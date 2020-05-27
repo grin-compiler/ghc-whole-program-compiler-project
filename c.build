@@ -1,5 +1,0 @@
-reset
-
-set -x -e
-
-time stack --stack-root `pwd`/.stack-root build
