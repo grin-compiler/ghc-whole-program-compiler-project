@@ -1,0 +1,44 @@
+name:                external-stg
+version:             0.1.0.0
+synopsis:            A library to dump GHC's STG representation.
+
+license:             BSD3
+license-file:        LICENSE
+author:              Csaba Hruska
+maintainer:          csaba.hruska@gmail.com
+copyright:           (c) 2018 Csaba Hruska
+category:            Development
+build-type:          Simple
+tested-with:         GHC==8.8.3
+cabal-version:       >=1.10
+
+library
+  exposed-modules:
+    Stg.Pretty
+    Stg.Reconstruct
+    Stg.Syntax
+    Stg.IO
+  hs-source-dirs:      lib
+  ghc-options:         -Wall
+  cpp-options:         -DEXTERNAL_STG_PACKAGE
+  other-extensions:    GeneralizedNewtypeDeriving
+  build-depends:       base,
+                       bytestring,
+                       filepath,
+                       binary,
+                       containers,
+                       transformers,
+                       unordered-containers,
+                       hashable,
+                       ansi-wl-pprint
+  default-language:    Haskell2010
+
+executable ext-stg
+  hs-source-dirs:      app
+  main-is:             ext-stg.hs
+  build-depends:       base < 5.0,
+                       external-stg,
+                       ansi-wl-pprint,
+                       bytestring,
+                       optparse-applicative
+  default-language:    Haskell2010

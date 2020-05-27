@@ -1,0 +1,80 @@
+name:                external-stg-compiler
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/githubuser/grin#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Csaba Hruska
+maintainer:          csaba.hruska@gmail.com
+copyright:           2020 Csaba Hruska
+category:            Compiler
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      lib
+  exposed-modules:
+    Stg.GHC.Backend
+    Stg.GHC.Symbols
+    Stg.GHC.ToStg
+    Stg.DeadFunctionElimination.Analysis
+    Stg.DeadFunctionElimination.Facts
+    Stg.DeadFunctionElimination.StripModule
+
+  build-depends:
+      base
+    , containers
+    , mtl
+    , bytestring
+    , ghc
+    , ghc-paths
+    , ghc-boot
+    , binary
+    , filepath
+    , directory
+    , process
+    , temporary
+
+  default-language:    Haskell2010
+
+executable gen-exe
+  hs-source-dirs:      app
+  main-is:             gen-exe.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , binary
+                     , ghc
+                     , external-stg
+                     , external-stg-compiler
+                     , split
+                     , async-pool
+                     , process
+                     , filepath
+                     , filemanip
+                     , containers
+                     , bytestring
+  default-language:    Haskell2010
+
+executable gen-obj
+  hs-source-dirs:      app
+  main-is:             gen-obj.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , ghc
+                     , ghc-paths
+                     , external-stg
+                     , external-stg-compiler
+  default-language:    Haskell2010
+
+executable show-ghc-stg
+  hs-source-dirs:      app
+  main-is:             show-ghc-stg.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , ghc
+                     , ghc-paths
+                     , external-stg
+                     , external-stg-compiler
+                     , filepath
+  default-language:    Haskell2010

@@ -1,0 +1,58 @@
+.symbol_type Name
+
+// input fatcs
+.decl TyCon(tycon:Name, datacon:Name)
+.input TyCon
+
+.decl TyConReference(fun:Name, tycon:Name)
+.input TyConReference
+
+.decl DataConReference(fun:Name, datacon:Name)
+.input DataConReference
+
+.decl FunReference(fun:Name, funref:Name)
+.input FunReference
+
+.decl LiveSource(fun:Name)
+.input LiveSource
+
+// output fatcs
+.decl LiveFunName(fun:Name)
+.output LiveFunName
+
+.decl LiveTyConName(tycon:Name)
+.output LiveTyConName
+
+.decl LiveDataConName(datacon:Name)
+.output LiveDataConName
+
+// calculate live functions
+LiveFunName(fun) :-
+  LiveSource(fun).
+
+LiveFunName(ref) :-
+  LiveFunName(fun),
+  FunReference(fun, ref).
+
+// calculate live data cons
+LiveDataConName(fun) :-
+  LiveSource(fun).
+
+LiveDataConName(datacon) :-
+  LiveFunName(fun),
+  DataConReference(fun, datacon).
+
+// calculate live type cons
+LiveTyConName(tycon) :-
+  LiveDataConName(datacon),
+  TyCon(tycon, datacon).
+
+LiveTyConName(tycon) :-
+  LiveFunName(fun),
+  TyConReference(fun, tycon).
+
+
+
+// temp hack: keep all datacons live
+LiveDataConName(datacon) :-
+  TyCon(_, datacon).
