@@ -2,6 +2,3 @@
 	path = ghc-wpc
 	url = git@github.com:grin-compiler/ghc.git
 	branch = ghc-whole-program-compiler
-[submodule "ghc-wpc-sample-programs"]
-	path = ghc-wpc-sample-programs
-	url = git@github.com:grin-compiler/ghc-wpc-sample-programs.git
