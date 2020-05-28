@@ -6,19 +6,32 @@ packages:
   - 'external-stg-compiler'
   - 'external-stg'
 
-# use custom ext-stg whole program compiler GHC
-compiler:   ghc-8.11.0.20200524-ext-stg
-system-ghc: true
-extra-path:
-  - /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler/_build/stage1/bin
-
-#dump-logs: all
-#build:
-#  keep-tmp-files: true
-#  cabal-verbose: true
-
 ghc-options:
   "$everything": -fno-stgbin -fno-stgapp
 
 extra-deps:
   - async-pool-0.9.1@sha256:4015140f896c3f1652b06a679b0ade2717d05557970c283ea2c372a71be2a6a1,1605
+  - github: csabahruska/souffle-haskell
+    commit: 29925d46da20b20ef6eeb38cb93ba3db797df230
+
+# use custom ext-stg whole program compiler GHC
+compiler:     ghc-8.11.0.20200527
+ghc-variant:  ext-stg-whole-program-compiler
+
+setup-info-locations: []
+setup-info:
+  ghc:
+    linux64-custom-ext-stg-whole-program-compiler:
+      8.11.0.20200527:
+        url: "https://github.com/grin-compiler/ghc-wpc/releases/download/ghc-8.11.0.20200527-wpc/ghc-8.11.0.20200527.tar.xz"
+
+# use local GHC (for development)
+#system-ghc: true
+#extra-path:
+#  - /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin
+
+# DEBUG INFO
+#dump-logs: all
+#build:
+#  keep-tmp-files: true
+#  cabal-verbose: true
