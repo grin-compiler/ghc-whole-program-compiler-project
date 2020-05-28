@@ -39,7 +39,7 @@ import Data.Binary
 import qualified Data.Set as Set
 
 import qualified Stg.Syntax as C
-import qualified Stg.Convert as C
+import qualified Stg.GHC.Convert as C
 
 import Data.List (isSuffixOf)
 import System.FilePath
@@ -112,6 +112,8 @@ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName 
     `gopt_set`  Opt_DoCmmLinting
 -}
     `gopt_set`  Opt_SplitSections -- HINT: linker based dead code elimination
+    `gopt_set`  Opt_NoStgbin
+    `gopt_set`  Opt_NoStgapp
 
   env <- getSession
   liftIO $ do
@@ -181,6 +183,8 @@ type CollectedCCs
     `gopt_set`  Opt_DoStgLinting
     `gopt_set`  Opt_DoCmmLinting
     `gopt_set`  Opt_SplitSections -- HINT: linker based dead code elimination
+    `gopt_set`  Opt_NoStgbin
+    `gopt_set`  Opt_NoStgapp
 
   let libSet = Set.fromList ["rts"] -- "rts", "ghc-prim-cbits", "base-cbits", "integer-gmp-cbits"]
   dflags <- getSessionDynFlags
