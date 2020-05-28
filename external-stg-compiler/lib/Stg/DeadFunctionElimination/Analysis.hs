@@ -1,7 +1,14 @@
+{-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies, TemplateHaskell #-}
 {-# LANGUAGE RecordWildCards, LambdaCase, TupleSections, OverloadedStrings #-}
 module Stg.DeadFunctionElimination.Analysis where
 
+import Control.Monad.IO.Class
+import qualified Language.Souffle.Class     as Souffle
+import qualified Language.Souffle.Compiled  as Souffle
+import qualified Language.Souffle.TH        as Souffle
+
 import Control.Monad
+import Data.Word
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.ByteString as BS
@@ -14,6 +21,7 @@ import System.IO.Temp
 
 import qualified Stg.GHC.Symbols as GHCSymbols
 
+Souffle.embedProgram "cbits/ext-stg-liveness.cpp"
 {-
   TODO:
     done - collect module facts
@@ -52,7 +60,11 @@ livenessAnalysisImplM log stgBins = do
   -- run liveness analysis
 
   when log $ putStrLn "run: ext-stg-liveness"
-  callProcess "ext-stg-liveness" ["--output=" ++ tmpDir, "--facts=" ++ tmpDir, "--jobs=4"]
+  -- exec as a separate process
+  --callProcess "ext-stg-liveness" ["--output=" ++ tmpDir, "--facts=" ++ tmpDir, "--jobs=4"]
+
+  -- exec as embedded .cpp
+  execLiveness tmpDir tmpDir 4
 
   when log $ putStrLn "read back result"
   copyFile (tmpDir </> "LiveFunName.csv") "LiveFunName.csv"
@@ -101,3 +113,20 @@ mergeInputFacts stgBins tmpDir = do
 .decl LiveDataConName(datacon:Name)
 .output LiveDataConName
 -}
+
+data Liveness = Liveness
+
+instance Souffle.Program Liveness where
+  type ProgramFacts Liveness = '[]
+  programName = const "ext_stg_liveness"
+
+execLiveness :: FilePath -> FilePath -> Word64 -> IO ()
+execLiveness inputDir outputDir threadCount = Souffle.runSouffle $ do
+  maybeProgram <- Souffle.init Liveness
+  case maybeProgram of
+    Nothing -> liftIO $ putStrLn "Failed to load program."
+    Just prog -> do
+      Souffle.setNumThreads prog threadCount
+      Souffle.loadFiles prog inputDir
+      Souffle.run prog
+      Souffle.writeFiles prog outputDir
