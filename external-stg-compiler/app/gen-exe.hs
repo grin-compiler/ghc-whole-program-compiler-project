@@ -75,12 +75,11 @@ getStgbins fname = do
 {-
   TODO: LTO-DFE
     done - app module pruning
-    - ext stg name collector pass
-    - cli tool to generate facts
+    done - ext stg name collector pass
+    skip - cli tool to generate facts
 
-    - collect facts + run LTO-DFE + export results
-    - call gen-obj + import liveness result + prune top level bindings
-
+    done - collect facts + run LTO-DFE + export results
+    done - call gen-obj + import liveness result + prune top level bindings
 -}
 
 collectProgramModules :: [FilePath] -> String -> String -> IO [FilePath]
@@ -112,11 +111,6 @@ collectProgramModules stgbinFileNames unitId mod = do
 genProgramDfeFacts :: [FilePath] -> IO ()
 genProgramDfeFacts stgbinFileNames = do
   putStrLn "generate datalog facts for whole stg program dead function elimination"
-{-
-  forM_ stgbinFileNames $ \stgbinName -> do
-    extStgModule <- readStgbin stgbinName
-    writeDfeFacts stgbinName extStgModule
--}
   withTaskGroup 4 $ \g -> do
     mapTasks g [readStgbin f >>= writeDfeFacts f | f <- stgbinFileNames]
   pure ()
