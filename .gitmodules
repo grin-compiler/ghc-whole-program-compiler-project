@@ -1,4 +1,4 @@
 [submodule "ghc-wpc"]
 	path = ghc-wpc
-	url = git@github.com:grin-compiler/ghc.git
+	url = git@github.com:grin-compiler/ghc-wpc.git
 	branch = ghc-whole-program-compiler
