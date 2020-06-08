@@ -15,7 +15,7 @@ External STG tools:
 - to make it easy to develop new backends for GHC without extending Cabal with new targets
 - to facilitate compiler/PL reasearch that need real world input programs
 - to allow whole program analysis
-- escape from GHC codebase to the surface Haskell that allows to use any library
+- to escape from GHC codebase to the surface Haskell that allows to use any library
 - to allow program observation with arbitrary precision
 - to make it easy to focus on the compiler backend development
 - to allow other compilers to target GHC/STG and the feature rich RTS 
