@@ -17,5 +17,5 @@ External STG tools:
 - to allow whole program analysis
 - to escape from GHC codebase to the surface Haskell that allows to use any library
 - to allow program observation with arbitrary precision
-- to make it easy to focus on the compiler backend development
+- to make it easy to focus on the compiler backend development without hacking GHC
 - to allow other compilers to target GHC/STG and the feature rich RTS 
