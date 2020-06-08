@@ -13,7 +13,7 @@ External STG tools:
 
 ## Why?
 - to make it easy to develop new backends for GHC without extending Cabal with new targets
-- to facilitate reasearch that need real world input programs
+- to facilitate compiler/PL reasearch that need real world input programs
 - to allow whole program analysis
 - escape from GHC codebase to the surface Haskell that allows to use any library
 - to allow program observation with arbitrary precision
