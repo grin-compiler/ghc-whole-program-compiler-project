@@ -6,7 +6,7 @@ The project consists of **GHC-WPC** and the corresponding **External STG IR** an
 GHC-WPC is an extended GHC that exports the STG IR `(.o_stgbin)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
 
 
-This repo uses GHC-WPC via stack, so no worries, stack will download it and do the setup automatically, but **only on Linux x64**.  
+This repo uses GHC-WPC via stack, so no worries, stack will download it and do the setup automatically, but **only on Linux x64**.
 If you use macOS or Windows you have to compile GHC-WPC manually. See the developer instructions below.  
 However `external-stg` package compiles with vanilla GHC also.
 
@@ -47,6 +47,11 @@ git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-pr
 stack --stack-root `pwd`/.stack-root install
 ```
 5. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
+
+## Sample applications for GHC-WPC
+
+There is a set of prepared applications in the [ghc-wpc-sample-programs](https://github.com/grin-compiler/ghc-wpc-sample-programs) repository that you can compile easily to try out GHC-WPC.
+No special preparation needed if you use x64 Linux it's ony the regular stack based workflow.
 
 
 ## Why?
