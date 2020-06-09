@@ -1,15 +1,53 @@
 # GHC whole program compiler project
 
-This repo uses a custom GHC (ghc-wpc). Stack will download it and set up automatically.
+The project consists of **GHC-WPC** and the corresponding **External STG IR** and **tooling**.
 
-To install external stg tooling run the following command:
+
+GHC-WPC is an extended GHC that exports the STG IR `(.o_stgbin)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
+
+
+This repo uses GHC-WPC via stack, so no worries, stack will download it and do the setup automatically, but **only on Linux x64**.  
+If you use macOS or Windows you have to compile GHC-WPC manually. See the developer instructions below.  
+However `external-stg` package compiles with vanilla GHC also.
+
+## External STG tools (Ext-STG)
+- `gen-exe` main compiler driver, it produces executable from `.ghc_stgapp` files.
+- `gen-obj` compiles STG IR files `.o_stgbin` to object code `.o`. (gen-exe calls it)
+- `ext-stg` CLI tool for external STG IR, it can pretty print `.o_stgbin` files.
+
+## Usage (user)
+
+The user of External STG is the one who does not alter the Ext-STG IR, instead just uses it via the `external-stg` package.
+I.e. `external-stg-compiler` is such an example.
+
+**Important:** GHC-WPC has precompiled Linux x64 binary release, so the install is straigtforward thanks to stack.
+
+1. Clone this repository.
+```
+git clone git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
+```
+2. Install the external stg tooling with the following command:
 ```
 stack --stack-root `pwd`/.stack-root install
 ```
-External STG tools:
-- `gen-exe` main compiler driver, it produces executable from *.ghc_stgapp files.
-- `gen-obj` compiles STG IR files *.o_stgbin to object code *.o. (gen-exe calls it)
-- `ext-stg` CLI tool for external STG IR, it can pretty print *.o_stgbin files.
+3. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
+
+## Usage (GHC-WPC developer)
+
+If you change the External STG IR, then GHC-WPC must be recompiled. If you just would like to use Ext-STG IR in you project then follow the (user) instructions.
+
+1. Clone this repository.
+```
+git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
+```
+2. Compile GHC-WPC in `./ghc-wpc` folder with Hadrian. 
+3. Set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
+4. Install the external stg tooling with the following command:
+```
+stack --stack-root `pwd`/.stack-root install
+```
+5. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
+
 
 ## Why?
 - to make it easy to develop new backends for GHC without extending Cabal with new targets
