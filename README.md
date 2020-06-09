@@ -34,7 +34,7 @@ stack --stack-root `pwd`/.stack-root install
 
 ## Usage (GHC-WPC developer)
 
-If you change the External STG IR, then GHC-WPC must be recompiled. If you just would like to use Ext-STG IR in you project then follow the (user) instructions.
+If you change the External STG IR, then GHC-WPC must be recompiled. If you just would like to use Ext-STG IR in you project then please follow the **(user) usage** instructions.
 
 1. Clone this repository.
 ```
