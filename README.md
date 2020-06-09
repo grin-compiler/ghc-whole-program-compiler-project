@@ -15,6 +15,11 @@ However `external-stg` package compiles with vanilla GHC also.
 - `gen-obj` compiles STG IR files `.o_stgbin` to object code `.o`. (gen-exe calls it)
 - `ext-stg` CLI tool for external STG IR, it can pretty print `.o_stgbin` files.
 
+## Sample applications for GHC-WPC
+
+There is a set of prepared applications in the [ghc-wpc-sample-programs](https://github.com/grin-compiler/ghc-wpc-sample-programs) repository that you can compile easily to try out GHC-WPC.
+No special preparation needed if you use x64 Linux. It's only the regular stack based workflow.
+
 ## Usage (user)
 
 The user of External STG is the one who does not alter the Ext-STG IR, instead just uses it via the `external-stg` package.
@@ -47,12 +52,6 @@ git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-pr
 stack --stack-root `pwd`/.stack-root install
 ```
 5. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
-
-## Sample applications for GHC-WPC
-
-There is a set of prepared applications in the [ghc-wpc-sample-programs](https://github.com/grin-compiler/ghc-wpc-sample-programs) repository that you can compile easily to try out GHC-WPC.
-No special preparation needed if you use x64 Linux it's ony the regular stack based workflow.
-
 
 ## Why?
 - to make it easy to develop new backends for GHC without extending Cabal with new targets
