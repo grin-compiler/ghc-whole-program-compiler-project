@@ -55,11 +55,6 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
    *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
 5. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
 
-## TODO
-**Ext-STG IR**
-- export IdInfo
-- export Tickish
-
 ## Why?
 - to make it easy to develop new backends for GHC without extending Cabal with new targets
 - to facilitate compiler/PL reasearch that need real world input programs
@@ -68,3 +63,8 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
 - to allow program observation with arbitrary precision
 - to make it easy to focus on the compiler backend development without hacking GHC
 - to allow other compilers to target GHC/STG and the feature rich RTS 
+
+## TODO
+**Ext-STG IR**
+- export IdInfo
+- export Tickish
