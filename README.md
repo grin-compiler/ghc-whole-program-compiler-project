@@ -28,13 +28,14 @@ I.e. `external-stg-compiler` is such an example.
 **Important:** GHC-WPC has precompiled Linux x64 binary release, so the install is straigtforward thanks to stack.
 
 1. Clone this repository.
-```
-git clone git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
-```
+   ```
+   git clone git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
+   ```
 2. Install the external stg tooling with the following command:
-```
-stack --stack-root `pwd`/.stack-root install
-```
+   ```
+   stack --stack-root `pwd`/.stack-root install
+   ```
+   *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
 3. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
 
 ## Usage (GHC-WPC developer)
@@ -42,15 +43,16 @@ stack --stack-root `pwd`/.stack-root install
 If you change the External STG IR, then GHC-WPC must be recompiled. If you just would like to use Ext-STG IR in you project then please follow the **(user) usage** instructions.
 
 1. Clone this repository.
-```
-git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
-```
+   ```
+   git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
+   ```
 2. Compile GHC-WPC in `./ghc-wpc` folder with Hadrian. 
 3. Set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
 4. Install the external stg tooling with the following command:
-```
-stack --stack-root `pwd`/.stack-root install
-```
+   ```
+   stack --stack-root `pwd`/.stack-root install
+   ```
+   *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
 5. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
 
 ## Why?
