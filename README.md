@@ -38,6 +38,15 @@ I.e. `external-stg-compiler` is such an example.
    *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
 3. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
 
+## Why?
+- to make it easy to develop new backends for GHC without extending Cabal with new targets
+- to facilitate compiler/PL reasearch that need real world input programs
+- to allow whole program analysis (new insights might be adopted to incremental compilers)  
+- to escape from GHC codebase to the surface Haskell that allows to use any library
+- to allow program observation with arbitrary precision
+- to make it easy to focus on the compiler backend development without hacking GHC
+- to allow other compilers to target GHC/STG and the feature rich RTS 
+
 ## Usage (GHC-WPC developer)
 
 If you change the External STG IR, then GHC-WPC must be recompiled. If you just would like to use Ext-STG IR in you project then please follow the **(user) usage** instructions.
@@ -54,15 +63,6 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
    ```
    *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
 5. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
-
-## Why?
-- to make it easy to develop new backends for GHC without extending Cabal with new targets
-- to facilitate compiler/PL reasearch that need real world input programs
-- to allow whole program analysis (new insights might be adopted to incremental compilers)  
-- to escape from GHC codebase to the surface Haskell that allows to use any library
-- to allow program observation with arbitrary precision
-- to make it easy to focus on the compiler backend development without hacking GHC
-- to allow other compilers to target GHC/STG and the feature rich RTS 
 
 ## TODO
 **Ext-STG IR**
