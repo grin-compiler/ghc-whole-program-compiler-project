@@ -10,6 +10,9 @@ This repo uses GHC-WPC via stack, so no worries, stack will download it and do t
 If you use macOS or Windows you have to compile GHC-WPC manually. See the developer instructions below.  
 However `external-stg` package compiles with vanilla GHC also.
 
+## Readings
+- [Introducing GHC whole program compiler (GHC-WPC)](https://www.patreon.com/posts/introducing-ghc-38173710)
+
 ## External STG tools (Ext-STG)
 - `gen-exe` main compiler driver, it produces executable from `.ghc_stgapp` files.
 - `gen-obj` compiles STG IR files `.o_stgbin` to object code `.o`. (gen-exe calls it)
