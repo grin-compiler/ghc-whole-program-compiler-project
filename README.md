@@ -6,7 +6,7 @@ The project consists of **GHC-WPC** and the corresponding **External STG IR** an
 GHC-WPC is an extended GHC that exports the STG IR `(.o_stgbin)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
 
 
-This repo uses GHC-WPC via stack, so no worries, stack will download it and do the setup automatically, but **only on Linux x64**.
+This repo uses GHC-WPC via stack, so no worries, stack will download it and do the setup automatically, but **only on Ubuntu 16.04 x64**.
 If you use macOS or Windows you have to compile GHC-WPC manually. See the developer instructions below.  
 However `external-stg` package compiles with vanilla GHC also.
 
@@ -21,14 +21,14 @@ However `external-stg` package compiles with vanilla GHC also.
 ## Sample applications for GHC-WPC
 
 There is a set of prepared applications in the [ghc-wpc-sample-programs](https://github.com/grin-compiler/ghc-wpc-sample-programs) repository that you can compile easily to try out GHC-WPC.
-No special preparation needed if you use x64 Linux. It's only the regular stack based workflow.
+No special preparation needed if you use x64 Ubuntu 16.04. It's only the regular stack based workflow.
 
 ## Usage (user)
 
 The user of External STG is the one who does not alter the Ext-STG IR, instead just uses it via the `external-stg` package.
 I.e. `external-stg-compiler` is such an example.
 
-**Important:** GHC-WPC has precompiled Linux x64 binary release, so the install is straigtforward thanks to stack.
+**Important:** GHC-WPC has precompiled Ubuntu 16.04 x64 binary release, so the install is straigtforward thanks to stack.
 
 1. Clone this repository.
    ```
