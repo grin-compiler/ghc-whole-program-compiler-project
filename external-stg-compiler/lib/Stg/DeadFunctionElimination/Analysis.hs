@@ -18,6 +18,7 @@ import System.FilePath
 import System.Process
 import System.IO
 import System.IO.Temp
+import Data.Time.Clock
 
 import qualified Stg.GHC.Symbols as GHCSymbols
 
@@ -28,6 +29,14 @@ Souffle.embedProgram "cbits/ext-stg-liveness.cpp"
     done - run analysis
     done - write module liveness
 -}
+
+timeItNamed :: String -> IO m -> IO m
+timeItNamed title m = do
+  preTime <- getCurrentTime
+  result <- m
+  postTime <- getCurrentTime
+  putStrLn $ title ++ ": " ++ show (diffUTCTime postTime preTime)
+  pure result
 
 livenessAnalysisM :: [FilePath] -> IO ()
 livenessAnalysisM = livenessAnalysisImplM False
@@ -64,7 +73,9 @@ livenessAnalysisImplM log stgBins = do
   --callProcess "ext-stg-liveness" ["--output=" ++ tmpDir, "--facts=" ++ tmpDir, "--jobs=4"]
 
   -- exec as embedded .cpp
-  execLiveness tmpDir tmpDir 4
+  (if log
+    then timeItNamed "liveness analysis run time"
+    else id) $ execLiveness tmpDir tmpDir 4
 
   when log $ putStrLn "read back result"
   copyFile (tmpDir </> "LiveFunName.csv") "LiveFunName.csv"

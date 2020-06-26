@@ -10,6 +10,7 @@ import Text.Printf
 import Control.Concurrent.Async.Pool
 
 import System.Environment
+import System.Directory
 import System.FilePath
 import System.FilePath.Find
 import System.Process
@@ -109,7 +110,7 @@ collectProgramModules stgbinFileNames unitId mod = do
   pure prunedDeps
 
 genProgramDfeFacts :: [FilePath] -> IO ()
-genProgramDfeFacts stgbinFileNames = do
+genProgramDfeFacts stgbinFileNames = timeItNamed "fact collection run time" $ do
   putStrLn "generate datalog facts for whole stg program dead function elimination"
   withTaskGroup 4 $ \g -> do
     mapTasks g [readStgbin f >>= writeDfeFacts f | f <- stgbinFileNames]
@@ -128,13 +129,19 @@ main = do
   genProgramDfeFacts appStgBins
   livenessAnalysisLogM appStgBins
 
-  withTaskGroup 4 $ \g -> do
-    mapTasks g [callProcess "gen-obj" f | f <- chunksOf 1 appStgBins]
-
   let oStg = [s ++ ".o" | s <- appStgBins]
+  forM_ oStg $ \obj -> do
+    fileExists <- doesFileExist obj
+    when fileExists $ removeFile obj
+
+  timeItNamed "program objects codegen time" $ do
+    withTaskGroup 4 $ \g -> do
+      mapTasks g [callProcess "gen-obj" f | f <- chunksOf 1 appStgBins]
+
   o@(incPaths, libPaths, ldOpts, clikeFiles) <- getAppLibs stgAppFname
 
   let cg = NCG
 
   putStrLn $ "linking exe"
+
   compileProgram cg incPaths libPaths ldOpts (clikeFiles ++ oStg) GHC.NoStubs [] []
