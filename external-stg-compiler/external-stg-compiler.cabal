@@ -47,12 +47,8 @@ library
 
   extra-libraries:      gomp
 
--- HINT: temporarly disabled, it is embedded using Template Haskell
---  cxx-sources:          cbits/ext-stg-liveness.cpp
+  cxx-sources:          cbits/ext-stg-liveness.cpp
   cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
-
-  -- dirty workaround for Template Haskell embedded C++ sources
-  cpp-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
 
 executable gen-exe
   hs-source-dirs:      app

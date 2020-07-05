@@ -5,7 +5,6 @@ module Stg.DeadFunctionElimination.Analysis where
 import Control.Monad.IO.Class
 import qualified Language.Souffle.Class     as Souffle
 import qualified Language.Souffle.Compiled  as Souffle
-import qualified Language.Souffle.TH        as Souffle
 
 import Control.Monad
 import Data.Word
@@ -21,7 +20,6 @@ import System.IO.Temp
 
 import qualified Stg.GHC.Symbols as GHCSymbols
 
-Souffle.embedProgram "cbits/ext-stg-liveness.cpp"
 {-
   TODO:
     done - collect module facts
