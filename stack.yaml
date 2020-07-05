@@ -11,8 +11,8 @@ ghc-options:
 
 extra-deps:
   - async-pool-0.9.1@sha256:4015140f896c3f1652b06a679b0ade2717d05557970c283ea2c372a71be2a6a1,1605
-  - github: csabahruska/souffle-haskell
-    commit: 29925d46da20b20ef6eeb38cb93ba3db797df230
+  - github: luc-tielen/souffle-haskell
+    commit: e4da32f22be4dec293d1ddc13d35fa17d61f008f
 
 # use custom ext-stg whole program compiler GHC
 compiler:     ghc-8.11.0.20200527
