@@ -12,6 +12,7 @@ However `external-stg` package compiles with vanilla GHC also.
 
 ## Readings
 - [Introducing GHC whole program compiler (GHC-WPC)](https://www.patreon.com/posts/introducing-ghc-38173710)
+- [GHC-WPC thread on ghc-devs mailing list](https://mail.haskell.org/pipermail/ghc-devs/2020-June/018994.html)
 
 ## External STG tools (Ext-STG)
 - `gen-exe` main compiler driver, it produces executable from `.ghc_stgapp` files.
