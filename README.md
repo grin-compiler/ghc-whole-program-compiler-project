@@ -59,7 +59,12 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
    ```
    git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
    ```
-2. Compile GHC-WPC in `./ghc-wpc` folder with Hadrian. 
+2. Compile GHC-WPC in `./ghc-wpc` folder with Hadrian (see [ghc.dev](https://ghc.dev) for details). e.g.
+   ```
+   ./boot
+   ./configure
+   hadrian/build-stack -j
+   ```
 3. Set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
 4. Install the external stg tooling with the following command:
    ```
