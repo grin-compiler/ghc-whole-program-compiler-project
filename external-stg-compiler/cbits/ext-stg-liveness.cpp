@@ -390,7 +390,7 @@ bool performIO;
 std::atomic<RamDomain> ctr{};
 
 std::atomic<size_t> iter{};
-void runFunction(std::string inputDirectory = ".", std::string outputDirectory = ".", bool performIO = false) {
+void runFunction(std::string inputDirectory = "", std::string outputDirectory = "", bool performIO = false) {
 this->inputDirectory = inputDirectory;
 this->outputDirectory = outputDirectory;
 this->performIO = performIO;
@@ -437,99 +437,99 @@ subroutine_7(args, ret);
 SignalHandler::instance()->reset();
 }
 public:
-void run() override { runFunction(".", ".", false); }
+void run() override { runFunction("", "", false); }
 public:
-void runAll(std::string inputDirectory = ".", std::string outputDirectory = ".") override { runFunction(inputDirectory, outputDirectory, true);
+void runAll(std::string inputDirectory = "", std::string outputDirectory = "") override { runFunction(inputDirectory, outputDirectory, true);
 }
 public:
-void printAll(std::string outputDirectory = ".") override {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun"},{"filename","./LiveFunName.csv"},{"name","LiveFunName"},{"operation","output"},{"types","{\"LiveFunName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}, \"records\": {}}"}});
-if (!outputDirectory.empty() && directiveMap["IO"] == "file" && directiveMap["filename"].front() != '/') {directiveMap["filename"] = outputDirectory + "/" + directiveMap["filename"];}
-IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_6_LiveFunName);
-} catch (std::exception& e) {std::cerr << e.what();exit(1);}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","datacon"},{"filename","./LiveDataConName.csv"},{"name","LiveDataConName"},{"operation","output"},{"types","{\"LiveDataConName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}, \"records\": {}}"}});
-if (!outputDirectory.empty() && directiveMap["IO"] == "file" && directiveMap["filename"].front() != '/') {directiveMap["filename"] = outputDirectory + "/" + directiveMap["filename"];}
+void printAll(std::string outputDirectory = "") override {
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","datacon"},{"name","LiveDataConName"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"datacon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}"}});
+if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_5_LiveDataConName);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","tycon"},{"filename","./LiveTyConName.csv"},{"name","LiveTyConName"},{"operation","output"},{"types","{\"LiveTyConName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}, \"records\": {}}"}});
-if (!outputDirectory.empty() && directiveMap["IO"] == "file" && directiveMap["filename"].front() != '/') {directiveMap["filename"] = outputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun"},{"name","LiveFunName"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"fun\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}"}});
+if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
+IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_6_LiveFunName);
+} catch (std::exception& e) {std::cerr << e.what();exit(1);}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","tycon"},{"name","LiveTyConName"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"tycon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}"}});
+if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_8_LiveTyConName);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
 public:
-void loadAll(std::string inputDirectory = ".") override {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./TyCon.facts"},{"name","TyCon"},{"operation","input"},{"types","{\"TyCon\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["IO"] == "file" && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_9_TyCon);
+void loadAll(std::string inputDirectory = "") override {
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun"},{"fact-dir","."},{"name","LiveSource"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"fun\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_7_LiveSource);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./FunReference.facts"},{"name","FunReference"},{"operation","input"},{"types","{\"FunReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["IO"] == "file" && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_4_FunReference);
-} catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./TyConReference.facts"},{"name","TyConReference"},{"operation","input"},{"types","{\"TyConReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["IO"] == "file" && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_10_TyConReference);
-} catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./DataConReference.facts"},{"name","DataConReference"},{"operation","input"},{"types","{\"DataConReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["IO"] == "file" && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun\tdatacon"},{"fact-dir","."},{"name","DataConReference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"fun\", \"datacon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_3_DataConReference);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./LiveSource.facts"},{"name","LiveSource"},{"operation","input"},{"types","{\"LiveSource\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["IO"] == "file" && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_7_LiveSource);
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun\tfunref"},{"fact-dir","."},{"name","FunReference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"fun\", \"funref\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_4_FunReference);
+} catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun\ttycon"},{"fact-dir","."},{"name","TyConReference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"fun\", \"tycon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_10_TyConReference);
+} catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","tycon\tdatacon"},{"fact-dir","."},{"name","TyCon"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"tycon\", \"datacon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_9_TyCon);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
 public:
 void dumpInputs(std::ostream& out = std::cout) override {
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
-rwOperation["name"] = "TyCon";
-rwOperation["types"] = "{\"TyCon\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_9_TyCon);
+rwOperation["name"] = "LiveSource";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}";
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_7_LiveSource);
+} catch (std::exception& e) {std::cerr << e.what();exit(1);}
+try {std::map<std::string, std::string> rwOperation;
+rwOperation["IO"] = "stdout";
+rwOperation["name"] = "DataConReference";
+rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}";
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_3_DataConReference);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "FunReference";
-rwOperation["types"] = "{\"FunReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_4_FunReference);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "TyConReference";
-rwOperation["types"] = "{\"TyConReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_10_TyConReference);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
-rwOperation["name"] = "DataConReference";
-rwOperation["types"] = "{\"DataConReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_3_DataConReference);
-} catch (std::exception& e) {std::cerr << e.what();exit(1);}
-try {std::map<std::string, std::string> rwOperation;
-rwOperation["IO"] = "stdout";
-rwOperation["name"] = "LiveSource";
-rwOperation["types"] = "{\"LiveSource\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_7_LiveSource);
+rwOperation["name"] = "TyCon";
+rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}";
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_9_TyCon);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
 public:
 void dumpOutputs(std::ostream& out = std::cout) override {
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
-rwOperation["name"] = "LiveFunName";
-rwOperation["types"] = "{\"LiveFunName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_6_LiveFunName);
-} catch (std::exception& e) {std::cerr << e.what();exit(1);}
-try {std::map<std::string, std::string> rwOperation;
-rwOperation["IO"] = "stdout";
 rwOperation["name"] = "LiveDataConName";
-rwOperation["types"] = "{\"LiveDataConName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_5_LiveDataConName);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
+rwOperation["name"] = "LiveFunName";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}";
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_6_LiveFunName);
+} catch (std::exception& e) {std::cerr << e.what();exit(1);}
+try {std::map<std::string, std::string> rwOperation;
+rwOperation["IO"] = "stdout";
 rwOperation["name"] = "LiveTyConName";
-rwOperation["types"] = "{\"LiveTyConName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_8_LiveTyConName);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
@@ -566,40 +566,40 @@ fatal("unknown subroutine");
 }
 void subroutine_0(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./TyCon.facts"},{"name","TyCon"},{"operation","input"},{"types","{\"TyCon\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","tycon\tdatacon"},{"fact-dir","."},{"name","TyCon"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"tycon\", \"datacon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_9_TyCon);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
 }
 void subroutine_1(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./TyConReference.facts"},{"name","TyConReference"},{"operation","input"},{"types","{\"TyConReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun\ttycon"},{"fact-dir","."},{"name","TyConReference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"fun\", \"tycon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_10_TyConReference);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
 }
 void subroutine_2(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./DataConReference.facts"},{"name","DataConReference"},{"operation","input"},{"types","{\"DataConReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun\tdatacon"},{"fact-dir","."},{"name","DataConReference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"fun\", \"datacon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_3_DataConReference);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
 }
 void subroutine_3(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./FunReference.facts"},{"name","FunReference"},{"operation","input"},{"types","{\"FunReference\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun\tfunref"},{"fact-dir","."},{"name","FunReference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"fun\", \"funref\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:Name\", \"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_4_FunReference);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
 }
 void subroutine_4(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"filename","./LiveSource.facts"},{"name","LiveSource"},{"operation","input"},{"types","{\"LiveSource\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}, \"records\": {}}"}});
-if (!inputDirectory.empty() && directiveMap["filename"].front() != '/') {directiveMap["filename"] = inputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun"},{"fact-dir","."},{"name","LiveSource"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"fun\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}"}});
+if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_7_LiveSource);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
@@ -607,7 +607,7 @@ IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(
 void subroutine_5(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 SignalHandler::instance()->setMsg(R"_(LiveFunName(fun) :- 
    LiveSource(fun).
-in file /Users/luc/personal/souffle-hs/ext-stg-liveness.dl [30:1-31:19])_");
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-compiler/datalog/ext-stg-liveness.dl [32:1-33:19])_");
 if(!(rel_7_LiveSource->empty())) {
 [&](){
 CREATE_OP_CONTEXT(rel_7_LiveSource_op_ctxt,rel_7_LiveSource->createContext());
@@ -631,14 +631,18 @@ for(;;) {
 SignalHandler::instance()->setMsg(R"_(LiveFunName(ref) :- 
    LiveFunName(fun),
    FunReference(fun,ref).
-in file /Users/luc/personal/souffle-hs/ext-stg-liveness.dl [33:1-35:26])_");
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-compiler/datalog/ext-stg-liveness.dl [35:1-37:26])_");
 if(!(rel_1_delta_LiveFunName->empty()) && !(rel_4_FunReference->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_4_FunReference_op_ctxt,rel_4_FunReference->createContext());
-CREATE_OP_CONTEXT(rel_6_LiveFunName_op_ctxt,rel_6_LiveFunName->createContext());
-CREATE_OP_CONTEXT(rel_1_delta_LiveFunName_op_ctxt,rel_1_delta_LiveFunName->createContext());
+auto part = rel_1_delta_LiveFunName->partition();
+PARALLEL_START
 CREATE_OP_CONTEXT(rel_2_new_LiveFunName_op_ctxt,rel_2_new_LiveFunName->createContext());
-for(const auto& env0 : *rel_1_delta_LiveFunName) {
+CREATE_OP_CONTEXT(rel_6_LiveFunName_op_ctxt,rel_6_LiveFunName->createContext());
+CREATE_OP_CONTEXT(rel_4_FunReference_op_ctxt,rel_4_FunReference->createContext());
+CREATE_OP_CONTEXT(rel_1_delta_LiveFunName_op_ctxt,rel_1_delta_LiveFunName->createContext());
+pfor(auto it = part.begin(); it<part.end();++it){
+try{
+for(const auto& env0 : *it) {
 const Tuple<RamDomain,2> lower{{ramBitCast(env0[0]),0}};
 const Tuple<RamDomain,2> upper{{ramBitCast(env0[0]),0}};
 auto range = rel_4_FunReference->lowerUpperRange_01(lower, upper,READ_OP_CONTEXT(rel_4_FunReference_op_ctxt));
@@ -649,12 +653,15 @@ rel_2_new_LiveFunName->insert(tuple,READ_OP_CONTEXT(rel_2_new_LiveFunName_op_ctx
 }
 }
 }
+} catch(std::exception &e) { SignalHandler::instance()->error(e.what());}
+}
+PARALLEL_END
 }
 ();}
 if(rel_2_new_LiveFunName->empty()) break;
 [&](){
-CREATE_OP_CONTEXT(rel_6_LiveFunName_op_ctxt,rel_6_LiveFunName->createContext());
 CREATE_OP_CONTEXT(rel_2_new_LiveFunName_op_ctxt,rel_2_new_LiveFunName->createContext());
+CREATE_OP_CONTEXT(rel_6_LiveFunName_op_ctxt,rel_6_LiveFunName->createContext());
 for(const auto& env0 : *rel_2_new_LiveFunName) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
 rel_6_LiveFunName->insert(tuple,READ_OP_CONTEXT(rel_6_LiveFunName_op_ctxt));
@@ -668,8 +675,8 @@ iter = 0;
 rel_1_delta_LiveFunName->purge();
 rel_2_new_LiveFunName->purge();
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun"},{"filename","./LiveFunName.csv"},{"name","LiveFunName"},{"operation","output"},{"types","{\"LiveFunName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}, \"records\": {}}"}});
-if (!outputDirectory.empty() && directiveMap["filename"].front() != '/') {directiveMap["filename"] = outputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","fun"},{"name","LiveFunName"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"fun\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}"}});
+if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_6_LiveFunName);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
@@ -678,7 +685,7 @@ if (performIO) rel_4_FunReference->purge();
 void subroutine_6(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 SignalHandler::instance()->setMsg(R"_(LiveDataConName(fun) :- 
    LiveSource(fun).
-in file /Users/luc/personal/souffle-hs/ext-stg-liveness.dl [38:1-39:19])_");
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-compiler/datalog/ext-stg-liveness.dl [40:1-41:19])_");
 if(!(rel_7_LiveSource->empty())) {
 [&](){
 CREATE_OP_CONTEXT(rel_7_LiveSource_op_ctxt,rel_7_LiveSource->createContext());
@@ -692,13 +699,17 @@ rel_5_LiveDataConName->insert(tuple,READ_OP_CONTEXT(rel_5_LiveDataConName_op_ctx
 SignalHandler::instance()->setMsg(R"_(LiveDataConName(datacon) :- 
    LiveFunName(fun),
    DataConReference(fun,datacon).
-in file /Users/luc/personal/souffle-hs/ext-stg-liveness.dl [41:1-43:34])_");
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-compiler/datalog/ext-stg-liveness.dl [43:1-45:34])_");
 if(!(rel_6_LiveFunName->empty()) && !(rel_3_DataConReference->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_3_DataConReference_op_ctxt,rel_3_DataConReference->createContext());
-CREATE_OP_CONTEXT(rel_6_LiveFunName_op_ctxt,rel_6_LiveFunName->createContext());
+auto part = rel_6_LiveFunName->partition();
+PARALLEL_START
 CREATE_OP_CONTEXT(rel_5_LiveDataConName_op_ctxt,rel_5_LiveDataConName->createContext());
-for(const auto& env0 : *rel_6_LiveFunName) {
+CREATE_OP_CONTEXT(rel_6_LiveFunName_op_ctxt,rel_6_LiveFunName->createContext());
+CREATE_OP_CONTEXT(rel_3_DataConReference_op_ctxt,rel_3_DataConReference->createContext());
+pfor(auto it = part.begin(); it<part.end();++it){
+try{
+for(const auto& env0 : *it) {
 const Tuple<RamDomain,2> lower{{ramBitCast(env0[0]),0}};
 const Tuple<RamDomain,2> upper{{ramBitCast(env0[0]),0}};
 auto range = rel_3_DataConReference->lowerUpperRange_01(lower, upper,READ_OP_CONTEXT(rel_3_DataConReference_op_ctxt));
@@ -707,15 +718,18 @@ Tuple<RamDomain,1> tuple{{ramBitCast(env1[1])}};
 rel_5_LiveDataConName->insert(tuple,READ_OP_CONTEXT(rel_5_LiveDataConName_op_ctxt));
 }
 }
+} catch(std::exception &e) { SignalHandler::instance()->error(e.what());}
+}
+PARALLEL_END
 }
 ();}
 SignalHandler::instance()->setMsg(R"_(LiveDataConName(datacon) :- 
    TyCon(_,datacon).
-in file /Users/luc/personal/souffle-hs/ext-stg-liveness.dl [57:1-58:21])_");
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-compiler/datalog/ext-stg-liveness.dl [59:1-60:21])_");
 if(!(rel_9_TyCon->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_9_TyCon_op_ctxt,rel_9_TyCon->createContext());
 CREATE_OP_CONTEXT(rel_5_LiveDataConName_op_ctxt,rel_5_LiveDataConName->createContext());
+CREATE_OP_CONTEXT(rel_9_TyCon_op_ctxt,rel_9_TyCon->createContext());
 for(const auto& env0 : *rel_9_TyCon) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env0[1])}};
 rel_5_LiveDataConName->insert(tuple,READ_OP_CONTEXT(rel_5_LiveDataConName_op_ctxt));
@@ -723,8 +737,8 @@ rel_5_LiveDataConName->insert(tuple,READ_OP_CONTEXT(rel_5_LiveDataConName_op_ctx
 }
 ();}
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","datacon"},{"filename","./LiveDataConName.csv"},{"name","LiveDataConName"},{"operation","output"},{"types","{\"LiveDataConName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}, \"records\": {}}"}});
-if (!outputDirectory.empty() && directiveMap["filename"].front() != '/') {directiveMap["filename"] = outputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","datacon"},{"name","LiveDataConName"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"datacon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}"}});
+if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_5_LiveDataConName);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
@@ -735,13 +749,17 @@ void subroutine_7(const std::vector<RamDomain>& args, std::vector<RamDomain>& re
 SignalHandler::instance()->setMsg(R"_(LiveTyConName(tycon) :- 
    LiveDataConName(datacon),
    TyCon(tycon,datacon).
-in file /Users/luc/personal/souffle-hs/ext-stg-liveness.dl [46:1-48:25])_");
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-compiler/datalog/ext-stg-liveness.dl [48:1-50:25])_");
 if(!(rel_5_LiveDataConName->empty()) && !(rel_9_TyCon->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_9_TyCon_op_ctxt,rel_9_TyCon->createContext());
-CREATE_OP_CONTEXT(rel_5_LiveDataConName_op_ctxt,rel_5_LiveDataConName->createContext());
+auto part = rel_5_LiveDataConName->partition();
+PARALLEL_START
 CREATE_OP_CONTEXT(rel_8_LiveTyConName_op_ctxt,rel_8_LiveTyConName->createContext());
-for(const auto& env0 : *rel_5_LiveDataConName) {
+CREATE_OP_CONTEXT(rel_5_LiveDataConName_op_ctxt,rel_5_LiveDataConName->createContext());
+CREATE_OP_CONTEXT(rel_9_TyCon_op_ctxt,rel_9_TyCon->createContext());
+pfor(auto it = part.begin(); it<part.end();++it){
+try{
+for(const auto& env0 : *it) {
 const Tuple<RamDomain,2> lower{{0,ramBitCast(env0[0])}};
 const Tuple<RamDomain,2> upper{{0,ramBitCast(env0[0])}};
 auto range = rel_9_TyCon->lowerUpperRange_10(lower, upper,READ_OP_CONTEXT(rel_9_TyCon_op_ctxt));
@@ -750,18 +768,25 @@ Tuple<RamDomain,1> tuple{{ramBitCast(env1[0])}};
 rel_8_LiveTyConName->insert(tuple,READ_OP_CONTEXT(rel_8_LiveTyConName_op_ctxt));
 }
 }
+} catch(std::exception &e) { SignalHandler::instance()->error(e.what());}
+}
+PARALLEL_END
 }
 ();}
 SignalHandler::instance()->setMsg(R"_(LiveTyConName(tycon) :- 
    LiveFunName(fun),
    TyConReference(fun,tycon).
-in file /Users/luc/personal/souffle-hs/ext-stg-liveness.dl [50:1-52:30])_");
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-compiler/datalog/ext-stg-liveness.dl [52:1-54:30])_");
 if(!(rel_6_LiveFunName->empty()) && !(rel_10_TyConReference->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_10_TyConReference_op_ctxt,rel_10_TyConReference->createContext());
-CREATE_OP_CONTEXT(rel_6_LiveFunName_op_ctxt,rel_6_LiveFunName->createContext());
+auto part = rel_6_LiveFunName->partition();
+PARALLEL_START
 CREATE_OP_CONTEXT(rel_8_LiveTyConName_op_ctxt,rel_8_LiveTyConName->createContext());
-for(const auto& env0 : *rel_6_LiveFunName) {
+CREATE_OP_CONTEXT(rel_6_LiveFunName_op_ctxt,rel_6_LiveFunName->createContext());
+CREATE_OP_CONTEXT(rel_10_TyConReference_op_ctxt,rel_10_TyConReference->createContext());
+pfor(auto it = part.begin(); it<part.end();++it){
+try{
+for(const auto& env0 : *it) {
 const Tuple<RamDomain,2> lower{{ramBitCast(env0[0]),0}};
 const Tuple<RamDomain,2> upper{{ramBitCast(env0[0]),0}};
 auto range = rel_10_TyConReference->lowerUpperRange_01(lower, upper,READ_OP_CONTEXT(rel_10_TyConReference_op_ctxt));
@@ -770,16 +795,19 @@ Tuple<RamDomain,1> tuple{{ramBitCast(env1[1])}};
 rel_8_LiveTyConName->insert(tuple,READ_OP_CONTEXT(rel_8_LiveTyConName_op_ctxt));
 }
 }
+} catch(std::exception &e) { SignalHandler::instance()->error(e.what());}
+}
+PARALLEL_END
 }
 ();}
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","tycon"},{"filename","./LiveTyConName.csv"},{"name","LiveTyConName"},{"operation","output"},{"types","{\"LiveTyConName\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}, \"records\": {}}"}});
-if (!outputDirectory.empty() && directiveMap["filename"].front() != '/') {directiveMap["filename"] = outputDirectory + "/" + directiveMap["filename"];}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","tycon"},{"name","LiveTyConName"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"tycon\"]}}"},{"types","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:Name\"]}}"}});
+if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_8_LiveTyConName);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
-if (performIO) rel_9_TyCon->purge();
 if (performIO) rel_10_TyConReference->purge();
+if (performIO) rel_9_TyCon->purge();
 if (performIO) rel_6_LiveFunName->purge();
 if (performIO) rel_5_LiveDataConName->purge();
 }
@@ -805,11 +833,11 @@ int main(int argc, char** argv)
 {
 try{
 souffle::CmdOptions opt(R"(ext-stg-liveness.dl)",
-R"(.)",
-R"(.)",
+R"()",
+R"()",
 false,
 R"()",
-1);
+4);
 if (!opt.parse(argc,argv)) return 1;
 souffle::Sf_ext_stg_liveness obj;
 #if defined(_OPENMP) 

@@ -1,3 +1,5 @@
+.pragma "legacy"
+
 .symbol_type Name
 
 // input fatcs
