@@ -35,8 +35,9 @@ I.e. `external-stg-compiler` is such an example.
    ```
    git clone git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
    ```
-2. Install the external stg tooling with the following command:
+2. Install the external stg tooling with the following commands:
    ```
+   (cd mod-pak ; stack install)
    stack --stack-root `pwd`/.stack-root install
    ```
    *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
@@ -66,8 +67,9 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
    hadrian/build-stack -j
    ```
 3. Set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
-4. Install the external stg tooling with the following command:
+4. Install the external stg tooling with the following commands:
    ```
+   (cd mod-pak ; stack install)
    stack --stack-root `pwd`/.stack-root install
    ```
    *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
