@@ -31,16 +31,16 @@ main :: IO ()
 main = runGhc (Just libdir) $ do
   let cg = NCG
 
-  stgbins <- liftIO getArgs
-  forM_ stgbins $ \stgbinName -> do
+  modpaks <- liftIO getArgs
+  forM_ modpaks $ \modpakName -> do
     extStgModule <- liftIO $ do
-      putStrLn $ stgbinName
-      readStgbin stgbinName
+      putStrLn $ modpakName
+      readModpakL modpakName modpakStgbinPath decodeStgbin
 
-    strippedExtModule <- liftIO $ tryStripDeadParts {-stgbinName-}"." extStgModule -- TODO: fix liveness input name
+    strippedExtModule <- liftIO $ tryStripDeadParts {-modpakName-}"." extStgModule -- TODO: fix liveness input name
 
     let StgModule{..} = toStg strippedExtModule
-        oName         = stgbinName ++ ".o"
+        oName         = modpakName ++ ".o"
     --liftIO $ putStrLn $ "compiling " ++ oName
     --putStrLn $ unlines $ map show stgIdUniqueMap
 

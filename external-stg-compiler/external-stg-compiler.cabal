@@ -50,6 +50,7 @@ library
 
   cxx-sources:          cbits/ext-stg-liveness.cpp
   cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
+  ld-options:           "-Wl,--undefined=__factory_Sf_ext_stg_liveness_instance"
 
 executable gen-exe
   hs-source-dirs:      app
@@ -92,4 +93,17 @@ executable show-ghc-stg
                      , external-stg
                      , external-stg-compiler
                      , filepath
+  default-language:    Haskell2010
+
+executable mkfullpak
+  hs-source-dirs:      app
+  main-is:             mkfullpak.hs
+  build-depends:       base
+                     , containers
+                     , optparse-applicative
+                     , filepath
+                     , bytestring
+                     , zip
+                     , external-stg
+                     , external-stg-compiler
   default-language:    Haskell2010

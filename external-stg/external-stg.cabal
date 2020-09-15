@@ -1,5 +1,5 @@
 name:                external-stg
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            A library to dump GHC's STG representation.
 
 license:             BSD3
@@ -17,6 +17,7 @@ library
     Stg.Pretty
     Stg.Reconstruct
     Stg.Syntax
+    Stg.Program
     Stg.IO
   hs-source-dirs:      lib
   ghc-options:         -Wall
@@ -24,13 +25,16 @@ library
   other-extensions:    GeneralizedNewtypeDeriving
   build-depends:       base,
                        bytestring,
+                       filemanip,
                        filepath,
+                       directory,
                        binary,
                        containers,
                        transformers,
                        unordered-containers,
                        hashable,
-                       ansi-wl-pprint
+                       ansi-wl-pprint,
+                       zip
   default-language:    Haskell2010
 
 executable ext-stg

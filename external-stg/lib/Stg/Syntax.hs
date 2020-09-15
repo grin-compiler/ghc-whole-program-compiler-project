@@ -392,9 +392,6 @@ data Module' idBnd idOcc dcOcc tcBnd tcOcc
   , moduleTyCons              :: ![(UnitId, [(ModuleName, [tcBnd])])]
   , moduleTopBindings         :: ![TopBinding' idBnd idOcc dcOcc tcOcc]
   , moduleForeignFiles        :: ![(ForeignSrcLang, FilePath)]
-  , moduleCoreSrc             :: !BS8.ByteString
-  , modulePrepCoreSrc         :: !BS8.ByteString
-  , moduleStgSrc              :: !BS8.ByteString
   }
   deriving (Eq, Ord, Generic, Show)
 

@@ -12,11 +12,11 @@ import System.FilePath
 import Stg.Syntax
 
 writeDfeFacts :: FilePath -> Module -> IO ()
-writeDfeFacts stgbinFname Module{..} = do
+writeDfeFacts prefixPath Module{..} = do
   let
       openFact :: String -> IO Handle
       openFact name = do
-        let factFile = stgbinFname -<.> name
+        let factFile = prefixPath -<.> name
         h <- openFile factFile WriteMode
         putStrLn factFile
         pure h

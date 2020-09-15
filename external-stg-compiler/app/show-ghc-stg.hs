@@ -22,9 +22,9 @@ showSDoc = GHC.showSDoc GHC.unsafeGlobalDynFlags
 main :: IO ()
 main = runGhc (Just libdir) . liftIO $ do
 
-  stgbins <- getArgs
-  forM_ stgbins $ \stgbinName -> do
-    putStrLn $ "reading   " ++ stgbinName
-    extStgModule <- readStgbin stgbinName
+  modpaks <- getArgs
+  forM_ modpaks $ \modpakName -> do
+    putStrLn $ "reading   " ++ modpakName
+    extStgModule <- readModpakL modpakName modpakStgbinPath decodeStgbin
     let StgModule{..} = toStg extStgModule
     putStrLn . showSDoc $ GHC.pprStgTopBindings stgTopBindings

@@ -514,8 +514,8 @@ cvtForeignSrcLang = \case
   GHC.RawObject   -> RawObject
 
 -- module conversion
-cvtModule :: GHC.CoreProgram -> GHC.CoreProgram -> String -> GHC.UnitId -> GHC.ModuleName -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
-cvtModule core prep_core phase unitId' modName' binds foreignStubs foreignFiles =
+cvtModule :: String -> GHC.UnitId -> GHC.ModuleName -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
+cvtModule phase unitId' modName' binds foreignStubs foreignFiles =
   Module
   { modulePhase               = BS8.pack phase
   , moduleUnitId              = unitId
@@ -527,9 +527,6 @@ cvtModule core prep_core phase unitId' modName' binds foreignStubs foreignFiles 
   , moduleTyCons              = tyCons
   , moduleTopBindings         = topBinds
   , moduleForeignFiles        = [(cvtForeignSrcLang s, p) | (s, p) <- foreignFiles]
-  , moduleCoreSrc             = bs8SDoc $ GHC.pprCoreBindings core
-  , modulePrepCoreSrc         = bs8SDoc $ GHC.pprCoreBindings prep_core
-  , moduleStgSrc              = bs8SDoc $ GHC.pprStgTopBindings binds
   } where
       ((topBinds, externalIds), Env{..}) = runState (cvtTopBinds binds) initialEnv
 

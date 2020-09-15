@@ -131,7 +131,7 @@ compileProgram backend incPaths libPaths ldOpts clikeFiles stubs tyCons topBinds
     -- save exported external STG
     let stgFName = "whole_program_original.stgbin"
     putStrLn $ "writing " ++ stgFName
-    encodeFile stgFName $ C.cvtModule [] [] "whole-program-stg" mainUnitId (mkModuleName ":Main") topBinds_simple NoStubs []
+    encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnitId (mkModuleName ":Main") topBinds_simple NoStubs []
 
     putStrLn "==== STG ===="
 --    putStrLn $ showSDoc dflags $ pprStgTopBindings topBinds_simple
@@ -144,7 +144,7 @@ compileProgram backend incPaths libPaths ldOpts clikeFiles stubs tyCons topBinds
   liftIO $ do
     let stgFName = "whole_program_unarised.stgbin"
     putStrLn $ "writing " ++ stgFName
-    encodeFile stgFName $ C.cvtModule [] [] "whole-program-stg" mainUnitId (mkModuleName ":Main") topBinds NoStubs []
+    encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnitId (mkModuleName ":Main") topBinds NoStubs []
 
   -- construct STG program manually
   -- TODO: specify the following properly

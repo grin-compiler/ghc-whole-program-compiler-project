@@ -127,9 +127,6 @@ reconModule Module{..} = mod where
     , moduleTyCons              = tyConList
     , moduleTopBindings         = binds
     , moduleForeignFiles        = moduleForeignFiles
-    , moduleCoreSrc             = moduleCoreSrc
-    , modulePrepCoreSrc         = modulePrepCoreSrc
-    , moduleStgSrc              = moduleStgSrc
     }
 
   bm = BinderMap

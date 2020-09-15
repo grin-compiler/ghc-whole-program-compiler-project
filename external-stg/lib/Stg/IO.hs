@@ -1,28 +1,65 @@
 module Stg.IO
-    ( -- * Convenient IO
-      readStgbin
-    , readStgbin'
-    , readStgbinInfo
-    , readStgbinStubs
+    ( -- * Convenient Modpak IO
+      readModpakS
+    , readModpakL
+      -- * Convenient Decoding
+    , decodeStgbin
+    , decodeStgbin'
+    , decodeStgbinInfo
+    , decodeStgbinStubs
+    , decodeStgbinModuleName
+      -- .fullpak and .modpak content structure
+    , fullpakAppInfoPath
+    , modpakStgbinPath
     ) where
 
 import Prelude hiding (readFile)
 
+import Control.Monad.IO.Class
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import Data.Binary
 import Data.Binary.Get
+import Codec.Archive.Zip
+import System.FilePath
 
 import Stg.Syntax
 import Stg.Reconstruct
 
-readStgbin' :: FilePath -> IO SModule
-readStgbin' fname = decode <$> BSL.readFile fname
+-- from .modpak file
 
-readStgbin :: FilePath -> IO Module
-readStgbin fname = reconModule <$> readStgbin' fname
+readModpakS :: FilePath -> String -> (BS.ByteString -> a) -> IO a
+readModpakS modpakPath fname f = do
+  s <- mkEntrySelector fname
+  f <$> withArchive modpakPath (getEntry s)
 
-readStgbinInfo :: FilePath -> IO (Name, UnitId, ModuleName, ForeignStubs, Bool, [(UnitId, [ModuleName])])
-readStgbinInfo fname = decode <$> BSL.readFile fname
+readModpakL :: FilePath -> String -> (BSL.ByteString -> a) -> IO a
+readModpakL modpakPath fname f = do
+  s <- mkEntrySelector fname
+  f . BSL.fromStrict <$> withArchive modpakPath (getEntry s)
 
-readStgbinStubs :: FilePath -> IO (Name, UnitId, ModuleName, ForeignStubs)
-readStgbinStubs fname = decode <$> BSL.readFile fname
+-- from bytestring
+
+decodeStgbin' :: BSL.ByteString -> SModule
+decodeStgbin' = decode
+
+decodeStgbin :: BSL.ByteString -> Module
+decodeStgbin = reconModule . decodeStgbin'
+
+decodeStgbinInfo :: BSL.ByteString -> (Name, UnitId, ModuleName, ForeignStubs, Bool, [(UnitId, [ModuleName])])
+decodeStgbinInfo = decode
+
+decodeStgbinStubs :: BSL.ByteString -> (Name, UnitId, ModuleName, ForeignStubs)
+decodeStgbinStubs = decode
+
+decodeStgbinModuleName :: BSL.ByteString -> (Name, UnitId, ModuleName)
+decodeStgbinModuleName = decode
+
+-- .modpak and .fullpak structure
+
+modpakStgbinPath :: FilePath
+modpakStgbinPath = "module.stgbin"
+
+fullpakAppInfoPath :: FilePath
+fullpakAppInfoPath = "app.info"
