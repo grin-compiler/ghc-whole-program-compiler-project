@@ -25,6 +25,8 @@ There is a set of prepared applications in the [ghc-wpc-sample-programs](https:/
 No special preparation needed if you use x64 Debian9, Ubuntu 16.04-17.10. It's only the regular stack based workflow.
 
 ## Usage (user)
+### DOES NOT WORK AT THE MOMENT, NEW BINARY RELEASE OF GHC-WPC IS NEEDED
+### try the GHC-WPC developer usage way
 
 The user of External STG is the one who does not alter the Ext-STG IR, instead just uses it via the `external-stg` package.
 I.e. `external-stg-compiler` is such an example.
