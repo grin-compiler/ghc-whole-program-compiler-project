@@ -14,6 +14,7 @@ data Modpak
   , stgbinPath  :: FilePath
   , ghcstgPath  :: FilePath
   , hsSrcPath   :: Maybe FilePath
+  , ghccorePath :: Maybe FilePath
   }
 
 modpak :: Parser Modpak
@@ -22,6 +23,7 @@ modpak = Modpak
   <*> strOption (long "stgbin" <> metavar "FILENAME" <> help "Stgbin file to be added to the archive")
   <*> strOption (long "ghcstg" <> metavar "FILENAME" <> help "Pretty printed GHC Stg file to be added to the archive")
   <*> optional (strOption (long "hssrc" <> metavar "FILENAME" <> help "Haskell source file to be added to the archive"))
+  <*> optional (strOption (long "ghccore" <> metavar "FILENAME" <> help "Pretty printed GHC Core file to be added to the archive"))
 
 main :: IO ()
 main = do
@@ -31,6 +33,7 @@ main = do
   stgbinEntry <- mkEntrySelector "module.stgbin"
   ghcstgData  <- BS.readFile ghcstgPath
   ghcstgEntry <- mkEntrySelector "module.ghcstg"
+  ghccoreEntry <- mkEntrySelector "module.ghccore"
   hsEntry <- mkEntrySelector "module.hs"
   createArchive modpakName $ do
     addEntry Store stgbinData stgbinEntry
@@ -43,3 +46,9 @@ main = do
         hsData <- liftIO $ BS.readFile hs
         addEntry Store hsData hsEntry
         setExternalFileAttrs (fromFileMode 0o0644) hsEntry
+    case ghccorePath of
+      Nothing -> pure ()
+      Just c -> do
+        coreData <- liftIO $ BS.readFile c
+        addEntry Store coreData ghccoreEntry
+        setExternalFileAttrs (fromFileMode 0o0644) ghccoreEntry

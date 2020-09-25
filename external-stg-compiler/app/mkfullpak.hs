@@ -2,6 +2,7 @@
 
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.Catch
 import Options.Applicative
 import Data.Semigroup ((<>))
 import qualified Data.ByteString.Char8 as BS8
@@ -58,10 +59,12 @@ main = do
             [ "module.stgbin"
             ] ++ if stgbinsOnly then [] else
             [ "module.ghcstg"
+            , "module.ghccore"
             , "module.hs"
             ]
       forM_ files $ \fn -> do
         (src, dst) <- liftIO $ do
           (,) <$> mkEntrySelector fn <*> mkEntrySelector (modModuleName </> fn)
-        copyEntry modModpakPath src dst
-        setExternalFileAttrs (fromFileMode 0o0644) dst
+        flip catch (\EntryDoesNotExist{} -> pure ()) $ do
+          copyEntry modModpakPath src dst
+          setExternalFileAttrs (fromFileMode 0o0644) dst

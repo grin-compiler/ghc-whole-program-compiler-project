@@ -100,6 +100,7 @@ executable mkfullpak
   main-is:             mkfullpak.hs
   build-depends:       base
                      , containers
+                     , exceptions
                      , optparse-applicative
                      , filepath
                      , bytestring
