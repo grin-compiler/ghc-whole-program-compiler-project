@@ -73,6 +73,8 @@ reconLocalBinder BinderMap{..} SBinder{..} = -- HINT: local binders only
   , binderType        = sbinderType
   , binderTypeSig     = sbinderTypeSig
   , binderDetails     = sbinderDetails
+  , binderInfo        = sbinderInfo
+  , binderDefLoc      = sbinderDefLoc
   , binderUnitId      = bmUnitId
   , binderModule      = bmModule
   , binderScope       = LocalScope
@@ -87,6 +89,7 @@ reconDataCon u m tc SDataCon{..} = DataCon
   , dcModule  = m
   , dcRep     = sdcRep
   , dcWorker  = mkTopBinder u m (sbinderScope sdcWorker) sdcWorker
+  , dcDefLoc  = sdcDefLoc
   , dcTyCon   = tc
   }
 
@@ -98,6 +101,7 @@ reconTyCon u m STyCon{..} = tc where
     , tcUnitId    = u
     , tcModule    = m
     , tcDataCons  = map (reconDataCon u m tc) stcDataCons
+    , tcDefLoc    = stcDefLoc
     }
 
 mkTopBinder :: UnitId -> ModuleName -> Scope -> SBinder -> Binder
@@ -108,6 +112,8 @@ mkTopBinder u m scope SBinder{..} =
   , binderType        = sbinderType
   , binderTypeSig     = sbinderTypeSig
   , binderDetails     = sbinderDetails
+  , binderInfo        = sbinderInfo
+  , binderDefLoc      = sbinderDefLoc
   , binderUnitId      = u
   , binderModule      = m
   , binderScope       = scope
@@ -120,6 +126,7 @@ reconModule Module{..} = mod where
     { modulePhase               = modulePhase
     , moduleUnitId              = moduleUnitId
     , moduleName                = moduleName
+    , moduleSourceFilePath      = moduleSourceFilePath
     , moduleForeignStubs        = moduleForeignStubs
     , moduleHasForeignExported  = moduleHasForeignExported
     , moduleDependency          = moduleDependency

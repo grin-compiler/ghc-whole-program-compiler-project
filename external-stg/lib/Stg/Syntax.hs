@@ -18,6 +18,10 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import Data.Binary
 
+-- idinfo
+
+type IdInfo = BS8.ByteString
+
 -- data types
 
 type Name = BS8.ByteString
@@ -28,6 +32,42 @@ data Unique
 
 instance Show Unique where
  show (Unique c n) = c : show n
+
+-- source location related
+
+data RealSrcSpan
+  = RealSrcSpan'
+  { srcSpanFile   :: !Name
+  , srcSpanSLine  :: !Int
+  , srcSpanSCol   :: !Int
+  , srcSpanELine  :: !Int
+  , srcSpanECol   :: !Int
+  }
+  deriving (Eq, Ord, Generic, Show)
+
+data BufSpan
+  = BufSpan
+  { bufSpanStart  :: !Int
+  , bufSpanEnd    :: !Int
+  }
+  deriving (Eq, Ord, Generic, Show)
+
+data SrcSpan
+  = RealSrcSpan   !RealSrcSpan !(Maybe BufSpan)
+  | UnhelpfulSpan !Name
+  deriving (Eq, Ord, Generic, Show)
+
+-- tickish related
+
+data Tickish
+  = ProfNote
+  | HpcTick
+  | Breakpoint
+  | SourceNote
+    { sourceSpan :: RealSrcSpan
+    , sourceName :: Name
+    }
+  deriving (Eq, Ord, Generic, Show)
 
 -- type related
 
@@ -100,6 +140,7 @@ data SDataCon
   , sdcId     :: !DataConId
   , sdcRep    :: !DataConRep
   , sdcWorker :: !SBinder
+  , sdcDefLoc :: !SrcSpan
   }
   deriving (Eq, Ord, Generic, Show)
 
@@ -108,6 +149,7 @@ data STyCon
   { stcName     :: !Name
   , stcId       :: !TyConId
   , stcDataCons :: ![SDataCon]
+  , stcDefLoc   :: !SrcSpan
   }
   deriving (Eq, Ord, Generic, Show)
 
@@ -121,6 +163,7 @@ data DataCon
   , dcRep    :: !DataConRep
   , dcTyCon  :: !TyCon
   , dcWorker :: !Binder
+  , dcDefLoc :: !SrcSpan
   }
   deriving (Eq, Ord, Generic, Show)
 
@@ -131,6 +174,7 @@ data TyCon
   , tcUnitId    :: !UnitId
   , tcModule    :: !ModuleName
   , tcDataCons  :: ![DataCon]
+  , tcDefLoc    :: !SrcSpan
   }
   deriving (Eq, Ord, Generic, Show)
 
@@ -173,6 +217,8 @@ data SBinder
     , sbinderTypeSig  :: !Name
     , sbinderScope    :: !Scope
     , sbinderDetails  :: !IdDetails
+    , sbinderInfo     :: !IdInfo
+    , sbinderDefLoc   :: !SrcSpan
     }
   deriving (Eq, Ord, Generic, Show)
 
@@ -184,6 +230,8 @@ data Binder
     , binderTypeSig   :: !Name
     , binderScope     :: !Scope
     , binderDetails   :: !IdDetails
+    , binderInfo      :: !IdInfo
+    , binderDefLoc    :: !SrcSpan
     , binderUnitId    :: !UnitId
     , binderModule    :: !ModuleName
     , binderTopLevel  :: !Bool
@@ -288,6 +336,10 @@ data Expr' idBnd idOcc dcOcc tcOcc
   | StgLetNoEscape
         (Binding' idBnd idOcc dcOcc tcOcc)  -- right hand sides (see below)
         (Expr' idBnd idOcc dcOcc tcOcc)     -- body
+
+  | StgTick
+        Tickish
+        (Expr' idBnd idOcc dcOcc tcOcc)     -- sub expression
   deriving (Eq, Ord, Generic, Show)
 
 data AltType' tcOcc
@@ -385,6 +437,7 @@ data Module' idBnd idOcc dcOcc tcBnd tcOcc
   { modulePhase               :: !BS8.ByteString
   , moduleUnitId              :: !UnitId
   , moduleName                :: !ModuleName
+  , moduleSourceFilePath      :: !(Maybe Name) -- HINT: RealSrcSpan's source file refers to this value
   , moduleForeignStubs        :: !ForeignStubs
   , moduleHasForeignExported  :: !Bool
   , moduleDependency          :: ![(UnitId, [ModuleName])]
@@ -443,6 +496,10 @@ instance Binary SDataCon
 instance Binary STyCon
 instance Binary ForeignStubs
 instance Binary ForeignSrcLang
+instance Binary RealSrcSpan
+instance Binary BufSpan
+instance Binary SrcSpan
+instance Binary Tickish
 instance (Binary tcOcc) => Binary (AltType' tcOcc)
 instance (Binary dcOcc) => Binary (AltCon' dcOcc)
 instance (Binary idOcc) => Binary (Arg' idOcc)

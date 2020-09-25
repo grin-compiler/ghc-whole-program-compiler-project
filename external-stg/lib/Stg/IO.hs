@@ -47,13 +47,13 @@ decodeStgbin' = decode
 decodeStgbin :: BSL.ByteString -> Module
 decodeStgbin = reconModule . decodeStgbin'
 
-decodeStgbinInfo :: BSL.ByteString -> (Name, UnitId, ModuleName, ForeignStubs, Bool, [(UnitId, [ModuleName])])
+decodeStgbinInfo :: BSL.ByteString -> (Name, UnitId, ModuleName, Maybe Name, ForeignStubs, Bool, [(UnitId, [ModuleName])])
 decodeStgbinInfo = decode
 
-decodeStgbinStubs :: BSL.ByteString -> (Name, UnitId, ModuleName, ForeignStubs)
+decodeStgbinStubs :: BSL.ByteString -> (Name, UnitId, ModuleName, Maybe Name, ForeignStubs)
 decodeStgbinStubs = decode
 
-decodeStgbinModuleName :: BSL.ByteString -> (Name, UnitId, ModuleName)
+decodeStgbinModuleName :: BSL.ByteString -> (Name, UnitId, ModuleName, Maybe Name)
 decodeStgbinModuleName = decode
 
 -- .modpak and .fullpak structure

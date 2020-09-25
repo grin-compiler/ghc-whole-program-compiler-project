@@ -27,6 +27,7 @@ import qualified GHC.Types.Id           as GHC
 import qualified GHC.Types.Id.Info      as GHC
 import qualified GHC.Types.Literal      as GHC
 import qualified GHC.Types.Name         as GHC
+import qualified GHC.Types.SrcLoc       as GHC
 import qualified GHC.Types.RepType      as GHC
 import qualified GHC.Types.Unique       as GHC
 import qualified GHC.Types.Module       as GHC
@@ -59,6 +60,8 @@ data Env
 
   -- debug state
   , envDefinedUnique  :: IntSet
+
+  , envNameSrcLoc     :: IntMap GHC.SrcSpan
   }
 
 emptyEnv :: Env
@@ -66,11 +69,22 @@ emptyEnv = Env
   { envExternalIds    = IntMap.empty
   , envTyCons         = IntMap.empty
   , envDefinedUnique  = IntSet.empty
+  , envNameSrcLoc     = IntMap.empty
   }
 
 type M = State Env
 
 -- debug
+
+checkName :: GHC.Name -> M ()
+checkName n = do
+  let key = uniqueKey n
+      loc = GHC.nameSrcSpan n
+  lastLoc <- state $ \env@Env{..} -> (IntMap.lookup key envNameSrcLoc, env {envNameSrcLoc = IntMap.insert key loc envNameSrcLoc})
+  case lastLoc of
+    Nothing -> pure ()
+    Just l  -> when (l == loc) $ do
+      error $ ppr n ++ " has multiple source locations, previous: " ++ show l ++ " current: " ++ show loc
 
 defKey :: (GHC.Uniquable a, GHC.Outputable a) => a -> M ()
 defKey a = do
@@ -110,6 +124,35 @@ cvtModuleName = ModuleName . GHC.bytesFS . GHC.moduleNameFS
 
 cvtUnitIdAndModuleName :: GHC.Module -> (UnitId, ModuleName)
 cvtUnitIdAndModuleName m = (cvtUnitId $ GHC.moduleUnitId m, cvtModuleName $ GHC.moduleName m)
+
+-- source location conversion
+
+cvtBufSpan :: GHC.BufSpan -> BufSpan
+cvtBufSpan (GHC.BufSpan s e) = BufSpan (GHC.bufPos s) (GHC.bufPos e)
+
+cvtRealSrcSpan :: GHC.RealSrcSpan -> RealSrcSpan
+cvtRealSrcSpan rs =
+  RealSrcSpan'
+  { srcSpanFile   = GHC.bytesFS $ GHC.srcSpanFile rs
+  , srcSpanSLine  = GHC.srcSpanStartLine rs
+  , srcSpanSCol   = GHC.srcSpanStartCol rs
+  , srcSpanELine  = GHC.srcSpanEndLine rs
+  , srcSpanECol   = GHC.srcSpanEndCol rs
+  }
+
+cvtSrcSpan :: GHC.SrcSpan -> SrcSpan
+cvtSrcSpan = \case
+  GHC.RealSrcSpan s mb  -> RealSrcSpan (cvtRealSrcSpan s) (fmap cvtBufSpan mb)
+  GHC.UnhelpfulSpan s   -> UnhelpfulSpan $ GHC.bytesFS s
+
+-- tickish conversion
+
+cvtTickish :: GHC.Tickish id -> Tickish
+cvtTickish = \case
+  GHC.ProfNote{}      -> ProfNote
+  GHC.HpcTick{}       -> HpcTick
+  GHC.Breakpoint{}    -> Breakpoint
+  GHC.SourceNote{..}  -> SourceNote (cvtRealSrcSpan sourceSpan) (BS8.pack sourceName)
 
 -- data con conversion
 
@@ -312,6 +355,7 @@ cvtOccId x = do
     let key = uniqueKey x
     new <- IntMap.notMember key <$> gets envExternalIds
     when new $ modify' $ \m@Env{..} -> m {envExternalIds = IntMap.insert key x envExternalIds}
+  --checkName name
   pure $ mkBinderId x
 
 isForeignExportedId :: GHC.Id -> Bool
@@ -353,6 +397,8 @@ cvtBinderIdClosureParam details msg v
       , sbinderTypeSig  = BS8.pack . ppr $ GHC.idType v
       , sbinderScope    = cvtScope v
       , sbinderDetails  = details
+      , sbinderInfo     = BS8.pack . ppr $ GHC.idInfo v
+      , sbinderDefLoc   = cvtSrcSpan . GHC.nameSrcSpan $ GHC.getName v
       }
   | otherwise = error $ "Type binder in STG: " ++ (show $ cvtOccName $ GHC.getOccName v)
 
@@ -366,6 +412,8 @@ cvtBinderId details msg v
       , sbinderTypeSig  = BS8.pack . ppr $ GHC.idType v
       , sbinderScope    = cvtScope v
       , sbinderDetails  = details
+      , sbinderInfo     = BS8.pack . ppr $ GHC.idInfo v
+      , sbinderDefLoc   = cvtSrcSpan . GHC.nameSrcSpan $ GHC.getName v
       }
   | otherwise = error $ "Type binder in STG: " ++ (show $ cvtOccName $ GHC.getOccName v)
 
@@ -377,6 +425,7 @@ cvtBinderIdClosureParamM msg i = do
 
 cvtBinderIdM :: String -> GHC.Id -> M SBinder
 cvtBinderIdM msg i = do
+  --checkName $ GHC.getName i
   --defKey i -- debug
   details <- cvtIdDetails i
   pure $ cvtBinderId details msg i
@@ -459,7 +508,7 @@ cvtExpr = \case
   GHC.StgCase e b at al     -> StgCase <$> cvtExpr e <*> cvtBinderIdM "StgCase" b <*> cvtAltType at <*> mapM cvtAlt al
   GHC.StgLet _ b e          -> StgLet <$> cvtBind b <*> cvtExpr e
   GHC.StgLetNoEscape _ b e  -> StgLetNoEscape <$> cvtBind b <*> cvtExpr e
-  GHC.StgTick _ e           -> cvtExpr e
+  GHC.StgTick t e           -> StgTick (cvtTickish t) <$> cvtExpr e
   e                         -> error $ "invalid stg expression: " ++ ppr e
 
 -- stg rhs conversion (heap objects)
@@ -514,12 +563,13 @@ cvtForeignSrcLang = \case
   GHC.RawObject   -> RawObject
 
 -- module conversion
-cvtModule :: String -> GHC.UnitId -> GHC.ModuleName -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
-cvtModule phase unitId' modName' binds foreignStubs foreignFiles =
+cvtModule :: String -> GHC.UnitId -> GHC.ModuleName -> Maybe FilePath -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
+cvtModule phase unitId' modName' mSrcPath binds foreignStubs foreignFiles =
   Module
   { modulePhase               = BS8.pack phase
   , moduleUnitId              = unitId
   , moduleName                = modName
+  , moduleSourceFilePath      = fmap BS8.pack mSrcPath
   , moduleForeignStubs        = cvtForeignStubs foreignStubs
   , moduleHasForeignExported  = any isForeignExportedId stgTopIds
   , moduleDependency          = dependencies
@@ -558,6 +608,7 @@ mkTyCon tc = (cvtUnitIdAndModuleName $ GHC.nameModule n, b) where
       { stcName     = cvtOccName $ GHC.getOccName n
       , stcId       = TyConId . cvtUnique . GHC.getUnique $ n
       , stcDataCons = map mkSDataCon . sortDataCons $ GHC.tyConDataCons tc
+      , stcDefLoc   = cvtSrcSpan $ GHC.nameSrcSpan n
       }
   sortDataCons l = IntMap.elems $ IntMap.fromList [(GHC.dataConTag dc, dc) | dc <- l]
 
@@ -569,6 +620,7 @@ mkSDataCon dc = SDataCon
                   then UnboxedTupleCon . GHC.tyConArity $ GHC.dataConTyCon dc
                   else AlgDataCon $ concatMap (getConArgRep . dcpp "3" GHC.typePrimRepArgs) $ dcpp "2" GHC.dataConRepArgTys $ dcpp "1" id $ dc
   , sdcWorker = cvtBinderId idDetails "dataConWorkId" workerId
+  , sdcDefLoc = cvtSrcSpan $ GHC.nameSrcSpan n
   } where
       dataConId = DataConId . cvtUnique . GHC.getUnique $ n
       workerId  = GHC.dataConWorkId dc

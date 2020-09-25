@@ -96,7 +96,7 @@ getAppModuleMapping ghcStgAppFname = do
   -- load app module names from stgbins
   appModules <- forM o_files $ \o -> do
     let modpak = root </> o ++ "_modpak"
-    (_phase, _unitId, moduleName) <- readModpakL modpak modpakStgbinPath decodeStgbinModuleName
+    (_phase, _unitId, moduleName, _srcPath) <- readModpakL modpak modpakStgbinPath decodeStgbinModuleName
     pure StgModuleInfo
           { modModuleName   = BS8.unpack $ getModuleName moduleName
           , modModpakPath   = modpak
@@ -112,7 +112,7 @@ collectProgramModules :: [FilePath] -> String -> String -> [(String, String, Str
 collectProgramModules modpakFileNames unitId mod liveSymbols = do
   -- filter dependenies only
   (fexportedList, depList) <- fmap unzip . forM modpakFileNames $ \fname -> do
-    (_, u, m, _, hasForeignExport, deps) <- readModpakL fname modpakStgbinPath decodeStgbinInfo
+    (_, u, m, _, _, hasForeignExport, deps) <- readModpakL fname modpakStgbinPath decodeStgbinInfo
     let fexport = if hasForeignExport then Just (u, m) else Nothing
     pure (fexport, ((u, m), [(du, dm) | (du, dl) <- deps, dm <- dl]))
   let fnameMap  = Map.fromList $ zip (map fst depList) modpakFileNames
