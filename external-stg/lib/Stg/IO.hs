@@ -2,6 +2,7 @@ module Stg.IO
     ( -- * Convenient Modpak IO
       readModpakS
     , readModpakL
+    , doesModpakEntryExist
       -- * Convenient Decoding
     , decodeStgbin
     , decodeStgbin'
@@ -10,6 +11,7 @@ module Stg.IO
     , decodeStgbinModuleName
       -- .fullpak and .modpak content structure
     , fullpakAppInfoPath
+    , modpakHaskellSourcePath
     , modpakStgbinPath
     ) where
 
@@ -39,6 +41,11 @@ readModpakL modpakPath fname f = do
   s <- mkEntrySelector fname
   f . BSL.fromStrict <$> withArchive modpakPath (getEntry s)
 
+doesModpakEntryExist :: FilePath -> String -> IO Bool
+doesModpakEntryExist modpakPath fname = do
+  s <- mkEntrySelector fname
+  withArchive modpakPath $ doesEntryExist s
+
 -- from bytestring
 
 decodeStgbin' :: BSL.ByteString -> SModule
@@ -60,6 +67,9 @@ decodeStgbinModuleName = decode
 
 modpakStgbinPath :: FilePath
 modpakStgbinPath = "module.stgbin"
+
+modpakHaskellSourcePath :: FilePath
+modpakHaskellSourcePath = "module.hs"
 
 fullpakAppInfoPath :: FilePath
 fullpakAppInfoPath = "app.info"
