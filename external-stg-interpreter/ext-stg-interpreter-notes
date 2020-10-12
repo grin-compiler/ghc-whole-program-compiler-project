@@ -1,0 +1,54 @@
+stg interpreter state:
+  stack
+    unboxed tuples
+    stack frame = local binders
+    let no escape??
+  heap
+    stg heap objects?
+    data constructor
+    closure object
+    app node
+
+NOTE:
+  only the heap objects are tagged at run-time, atom type observation is not allowed during evaluation! ; use the reptype instead.
+
+READ:
+  - Apply.cmm
+  - StgStdThunks.cmm
+
+Q: only case forces heap objects?? what about apply? it must progress PAPS and thunks
+Q: what is the semantic of StgApp?
+Q: are all thunks created at compile time, can a thunk be created at runtime?
+Q: can any heap object turn into a thunk?
+
+
+TODO:
+  - refresh unique values to generate globally unique ones
+  - compile dynlib version of package .cbits
+
+IDEA:
+  GC implementation in souffle datalog:
+    intmap heap: no copying, stable/constant heap locations
+    interpreter incrementally emit reachablity datalog facts
+    GC process:
+      - collect roots from stack
+      - calculate transitive closure with souffle
+      - delete unreachable heap values and their datalog facts
+
+  GC optimized implementation:
+    IntMap for old generations        - sparse locations
+    Vector for the newers generation  - dense locations
+    newGenStartLocation               - all locations above this index belongs to the new generation
+    updates are collected for the old generation
+    at GC facts are incrementally generated:
+      - new gen facts
+      - old gen update facts
+
+  Implementation method:
+    first:  pure and simple haskell
+    then:   gradually optimize if necessary
+
+ffi libs:
+  https://hackage.haskell.org/package/unix-2.7.2.2/docs/System-Posix-DynamicLinker.html
+  https://hackage.haskell.org/package/rtld
+  https://www.stackage.org/lts-16.16/package/libffi-0.1
