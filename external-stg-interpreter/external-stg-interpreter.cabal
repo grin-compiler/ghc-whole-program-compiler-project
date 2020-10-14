@@ -14,6 +14,38 @@ cabal-version:       >=1.10
 library
   exposed-modules:
     Stg.Interpreter
+    Stg.Interpreter.Base
+    Stg.Interpreter.PrimOp.Addr
+    Stg.Interpreter.PrimOp.ArrayArray
+    Stg.Interpreter.PrimOp.Array
+    Stg.Interpreter.PrimOp.ByteArray
+    Stg.Interpreter.PrimOp.Char
+    Stg.Interpreter.PrimOp.Compact
+    Stg.Interpreter.PrimOp.Concurrency
+    Stg.Interpreter.PrimOp.DelayWait
+    Stg.Interpreter.PrimOp.Double
+    Stg.Interpreter.PrimOp.Exceptions
+    Stg.Interpreter.PrimOp.Float
+    Stg.Interpreter.PrimOp.GHCiBytecode
+    Stg.Interpreter.PrimOp.Int16
+    Stg.Interpreter.PrimOp.Int8
+    Stg.Interpreter.PrimOp.Int
+    Stg.Interpreter.PrimOp.MiscEtc
+    Stg.Interpreter.PrimOp.MutVar
+    Stg.Interpreter.PrimOp.MVar
+    Stg.Interpreter.PrimOp.Narrowings
+    Stg.Interpreter.PrimOp.Parallelism
+    Stg.Interpreter.PrimOp.Prefetch
+    Stg.Interpreter.PrimOp.SmallArray
+    Stg.Interpreter.PrimOp.StablePointer
+    Stg.Interpreter.PrimOp.STM
+    Stg.Interpreter.PrimOp.TagToEnum
+    Stg.Interpreter.PrimOp.Unsafe
+    Stg.Interpreter.PrimOp.WeakPointer
+    Stg.Interpreter.PrimOp.Word16
+    Stg.Interpreter.PrimOp.Word8
+    Stg.Interpreter.PrimOp.Word
+
   hs-source-dirs:      lib
   ghc-options:         -Wall
   build-depends:       base,

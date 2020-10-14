@@ -1,22 +1,30 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter where
 
-import Debug.Trace
 import Control.Monad.State
 
-import Data.Char
-import Data.List (partition, concatMap)
+import Data.List (partition)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS8
-import Data.Vector (Vector)
-import qualified Data.Vector as V
 
 import Stg.Syntax
 import Stg.Program
+
+import Stg.Interpreter.Base
+
+import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
+import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
+import qualified Stg.Interpreter.PrimOp.ByteArray     as PrimByteArray
+import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
+import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
+import qualified Stg.Interpreter.PrimOp.Exceptions    as PrimExceptions
+import qualified Stg.Interpreter.PrimOp.Int           as PrimInt
+import qualified Stg.Interpreter.PrimOp.MutVar        as PrimMutVar
+import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
+import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
+import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
+import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
 
 {-
   Q: what is the operational semantic of StgApp
@@ -32,132 +40,11 @@ import Stg.Program
     - call main
 -}
 
-newtype Id = Id {unId :: Binder}
-
-instance Eq Id where
-  (Id a) == (Id b) = binderUniqueName a == binderUniqueName b -- FIXME: make this fast
-
-instance Ord Id where
-  compare (Id a) (Id b) = compare (binderUniqueName a) (binderUniqueName b) -- FIXME: make this fast
-
-instance Show Id where
-  show (Id a) = show $ binderUniqueName a
-
-type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
-
-data HeapObject
-  = Con
-    { hoCon         :: DataCon
-    , hoConArgs     :: [Atom]
-    }
-  | Closure
-    { hoName        :: Id
-    , hoCloBody     :: StgRhsClosure
-    , hoEnv         :: Env    -- local environment ; with live variables only, everything else is pruned
-    , hoCloArgs     :: [Atom]
-    , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
-    }
-  | Blackhole HeapObject
-  deriving (Show, Eq, Ord)
-
-data StackContinuation
-  = CaseOf  Id AltType [Alt]  -- pattern match on the result
-  | Update  Addr                  -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
-  | Apply   [Atom]                -- apply args on the result heap object
-  deriving (Show, Eq, Ord)
-
-data Atom     -- Q: should atom fit into a cpu register?
-  = HeapPtr   Addr
-  | Literal   Lit             -- Q: shopuld we allow string literals, or should string lits be modeled as StringPtr?
-  | StringPtr Int ByteString  -- HINT: StgTopStringLit ; maybe include its origin? ; the PrimRep is AddrRep
-  | RtsPrim   -- ??? or is this a heap object?
-  | Void
-  | StablePointer Atom -- TODO: need proper implementation
-  | MVar          Int
-  | MutableArray  Int
-  | MutVar        Int
-  deriving (Show, Eq, Ord)
-
-type ReturnValue = [Atom]
-
-type Addr   = Int
-type Heap   = IntMap HeapObject
-type Env    = Map Id Atom   -- NOTE: must contain only the defined local variables
-type Stack  = [(Env, StackContinuation)]
-
-{-
-  Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
--}
-
-data StgState
-  = StgState
-  { ssHeap      :: !Heap
-  , ssEnv       :: !Env
---  , ssStack     :: [(Env, StackContinuation)] -- TODO: use reified stack instead of the host language stack
-  , ssEvalStack :: [Id]
-  , ssNextAddr  :: !Int
-  , ssMVars         :: IntMap (Maybe Atom)
-  , ssMutableArrays :: IntMap (Vector Atom)
-  , ssMutVars       :: IntMap Atom
-  }
-  deriving (Show, Eq, Ord)
-
-emptyStgState :: StgState
-emptyStgState = StgState
-  { ssHeap      = mempty
-  , ssEnv       = mempty
-  , ssEvalStack = []
-  , ssNextAddr  = 0
-  , ssMVars         = mempty
-  , ssMutableArrays = mempty
-  , ssMutVars       = mempty
-  }
-
-type M = State StgState
-
-freshHeapAddress :: M Addr
-freshHeapAddress = state $ \s@StgState{..} -> (ssNextAddr, s {ssNextAddr = succ ssNextAddr})
-
-allocAndStore :: HeapObject -> M Addr
-allocAndStore o = do
-  a <- freshHeapAddress
-  store a o
-  pure a
-
-store :: Addr -> HeapObject -> M ()
-store a o = modify' $ \s -> s {ssHeap = IntMap.insert a o (ssHeap s)}
-
-addEnv :: Binder -> Atom -> M ()
-addEnv b a = modify' $ \s -> s {ssEnv = Map.insert (Id b) a (ssEnv s)}
-
-stgErrorM :: String -> M a
-stgErrorM msg = do
-  es <- gets ssEvalStack
-  error $ unlines ["eval stack:", show es, msg]
-
-lookupEnv :: Binder -> M Atom
-lookupEnv b
- | binderId b == BinderId (Unique '0' 21) -- void#
- = pure Void
- | binderId b == BinderId (Unique '0' 15) -- realWorld#
- = pure Void
- | otherwise
- = do
-  env <- gets ssEnv
-  case Map.lookup (Id b) env of
-    Nothing -> stgErrorM $ "unknown variable: " ++ show b
-    Just a  -> pure a
 
 evalArg :: Arg -> M Atom
 evalArg = \case
   StgLitArg l -> pure $ Literal l
   StgVarArg b -> lookupEnv b
-
-update :: Atom -> [Atom] -> M [Atom]
-update (HeapPtr dst) result@[src] = do
-  o <- readHeap src
-  store dst o
-  pure result
 
 builtinStgEval :: Atom -> M [Atom]
 builtinStgEval a = do
@@ -189,15 +76,6 @@ builtinStgEval a = do
             store l (Blackhole o)
             withEnv hoName hoEnv (argsM >> evalExpr e)
 
-withEnv :: Id -> Env -> M a -> M a
-withEnv i env m = do
-  save <- gets ssEnv
-  saveES <- gets ssEvalStack
-  modify' $ \s -> s {ssEnv = env, ssEvalStack = [i]}
-  res <- trace ("eval " ++ show i ++ " " ++ show (binderModule $ unId i)) $ m
-  modify' $ \s -> s {ssEnv = save, ssEvalStack = saveES}
-  pure res
-
 builtinStgApply :: Atom -> [Atom] -> M [Atom]
 builtinStgApply a args = do
   let argCount      = length args
@@ -228,18 +106,6 @@ builtinStgApply a args = do
         newAp <- freshHeapAddress
         store newAp (o {hoCloArgs = hoCloArgs ++ args, hoCloMissing = hoCloMissing - argCount})
         builtinStgEval (HeapPtr newAp)
-
-readHeap :: Atom -> M HeapObject
-readHeap (HeapPtr l) = do
-  h <- gets ssHeap
-  case IntMap.lookup l h of
-    Nothing -> stgErrorM $ "unknown heap address: " ++ show l
-    Just o  -> pure o
-
-readHeapCon :: Atom -> M HeapObject
-readHeapCon a = readHeap a >>= \o -> case o of
-    Con{} -> pure o
-    _     -> stgErrorM $ "expected con but got: " ++ show o
 
 evalExpr :: Expr -> M [Atom]
 evalExpr = \case
@@ -322,139 +188,9 @@ evalExpr = \case
         zipWithM_ addEnv altBinders result
         evalExpr altRHS
 
-  StgOpApp (StgPrimOp op) l _t _tc -> do
+  StgOpApp (StgPrimOp op) l t tc -> do
     args <- mapM evalArg l
-    case (op, args) of
-      ("catch#", [f, h, w]) -> builtinStgApply f [w]
-      ("myThreadId#", [w]) -> pure [RtsPrim] -- State# RealWorld -> (# State# RealWorld, ThreadId# #)
-      ("mkWeakNoFinalizer#", [_o, _b, w]) -> pure [RtsPrim] -- o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
-      ("getMaskingState#", [w]) -> pure [Literal $ LitNumber LitNumInt 1] -- State# RealWorld -> (# State# RealWorld, Int# #)
-      ("noDuplicate#", [s]) -> pure [s] --  State# s -> State# s
-
-      -- Mutable Array
-      ("newArray#", [Literal (LitNumber LitNumInt i), a, s]) -> do
-        -- Int# -> a -> State# s -> (# State# s, MutableArray# s a #)
-        let v = V.replicate (fromIntegral i) a
-        state (\s@StgState{..} -> let next = IntMap.size ssMutableArrays in ([MutableArray next], s {ssMutableArrays = IntMap.insert next v ssMutableArrays}))
-
-      ("readArray#", [MutableArray a, Literal (LitNumber LitNumInt i), s]) -> do
-        -- MutableArray# s a -> Int# -> State# s -> (# State# s, a #)
-        v <- lookupMutableArray a
-        pure [v V.! (fromIntegral i)]
-
-      ("writeArray#", [MutableArray m, Literal (LitNumber LitNumInt i), a, s]) -> do
-        -- MutableArray# s a -> Int# -> a -> State# s -> State# s
-        v <- lookupMutableArray m
-        modify' $ \s@StgState{..} -> s {ssMutableArrays = IntMap.insert m (v V.// [(fromIntegral i, a)]) ssMutableArrays}
-        pure [s]
-
-      -- MutVar
-      ("newMutVar#", [a, s]) -> do
-        -- a -> State# s -> (# State# s, MutVar# s a #)
-        state (\s@StgState{..} -> let next = IntMap.size ssMutVars in ([MutVar next], s {ssMutVars = IntMap.insert next a ssMutVars}))
-
-      ("readMutVar#", [MutVar m, s]) -> do
-        -- MutVar# s a -> State# s -> (# State# s, a #)
-        a <- lookupMutVar m
-        pure [a]
-
-      -- MVar
-      ("newMVar#", [s]) -> do
-        -- State# s -> (# State# s, MVar# s a #)
-        state (\s@StgState{..} -> let next = IntMap.size ssMVars in ([MVar next], s {ssMVars = IntMap.insert next Nothing ssMVars}))
-      ("putMVar#", [MVar m, a, s]) -> do
-        -- MVar# s a -> a -> State# s -> State# s
-        lookupMVar m >>= \case
-          Just{}  -> stgErrorM $ "TODO: blocking putMVar# for mvar " ++ show m
-          Nothing -> modify' $ \s@StgState{..} -> s {ssMVars = IntMap.insert m (Just a) ssMVars}
-        pure [s]
-      ("takeMVar#", [MVar m, s]) -> do
-        -- MVar# s a -> State# s -> (# State# s, a #)
-        lookupMVar m >>= \case
-          Nothing -> stgErrorM $ "TODO: blocking takeMVar# for mvar " ++ show m
-          Just a  -> state $ \s@StgState{..} -> ([a], s {ssMVars = IntMap.insert m Nothing ssMVars})
-
-      ("eqAddr#", [a, b]) -> pure [Literal $ LitNumber LitNumInt 0] -- Addr# -> Addr# -> Int#
-
-      -- TODO: implement stable pointers properly
-      ("makeStablePtr#", [a, s]) -> pure [StablePointer a] -- a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
-      ("deRefStablePtr#", [StablePointer a, s]) -> pure [a] -- TODO: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
-
-      ("maskUninterruptible#", [a]) -> pure [a] -- TODO : (State# RealWorld -> (# State# RealWorld, a #)) -> (State# RealWorld -> (# State# RealWorld, a #))
-      -- HACK:
-      ("maskUninterruptible#", [a, b]) -> builtinStgApply a [b]
-
-      ("<=#", [Literal (LitNumber LitNumInt a), Literal (LitNumber LitNumInt b)]) -> pure [Literal (LitNumber LitNumInt (if a <= b then 1 else 0))] -- Int# -> Int# -> Int#
-      (">=#", [Literal (LitNumber LitNumInt a), Literal (LitNumber LitNumInt b)]) -> pure [Literal (LitNumber LitNumInt (if a >= b then 1 else 0))] -- Int# -> Int# -> Int#
-
-      ("+#", [Literal (LitNumber LitNumInt a), Literal (LitNumber LitNumInt b)]) -> pure [Literal (LitNumber LitNumInt (a + b))] -- Int# -> Int# -> Int#
-      ("*#", [Literal (LitNumber LitNumInt a), Literal (LitNumber LitNumInt b)]) -> pure [Literal (LitNumber LitNumInt (a * b))] -- Int# -> Int# -> Int#
-
-      -- "uncheckedIShiftL#" args: [Literal (LitNumber LitNumInt 0),Literal (LitNumber LitNumInt 2)]
-      ("uncheckedIShiftL#", [a, b]) -> do
-        -- Int# -> Int# -> Int#
-        pure [a] -- TODO
-
-      ("newPinnedByteArray#", [Literal (LitNumber LitNumInt size), s]) -> do
-        -- Int# -> State# s -> (# State# s, MutableByteArray# s #)
-        pure [RtsPrim]
-
-      ("newAlignedPinnedByteArray#", [Literal (LitNumber LitNumInt size), Literal (LitNumber LitNumInt align), s]) -> do
-        -- Int# -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
-        pure [RtsPrim]
-
-      ("unsafeFreezeByteArray#", [a, s]) -> do
-        -- MutableByteArray# s -> State# s -> (# State# s, ByteArray# #)
-        pure [RtsPrim]
-
-      ("byteArrayContents#", [a]) -> do
-        -- ByteArray# -> Addr#
-        pure [Literal LitNullAddr]
-
-      ("readAddrOffAddr#", [addr, Literal (LitNumber LitNumInt offset), s]) -> do
-        -- Addr# -> Int# -> State# s -> (# State# s, Addr# #)
-        pure [Literal LitNullAddr]
-
-      ("readInt8OffAddr#", [addr, Literal (LitNumber LitNumInt offset), s]) -> do
-        -- Addr# -> Int# -> State# s -> (# State# s, Int# #)
-        pure [Literal (LitNumber LitNumInt 0)]
-
-      ("indexCharOffAddr#", [StringPtr base str, Literal (LitNumber LitNumInt offset)]) -> do
-        -- Addr# -> Int# -> Char#
-        pure [Literal $ LitChar $ BS8.index str (base + fromIntegral offset)]
-
-      ("plusAddr#", [StringPtr base str, Literal (LitNumber LitNumInt offset)]) -> do
-        -- Addr# -> Int# -> Addr#
-        pure [StringPtr (base + fromIntegral offset) str]
-
-      ("plusAddr#", [a, Literal (LitNumber LitNumInt offset)]) -> do
-        -- Addr# -> Int# -> Addr#
-        pure [a]
-
-
-      ("ord#", [Literal (LitChar c)]) -> do
-        -- Char# -> Int#
-        pure [Literal (LitNumber LitNumInt . fromIntegral $ ord c)]
-
-      ("narrow8Int#", [i]) -> do
-        -- Int# -> Int#
-        pure [i] -- TODO
-
-      -- "writeInt8OffAddr#" args: [Literal LitNullAddr,Literal (LitNumber LitNumInt 0),Literal (LitNumber LitNumInt 85),Void]
-      ("writeInt8OffAddr#", [a, b, c, s]) -> do
-        -- Addr# -> Int# -> Int# -> State# s -> State# s
-        pure [] -- TODO
-
-      ("touch#", [o, s]) -> do
-        -- o -> State# RealWorld -> State# RealWorld
-        pure []
-
-      -- "writeWideCharOffAddr#" args: [Literal LitNullAddr,Literal (LitNumber LitNumInt 0),Literal (LitChar 'a'),Void]
-      ("writeWideCharOffAddr#", [a, b, c, s]) -> do
-        -- Addr# -> Int# -> Char# -> State# s -> State# s
-        pure [] -- TODO
-
-      _ -> stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args
+    evalPrimOp op args t tc
 
   StgOpApp fop@(StgFCallOp (ForeignCall{..})) l t _tc -> do
     args <- mapM evalArg l
@@ -469,24 +205,6 @@ evalExpr = \case
       _ -> stgErrorM $ "unsupported StgFCallOp: " ++ show fop ++ " :: " ++ show t ++ " args: " ++ show args
 
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
-
-lookupMutVar :: Int -> M Atom
-lookupMutVar m = do
-  IntMap.lookup m <$> gets ssMutVars >>= \case
-    Nothing -> stgErrorM $ "unknown MutVar: " ++ show m
-    Just a  -> pure a
-
-lookupMVar :: Int -> M (Maybe Atom)
-lookupMVar m = do
-  IntMap.lookup m <$> gets ssMVars >>= \case
-    Nothing -> stgErrorM $ "unknown MVar: " ++ show m
-    Just a  -> pure a
-
-lookupMutableArray :: Int -> M (Vector Atom)
-lookupMutableArray m = do
-  IntMap.lookup m <$> gets ssMutableArrays >>= \case
-    Nothing -> stgErrorM $ "unknown MutableArrays: " ++ show m
-    Just a  -> pure a
 
 {-
           (State# RealWorld -> (# State# RealWorld, a #) )
@@ -612,3 +330,22 @@ test = do
   print ssNextAddr
   print $ head $ Map.toList ssEnv
   -- TODO: handle :Main.main properly ; currenlty it is in conflict with Main.main
+
+---------------------- primops
+
+evalPrimOp :: Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp =
+  PrimAddr.evalPrimOp $
+  PrimArray.evalPrimOp $
+  PrimByteArray.evalPrimOp $
+  PrimChar.evalPrimOp $
+  PrimConcurrency.evalPrimOp $
+  PrimExceptions.evalPrimOp builtinStgApply $
+  PrimInt.evalPrimOp $
+  PrimMutVar.evalPrimOp $
+  PrimMVar.evalPrimOp $
+  PrimNarrowings.evalPrimOp $
+  PrimStablePointer.evalPrimOp $
+  PrimWeakPointer.evalPrimOp $
+  unsupported where
+    unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args
