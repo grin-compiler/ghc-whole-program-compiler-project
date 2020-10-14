@@ -252,7 +252,12 @@ dataConUniqueName :: DataCon -> Name
 dataConUniqueName DataCon{..} = getUnitId dcUnitId <> "_" <> getModuleName dcModule <> "." <> dcName
 
 binderUniqueName :: Binder -> Name
-binderUniqueName Binder{..} = case binderScope of
+binderUniqueName Binder{..}
+ | binderId == rootMainBinderId
+ = ":Main.main"
+
+ | otherwise
+ = case binderScope of
   LocalScope      -> if binderTopLevel
                       then getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName <> BS8.pack ('.' : show u)
                       else binderName <> BS8.pack ('.' : show u)
@@ -261,6 +266,9 @@ binderUniqueName Binder{..} = case binderScope of
   ForeignExported -> getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName
   where
     BinderId u = binderId
+
+rootMainBinderId :: BinderId
+rootMainBinderId = BinderId $ Unique '0' 101
 
 data LitNumType
   = LitNumInt     -- ^ @Int#@ - according to target machine
