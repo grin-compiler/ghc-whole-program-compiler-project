@@ -20,6 +20,8 @@ import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
 import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
 import qualified Stg.Interpreter.PrimOp.Exceptions    as PrimExceptions
 import qualified Stg.Interpreter.PrimOp.Int           as PrimInt
+import qualified Stg.Interpreter.PrimOp.Int8          as PrimInt8
+import qualified Stg.Interpreter.PrimOp.Int16         as PrimInt16
 import qualified Stg.Interpreter.PrimOp.MutVar        as PrimMutVar
 import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
 import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
@@ -342,6 +344,8 @@ evalPrimOp =
   PrimConcurrency.evalPrimOp $
   PrimExceptions.evalPrimOp builtinStgApply $
   PrimInt.evalPrimOp $
+  PrimInt8.evalPrimOp $
+  PrimInt16.evalPrimOp $
   PrimMutVar.evalPrimOp $
   PrimMVar.evalPrimOp $
   PrimNarrowings.evalPrimOp $

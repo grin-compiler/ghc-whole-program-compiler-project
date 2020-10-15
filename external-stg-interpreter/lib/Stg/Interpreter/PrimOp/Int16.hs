@@ -1,53 +1,60 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Int16 where
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+import Data.Int
+
+pattern Int16V i  = Literal (LitNumber LitNumInt i)
+pattern IntV i    = Literal (LitNumber LitNumInt i)
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
+  -- extendInt16# :: Int16# -> Int#
+  ("extendInt16#",  [Int16V a]) -> pure [IntV  $ fromIntegral (fromIntegral a :: Int)]
+
+  -- narrowInt16# :: Int# -> Int16#
+  ("narrowInt16#",  [IntV a]) -> pure [Int16V  $ fromIntegral (fromIntegral a :: Int16)]
+
+  -- negateInt16# :: Int16# -> Int16#
+  ("negateInt16#",  [Int16V a]) -> pure [Int16V (-a)]
+
+  -- plusInt16# :: Int16# -> Int16# -> Int16#
+  ("plusInt16#",    [Int16V a, Int16V b]) -> pure [Int16V $ a + b]
+
+  -- subInt16# :: Int16# -> Int16# -> Int16#
+  ("subInt16#",     [Int16V a, Int16V b]) -> pure [Int16V $ a - b]
+
+  -- timesInt16# :: Int16# -> Int16# -> Int16#
+  ("timesInt16#",   [Int16V a, Int16V b]) -> pure [Int16V $ a * b]
+
+  -- quotInt16# :: Int16# -> Int16# -> Int16#
+  ("quotInt16#",    [Int16V a, Int16V b]) -> pure [Int16V $ a `quot` b]  -- NOTE: int16 / int16 in C
+
+  -- remInt16# :: Int16# -> Int16# -> Int16#
+  ("remInt16#",     [Int16V a, Int16V b]) -> pure [Int16V $ a `rem` b]   -- NOTE: int16 % int16 in C
+
+  -- quotRemInt16# :: Int16# -> Int16# -> (# Int16#, Int16# #)
+  ("quotRemInt16#", [Int16V a, Int16V b]) -> pure [Int16V $ a `quot` b, Int16V $ a `rem` b]
+
+  -- eqInt16# :: Int16# -> Int16# -> Int#
+  ("eqInt16#",      [Int16V a, Int16V b]) -> pure [IntV $ if a == b then 1 else 0]
+
+  -- geInt16# :: Int16# -> Int16# -> Int#
+  ("geInt16#",      [Int16V a, Int16V b]) -> pure [IntV $ if a >= b then 1 else 0]
+
+  -- gtInt16# :: Int16# -> Int16# -> Int#
+  ("gtInt16#",      [Int16V a, Int16V b]) -> pure [IntV $ if a > b  then 1 else 0]
+
+  -- leInt16# :: Int16# -> Int16# -> Int#
+  ("leInt16#",      [Int16V a, Int16V b]) -> pure [IntV $ if a <= b then 1 else 0]
+
+  -- ltInt16# :: Int16# -> Int16# -> Int#
+  ("ltInt16#",      [Int16V a, Int16V b]) -> pure [IntV $ if a < b  then 1 else 0]
+
+  -- neInt16# :: Int16# -> Int16# -> Int#
+  ("neInt16#",      [Int16V a, Int16V b]) -> pure [IntV $ if a /= b then 1 else 0]
+
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Int16#"
-        {Operations on 16-bit integers.}
-------------------------------------------------------------------------
-
-primtype Int16#
-
-primop Int16Extend "extendInt16#" GenPrimOp Int16# -> Int#
-primop Int16Narrow "narrowInt16#" GenPrimOp Int# -> Int16#
-
-primop Int16NegOp "negateInt16#" Monadic Int16# -> Int16#
-
-primop Int16AddOp "plusInt16#" Dyadic Int16# -> Int16# -> Int16#
-  with
-    commutable = True
-
-primop Int16SubOp "subInt16#" Dyadic Int16# -> Int16# -> Int16#
-
-primop Int16MulOp "timesInt16#" Dyadic Int16# -> Int16# -> Int16#
-  with
-    commutable = True
-
-primop Int16QuotOp "quotInt16#" Dyadic Int16# -> Int16# -> Int16#
-  with
-    can_fail = True
-
-primop Int16RemOp "remInt16#" Dyadic Int16# -> Int16# -> Int16#
-  with
-    can_fail = True
-
-primop Int16QuotRemOp "quotRemInt16#" GenPrimOp Int16# -> Int16# -> (# Int16#, Int16# #)
-  with
-    can_fail = True
-
-primop Int16EqOp "eqInt16#" Compare Int16# -> Int16# -> Int#
-primop Int16GeOp "geInt16#" Compare Int16# -> Int16# -> Int#
-primop Int16GtOp "gtInt16#" Compare Int16# -> Int16# -> Int#
-primop Int16LeOp "leInt16#" Compare Int16# -> Int16# -> Int#
-primop Int16LtOp "ltInt16#" Compare Int16# -> Int16# -> Int#
-primop Int16NeOp "neInt16#" Compare Int16# -> Int16# -> Int#
--}
