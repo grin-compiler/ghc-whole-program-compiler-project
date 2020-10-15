@@ -13,7 +13,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   ("newMutVar#", [a, s]) -> do
     -- a -> State# s -> (# State# s, MutVar# s a #)
-    state (\s@StgState{..} -> let next = IntMap.size ssMutVars in ([MutVar next], s {ssMutVars = IntMap.insert next a ssMutVars}))
+    state $ \s@StgState{..} ->
+      let next = IntMap.size ssMutVars
+      in  ( [MutVar next]
+          , s {ssMutVars = IntMap.insert next a ssMutVars}
+          )
 
   ("readMutVar#", [MutVar m, s]) -> do
     -- MutVar# s a -> State# s -> (# State# s, a #)

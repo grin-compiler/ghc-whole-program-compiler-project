@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Char where
 
 import Data.Char
@@ -6,47 +6,31 @@ import Data.Char
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern CharV c = Literal (LitChar c)
+pattern IntV i  = Literal (LitNumber LitNumInt i)
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("ord#", [Literal (LitChar c)]) -> do
-    -- Char# -> Int#
-    pure [Literal (LitNumber LitNumInt . fromIntegral $ ord c)]
+  -- gtChar# :: Char# -> Char# -> Int#
+  ("gtChar#", [CharV a, CharV b]) -> pure [IntV $ if a > b  then 1 else 0]
+
+  -- geChar# :: Char# -> Char# -> Int#
+  ("geChar#", [CharV a, CharV b]) -> pure [IntV $ if a >= b then 1 else 0]
+
+  -- eqChar# :: Char# -> Char# -> Int#
+  ("eqChar#", [CharV a, CharV b]) -> pure [IntV $ if a == b then 1 else 0]
+
+  -- neChar# :: Char# -> Char# -> Int#
+  ("neChar#", [CharV a, CharV b]) -> pure [IntV $ if a /= b then 1 else 0]
+
+  -- ltChar# :: Char# -> Char# -> Int#
+  ("ltChar#", [CharV a, CharV b]) -> pure [IntV $ if a < b  then 1 else 0]
+
+  -- leChar# :: Char# -> Char# -> Int#
+  ("leChar#", [CharV a, CharV b]) -> pure [IntV $ if a <= b then 1 else 0]
+
+  -- ord# :: Char# -> Int#
+  ("ord#", [CharV c]) -> pure [IntV . fromIntegral $ ord c]
 
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Char#"
-        {Operations on 31-bit characters.}
-------------------------------------------------------------------------
-
-primtype Char#
-
-primop   CharGtOp  "gtChar#"   Compare   Char# -> Char# -> Int#
-primop   CharGeOp  "geChar#"   Compare   Char# -> Char# -> Int#
-
-primop   CharEqOp  "eqChar#"   Compare
-   Char# -> Char# -> Int#
-   with commutable = True
-
-primop   CharNeOp  "neChar#"   Compare
-   Char# -> Char# -> Int#
-   with commutable = True
-
-primop   CharLtOp  "ltChar#"   Compare   Char# -> Char# -> Int#
-primop   CharLeOp  "leChar#"   Compare   Char# -> Char# -> Int#
-
-primop   OrdOp   "ord#"  GenPrimOp   Char# -> Int#
-   with code_size = 0
--}
-{-
--- Char
-evalPrimOp CharGtOp [CharV a, CharV b] = IntV $ if a > b  then 1 else 0
-evalPrimOp CharGeOp [CharV a, CharV b] = IntV $ if a >= b then 1 else 0
-evalPrimOp CharEqOp [CharV a, CharV b] = IntV $ if a == b then 1 else 0
-evalPrimOp CharNeOp [CharV a, CharV b] = IntV $ if a /= b then 1 else 0
-evalPrimOp CharLtOp [CharV a, CharV b] = IntV $ if a < b  then 1 else 0
-evalPrimOp CharLeOp [CharV a, CharV b] = IntV $ if a <= b then 1 else 0
-evalPrimOp OrdOp    [CharV a] = IntV $ fromIntegral a -- HINT: noop ; same bit level representation
--}

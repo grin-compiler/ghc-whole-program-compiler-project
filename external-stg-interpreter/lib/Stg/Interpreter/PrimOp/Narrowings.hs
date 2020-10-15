@@ -1,35 +1,34 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Narrowings where
+
+import Data.Int
+import Data.Word
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV i  = Literal (LitNumber LitNumInt i)
+pattern WordV w = Literal (LitNumber LitNumWord w)
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("narrow8Int#", [i]) -> do
-    -- Int# -> Int#
-    pure [i] -- TODO
+  -- narrow8Int# :: Int# -> Int#
+  ("narrow8Int#", [IntV a])     -> pure [IntV  $ fromIntegral (fromIntegral a :: Int8)]
+
+  -- narrow16Int# :: Int# -> Int#
+  ("narrow16Int#", [IntV a])    -> pure [IntV  $ fromIntegral (fromIntegral a :: Int16)]
+
+  -- narrow32Int# :: Int# -> Int#
+  ("narrow32Int#",  [IntV a])   -> pure [IntV  $ fromIntegral (fromIntegral a :: Int32)]
+
+  -- narrow8Word# :: Word# -> Word#
+  ("narrow8Word#", [WordV a])   -> pure [WordV $ fromIntegral (fromIntegral a :: Word8)]
+
+  -- narrow16Word# :: Word# -> Word#
+  ("narrow16Word#", [WordV a])  -> pure [WordV $ fromIntegral (fromIntegral a :: Word16)]
+
+  -- narrow32Word# :: Word# -> Word#
+  ("narrow32Word#", [WordV a])  -> pure [WordV $ fromIntegral (fromIntegral a :: Word32)]
 
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Narrowings"
-        {Explicit narrowing of native-sized ints or words.}
-------------------------------------------------------------------------
-
-primop   Narrow8IntOp      "narrow8Int#"      Monadic   Int# -> Int#
-primop   Narrow16IntOp     "narrow16Int#"     Monadic   Int# -> Int#
-primop   Narrow32IntOp     "narrow32Int#"     Monadic   Int# -> Int#
-primop   Narrow8WordOp     "narrow8Word#"     Monadic   Word# -> Word#
-primop   Narrow16WordOp    "narrow16Word#"    Monadic   Word# -> Word#
-primop   Narrow32WordOp    "narrow32Word#"    Monadic   Word# -> Word#
-
-evalPrimOp Narrow8IntOp   [IntV a]  = IntV  $ fromIntegral (fromIntegral a :: Int8)
-evalPrimOp Narrow16IntOp  [IntV a]  = IntV  $ fromIntegral (fromIntegral a :: Int16)
-evalPrimOp Narrow32IntOp  [IntV a]  = IntV  $ fromIntegral (fromIntegral a :: Int32)
-evalPrimOp Narrow8WordOp  [WordV a] = WordV $ fromIntegral (fromIntegral a :: Word8)
-evalPrimOp Narrow16WordOp [WordV a] = WordV $ fromIntegral (fromIntegral a :: Word16)
-evalPrimOp Narrow32WordOp [WordV a] = WordV $ fromIntegral (fromIntegral a :: Word32)
--}
