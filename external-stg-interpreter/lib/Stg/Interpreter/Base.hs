@@ -7,8 +7,10 @@ import qualified Data.Map as Map
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Char8 as BS8
 import Data.Vector (Vector)
 
+import Text.Printf
 import Debug.Trace
 import Stg.Syntax
 
@@ -21,7 +23,7 @@ instance Ord Id where
   compare (Id a) (Id b) = compare (binderUniqueName a) (binderUniqueName b) -- FIXME: make this fast
 
 instance Show Id where
-  show (Id a) = show $ binderUniqueName a
+  show (Id a) = BS8.unpack $ binderUniqueName a
 
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
 
@@ -142,7 +144,7 @@ withEnv i env m = do
   save <- gets ssEnv
   saveES <- gets ssEvalStack
   modify' $ \s -> s {ssEnv = env, ssEvalStack = [i]}
-  res <- trace ("eval " ++ show i ++ " " ++ show (binderModule $ unId i)) $ m
+  res <- trace (printf "eval %-40s %s" (BS8.unpack . getModuleName . binderModule $ unId i) (show i)) $ m
   modify' $ \s -> s {ssEnv = save, ssEvalStack = saveES}
   pure res
 
