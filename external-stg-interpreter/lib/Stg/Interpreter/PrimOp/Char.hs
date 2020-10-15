@@ -31,6 +31,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ("leChar#", [CharV a, CharV b]) -> pure [IntV $ if a <= b then 1 else 0]
 
   -- ord# :: Char# -> Int#
-  ("ord#", [CharV c]) -> pure [IntV . fromIntegral $ ord c]
+  ("ord#",    [CharV c]) -> pure [IntV . fromIntegral $ ord c]
 
   _ -> fallback op args t tc
