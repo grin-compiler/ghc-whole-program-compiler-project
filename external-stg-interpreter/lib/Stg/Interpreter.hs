@@ -20,6 +20,8 @@ import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
 import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
 import qualified Stg.Interpreter.PrimOp.Exceptions    as PrimExceptions
 import qualified Stg.Interpreter.PrimOp.Word          as PrimWord
+import qualified Stg.Interpreter.PrimOp.Word8         as PrimWord8
+import qualified Stg.Interpreter.PrimOp.Word16        as PrimWord16
 import qualified Stg.Interpreter.PrimOp.Int           as PrimInt
 import qualified Stg.Interpreter.PrimOp.Int8          as PrimInt8
 import qualified Stg.Interpreter.PrimOp.Int16         as PrimInt16
@@ -344,14 +346,16 @@ evalPrimOp =
   PrimChar.evalPrimOp $
   PrimConcurrency.evalPrimOp $
   PrimExceptions.evalPrimOp builtinStgApply $
-  PrimWord.evalPrimOp $
-  PrimInt.evalPrimOp $
-  PrimInt8.evalPrimOp $
   PrimInt16.evalPrimOp $
+  PrimInt8.evalPrimOp $
+  PrimInt.evalPrimOp $
   PrimMutVar.evalPrimOp $
   PrimMVar.evalPrimOp $
   PrimNarrowings.evalPrimOp $
   PrimStablePointer.evalPrimOp $
   PrimWeakPointer.evalPrimOp $
+  PrimWord16.evalPrimOp $
+  PrimWord8.evalPrimOp $
+  PrimWord.evalPrimOp $
   unsupported where
     unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args
