@@ -1,79 +1,46 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.MutVar where
 
 import Control.Monad.State
-import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV i = Literal (LitNumber LitNumInt i)
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("newMutVar#", [a, s]) -> do
-    -- a -> State# s -> (# State# s, MutVar# s a #)
-    state $ \s@StgState{..} ->
-      let next = IntMap.size ssMutVars
-      in  ( [MutVar next]
-          , s {ssMutVars = IntMap.insert next a ssMutVars}
-          )
+  -- newMutVar# :: a -> State# s -> (# State# s, MutVar# s a #)
+  ("newMutVar#", [a, _s]) -> do
+    mutVars <- gets ssMutVars
+    let next = IntMap.size mutVars
+    modify' $ \s -> s {ssMutVars = IntMap.insert next a mutVars}
+    pure [MutVar next]
 
-  ("readMutVar#", [MutVar m, s]) -> do
-    -- MutVar# s a -> State# s -> (# State# s, a #)
+  -- readMutVar# :: MutVar# s a -> State# s -> (# State# s, a #)
+  ("readMutVar#", [MutVar m, _s]) -> do
     a <- lookupMutVar m
     pure [a]
+
+  -- writeMutVar# :: MutVar# s a -> a -> State# s -> State# s
+  ("writeMutVar#", [MutVar m, a, _s]) -> do
+    _ <- lookupMutVar m -- check existence
+    modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m a ssMutVars}
+    pure []
+
+  -- sameMutVar# :: MutVar# s a -> MutVar# s a -> Int#
+  ("sameMutVar#", [MutVar a, MutVar b]) -> do
+    pure [IntV $ if a == b then 1 else 0]
+
+  -- TODO: atomicModifyMutVar2# :: MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
+  -- TODO: atomicModifyMutVar_# :: MutVar# s a -> (a -> a) -> State# s -> (# State# s, a, a #)
+  -- TODO: casMutVar# :: MutVar# s a -> a -> a -> State# s -> (# State# s, Int#, a #)
 
   _ -> fallback op args t tc
 
 {-
-------------------------------------------------------------------------
-section "Mutable variables"
-        {Operations on MutVar\#s.}
-------------------------------------------------------------------------
-
-primtype MutVar# s a
-        {A {\tt MutVar\#} behaves like a single-element mutable array.}
-
-primop  NewMutVarOp "newMutVar#" GenPrimOp
-   a -> State# s -> (# State# s, MutVar# s a #)
-   {Create {\tt MutVar\#} with specified initial value in specified state thread.}
-   with
-   out_of_line = True
-   has_side_effects = True
-
--- Note [Why MutVar# ops can't fail]
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
---
--- We don't label readMutVar# or writeMutVar# as can_fail.
--- This may seem a bit peculiar, because they surely *could*
--- fail spectacularly if passed a pointer to unallocated memory.
--- But MutVar#s are always correct by construction; we never
--- test if a pointer is valid before using it with these operations.
--- So we never have to worry about floating the pointer reference
--- outside a validity test. At the moment, has_side_effects blocks
--- up the relevant optimizations anyway, but we hope to draw finer
--- distinctions soon, which should improve matters for readMutVar#
--- at least.
-
-primop  ReadMutVarOp "readMutVar#" GenPrimOp
-   MutVar# s a -> State# s -> (# State# s, a #)
-   {Read contents of {\tt MutVar\#}. Result is not yet evaluated.}
-   with
-   -- See Note [Why MutVar# ops can't fail]
-   has_side_effects = True
-
-primop  WriteMutVarOp "writeMutVar#"  GenPrimOp
-   MutVar# s a -> a -> State# s -> State# s
-   {Write contents of {\tt MutVar\#}.}
-   with
-   -- See Note [Why MutVar# ops can't fail]
-   has_side_effects = True
-   code_size = { primOpCodeSizeForeignCall } -- for the write barrier
-
-primop  SameMutVarOp "sameMutVar#" GenPrimOp
-   MutVar# s a -> MutVar# s a -> Int#
-
 -- Note [Why not an unboxed tuple in atomicModifyMutVar2#?]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --

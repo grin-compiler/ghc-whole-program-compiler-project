@@ -7,8 +7,8 @@ import Stg.Interpreter.Base
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("myThreadId#", [w]) -> pure [RtsPrim] -- State# RealWorld -> (# State# RealWorld, ThreadId# #)
-  ("noDuplicate#", [s]) -> pure [s] --  State# s -> State# s
+  ("myThreadId#", [w]) -> pure [ThreadId] -- State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  ("noDuplicate#", [_s]) -> pure [] --  State# s -> State# s
 
   _ -> fallback op args t tc
 

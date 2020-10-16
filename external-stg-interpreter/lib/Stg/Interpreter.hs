@@ -151,6 +151,10 @@ evalExpr = \case
       v <- lookupEnv i
       pure [v]
 
+    UnboxedTuple [LiftedRep] -> do
+      v <- lookupEnv i
+      pure [v]
+
     r -> stgErrorM $ "unsupported var rep: " ++ show r -- unboxed: is it possible??
 
   -- fun app
@@ -202,6 +206,7 @@ evalExpr = \case
   StgOpApp fop@(StgFCallOp (ForeignCall{..})) l t _tc -> do
     args <- mapM evalArg l
     case foreignCTarget of
+{-
       StaticTarget _ "localeEncoding" _ _ -> pure [Literal LitNullAddr]
       StaticTarget _ "getProgArgv" _ _ -> pure []
       StaticTarget _ "hs_free_stable_ptr" _ _ -> pure []
@@ -209,7 +214,9 @@ evalExpr = \case
       StaticTarget _ "getOrSetGHCConcSignalSignalHandlerStore" _ _ -> pure [head args] -- WTF!
       StaticTarget _ "stg_sig_install" _ _ -> pure [Literal (LitNumber LitNumInt 0)]
       StaticTarget _ "hs_iconv_open" _ _ -> pure [Literal (LitNumber LitNumInt 0)]
-      _ -> stgErrorM $ "unsupported StgFCallOp: " ++ show fop ++ " :: " ++ show t ++ " args: " ++ show args
+      StaticTarget _ "hs_iconv" _ _ -> pure [Literal (LitNumber LitNumWord 0)]
+-}
+      _ -> stgErrorM $ "unsupported StgFCallOp: " ++ show fop ++ " :: " ++ show t ++ "\n args: " ++ show args
 
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 

@@ -11,24 +11,33 @@ import Stg.Interpreter.Base
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("newMVar#", [s]) -> do
-    -- State# s -> (# State# s, MVar# s a #)
+  -- newMVar# :: State# s -> (# State# s, MVar# s a #)
+  ("newMVar#", [_s]) -> do
     state (\s@StgState{..} -> let next = IntMap.size ssMVars in ([MVar next], s {ssMVars = IntMap.insert next Nothing ssMVars}))
 
-  ("putMVar#", [MVar m, a, s]) -> do
-    -- MVar# s a -> a -> State# s -> State# s
-    lookupMVar m >>= \case
-      Just{}  -> stgErrorM $ "TODO: blocking putMVar# for mvar " ++ show m
-      Nothing -> modify' $ \s@StgState{..} -> s {ssMVars = IntMap.insert m (Just a) ssMVars}
-    pure [s]
-
-  ("takeMVar#", [MVar m, s]) -> do
-    -- MVar# s a -> State# s -> (# State# s, a #)
+  -- takeMVar# :: MVar# s a -> State# s -> (# State# s, a #)
+  ("takeMVar#", [MVar m, _s]) -> do
     lookupMVar m >>= \case
       Nothing -> stgErrorM $ "TODO: blocking takeMVar# for mvar " ++ show m
       Just a  -> state $ \s@StgState{..} -> ([a], s {ssMVars = IntMap.insert m Nothing ssMVars})
 
+  -- TODO: tryTakeMVar# :: MVar# s a -> State# s -> (# State# s, Int#, a #)
+
+  -- putMVar# :: MVar# s a -> a -> State# s -> State# s
+  ("putMVar#", [MVar m, a, _s]) -> do
+    lookupMVar m >>= \case
+      Just{}  -> stgErrorM $ "TODO: blocking putMVar# for mvar " ++ show m
+      Nothing -> modify' $ \s@StgState{..} -> s {ssMVars = IntMap.insert m (Just a) ssMVars}
+    pure []
+
   _ -> fallback op args t tc
+
+  -- TODO: tryPutMVar# :: MVar# s a -> a -> State# s -> (# State# s, Int# #)
+  -- TODO: readMVar# :: MVar# s a -> State# s -> (# State# s, a #)
+  -- TODO: tryReadMVar# :: MVar# s a -> State# s -> (# State# s, Int#, a #)
+  -- TODO: sameMVar# :: MVar# s a -> MVar# s a -> Int#
+  -- TODO: isEmptyMVar# :: MVar# s a -> State# s -> (# State# s, Int# #)
+
 
 {-
 ------------------------------------------------------------------------

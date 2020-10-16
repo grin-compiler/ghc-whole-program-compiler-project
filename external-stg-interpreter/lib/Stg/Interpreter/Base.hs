@@ -52,14 +52,18 @@ data Atom     -- Q: should atom fit into a cpu register?
   = HeapPtr   !Addr
   | Literal   !Lit             -- Q: shopuld we allow string literals, or should string lits be modeled as StringPtr?
   | StringPtr !Int !ByteString  -- HINT: StgTopStringLit ; maybe include its origin? ; the PrimRep is AddrRep
-  | RtsPrim   -- ??? or is this a heap object?
   | Void
   | FloatAtom     !Float
   | DoubleAtom    !Double
   | StablePointer !Atom -- TODO: need proper implementation
   | MVar          !Int
+  | Array         !Int
   | MutableArray  !Int
   | MutVar        !Int
+  | MutableByteArray
+  | ByteArray
+  | WeakPointer
+  | ThreadId
   deriving (Show, Eq, Ord)
 
 type ReturnValue = [Atom]
@@ -84,6 +88,7 @@ data StgState
   -- primop related
 
   , ssMVars         :: IntMap (Maybe Atom)
+  , ssArrays        :: IntMap (Vector Atom)
   , ssMutableArrays :: IntMap (Vector Atom)
   , ssMutVars       :: IntMap Atom
   }
@@ -96,6 +101,7 @@ emptyStgState = StgState
   , ssEvalStack = []
   , ssNextAddr  = 0
   , ssMVars         = mempty
+  , ssArrays        = mempty
   , ssMutableArrays = mempty
   , ssMutVars       = mempty
   }
@@ -181,8 +187,14 @@ lookupMVar m = do
     Nothing -> stgErrorM $ "unknown MVar: " ++ show m
     Just a  -> pure a
 
+lookupArray :: Int -> M (Vector Atom)
+lookupArray m = do
+  IntMap.lookup m <$> gets ssArrays >>= \case
+    Nothing -> stgErrorM $ "unknown Array: " ++ show m
+    Just a  -> pure a
+
 lookupMutableArray :: Int -> M (Vector Atom)
 lookupMutableArray m = do
   IntMap.lookup m <$> gets ssMutableArrays >>= \case
-    Nothing -> stgErrorM $ "unknown MutableArrays: " ++ show m
+    Nothing -> stgErrorM $ "unknown MutableArray: " ++ show m
     Just a  -> pure a

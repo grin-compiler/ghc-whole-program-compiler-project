@@ -7,9 +7,9 @@ import Stg.Interpreter.Base
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("mkWeakNoFinalizer#", [_o, _b, w]) -> pure [RtsPrim] -- o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
+  ("mkWeakNoFinalizer#", [_o, _b, _w]) -> pure [WeakPointer] -- o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
 
-  ("touch#", [o, s]) -> do
+  ("touch#", [o, _s]) -> do
     -- o -> State# RealWorld -> State# RealWorld
     pure []
 

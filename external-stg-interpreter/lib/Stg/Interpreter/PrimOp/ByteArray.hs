@@ -7,17 +7,17 @@ import Stg.Interpreter.Base
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("newPinnedByteArray#", [Literal (LitNumber LitNumInt size), s]) -> do
+  ("newPinnedByteArray#", [Literal (LitNumber LitNumInt size), _s]) -> do
     -- Int# -> State# s -> (# State# s, MutableByteArray# s #)
-    pure [RtsPrim]
+    pure [MutableByteArray]
 
-  ("newAlignedPinnedByteArray#", [Literal (LitNumber LitNumInt size), Literal (LitNumber LitNumInt align), s]) -> do
+  ("newAlignedPinnedByteArray#", [Literal (LitNumber LitNumInt size), Literal (LitNumber LitNumInt align), _s]) -> do
     -- Int# -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
-    pure [RtsPrim]
+    pure [MutableByteArray]
 
-  ("unsafeFreezeByteArray#", [a, s]) -> do
+  ("unsafeFreezeByteArray#", [a, _s]) -> do
     -- MutableByteArray# s -> State# s -> (# State# s, ByteArray# #)
-    pure [RtsPrim]
+    pure [ByteArray]
 
   ("byteArrayContents#", [a]) -> do
     -- ByteArray# -> Addr#

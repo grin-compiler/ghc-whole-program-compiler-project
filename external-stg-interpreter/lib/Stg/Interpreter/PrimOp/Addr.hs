@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Addr where
 
 import qualified Data.ByteString.Char8 as BS8
@@ -6,43 +6,131 @@ import qualified Data.ByteString.Char8 as BS8
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern CharV c = Literal (LitChar c)
+pattern IntV i  = Literal (LitNumber LitNumInt i)
+pattern WordV i = Literal (LitNumber LitNumWord i)
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("readAddrOffAddr#", [addr, Literal (LitNumber LitNumInt offset), s]) -> do
-    -- Addr# -> Int# -> State# s -> (# State# s, Addr# #)
-    pure [Literal LitNullAddr]
-
-  ("readInt8OffAddr#", [addr, Literal (LitNumber LitNumInt offset), s]) -> do
-    -- Addr# -> Int# -> State# s -> (# State# s, Int# #)
-    pure [Literal (LitNumber LitNumInt 0)]
-
-  ("indexCharOffAddr#", [StringPtr base str, Literal (LitNumber LitNumInt offset)]) -> do
-    -- Addr# -> Int# -> Char#
-    pure [Literal $ LitChar $ BS8.index str (base + fromIntegral offset)]
-
+  -- plusAddr# :: Addr# -> Int# -> Addr#
+  -- TODO: design and implement this properly!!
   ("plusAddr#", [StringPtr base str, Literal (LitNumber LitNumInt offset)]) -> do
-    -- Addr# -> Int# -> Addr#
     pure [StringPtr (base + fromIntegral offset) str]
 
-  ("plusAddr#", [a, Literal (LitNumber LitNumInt offset)]) -> do
-    -- Addr# -> Int# -> Addr#
+  ("plusAddr#", [a, IntV offset]) -> do
     pure [a]
 
+  -- minusAddr# :: Addr# -> Addr# -> Int#
+  -- remAddr# :: Addr# -> Int# -> Int#
+  -- addr2Int# :: Addr# -> Int#
+  -- int2Addr# :: Int# -> Addr#
+  -- gtAddr# :: Addr# -> Addr# -> Int#
+  -- geAddr# :: Addr# -> Addr# -> Int#
 
+  -- eqAddr# :: Addr# -> Addr# -> Int#
+  ("eqAddr#", [a, b]) -> do
+    pure [IntV $ if a == b then 1 else 0]
 
-  -- "writeInt8OffAddr#" args: [Literal LitNullAddr,Literal (LitNumber LitNumInt 0),Literal (LitNumber LitNumInt 85),Void]
-  ("writeInt8OffAddr#", [a, b, c, s]) -> do
-    -- Addr# -> Int# -> Int# -> State# s -> State# s
-    pure [] -- TODO
+  -- neAddr# :: Addr# -> Addr# -> Int#
+  -- ltAddr# :: Addr# -> Addr# -> Int#
+  -- leAddr# :: Addr# -> Addr# -> Int#
 
+  -- indexCharOffAddr# :: Addr# -> Int# -> Char#
+  ("indexCharOffAddr#", [StringPtr base str, IntV offset]) -> do
+    pure [CharV $ BS8.index str (base + fromIntegral offset)]
 
+  -- indexWideCharOffAddr# :: Addr# -> Int# -> Char#
+  -- indexIntOffAddr# :: Addr# -> Int# -> Int#
+  -- indexWordOffAddr# :: Addr# -> Int# -> Word#
+  -- indexAddrOffAddr# :: Addr# -> Int# -> Addr#
+  -- indexFloatOffAddr# :: Addr# -> Int# -> Float#
+  -- indexDoubleOffAddr# :: Addr# -> Int# -> Double#
+  -- indexStablePtrOffAddr# :: Addr# -> Int# -> StablePtr# a
+  -- indexInt8OffAddr# :: Addr# -> Int# -> Int#
+  -- indexInt16OffAddr# :: Addr# -> Int# -> Int#
+  -- indexInt32OffAddr# :: Addr# -> Int# -> INT32
+  -- indexInt64OffAddr# :: Addr# -> Int# -> INT64
+  -- indexWord8OffAddr# :: Addr# -> Int# -> Word#
+  -- indexWord16OffAddr# :: Addr# -> Int# -> Word#
+  -- indexWord32OffAddr# :: Addr# -> Int# -> WORD32
+  -- indexWord64OffAddr# :: Addr# -> Int# -> WORD64
+  -- readCharOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Char# #)
+
+  -- readWideCharOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Char# #)
+  {-
+  ("readWideCharOffAddr#", [addr, IntV offset, _s]) -> do
+    pure [CharV 'a']
+  -}
+  -- readIntOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
+  -- readWordOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
+
+  -- readAddrOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Addr# #)
+  -- TODO: design and implement this properly!!
+  ("readAddrOffAddr#", [addr, IntV _, _s]) -> do
+    pure [Literal LitNullAddr]
+
+  -- readFloatOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Float# #)
+  -- readDoubleOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Double# #)
+  -- readStablePtrOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, StablePtr# a #)
+
+  -- readInt8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
+  -- TODO: design and implement this properly!!
+  ("readInt8OffAddr#", [addr, IntV offset, _s]) -> do
+    pure [IntV 0]
+
+  -- readInt16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
+  -- readInt32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, INT32 #)
+  -- readInt64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, INT64 #)
+
+  -- readWord8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
+  ("readWord8OffAddr#", [addr, IntV offset, _s]) -> do
+    pure [WordV 2]
+
+  -- readWord16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, WORD32 #)
+
+  -- readWord64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, WORD64 #)
+  ("readWord64OffAddr#", [addr, IntV offset, _s]) -> do
+    pure [WordV 1]
+
+  -- writeCharOffAddr# :: Addr# -> Int# -> Char# -> State# s -> State# s
+
+  -- writeWideCharOffAddr# :: Addr# -> Int# -> Char# -> State# s -> State# s
+  ("writeWideCharOffAddr#", [a, b, c, _s]) -> do
   -- "writeWideCharOffAddr#" args: [Literal LitNullAddr,Literal (LitNumber LitNumInt 0),Literal (LitChar 'a'),Void]
-  ("writeWideCharOffAddr#", [a, b, c, s]) -> do
-    -- Addr# -> Int# -> Char# -> State# s -> State# s
     pure [] -- TODO
 
-  ("eqAddr#", [a, b]) -> pure [Literal $ LitNumber LitNumInt 0] -- Addr# -> Addr# -> Int#
+  -- writeIntOffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
+  -- writeWordOffAddr# :: Addr# -> Int# -> Word# -> State# s -> State# s
+
+  -- writeAddrOffAddr# :: Addr# -> Int# -> Addr# -> State# s -> State# s
+  ("writeAddrOffAddr#", [a, b, c, _s]) -> do
+    pure [] -- TODO
+
+  -- writeFloatOffAddr# :: Addr# -> Int# -> Float# -> State# s -> State# s
+  -- writeDoubleOffAddr# :: Addr# -> Int# -> Double# -> State# s -> State# s
+  -- writeStablePtrOffAddr# :: Addr# -> Int# -> StablePtr# a -> State# s -> State# s
+
+  -- writeInt8OffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
+  ("writeInt8OffAddr#", [a, b, c, _s]) -> do
+  -- "writeInt8OffAddr#" args: [Literal LitNullAddr,Literal (LitNumber LitNumInt 0),Literal (LitNumber LitNumInt 85),Void]
+    pure [] -- TODO
+
+  -- writeInt16OffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
+  -- writeInt32OffAddr# :: Addr# -> Int# -> INT32 -> State# s -> State# s
+  -- writeInt64OffAddr# :: Addr# -> Int# -> INT64 -> State# s -> State# s
+
+  -- writeWord8OffAddr# :: Addr# -> Int# -> Word# -> State# s -> State# s
+  ("writeWord8OffAddr#", [a, b, c, _s]) -> do
+    pure [] -- TODO
+
+  -- writeWord16OffAddr# :: Addr# -> Int# -> Word# -> State# s -> State# s
+  -- writeWord32OffAddr# :: Addr# -> Int# -> WORD32 -> State# s -> State# s
+
+  -- writeWord64OffAddr# :: Addr# -> Int# -> WORD64 -> State# s -> State# s
+  ("writeWord64OffAddr#", [a, b, c, _s]) -> do
+    pure [] -- TODO
 
   _ -> fallback op args t tc
 

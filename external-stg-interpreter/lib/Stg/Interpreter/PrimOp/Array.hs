@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Array where
 
 import Control.Monad.State
@@ -8,24 +8,58 @@ import qualified Data.Vector as V
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV i  = Literal (LitNumber LitNumInt i)
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("newArray#", [Literal (LitNumber LitNumInt i), a, s]) -> do
-    -- Int# -> a -> State# s -> (# State# s, MutableArray# s a #)
-    let v = V.replicate (fromIntegral i) a
-    state (\s@StgState{..} -> let next = IntMap.size ssMutableArrays in ([MutableArray next], s {ssMutableArrays = IntMap.insert next v ssMutableArrays}))
+  -- newArray# :: Int# -> a -> State# s -> (# State# s, MutableArray# s a #)
+  ("newArray#", [IntV i, a, _s]) -> do
+    mutableArrays <- gets ssMutableArrays
+    let next  = IntMap.size mutableArrays
+        v     = V.replicate (fromIntegral i) a
+    modify' $ \s -> s {ssMutableArrays = IntMap.insert next v mutableArrays}
+    pure [MutableArray next]
 
-  ("readArray#", [MutableArray a, Literal (LitNumber LitNumInt i), s]) -> do
-    -- MutableArray# s a -> Int# -> State# s -> (# State# s, a #)
+  -- sameMutableArray# :: MutableArray# s a -> MutableArray# s a -> Int#
+  ("sameMutableArray#", [MutableArray a, MutableArray b]) -> do
+    pure [IntV $ if a == b then 1 else 0]
+
+  -- readArray# :: MutableArray# s a -> Int# -> State# s -> (# State# s, a #)
+  ("readArray#", [MutableArray a, IntV i, _s]) -> do
     v <- lookupMutableArray a
     pure [v V.! (fromIntegral i)]
 
-  ("writeArray#", [MutableArray m, Literal (LitNumber LitNumInt i), a, s]) -> do
-    -- MutableArray# s a -> Int# -> a -> State# s -> State# s
+  -- writeArray# :: MutableArray# s a -> Int# -> a -> State# s -> State# s
+  ("writeArray#", [MutableArray m, IntV i, a, _s]) -> do
     v <- lookupMutableArray m
     modify' $ \s@StgState{..} -> s {ssMutableArrays = IntMap.insert m (v V.// [(fromIntegral i, a)]) ssMutableArrays}
-    pure [s]
+    pure []
+
+  -- sizeofArray# :: Array# a -> Int#
+  ("sizeofArray#", [Array a]) -> do
+    v <- lookupArray a
+    pure [IntV . fromIntegral $ V.length v]
+
+  -- sizeofMutableArray# :: MutableArray# s a -> Int#
+  ("sizeofMutableArray#", [MutableArray a]) -> do
+    v <- lookupMutableArray a
+    pure [IntV . fromIntegral $ V.length v]
+
+  -- indexArray# :: Array# a -> Int# -> (# a #)
+  ("indexArray#", [Array a, IntV i]) -> do
+    v <- lookupArray a
+    pure [v V.! (fromIntegral i)]
+
+  -- TODO: unsafeFreezeArray# :: MutableArray# s a -> State# s -> (# State# s, Array# a #)
+  -- TODO: unsafeThawArray# :: Array# a -> State# s -> (# State# s, MutableArray# s a #)
+  -- TODO: copyArray# :: Array# a -> Int# -> MutableArray# s a -> Int# -> Int# -> State# s -> State# s
+  -- TODO: copyMutableArray# :: MutableArray# s a -> Int# -> MutableArray# s a -> Int# -> Int# -> State# s -> State# s
+  -- TODO: cloneArray# :: Array# a -> Int# -> Int# -> Array# a
+  -- TODO: cloneMutableArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
+  -- TODO: freezeArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, Array# a #)
+  -- TODO: thawArray# :: Array# a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
+  -- TODO: casArray# :: MutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
 
   _ -> fallback op args t tc
 
@@ -38,53 +72,6 @@ section "Arrays"
 primtype Array# a
 
 primtype MutableArray# s a
-
-primop  NewArrayOp "newArray#" GenPrimOp
-   Int# -> a -> State# s -> (# State# s, MutableArray# s a #)
-   {Create a new mutable array with the specified number of elements,
-    in the specified state thread,
-    with each element containing the specified initial value.}
-   with
-   out_of_line = True
-   has_side_effects = True
-
-primop  SameMutableArrayOp "sameMutableArray#" GenPrimOp
-   MutableArray# s a -> MutableArray# s a -> Int#
-
-primop  ReadArrayOp "readArray#" GenPrimOp
-   MutableArray# s a -> Int# -> State# s -> (# State# s, a #)
-   {Read from specified index of mutable array. Result is not yet evaluated.}
-   with
-   has_side_effects = True
-   can_fail         = True
-
-primop  WriteArrayOp "writeArray#" GenPrimOp
-   MutableArray# s a -> Int# -> a -> State# s -> State# s
-   {Write to specified index of mutable array.}
-   with
-   has_side_effects = True
-   can_fail         = True
-   code_size        = 2 -- card update too
-
-primop  SizeofArrayOp "sizeofArray#" GenPrimOp
-   Array# a -> Int#
-   {Return the number of elements in the array.}
-
-primop  SizeofMutableArrayOp "sizeofMutableArray#" GenPrimOp
-   MutableArray# s a -> Int#
-   {Return the number of elements in the array.}
-
-primop  IndexArrayOp "indexArray#" GenPrimOp
-   Array# a -> Int# -> (# a #)
-   {Read from the specified index of an immutable array. The result is packaged
-    into an unboxed unary tuple; the result itself is not yet
-    evaluated. Pattern matching on the tuple forces the indexing of the
-    array to happen but does not evaluate the element itself. Evaluating
-    the thunk prevents additional thunks from building up on the
-    heap. Avoiding these thunks, in turn, reduces references to the
-    argument array, allowing it to be garbage collected more promptly.}
-   with
-   can_fail         = True
 
 primop  UnsafeFreezeArrayOp "unsafeFreezeArray#" GenPrimOp
    MutableArray# s a -> State# s -> (# State# s, Array# a #)

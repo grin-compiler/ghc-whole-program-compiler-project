@@ -8,8 +8,8 @@ evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- TODO: implement stable pointers properly
-  ("makeStablePtr#", [a, s]) -> pure [StablePointer a] -- a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
-  ("deRefStablePtr#", [StablePointer a, s]) -> pure [a] -- TODO: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
+  ("makeStablePtr#", [a, _s]) -> pure [StablePointer a] -- a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
+  ("deRefStablePtr#", [StablePointer a, _s]) -> pure [a] -- TODO: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
 
   _ -> fallback op args t tc
 
