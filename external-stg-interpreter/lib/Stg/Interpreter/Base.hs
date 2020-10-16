@@ -49,15 +49,17 @@ data StackContinuation
   deriving (Show, Eq, Ord)
 
 data Atom     -- Q: should atom fit into a cpu register?
-  = HeapPtr   Addr
-  | Literal   Lit             -- Q: shopuld we allow string literals, or should string lits be modeled as StringPtr?
-  | StringPtr Int ByteString  -- HINT: StgTopStringLit ; maybe include its origin? ; the PrimRep is AddrRep
+  = HeapPtr   !Addr
+  | Literal   !Lit             -- Q: shopuld we allow string literals, or should string lits be modeled as StringPtr?
+  | StringPtr !Int !ByteString  -- HINT: StgTopStringLit ; maybe include its origin? ; the PrimRep is AddrRep
   | RtsPrim   -- ??? or is this a heap object?
   | Void
-  | StablePointer Atom -- TODO: need proper implementation
-  | MVar          Int
-  | MutableArray  Int
-  | MutVar        Int
+  | FloatAtom     !Float
+  | DoubleAtom    !Double
+  | StablePointer !Atom -- TODO: need proper implementation
+  | MVar          !Int
+  | MutableArray  !Int
+  | MutVar        !Int
   deriving (Show, Eq, Ord)
 
 type ReturnValue = [Atom]

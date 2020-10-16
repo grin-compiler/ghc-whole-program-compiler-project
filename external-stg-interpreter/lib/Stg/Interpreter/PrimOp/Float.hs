@@ -1,192 +1,105 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Float where
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV i    = Literal (LitNumber LitNumInt i)
+pattern FloatV f  = FloatAtom f
+pattern DoubleV d = DoubleAtom d
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
+  -- gtFloat# :: Float# -> Float# -> Int#
+  ("gtFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a > b  then 1 else 0]
+
+  -- geFloat# :: Float# -> Float# -> Int#
+  ("geFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a >= b then 1 else 0]
+
+  -- eqFloat# :: Float# -> Float# -> Int#
+  ("eqFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a == b then 1 else 0]
+
+  -- neFloat# :: Float# -> Float# -> Int#
+  ("neFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a /= b then 1 else 0]
+
+  -- ltFloat# :: Float# -> Float# -> Int#
+  ("ltFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a < b  then 1 else 0]
+
+  -- leFloat# :: Float# -> Float# -> Int#
+  ("leFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a <= b then 1 else 0]
+
+  -- plusFloat# :: Float# -> Float# -> Float#
+  ("plusFloat#",    [FloatV a, FloatV b]) -> pure [FloatV $ a + b]
+
+  -- minusFloat# :: Float# -> Float# -> Float#
+  ("minusFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ a - b]
+
+  -- timesFloat# :: Float# -> Float# -> Float#
+  ("timesFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ a * b]
+
+  -- divideFloat# :: Float# -> Float# -> Float#
+  ("divideFloat#",  [FloatV a, FloatV b]) -> pure [FloatV $ a / b]
+
+  -- negateFloat# :: Float# -> Float#
+  ("negateFloat#",  [FloatV a]) -> pure [FloatV (-a)]
+
+  -- fabsFloat# :: Float# -> Float#
+  ("fabsFloat#",    [FloatV a]) -> pure [FloatV (abs a)]
+
+  -- float2Int# :: Float# -> Int#
+  ("float2Int#",    [FloatV a]) -> pure [IntV $ truncate a]
+
+  -- expFloat# :: Float# -> Float#
+  ("expFloat#",     [FloatV a]) -> pure [FloatV $ exp a]
+
+  -- TODO: expm1Float# :: Float# -> Float#
+
+  -- logFloat# :: Float# -> Float#
+  ("logFloat#",     [FloatV a]) -> pure [FloatV $ log a]
+
+  -- TODO: log1pFloat# :: Float# -> Float#
+
+  -- sqrtFloat# :: Float# -> Float#
+  ("sqrtFloat#",    [FloatV a]) -> pure [FloatV $ sqrt a]
+
+  -- sinFloat# :: Float# -> Float#
+  ("sinFloat#",     [FloatV a]) -> pure [FloatV $ sin a]
+
+  -- cosFloat# :: Float# -> Float#
+  ("cosFloat#",     [FloatV a]) -> pure [FloatV $ cos a]
+
+  -- tanFloat# :: Float# -> Float#
+  ("FloatV",        [FloatV a]) -> pure [FloatV $ tan a]
+
+  -- asinFloat# :: Float# -> Float#
+  ("FloatV",        [FloatV a]) -> pure [FloatV $ asin a]
+
+  -- acosFloat# :: Float# -> Float#
+  ("FloatV",        [FloatV a]) -> pure [FloatV $ acos a]
+
+  -- atanFloat# :: Float# -> Float#
+  ("FloatV",        [FloatV a]) -> pure [FloatV $ atan a]
+
+  -- sinhFloat# :: Float# -> Float#
+  ("FloatV",        [FloatV a]) -> pure [FloatV $ sinh a]
+
+  -- coshFloat# :: Float# -> Float#
+  ("FloatV",        [FloatV a]) -> pure [FloatV $ cosh a]
+
+  -- tanhFloat# :: Float# -> Float#
+  ("FloatV",        [FloatV a]) -> pure [FloatV $ tanh a]
+
+  -- TODO: asinhFloat# :: Float# -> Float#
+  -- TODO: acoshFloat# :: Float# -> Float#
+  -- TODO: atanhFloat# :: Float# -> Float#
+
+  -- powerFloat# :: Float# -> Float# -> Float#
+  ("powerFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ a ** b]
+
+  -- float2Double# ::  Float# -> Double#
+  ("float2Double#", [FloatV a]) -> pure [DoubleV $ realToFrac a]
+
+  -- TODO: decodeFloat_Int# :: Float# -> (# Int#, Int# #)
+
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Float#"
-        {Operations on single-precision (32-bit) floating-point numbers.}
-------------------------------------------------------------------------
-
-primtype Float#
-
-primop   FloatGtOp  "gtFloat#"   Compare   Float# -> Float# -> Int#
-primop   FloatGeOp  "geFloat#"   Compare   Float# -> Float# -> Int#
-
-primop   FloatEqOp  "eqFloat#"   Compare
-   Float# -> Float# -> Int#
-   with commutable = True
-
-primop   FloatNeOp  "neFloat#"   Compare
-   Float# -> Float# -> Int#
-   with commutable = True
-
-primop   FloatLtOp  "ltFloat#"   Compare   Float# -> Float# -> Int#
-primop   FloatLeOp  "leFloat#"   Compare   Float# -> Float# -> Int#
-
-primop   FloatAddOp   "plusFloat#"      Dyadic
-   Float# -> Float# -> Float#
-   with commutable = True
-
-primop   FloatSubOp   "minusFloat#"      Dyadic      Float# -> Float# -> Float#
-
-primop   FloatMulOp   "timesFloat#"      Dyadic
-   Float# -> Float# -> Float#
-   with commutable = True
-
-primop   FloatDivOp   "divideFloat#"      Dyadic
-   Float# -> Float# -> Float#
-   with can_fail = True
-
-primop   FloatNegOp   "negateFloat#"      Monadic    Float# -> Float#
-
-primop   FloatFabsOp  "fabsFloat#"        Monadic    Float# -> Float#
-
-primop   Float2IntOp   "float2Int#"      GenPrimOp  Float# -> Int#
-   {Truncates a {\tt Float#} value to the nearest {\tt Int#}.
-    Results are undefined if the truncation if truncation yields
-    a value outside the range of {\tt Int#}.}
-
-primop   FloatExpOp   "expFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatExpM1Op   "expm1Float#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatLogOp   "logFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-   can_fail = True
-
-primop   FloatLog1POp  "log1pFloat#"     Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-   can_fail = True
-
-primop   FloatSqrtOp   "sqrtFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatSinOp   "sinFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatCosOp   "cosFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatTanOp   "tanFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatAsinOp   "asinFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-   can_fail = True
-
-primop   FloatAcosOp   "acosFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-   can_fail = True
-
-primop   FloatAtanOp   "atanFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatSinhOp   "sinhFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatCoshOp   "coshFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatTanhOp   "tanhFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatAsinhOp   "asinhFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatAcoshOp   "acoshFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatAtanhOp   "atanhFloat#"      Monadic
-   Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   FloatPowerOp   "powerFloat#"      Dyadic
-   Float# -> Float# -> Float#
-   with
-   code_size = { primOpCodeSizeForeignCall }
-
-primop   Float2DoubleOp   "float2Double#" GenPrimOp  Float# -> Double#
-
-primop   FloatDecode_IntOp   "decodeFloat_Int#" GenPrimOp
-   Float# -> (# Int#, Int# #)
-   {Convert to integers.
-    First {\tt Int\#} in result is the mantissa; second is the exponent.}
-   with out_of_line = True
--}
-{-
--- Float#
-evalPrimOp FloatGtOp      [FloatV a, FloatV b] = IntV $ if a > b  then 1 else 0
-evalPrimOp FloatGeOp      [FloatV a, FloatV b] = IntV $ if a >= b then 1 else 0
-evalPrimOp FloatEqOp      [FloatV a, FloatV b] = IntV $ if a == b then 1 else 0
-evalPrimOp FloatNeOp      [FloatV a, FloatV b] = IntV $ if a /= b then 1 else 0
-evalPrimOp FloatLtOp      [FloatV a, FloatV b] = IntV $ if a < b  then 1 else 0
-evalPrimOp FloatLeOp      [FloatV a, FloatV b] = IntV $ if a <= b then 1 else 0
-evalPrimOp FloatAddOp     [FloatV a, FloatV b] = FloatV $ a + b
-evalPrimOp FloatSubOp     [FloatV a, FloatV b] = FloatV $ a - b
-evalPrimOp FloatMulOp     [FloatV a, FloatV b] = FloatV $ a * b
-evalPrimOp FloatDivOp     [FloatV a, FloatV b] = FloatV $ a / b
-evalPrimOp FloatNegOp     [FloatV a] = FloatV (-a)
-evalPrimOp FloatFabsOp    [FloatV a] = FloatV (abs a)
-evalPrimOp Float2IntOp    [FloatV a] = IntV $ truncate a
-evalPrimOp FloatExpOp     [FloatV a] = FloatV $ exp a
-evalPrimOp FloatLogOp     [FloatV a] = FloatV $ log a
-evalPrimOp FloatSqrtOp    [FloatV a] = FloatV $ sqrt a
-evalPrimOp FloatSinOp     [FloatV a] = FloatV $ sin a
-evalPrimOp FloatCosOp     [FloatV a] = FloatV $ cos a
-evalPrimOp FloatTanOp     [FloatV a] = FloatV $ tan a
-evalPrimOp FloatAsinOp    [FloatV a] = FloatV $ asin a
-evalPrimOp FloatAcosOp    [FloatV a] = FloatV $ acos a
-evalPrimOp FloatAtanOp    [FloatV a] = FloatV $ atan a
-evalPrimOp FloatSinhOp    [FloatV a] = FloatV $ sinh a
-evalPrimOp FloatCoshOp    [FloatV a] = FloatV $ cosh a
-evalPrimOp FloatTanhOp    [FloatV a] = FloatV $ tanh a
-evalPrimOp FloatPowerOp   [FloatV a, FloatV b] = FloatV $ a ** b
-evalPrimOp Float2DoubleOp [FloatV a] = DoubleV $ realToFrac a
--}
-
-{-
-  FloatDecode_IntOp
--}

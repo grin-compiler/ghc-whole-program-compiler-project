@@ -15,8 +15,8 @@ type PrimWord = Word64
 pattern CharV c   = Literal (LitChar c)
 pattern IntV i    = Literal (LitNumber LitNumInt i)
 pattern WordV w   = Literal (LitNumber LitNumWord w)
-pattern FloatV f  = Literal (LitFloat f)
-pattern DoubleV d = Literal (LitDouble d)
+pattern FloatV f  = FloatAtom f
+pattern DoubleV d = DoubleAtom d
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
