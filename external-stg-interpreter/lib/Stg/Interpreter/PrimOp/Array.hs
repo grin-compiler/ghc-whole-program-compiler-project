@@ -126,7 +126,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     vsrc <- lookupArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
-      let next = IntMap.size ssArrays
+      let next = IntMap.size ssMutableArrays
       in ([MutableArray $ MutArrIdx next], s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays})
 
   -- casArray# :: MutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
