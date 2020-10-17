@@ -53,6 +53,12 @@ data ArrIdx
   | ArrIdx    !Int
   deriving (Show, Eq, Ord)
 
+data SmallArrIdx
+  = SmallMutArrIdx !Int
+  | SmallArrIdx    !Int
+  deriving (Show, Eq, Ord)
+
+
 data Atom     -- Q: should atom fit into a cpu register?
   = HeapPtr   !Addr
   | Literal   !Lit             -- Q: should we allow string literals, or should string lits be modeled as StringPtr?
@@ -64,6 +70,8 @@ data Atom     -- Q: should atom fit into a cpu register?
   | MVar          !Int
   | Array         !ArrIdx
   | MutableArray  !ArrIdx
+  | SmallArray         !SmallArrIdx
+  | SmallMutableArray  !SmallArrIdx
   | MutVar        !Int
   | MutableByteArray
   | ByteArray
@@ -96,6 +104,8 @@ data StgState
   , ssMVars         :: IntMap (Maybe Atom)
   , ssArrays        :: IntMap (Vector Atom)
   , ssMutableArrays :: IntMap (Vector Atom)
+  , ssSmallArrays        :: IntMap (Vector Atom)
+  , ssSmallMutableArrays :: IntMap (Vector Atom)
   , ssMutVars       :: IntMap Atom
   }
   deriving (Show, Eq, Ord)
@@ -203,4 +213,16 @@ lookupMutableArray :: Int -> M (Vector Atom)
 lookupMutableArray m = do
   IntMap.lookup m <$> gets ssMutableArrays >>= \case
     Nothing -> stgErrorM $ "unknown MutableArray: " ++ show m
+    Just a  -> pure a
+
+lookupSmallArray :: Int -> M (Vector Atom)
+lookupSmallArray m = do
+  IntMap.lookup m <$> gets ssSmallArrays >>= \case
+    Nothing -> stgErrorM $ "unknown SmallArray: " ++ show m
+    Just a  -> pure a
+
+lookupSmallMutableArray :: Int -> M (Vector Atom)
+lookupSmallMutableArray m = do
+  IntMap.lookup m <$> gets ssSmallMutableArrays >>= \case
+    Nothing -> stgErrorM $ "unknown SmallMutableArray: " ++ show m
     Just a  -> pure a

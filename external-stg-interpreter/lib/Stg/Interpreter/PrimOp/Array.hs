@@ -84,6 +84,19 @@ evalPrimOp fallback op args t tc = case (op, args) of
     updateArrIdx dst vdst'
     pure []
 
+  -- copyMutableArray# :: MutableArray# s a -> Int# -> MutableArray# s a -> Int# -> Int# -> State# s -> State# s
+  ("copyMutableArray#", [ MutableArray src, IntV os, MutableArray dst, IntV od, IntV n, _s]) -> do
+    vsrc <- lookupArrIdx src
+    vdst <- lookupArrIdx dst
+    let vdst' = vdst V.// [ (fromIntegral di, v)
+                          | i <- [ 0 .. n-1 ]
+                          , let si = os + i
+                          , let di = od + i
+                          , let v = vsrc V.! (fromIntegral si)
+                          ]
+    updateArrIdx dst vdst'
+    pure []
+
   -- cloneArray# :: Array# a -> Int# -> Int# -> Array# a
   ("cloneArray#", [Array src, IntV o, IntV n]) -> do
     vsrc <- lookupArrIdx src
@@ -91,6 +104,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
     state $ \s'@StgState{..} ->
       let next = IntMap.size ssArrays
       in ([Array $ ArrIdx next], s' {ssArrays = IntMap.insert next vdst ssArrays})
+
+  -- cloneMutableArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
+  ("cloneMutableArray#", [ MutableArray src, IntV o, IntV n, _s]) -> do
+    vsrc <- lookupArrIdx src
+    let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
+    state $ \s'@StgState{..} ->
+      let next = IntMap.size ssMutableArrays
+      in ([MutableArray $ MutArrIdx next], s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays})
 
   -- freezeArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, Array# a #)
   ("freezeArray#", [MutableArray src, IntV o, IntV n, _s]) -> do
@@ -118,26 +139,5 @@ evalPrimOp fallback op args t tc = case (op, args) of
         pure [IntV 0, new]
       else do
         pure [IntV 1, old]
-
-  -- copyMutableArray# :: MutableArray# s a -> Int# -> MutableArray# s a -> Int# -> Int# -> State# s -> State# s
-  ("copyMutableArray#", [ MutableArray src, IntV os, MutableArray dst, IntV od, IntV n, _s]) -> do
-    vsrc <- lookupArrIdx src
-    vdst <- lookupArrIdx dst
-    let vdst' = vdst V.// [ (fromIntegral di, v)
-                          | i <- [ 0 .. n-1 ]
-                          , let si = os + i
-                          , let di = od + i
-                          , let v = vsrc V.! (fromIntegral si)
-                          ]
-    updateArrIdx dst vdst'
-    pure []
-
-  -- cloneMutableArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
-  ("cloneMutableArray#", [ MutableArray src, IntV o, IntV n, _s]) -> do
-    vsrc <- lookupArrIdx src
-    let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
-    state $ \s'@StgState{..} ->
-      let next = IntMap.size ssMutableArrays
-      in ([MutableArray $ MutArrIdx next], s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays})
 
   _ -> fallback op args t tc
