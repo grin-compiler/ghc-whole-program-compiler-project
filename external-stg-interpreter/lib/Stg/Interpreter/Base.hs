@@ -58,6 +58,10 @@ data SmallArrIdx
   | SmallArrIdx    !Int
   deriving (Show, Eq, Ord)
 
+data ArrayArrIdx
+  = ArrayMutArrIdx !Int
+  | ArrayArrIdx    !Int
+  deriving (Show, Eq, Ord)
 
 data Atom     -- Q: should atom fit into a cpu register?
   = HeapPtr   !Addr
@@ -68,13 +72,17 @@ data Atom     -- Q: should atom fit into a cpu register?
   | DoubleAtom    !Double
   | StablePointer !Atom -- TODO: need proper implementation
   | MVar          !Int
-  | Array         !ArrIdx
-  | MutableArray  !ArrIdx
-  | SmallArray         !SmallArrIdx
-  | SmallMutableArray  !SmallArrIdx
   | MutVar        !Int
-  | MutableByteArray
+  | SomeArrayArray -- Initial value for ArrayArray creation
+  | Array             !ArrIdx
+  | MutableArray      !ArrIdx
+  | SmallArray        !SmallArrIdx
+  | SmallMutableArray !SmallArrIdx
+  | ArrayArray        !ArrayArrIdx
+  | MutableArrayArray !ArrayArrIdx
   | ByteArray
+  | MutableByteArray
+  | ArrayArrayArray
   | WeakPointer
   | ThreadId
   deriving (Show, Eq, Ord)
@@ -106,6 +114,8 @@ data StgState
   , ssMutableArrays :: IntMap (Vector Atom)
   , ssSmallArrays        :: IntMap (Vector Atom)
   , ssSmallMutableArrays :: IntMap (Vector Atom)
+  , ssArrayArrays        :: IntMap (Vector Atom)
+  , ssMutableArrayArrays :: IntMap (Vector Atom)
   , ssMutVars       :: IntMap Atom
   }
   deriving (Show, Eq, Ord)
@@ -224,5 +234,17 @@ lookupSmallArray m = do
 lookupSmallMutableArray :: Int -> M (Vector Atom)
 lookupSmallMutableArray m = do
   IntMap.lookup m <$> gets ssSmallMutableArrays >>= \case
+    Nothing -> stgErrorM $ "unknown SmallMutableArray: " ++ show m
+    Just a  -> pure a
+
+lookupArrayArray :: Int -> M (Vector Atom)
+lookupArrayArray m = do
+  IntMap.lookup m <$> gets ssArrayArrays >>= \case
+    Nothing -> stgErrorM $ "unknown SmallArray: " ++ show m
+    Just a  -> pure a
+
+lookupMutableArrayArray :: Int -> M (Vector Atom)
+lookupMutableArrayArray m = do
+  IntMap.lookup m <$> gets ssMutableArrayArrays >>= \case
     Nothing -> stgErrorM $ "unknown SmallMutableArray: " ++ show m
     Just a  -> pure a

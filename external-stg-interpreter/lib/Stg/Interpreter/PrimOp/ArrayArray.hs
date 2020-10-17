@@ -1,122 +1,144 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ArrayArray where
+
+import Control.Monad.State
+import qualified Data.IntMap as IntMap
+import qualified Data.Vector as V
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Integer -> Atom
+pattern IntV i = Literal (LitNumber LitNumInt i)
+
+lookupArrayArrIdx :: ArrayArrIdx -> M (V.Vector Atom)
+lookupArrayArrIdx = \case
+  ArrayMutArrIdx i -> lookupMutableArrayArray i
+  ArrayArrIdx    i -> lookupArrayArray i
+
+updateArrayArrIdx :: ArrayArrIdx -> V.Vector Atom -> M ()
+updateArrayArrIdx m v = do
+  modify' $ \s@StgState{..} -> case m of
+    ArrayMutArrIdx n -> s { ssMutableArrayArrays = IntMap.insert n v ssMutableArrayArrays }
+    ArrayArrIdx    n -> s { ssArrayArrays        = IntMap.insert n v ssArrayArrays        }
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
+  -- newArrayArray# :: Int# -> State# s -> (# State# s, MutableArrayArray# s #)
+  ("newArrayArray#", [IntV i, _s]) -> do
+    -- TODO:
+    -- {Create a new mutable array of arrays with the specified number of elements,
+    -- in the specified state thread, with each element recursively referring to the
+    -- newly created array.}
+    mutableArrayArrays <- gets ssMutableArrayArrays
+    let next  = IntMap.size mutableArrayArrays
+        v     = V.replicate (fromIntegral i) SomeArrayArray
+    modify' $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays}
+    pure [MutableArrayArray $ ArrayMutArrIdx next]
+
+  -- sameMutableArrayArray# :: MutableArrayArray# s -> MutableArrayArray# s -> Int#
+  ("sameMutableArrayArray#", [MutableArrayArray a, MutableArrayArray b]) -> do
+    pure [IntV $ if a == b then 1 else 0]
+
+  -- unsafeFreezeArrayArray# :: MutableArrayArray# s -> State# s -> (# State# s, ArrayArray# #)
+  ("unsafeFreezeArrayArray#", [MutableArrayArray v, _s]) -> do
+    pure [ArrayArray v]
+
+  -- sizeofArrayArray# :: ArrayArray# -> Int#
+  ("sizeofArrayArray#", [ArrayArray a]) -> do
+    v <- lookupArrayArrIdx a
+    pure [IntV . fromIntegral $ V.length v]
+
+  -- sizeofMutableArrayArray# :: MutableArrayArray# s -> Int#
+  ("sizeofMutableArrayArray#", [MutableArrayArray a]) -> do
+    v <- lookupArrayArrIdx a
+    pure [IntV . fromIntegral $ V.length v]
+
+  -- indexByteArrayArray# :: ArrayArray# -> Int# -> ByteArray#
+  ("indexByteArrayArray#", [ArrayArray a, IntV i]) -> do
+    v <- lookupArrayArrIdx a
+    let x@ByteArray = v V.! (fromIntegral i)
+    pure [x]
+
+  -- indexArrayArrayArray# :: ArrayArray# -> Int# -> ArrayArray#
+  ("indexArrayArrayArray#", [ArrayArray a, IntV i]) -> do
+    v <- lookupArrayArrIdx a
+    let x@ArrayArray{} = v V.! (fromIntegral i)
+    pure [x]
+
+  -- readByteArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, ByteArray# #)
+  ("readByteArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
+    v <- lookupArrayArrIdx a
+    let x@ByteArray{} = v V.! (fromIntegral i)
+    pure [x]
+
+  -- readMutableByteArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
+  ("readMutableByteArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
+    v <- lookupArrayArrIdx a
+    let x@MutableByteArray{} = v V.! (fromIntegral i)
+    pure [x]
+
+  -- readArrayArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, ArrayArray# #)
+  ("readArrayArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
+    v <- lookupArrayArrIdx a
+    let x@ArrayArray{} = v V.! (fromIntegral i)
+    pure [x]
+
+  -- readMutableArrayArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableArrayArray# s #)
+  ("readMutableArrayArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
+    v <- lookupArrayArrIdx a
+    let x@MutableArrayArray{} = v V.! (fromIntegral i)
+    pure [x]
+
+  -- writeByteArrayArray# :: MutableArrayArray# s -> Int# -> ByteArray# -> State# s -> State# s
+  ("writeByteArrayArray#", [MutableArrayArray m, IntV i, a@ByteArray, _s]) -> do
+    v <- lookupArrayArrIdx m
+    updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
+    pure []
+
+  -- writeMutableByteArrayArray# :: MutableArrayArray# s -> Int# -> MutableByteArray# s -> State# s -> State# s
+  ("writeMutableByteArrayArray#", [MutableArrayArray m, IntV i, a@MutableByteArray, _s]) -> do
+    v <- lookupArrayArrIdx m
+    updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
+    pure []
+
+  -- writeArrayArrayArray# :: MutableArrayArray# s -> Int# -> ArrayArray# -> State# s -> State# s
+  ("writeArrayArrayArray#", [MutableArrayArray m, IntV i, a@ArrayArray{}, _s]) -> do
+    v <- lookupArrayArrIdx m
+    updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
+    pure []
+
+  -- writeMutableArrayArrayArray# :: MutableArrayArray# s -> Int# -> MutableArrayArray# s -> State# s -> State# s
+  ("writeMutableArrayArrayArray#", [MutableArrayArray m, IntV i, a@MutableArrayArray{}, _s]) -> do
+    v <- lookupArrayArrIdx m
+    updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
+    pure []
+
+  -- copyArrayArray# :: ArrayArray# -> Int# -> MutableArrayArray# s -> Int# -> Int# -> State# s -> State# s
+  ("copyArrayArray#", [ArrayArray src, IntV os, MutableArrayArray dst, IntV od, IntV n, _s]) -> do
+    vsrc <- lookupArrayArrIdx src
+    vdst <- lookupArrayArrIdx dst
+    let vdst' = vdst V.// [ (fromIntegral di, v)
+                          | i <- [ 0 .. n-1 ]
+                          , let si = os + i
+                          , let di = od + i
+                          , let v = vsrc V.! (fromIntegral si)
+                          ]
+    updateArrayArrIdx dst vdst'
+    pure []
+
+  -- copyMutableArrayArray#" :: MutableArrayArray# s -> Int# -> MutableArrayArray# s -> Int# -> Int# -> State# s -> State# s
+  ("copyMutableArrayArray#", [MutableArrayArray src, IntV os, MutableArrayArray dst, IntV od, IntV n, _s]) -> do
+    vsrc <- lookupArrayArrIdx src
+    vdst <- lookupArrayArrIdx dst
+    let vdst' = vdst V.// [ (fromIntegral di, v)
+                          | i <- [ 0 .. n-1 ]
+                          , let si = os + i
+                          , let di = od + i
+                          , let v = vsrc V.! (fromIntegral si)
+                          ]
+    updateArrayArrIdx dst vdst'
+    pure []
+
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Arrays of arrays"
-        {Operations on {\tt ArrayArray\#}. An {\tt ArrayArray\#} contains references to {\em unpointed}
-         arrays, such as {\tt ByteArray\#s}. Hence, it is not parameterised by the element types,
-         just like a {\tt ByteArray\#}, but it needs to be scanned during GC, just like an {\tt Array\#}.
-         We represent an {\tt ArrayArray\#} exactly as a {\tt Array\#}, but provide element-type-specific
-         indexing, reading, and writing.}
-------------------------------------------------------------------------
-
-primtype ArrayArray#
-
-primtype MutableArrayArray# s
-
-primop  NewArrayArrayOp "newArrayArray#" GenPrimOp
-   Int# -> State# s -> (# State# s, MutableArrayArray# s #)
-   {Create a new mutable array of arrays with the specified number of elements,
-    in the specified state thread, with each element recursively referring to the
-    newly created array.}
-   with
-   out_of_line = True
-   has_side_effects = True
-
-primop  SameMutableArrayArrayOp "sameMutableArrayArray#" GenPrimOp
-   MutableArrayArray# s -> MutableArrayArray# s -> Int#
-
-primop  UnsafeFreezeArrayArrayOp "unsafeFreezeArrayArray#" GenPrimOp
-   MutableArrayArray# s -> State# s -> (# State# s, ArrayArray# #)
-   {Make a mutable array of arrays immutable, without copying.}
-   with
-   has_side_effects = True
-
-primop  SizeofArrayArrayOp "sizeofArrayArray#" GenPrimOp
-   ArrayArray# -> Int#
-   {Return the number of elements in the array.}
-
-primop  SizeofMutableArrayArrayOp "sizeofMutableArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int#
-   {Return the number of elements in the array.}
-
-primop IndexArrayArrayOp_ByteArray "indexByteArrayArray#" GenPrimOp
-   ArrayArray# -> Int# -> ByteArray#
-   with can_fail = True
-
-primop IndexArrayArrayOp_ArrayArray "indexArrayArrayArray#" GenPrimOp
-   ArrayArray# -> Int# -> ArrayArray#
-   with can_fail = True
-
-primop  ReadArrayArrayOp_ByteArray "readByteArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int# -> State# s -> (# State# s, ByteArray# #)
-   with has_side_effects = True
-        can_fail = True
-
-primop  ReadArrayArrayOp_MutableByteArray "readMutableByteArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
-   with has_side_effects = True
-        can_fail = True
-
-primop  ReadArrayArrayOp_ArrayArray "readArrayArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int# -> State# s -> (# State# s, ArrayArray# #)
-   with has_side_effects = True
-        can_fail = True
-
-primop  ReadArrayArrayOp_MutableArrayArray "readMutableArrayArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableArrayArray# s #)
-   with has_side_effects = True
-        can_fail = True
-
-primop  WriteArrayArrayOp_ByteArray "writeByteArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int# -> ByteArray# -> State# s -> State# s
-   with has_side_effects = True
-        can_fail = True
-
-primop  WriteArrayArrayOp_MutableByteArray "writeMutableByteArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int# -> MutableByteArray# s -> State# s -> State# s
-   with has_side_effects = True
-        can_fail = True
-
-primop  WriteArrayArrayOp_ArrayArray "writeArrayArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int# -> ArrayArray# -> State# s -> State# s
-   with has_side_effects = True
-        can_fail = True
-
-primop  WriteArrayArrayOp_MutableArrayArray "writeMutableArrayArrayArray#" GenPrimOp
-   MutableArrayArray# s -> Int# -> MutableArrayArray# s -> State# s -> State# s
-   with has_side_effects = True
-        can_fail = True
-
-primop  CopyArrayArrayOp "copyArrayArray#" GenPrimOp
-  ArrayArray# -> Int# -> MutableArrayArray# s -> Int# -> Int# -> State# s -> State# s
-  {Copy a range of the ArrayArray\# to the specified region in the MutableArrayArray\#.
-   Both arrays must fully contain the specified ranges, but this is not checked.
-   The two arrays must not be the same array in different states, but this is not checked either.}
-  with
-  out_of_line      = True
-  has_side_effects = True
-  can_fail         = True
-
-primop  CopyMutableArrayArrayOp "copyMutableArrayArray#" GenPrimOp
-  MutableArrayArray# s -> Int# -> MutableArrayArray# s -> Int# -> Int# -> State# s -> State# s
-  {Copy a range of the first MutableArrayArray# to the specified region in the second
-   MutableArrayArray#.
-   Both arrays must fully contain the specified ranges, but this is not checked.
-   The regions are allowed to overlap, although this is only possible when the same
-   array is provided as both the source and the destination.
-   }
-  with
-  out_of_line      = True
-  has_side_effects = True
-  can_fail         = True
--}
