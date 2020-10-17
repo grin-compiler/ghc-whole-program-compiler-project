@@ -48,17 +48,22 @@ data StackContinuation
   | Apply   [Atom]                -- apply args on the result heap object
   deriving (Show, Eq, Ord)
 
+data ArrIdx
+  = MutArrIdx !Int
+  | ArrIdx    !Int
+  deriving (Show, Eq, Ord)
+
 data Atom     -- Q: should atom fit into a cpu register?
   = HeapPtr   !Addr
-  | Literal   !Lit             -- Q: shopuld we allow string literals, or should string lits be modeled as StringPtr?
+  | Literal   !Lit             -- Q: should we allow string literals, or should string lits be modeled as StringPtr?
   | StringPtr !Int !ByteString  -- HINT: StgTopStringLit ; maybe include its origin? ; the PrimRep is AddrRep
   | Void
   | FloatAtom     !Float
   | DoubleAtom    !Double
   | StablePointer !Atom -- TODO: need proper implementation
   | MVar          !Int
-  | Array         !Int
-  | MutableArray  !Int
+  | Array         !ArrIdx
+  | MutableArray  !ArrIdx
   | MutVar        !Int
   | MutableByteArray
   | ByteArray
@@ -76,6 +81,7 @@ type Stack  = [(Env, StackContinuation)]
 {-
   Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
 -}
+
 
 data StgState
   = StgState
