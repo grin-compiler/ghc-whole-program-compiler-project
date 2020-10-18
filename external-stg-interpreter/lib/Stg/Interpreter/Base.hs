@@ -73,7 +73,6 @@ data Atom     -- Q: should atom fit into a cpu register?
   | StablePointer !Atom -- TODO: need proper implementation
   | MVar          !Int
   | MutVar        !Int
-  | SomeArrayArray -- Initial value for ArrayArray creation
   | Array             !ArrIdx
   | MutableArray      !ArrIdx
   | SmallArray        !SmallArrIdx
