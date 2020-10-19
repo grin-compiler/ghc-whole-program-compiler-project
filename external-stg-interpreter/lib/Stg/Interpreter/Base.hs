@@ -84,6 +84,7 @@ data Atom     -- Q: should atom fit into a cpu register?
   | ArrayArrayArray
   | WeakPointer
   | ThreadId
+  | LiftedUndefined
   deriving (Show, Eq, Ord)
 
 type ReturnValue = [Atom]
