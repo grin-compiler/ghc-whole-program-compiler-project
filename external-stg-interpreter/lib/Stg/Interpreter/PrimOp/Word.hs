@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Stg.Interpreter.PrimOp.Word where
 
 import Data.Word
@@ -175,10 +176,29 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- byteSwap# :: Word# -> Word#
   ("byteSwap#",   [WordV a]) -> pure [WordV . fromIntegral . byteSwap64 $ fromIntegral a]
 
-  -- TODO: bitReverse8# :: Word# -> Word#
-  -- TODO: bitReverse16# :: Word# -> Word#
-  -- TODO: bitReverse32# :: Word# -> Word#
-  -- TODO: bitReverse64# :: WORD64 -> WORD64
-  -- TODO: bitReverse# :: Word# -> Word#
+  -- bitReverse8# :: Word# -> Word#
+  ("bitReverse8#", [WordV a]) -> pure [WordV $ bitReverse @Word8 $ fromIntegral a]
+
+  -- bitReverse16# :: Word# -> Word#
+  ("bitReverse16#", [WordV a]) -> pure [WordV $ bitReverse @Word16 $ fromIntegral a]
+
+  -- bitReverse32# :: Word# -> Word#
+  ("bitReverse32#", [WordV a]) -> pure [WordV $ bitReverse @Word32 $ fromIntegral a]
+
+  -- bitReverse64# :: Word64 -> Word64
+  ("bitReverse64#", [WordV a]) -> pure [WordV $ bitReverse @Word64 $ fromIntegral a]
+
+  -- bitReverse# :: Word# -> Word#
+  ("bitReverse#", [WordV a]) -> pure [WordV $ bitReverse @Word64 $ fromIntegral a]
 
   _ -> fallback op args t tc
+
+bitReverse :: forall a . (FiniteBits a, Integral a) => a -> Integer
+bitReverse x =
+  let n = finiteBitSize x - 1
+      bits = [ (n - i, b)
+             | i <- [ 0 .. (finiteBitSize x - 1) ]
+             , let b = testBitDefault x i
+             ]
+  in fromIntegral (foldl (\y (i,b) -> if b then setBit y i else y) (zeroBits @a) bits)
+
