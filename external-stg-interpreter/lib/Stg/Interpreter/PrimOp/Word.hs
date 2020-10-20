@@ -1,9 +1,11 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, TypeApplications #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, MagicHash #-}
 module Stg.Interpreter.PrimOp.Word where
 
 import Data.Word
 import Data.Bits
+import GHC.Exts
+import GHC.Word
 
 import Stg.Syntax
 import Stg.Interpreter.Base
@@ -117,22 +119,35 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- popCnt# :: Word# -> Word#
   ("popCnt#",   [WordV a])          -> pure [WordV . fromIntegral $ popCount a]
 
-{-
-  HINT:
-    https://en.wikipedia.org/wiki/Bit_Manipulation_Instruction_Sets#Parallel_bit_deposit_and_extract
-    https://www.felixcloutier.com/x86/pdep
--}
+  -- pdep8# :: Word# -> Word# -> Word#
+  ("pdep8#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep8 (fromIntegral a) (fromIntegral b)]
 
-  -- TODO: pdep8# :: Word# -> Word# -> Word#
-  -- TODO: pdep16# :: Word# -> Word# -> Word#
-  -- TODO: pdep32# :: Word# -> Word# -> Word#
-  -- TODO: pdep64# :: WORD64 -> WORD64 -> WORD64
-  -- TODO: pdep# :: Word# -> Word# -> Word#
-  -- TODO: pext8# :: Word# -> Word# -> Word#
-  -- TODO: pext16# :: Word# -> Word# -> Word#
-  -- TODO: pext32# :: Word# -> Word# -> Word#
-  -- TODO: pext64# :: WORD64 -> WORD64 -> WORD64
-  -- TODO: pext# :: Word# -> Word# -> Word#
+  -- pdep16# :: Word# -> Word# -> Word#
+  ("pdep16#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep16 (fromIntegral a) (fromIntegral b)]
+
+  -- pdep32# :: Word# -> Word# -> Word#
+  ("pdep32#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep32 (fromIntegral a) (fromIntegral b)]
+
+  -- pdep64# :: Word64 -> Word64 -> Word64
+  ("pdep64#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep64 (fromIntegral a) (fromIntegral b)]
+
+  -- pdep# :: Word# -> Word# -> Word#
+  ("pdep#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep (fromIntegral a) (fromIntegral b)]
+
+  -- pext8# :: Word# -> Word# -> Word#
+  ("pext8", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext8 (fromIntegral a) (fromIntegral b)]
+
+  -- pext16# :: Word# -> Word# -> Word#
+  ("pext16", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext16 (fromIntegral a) (fromIntegral b)]
+
+  -- pext32# :: Word# -> Word# -> Word#
+  ("pext32", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext32 (fromIntegral a) (fromIntegral b)]
+
+  -- pext64# :: Word64 -> Word64 -> Word64
+  ("pext64", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext64 (fromIntegral a) (fromIntegral b)]
+
+  -- pext# :: Word# -> Word# -> Word#
+  ("pext", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext (fromIntegral a) (fromIntegral b)]
 
   -- clz8# :: Word# -> Word#
   ("clz8#",   [WordV a]) -> pure [WordV . fromIntegral $ countLeadingZeros (fromIntegral a :: Word8)]
@@ -193,6 +208,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   _ -> fallback op args t tc
 
+-- TODO: Replace this with GHC.Word bitReverse when base 4.14 is used.
 bitReverse :: forall a . (FiniteBits a, Integral a) => a -> Integer
 bitReverse x =
   let n = finiteBitSize x - 1
@@ -202,3 +218,35 @@ bitReverse x =
              ]
   in fromIntegral (foldl (\y (i,b) -> if b then setBit y i else y) (zeroBits @a) bits)
 
+-- TODO: Maybe this could be implemented showing the desired semantics, instead of
+-- piggy-backing of GHC's implementation.
+
+pdep8 :: Word8 -> Word8 -> Word8
+pdep8 (W8# a) (W8# b) = W8# (pdep8# a b)
+
+pdep16 :: Word16 -> Word16 -> Word16
+pdep16 (W16# a) (W16# b) = W16# (pdep16# a b)
+
+pdep32 :: Word32 -> Word32 -> Word32
+pdep32 (W32# a) (W32# b) = W32# (pdep32# a b)
+
+pdep64 :: Word64 -> Word64 -> Word64
+pdep64 (W64# a) (W64# b) = W64# (pdep64# a b)
+
+pdep :: Word -> Word -> Word
+pdep (W# a) (W# b) = W# (pdep# a b)
+
+pext8 :: Word8 -> Word8 -> Word8
+pext8 (W8# a) (W8# b) = W8# (pext8# a b)
+
+pext16 :: Word16 -> Word16 -> Word16
+pext16 (W16# a) (W16# b) = W16# (pext16# a b)
+
+pext32 :: Word32 -> Word32 -> Word32
+pext32 (W32# a) (W32# b) = W32# (pext32# a b)
+
+pext64 :: Word64 -> Word64 -> Word64
+pext64 (W64# a) (W64# b) = W64# (pext64# a b)
+
+pext :: Word -> Word -> Word
+pext (W# a) (W# b) = W# (pext# a b)
