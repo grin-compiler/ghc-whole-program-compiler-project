@@ -47,7 +47,7 @@ library
     Stg.Interpreter.PrimOp.Word
 
   hs-source-dirs:      lib
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fobject-code
   build-depends:       base,
                        ghc-prim,
                        bytestring,
