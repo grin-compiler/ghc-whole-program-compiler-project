@@ -51,6 +51,7 @@ library
   build-depends:       base,
                        bytestring,
                        containers,
+                       primitive,
                        vector,
                        mtl,
                        external-stg

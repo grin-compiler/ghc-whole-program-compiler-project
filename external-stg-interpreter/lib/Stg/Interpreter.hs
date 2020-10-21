@@ -1,6 +1,13 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter where
 
+----- FFI expoerimental
+import Foreign.Storable
+import Foreign.Ptr
+import Foreign.C.Types
+import Foreign.C.String
+-----
+
 import Control.Monad.State
 
 import Data.List (partition)
@@ -206,14 +213,31 @@ evalExpr = \case
   StgOpApp fop@(StgFCallOp (ForeignCall{..})) l t _tc -> do
     args <- mapM evalArg l
     case foreignCTarget of
-{-
-      StaticTarget _ "localeEncoding" _ _ -> pure [Literal LitNullAddr]
-      StaticTarget _ "getProgArgv" _ _ -> pure []
-      StaticTarget _ "hs_free_stable_ptr" _ _ -> pure []
       StaticTarget _ "rts_setMainThread" _ _ -> pure []
       StaticTarget _ "getOrSetGHCConcSignalSignalHandlerStore" _ _ -> pure [head args] -- WTF!
-      StaticTarget _ "stg_sig_install" _ _ -> pure [Literal (LitNumber LitNumInt 0)]
-      StaticTarget _ "hs_iconv_open" _ _ -> pure [Literal (LitNumber LitNumInt 0)]
+      StaticTarget _ "stg_sig_install" _ _ -> pure [Literal (LitNumber LitNumInt (-1))]
+      StaticTarget _ "getProgArgv" _ _ -> do
+        let [ByteArrayPtr ba1 ptrArgc, ByteArrayPtr ba2 ptrArgv, Void] = args
+        liftIO $ do
+          -- HINT: getProgArgv :: Ptr CInt -> Ptr (Ptr CString) -> IO ()
+          poke (castPtr ptrArgc :: Ptr CInt) 0
+          poke (castPtr ptrArgv :: Ptr (Ptr CString)) nullPtr
+        pure []
+
+      StaticTarget _ "localeEncoding" _ _ -> do
+        -- const char* localeEncoding(void)
+        -- foreign import ccall unsafe "localeEncoding" c_localeEncoding :: IO CString
+        pure [StringPtr 0 "iso-8859-1"]
+
+      StaticTarget _ "hs_iconv_open" _ _ -> do
+        -- type IConv = CLong -- ToDo: (#type iconv_t)
+        -- foreign import ccall unsafe "hs_iconv_open" hs_iconv_open :: CString -> CString -> IO IConv
+        -- iconv_t hs_iconv_open(const char* tocode, const char* fromcode)
+        -- args:
+        --  [ByteArrayPtr (ByteArrayIdx {baId = 3, baPinned = True, baAlignment = 1}) 0x00000042020661a0,ByteArrayPtr (ByteArrayIdx {baId = 2, baPinned = True, baAlignment = 1}) 0x000000422183a7b0,Void]
+        pure [Literal (LitNumber LitNumInt 0)]
+{-
+      StaticTarget _ "hs_free_stable_ptr" _ _ -> pure []
       StaticTarget _ "hs_iconv" _ _ -> pure [Literal (LitNumber LitNumWord 0)]
 -}
       _ -> stgErrorM $ "unsupported StgFCallOp: " ++ show fop ++ " :: " ++ show t ++ "\n args: " ++ show args
@@ -338,7 +362,7 @@ test = do
         rootMain <- unId . head . Map.keys <$> gets ssEnv
         evalExpr (StgApp rootMain [StgLitArg LitNullAddr] (SingleValue VoidRep) mempty)
 
-  let s@StgState{..} = execState run emptyStgState
+  s@StgState{..} <- execStateT run emptyStgState
 
   putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
   print ssNextAddr

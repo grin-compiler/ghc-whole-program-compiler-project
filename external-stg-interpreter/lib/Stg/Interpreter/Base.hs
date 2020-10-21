@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.Base where
 
+import Data.Word
+import Foreign.Ptr
 import Control.Monad.State
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -9,6 +11,8 @@ import qualified Data.IntMap as IntMap
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS8
 import Data.Vector (Vector)
+import qualified Data.Primitive.ByteArray as BA
+import Control.Monad.Primitive
 
 import Text.Printf
 import Debug.Trace
@@ -63,7 +67,31 @@ data ArrayArrIdx
   | ArrayArrIdx    !Int
   deriving (Show, Eq, Ord)
 
-data Atom     -- Q: should atom fit into a cpu register?
+data ByteArrayIdx
+  = ByteArrayIdx
+  { baId        :: !Int
+  , baPinned    :: !Bool
+  , baAlignment :: !Int
+  }
+  deriving (Show, Eq, Ord)
+
+data ByteArrayDescriptor
+  = ByteArrayDescriptor
+  { baaMutableByteArray :: !(BA.MutableByteArray RealWorld)
+  , baaByteArray        :: !(Maybe BA.ByteArray)  -- HINT: ByteArray can only be created via unsafeFreeze from a MutableByteArray
+  , baaPinned           :: !Bool
+  , baaAlignment        :: !Int
+  }
+instance Show ByteArrayDescriptor where
+  show _ = "ByteArrayDescriptor (TODO)"
+
+instance Eq ByteArrayDescriptor where
+  _ == _ = True -- TODO
+
+instance Ord ByteArrayDescriptor where
+  _ `compare` _ = EQ -- TODO
+
+data Atom     -- Q: should atom fit into a cpu register? A: yes
   = HeapPtr   !Addr
   | Literal   !Lit             -- Q: should we allow string literals, or should string lits be modeled as StringPtr?
   | StringPtr !Int !ByteString  -- HINT: StgTopStringLit ; maybe include its origin? ; the PrimRep is AddrRep
@@ -79,9 +107,9 @@ data Atom     -- Q: should atom fit into a cpu register?
   | SmallMutableArray !SmallArrIdx
   | ArrayArray        !ArrayArrIdx
   | MutableArrayArray !ArrayArrIdx
-  | ByteArray
-  | MutableByteArray
-  | ArrayArrayArray
+  | ByteArrayPtr      !ByteArrayIdx !(Ptr Word8)  -- raw ptr to the byte array
+  | ByteArray         !ByteArrayIdx
+  | MutableByteArray  !ByteArrayIdx
   | WeakPointer
   | ThreadId
   | LiftedUndefined
@@ -109,14 +137,15 @@ data StgState
 
   -- primop related
 
-  , ssMVars         :: IntMap (Maybe Atom)
-  , ssArrays        :: IntMap (Vector Atom)
-  , ssMutableArrays :: IntMap (Vector Atom)
-  , ssSmallArrays        :: IntMap (Vector Atom)
-  , ssSmallMutableArrays :: IntMap (Vector Atom)
-  , ssArrayArrays        :: IntMap (Vector Atom)
-  , ssMutableArrayArrays :: IntMap (Vector Atom)
-  , ssMutVars       :: IntMap Atom
+  , ssMutableByteArrays   :: IntMap ByteArrayDescriptor
+  , ssMVars               :: IntMap (Maybe Atom)
+  , ssMutVars             :: IntMap Atom
+  , ssArrays              :: IntMap (Vector Atom)
+  , ssMutableArrays       :: IntMap (Vector Atom)
+  , ssSmallArrays         :: IntMap (Vector Atom)
+  , ssSmallMutableArrays  :: IntMap (Vector Atom)
+  , ssArrayArrays         :: IntMap (Vector Atom)
+  , ssMutableArrayArrays  :: IntMap (Vector Atom)
   }
   deriving (Show, Eq, Ord)
 
@@ -126,13 +155,21 @@ emptyStgState = StgState
   , ssEnv       = mempty
   , ssEvalStack = []
   , ssNextAddr  = 0
-  , ssMVars         = mempty
-  , ssArrays        = mempty
-  , ssMutableArrays = mempty
-  , ssMutVars       = mempty
+
+  -- primop related
+
+  , ssMutableByteArrays   = mempty
+  , ssMVars               = mempty
+  , ssMutVars             = mempty
+  , ssArrays              = mempty
+  , ssMutableArrays       = mempty
+  , ssSmallArrays         = mempty
+  , ssSmallMutableArrays  = mempty
+  , ssArrayArrays         = mempty
+  , ssMutableArrayArrays  = mempty
   }
 
-type M = State StgState
+type M = StateT StgState IO
 
 freshHeapAddress :: M Addr
 freshHeapAddress = state $ \s@StgState{..} -> (ssNextAddr, s {ssNextAddr = succ ssNextAddr})
@@ -240,11 +277,17 @@ lookupSmallMutableArray m = do
 lookupArrayArray :: Int -> M (Vector Atom)
 lookupArrayArray m = do
   IntMap.lookup m <$> gets ssArrayArrays >>= \case
-    Nothing -> stgErrorM $ "unknown SmallArray: " ++ show m
+    Nothing -> stgErrorM $ "unknown ArrayArray: " ++ show m
     Just a  -> pure a
 
 lookupMutableArrayArray :: Int -> M (Vector Atom)
 lookupMutableArrayArray m = do
   IntMap.lookup m <$> gets ssMutableArrayArrays >>= \case
-    Nothing -> stgErrorM $ "unknown SmallMutableArray: " ++ show m
+    Nothing -> stgErrorM $ "unknown MutableArrayArray: " ++ show m
+    Just a  -> pure a
+
+lookupByteArrayDescriptor :: Int -> M ByteArrayDescriptor
+lookupByteArrayDescriptor m = do
+  IntMap.lookup m <$> gets ssMutableByteArrays >>= \case
+    Nothing -> stgErrorM $ "unknown ByteArrayDescriptor: " ++ show m
     Just a  -> pure a

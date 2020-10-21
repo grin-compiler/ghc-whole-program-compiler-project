@@ -1,12 +1,26 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ByteArray where
+
+import Control.Monad.State
+import qualified Data.IntMap as IntMap
+import qualified Data.Primitive.ByteArray as BA
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Integer -> Atom
+pattern IntV i = Literal (LitNumber LitNumInt i)
+
+lookupByteArray :: Int -> M BA.ByteArray
+lookupByteArray baId = do
+  desc@ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
+  case baaByteArray of
+    Just ba -> pure ba
+    Nothing -> stgErrorM $ "unknown ByteArray: " ++ show baId
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
-
+{-
   ("newPinnedByteArray#", [Literal (LitNumber LitNumInt size), _s]) -> do
     -- Int# -> State# s -> (# State# s, MutableByteArray# s #)
     pure [MutableByteArray]
@@ -15,13 +29,204 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- Int# -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
     pure [MutableByteArray]
 
-  ("unsafeFreezeByteArray#", [a, _s]) -> do
-    -- MutableByteArray# s -> State# s -> (# State# s, ByteArray# #)
-    pure [ByteArray]
-
   ("byteArrayContents#", [a]) -> do
     -- ByteArray# -> Addr#
     pure [Literal LitNullAddr]
+-}
+
+{-
+  - only mutable bytearray can be created
+  - bytearray is always an alias to mutable byte array
+  - mutable array parameters: alignment :: Int, pinned :: Bool, size :: Int ; keep these in the index
+-}
+
+------------------------------
+
+  -- construction
+
+  -- newByteArray# :: Int# -> State# s -> (# State# s, MutableByteArray# s #)
+  -- newPinnedByteArray# :: Int# -> State# s -> (# State# s, MutableByteArray# s #)
+
+  -- newAlignedPinnedByteArray# :: Int# -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
+  ("newAlignedPinnedByteArray#", [IntV size, IntV alignment, _s]) -> do
+    let sizeI       = fromIntegral size
+        alignmentI  = fromIntegral alignment
+
+    ba <- liftIO $ BA.newAlignedPinnedByteArray sizeI alignmentI
+
+    byteArrays <- gets ssMutableByteArrays
+    let next  = IntMap.size byteArrays
+        desc  = ByteArrayDescriptor
+          { baaMutableByteArray = ba
+          , baaByteArray        = Nothing
+          , baaPinned           = True
+          , baaAlignment        = alignmentI
+          }
+
+    modify' $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays}
+
+    let baIdx = ByteArrayIdx
+          { baId        = next
+          , baPinned    = True
+          , baAlignment = alignmentI
+          }
+    pure [MutableByteArray baIdx]
+
+  -- query implementation details
+
+  -- isMutableByteArrayPinned# :: MutableByteArray# s -> Int#
+  -- isByteArrayPinned# :: ByteArray# -> Int#
+
+  -- FFI and unsafe / raw pointer API
+
+  -- byteArrayContents# :: ByteArray# -> Addr#
+  ("byteArrayContents#", [ByteArray baIdx@ByteArrayIdx{..}]) -> do
+    ba <- lookupByteArray baId
+    let ptr = BA.byteArrayContents ba
+    pure [ByteArrayPtr baIdx ptr]
+
+  -- sameMutableByteArray# :: MutableByteArray# s -> MutableByteArray# s -> Int#
+  -- shrinkMutableByteArray# :: MutableByteArray# s -> Int# -> State# s -> State# s
+  -- resizeMutableByteArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s,MutableByteArray# s #)
+
+  -- unsafeFreezeByteArray# :: MutableByteArray# s -> State# s -> (# State# s, ByteArray# #)
+  ("unsafeFreezeByteArray#", [MutableByteArray baIdx@ByteArrayIdx{..}, _s]) -> do
+    desc@ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
+    case baaByteArray of
+      Just{}  -> pure ()
+      Nothing -> do
+        ba <- liftIO $ BA.unsafeFreezeByteArray baaMutableByteArray
+        let newDesc = desc {baaByteArray = Just ba}
+        modify' $ \s@StgState{..} -> s {ssMutableByteArrays = IntMap.insert baId newDesc ssMutableByteArrays}
+    pure [ByteArray baIdx]
+
+  -- sizeofByteArray# :: ByteArray# -> Int#
+  -- sizeofMutableByteArray# :: MutableByteArray# s -> Int#
+  -- getSizeofMutableByteArray# :: MutableByteArray# s -> State# s -> (# State# s, Int# #)
+
+  -- read ByteArray (pure)
+
+  -- indexCharArray# :: ByteArray# -> Int# -> Char#
+  -- indexWideCharArray# :: ByteArray# -> Int# -> Char#
+  -- indexIntArray# :: ByteArray# -> Int# -> Int#
+  -- indexWordArray# :: ByteArray# -> Int# -> Word#
+  -- indexAddrArray# :: ByteArray# -> Int# -> Addr#
+  -- indexFloatArray# :: ByteArray# -> Int# -> Float#
+  -- indexDoubleArray# :: ByteArray# -> Int# -> Double#
+  -- indexStablePtrArray# :: ByteArray# -> Int# -> StablePtr# a
+  -- indexInt8Array# :: ByteArray# -> Int# -> Int#
+  -- indexInt16Array# :: ByteArray# -> Int# -> Int#
+  -- indexInt32Array# :: ByteArray# -> Int# -> INT32
+  -- indexInt64Array# :: ByteArray# -> Int# -> INT64
+  -- indexWord8Array# :: ByteArray# -> Int# -> Word#
+  -- indexWord16Array# :: ByteArray# -> Int# -> Word#
+  -- indexWord32Array# :: ByteArray# -> Int# -> WORD32
+  -- indexWord64Array# :: ByteArray# -> Int# -> WORD64
+  -- indexWord8ArrayAsChar# :: ByteArray# -> Int# -> Char#
+  -- indexWord8ArrayAsWideChar# :: ByteArray# -> Int# -> Char#
+  -- indexWord8ArrayAsAddr# :: ByteArray# -> Int# -> Addr#
+  -- indexWord8ArrayAsFloat# :: ByteArray# -> Int# -> Float#
+  -- indexWord8ArrayAsDouble# :: ByteArray# -> Int# -> Double#
+  -- indexWord8ArrayAsStablePtr# :: ByteArray# -> Int# -> StablePtr# a
+  -- indexWord8ArrayAsInt16# :: ByteArray# -> Int# -> Int#
+  -- indexWord8ArrayAsInt32# :: ByteArray# -> Int# -> INT32
+  -- indexWord8ArrayAsInt64# :: ByteArray# -> Int# -> INT64
+  -- indexWord8ArrayAsInt# :: ByteArray# -> Int# -> Int#
+  -- indexWord8ArrayAsWord16# :: ByteArray# -> Int# -> Word#
+  -- indexWord8ArrayAsWord32# :: ByteArray# -> Int# -> WORD32
+  -- indexWord8ArrayAsWord64# :: ByteArray# -> Int# -> WORD64
+  -- indexWord8ArrayAsWord# :: ByteArray# -> Int# -> Word#
+
+  -- read MutableByteArray (effectful)
+
+  -- readCharArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
+  -- readWideCharArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
+  -- readIntArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- readWordArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+  -- readAddrArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Addr# #)
+  -- readFloatArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Float# #)
+  -- readDoubleArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Double# #)
+  -- readStablePtrArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, StablePtr# a #)
+  -- readInt8Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- readInt16Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- readInt32Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT32 #)
+  -- readInt64Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT64 #)
+  -- readWord8Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord16Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord32Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD32 #)
+  -- readWord64Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD64 #)
+  -- readWord8ArrayAsChar# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
+  -- readWord8ArrayAsWideChar# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
+  -- readWord8ArrayAsAddr# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Addr# #)
+  -- readWord8ArrayAsFloat# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Float# #)
+  -- readWord8ArrayAsDouble# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Double# #)
+  -- readWord8ArrayAsStablePtr# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, StablePtr# a #)
+  -- readWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- readWord8ArrayAsInt32# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT32 #)
+  -- readWord8ArrayAsInt64# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT64 #)
+  -- readWord8ArrayAsInt# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- readWord8ArrayAsWord16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord8ArrayAsWord32# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD32 #)
+  -- readWord8ArrayAsWord64# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD64 #)
+  -- readWord8ArrayAsWord# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+
+  -- write MutableByteArray (effectful)
+
+  -- writeCharArray# :: MutableByteArray# s -> Int# -> Char# -> State# s -> State# s
+  -- writeWideCharArray# :: MutableByteArray# s -> Int# -> Char# -> State# s -> State# s
+  -- writeIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- writeWordArray# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
+  -- writeAddrArray# :: MutableByteArray# s -> Int# -> Addr# -> State# s -> State# s
+  -- writeFloatArray# :: MutableByteArray# s -> Int# -> Float# -> State# s -> State# s
+  -- writeDoubleArray# :: MutableByteArray# s -> Int# -> Double# -> State# s -> State# s
+  -- writeStablePtrArray# :: MutableByteArray# s -> Int# -> StablePtr# a -> State# s -> State# s
+  -- writeInt8Array# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- writeInt16Array# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- writeInt32Array# :: MutableByteArray# s -> Int# -> INT32 -> State# s -> State# s
+  -- writeInt64Array# :: MutableByteArray# s -> Int# -> INT64 -> State# s -> State# s
+  -- writeWord8Array# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
+  -- writeWord16Array# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
+  -- writeWord32Array# :: MutableByteArray# s -> Int# -> WORD32 -> State# s -> State# s
+  -- writeWord64Array# :: MutableByteArray# s -> Int# -> WORD64 -> State# s -> State# s
+  -- writeWord8ArrayAsChar# :: MutableByteArray# s -> Int# -> Char# -> State# s -> State# s
+  -- writeWord8ArrayAsWideChar# :: MutableByteArray# s -> Int# -> Char# -> State# s -> State# s
+  -- writeWord8ArrayAsAddr# :: MutableByteArray# s -> Int# -> Addr# -> State# s -> State# s
+  -- writeWord8ArrayAsFloat# :: MutableByteArray# s -> Int# -> Float# -> State# s -> State# s
+  -- writeWord8ArrayAsDouble# :: MutableByteArray# s -> Int# -> Double# -> State# s -> State# s
+  -- writeWord8ArrayAsStablePtr# :: MutableByteArray# s -> Int# -> StablePtr# a -> State# s -> State# s
+  -- writeWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- writeWord8ArrayAsInt32# :: MutableByteArray# s -> Int# -> INT32 -> State# s -> State# s
+  -- writeWord8ArrayAsInt64# :: MutableByteArray# s -> Int# -> INT64 -> State# s -> State# s
+  -- writeWord8ArrayAsInt# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- writeWord8ArrayAsWord16# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
+  -- writeWord8ArrayAsWord32# :: MutableByteArray# s -> Int# -> WORD32 -> State# s -> State# s
+  -- writeWord8ArrayAsWord64# :: MutableByteArray# s -> Int# -> WORD64 -> State# s -> State# s
+  -- writeWord8ArrayAsWord# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
+
+  -- comparison
+
+  -- compareByteArrays# :: ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Int#
+
+  -- copy and fill
+
+  -- copyByteArray# :: ByteArray# -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- copyMutableByteArray# :: MutableByteArray# s -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- copyByteArrayToAddr# :: ByteArray# -> Int# -> Addr# -> Int# -> State# s -> State# s
+  -- copyMutableByteArrayToAddr# :: MutableByteArray# s -> Int# -> Addr# -> Int# -> State# s -> State# s
+  -- copyAddrToByteArray# :: Addr# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- setByteArray# :: MutableByteArray# s -> Int# -> Int# -> Int# -> State# s -> State# s
+
+  -- atomic operations
+
+  -- atomicReadIntArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- atomicWriteIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  -- casIntArray# :: MutableByteArray# s -> Int# -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  -- fetchAddIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  -- fetchSubIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  -- fetchAndIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  -- fetchNandIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  -- fetchOrIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  -- fetchXorIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
 
   _ -> fallback op args t tc
 
