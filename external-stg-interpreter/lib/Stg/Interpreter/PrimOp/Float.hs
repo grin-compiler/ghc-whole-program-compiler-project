@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Float where
 
+import GHC.Float
 import Stg.Syntax
 import Stg.Interpreter.Base
 
@@ -53,12 +54,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- expFloat# :: Float# -> Float#
   ("expFloat#",     [FloatV a]) -> pure [FloatV $ exp a]
 
-  -- TODO: expm1Float# :: Float# -> Float#
+  -- expm1Float# :: Float# -> Float#
+  ("expm1Float#", [FloatV a]) -> pure [FloatV $ expm1Float a]
 
   -- logFloat# :: Float# -> Float#
   ("logFloat#",     [FloatV a]) -> pure [FloatV $ log a]
 
-  -- TODO: log1pFloat# :: Float# -> Float#
+  -- log1pFloat# :: Float# -> Float#
+  ("log1pFloat#", [FloatV a]) -> pure [FloatV $ log1pFloat a]
 
   -- sqrtFloat# :: Float# -> Float#
   ("sqrtFloat#",    [FloatV a]) -> pure [FloatV $ sqrt a]
@@ -90,9 +93,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- tanhFloat# :: Float# -> Float#
   ("FloatV",        [FloatV a]) -> pure [FloatV $ tanh a]
 
-  -- TODO: asinhFloat# :: Float# -> Float#
-  -- TODO: acoshFloat# :: Float# -> Float#
-  -- TODO: atanhFloat# :: Float# -> Float#
+  -- asinhFloat# :: Float# -> Float#
+  ("asinhFloat#", [FloatV a]) -> pure [FloatV $ asinhFloat a]
+
+  -- acoshFloat# :: Float# -> Float#
+  ("acoshFloat#", [FloatV a]) -> pure [FloatV $ acoshFloat a]
+
+  -- atanhFloat# :: Float# -> Float#
+  ("atanhFloat#", [FloatV a]) -> pure [FloatV $ atanhFloat a]
 
   -- powerFloat# :: Float# -> Float# -> Float#
   ("powerFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ a ** b]
@@ -100,6 +108,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- float2Double# ::  Float# -> Double#
   ("float2Double#", [FloatV a]) -> pure [DoubleV $ realToFrac a]
 
-  -- TODO: decodeFloat_Int# :: Float# -> (# Int#, Int# #)
+  -- decodeFloat_Int# :: Float# -> (# Int#, Int# #)
+  ("decodeFloat_Int#", [FloatV a]) -> do
+    let (x,y) = decodeFloat a
+    pure [IntV x, IntV $ fromIntegral y]
 
   _ -> fallback op args t tc
