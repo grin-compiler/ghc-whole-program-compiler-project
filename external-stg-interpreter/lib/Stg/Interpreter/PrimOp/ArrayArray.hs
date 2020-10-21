@@ -55,7 +55,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- indexByteArrayArray# :: ArrayArray# -> Int# -> ByteArray#
   ("indexByteArrayArray#", [ArrayArray a, IntV i]) -> do
     v <- lookupArrayArrIdx a
-    let x@ByteArray = v V.! (fromIntegral i)
+    let x@ByteArray{} = v V.! (fromIntegral i)
     pure [x]
 
   -- indexArrayArrayArray# :: ArrayArray# -> Int# -> ArrayArray#
@@ -89,13 +89,13 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [x]
 
   -- writeByteArrayArray# :: MutableArrayArray# s -> Int# -> ByteArray# -> State# s -> State# s
-  ("writeByteArrayArray#", [MutableArrayArray m, IntV i, a@ByteArray, _s]) -> do
+  ("writeByteArrayArray#", [MutableArrayArray m, IntV i, a@ByteArray{}, _s]) -> do
     v <- lookupArrayArrIdx m
     updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
     pure []
 
   -- writeMutableByteArrayArray# :: MutableArrayArray# s -> Int# -> MutableByteArray# s -> State# s -> State# s
-  ("writeMutableByteArrayArray#", [MutableArrayArray m, IntV i, a@MutableByteArray, _s]) -> do
+  ("writeMutableByteArrayArray#", [MutableArrayArray m, IntV i, a@MutableByteArray{}, _s]) -> do
     v <- lookupArrayArrIdx m
     updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
     pure []
