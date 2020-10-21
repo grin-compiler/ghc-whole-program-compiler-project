@@ -49,6 +49,7 @@ library
   hs-source-dirs:      lib
   ghc-options:         -Wall
   build-depends:       base,
+                       ghc-prim,
                        bytestring,
                        containers,
                        primitive,

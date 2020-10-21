@@ -1,10 +1,15 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns #-}
 module Stg.Interpreter.PrimOp.Double where
 
+import GHC.Word
+import GHC.Int
+import GHC.Float
+import GHC.Prim
 import Stg.Syntax
 import Stg.Interpreter.Base
 
 pattern IntV i    = Literal (LitNumber LitNumInt i)
+pattern WordV w   = Literal (LitNumber LitNumWord w)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 
@@ -56,12 +61,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- expDouble# :: Double# -> Double#
   ("expDouble#", [DoubleV a]) -> pure [DoubleV $ exp a]
 
-  -- TODO: expm1Double# :: Double# -> Double#
+  -- expm1Double# :: Double# -> Double#
+  ("expm1Double#", [DoubleV a]) -> pure [DoubleV $ expm1Double a]
 
   -- logDouble# :: Double# -> Double#
   ("logDouble#", [DoubleV a]) -> pure [DoubleV $ log a]
 
-  -- TODO: log1pDouble# :: Double# -> Double#
+  -- log1pDouble# :: Double# -> Double#
+  ("log1pDouble#", [DoubleV a]) -> pure [DoubleV $ log1pDouble a]
 
   -- sqrtDouble# :: Double# -> Double#
   ("sqrtDouble#", [DoubleV a]) -> pure [DoubleV $ sqrt a]
@@ -93,14 +100,36 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- tanhDouble# :: Double# -> Double#
   ("tanhDouble#", [DoubleV a]) -> pure [DoubleV $ tanh a]
 
-  -- TODO: asinhDouble# :: Double# -> Double#
-  -- TODO: acoshDouble# :: Double# -> Double#
-  -- TODO: atanhDouble# :: Double# -> Double#
+  -- asinhDouble# :: Double# -> Double#
+  ("asinhDouble#", [DoubleV a]) -> pure [DoubleV $ asinhDouble a]
+
+  -- acoshDouble# :: Double# -> Double#
+  ("acoshDouble#", [DoubleV a]) -> pure [DoubleV $ acoshDouble a]
+
+  -- atanhDouble# :: Double# -> Double#
+  ("atanhDouble#", [DoubleV a]) -> pure [DoubleV $ atanhDouble a]
 
   -- **## :: Double# -> Double# -> Double#
   ("**##", [DoubleV a, DoubleV b]) -> pure [DoubleV $ a ** b]
 
-  -- TODO: decodeDouble_2Int# :: Double# -> (# Int#, Word#, Word#, Int# #)
-  -- TODO: decodeDouble_Int64# :: Double# -> (# INT64, Int# #)
+  -- decodeDouble_2Int# :: Double# -> (# Int#, Word#, Word#, Int# #)
+  ("decodeDouble_2Int#", [DoubleV x]) -> do
+    let (a,b,c,d) = decodeDouble_2Int x
+    pure [IntV a, WordV b, WordV c, IntV d]
+
+  -- decodeDouble_Int64# :: Double# -> (# Int#, Int# #)
+  ("decodeDouble_Int64", [DoubleV x]) -> do
+    let (a,b) = decodeDouble_Int64 x
+    pure [undefined, IntV b]
 
   _ -> fallback op args t tc
+
+decodeDouble_2Int :: Double -> (Integer, Integer, Integer, Integer)
+decodeDouble_2Int (D# x) =
+  let !(# a, b, c, d #) = decodeDouble_2Int# x
+  in (fromIntegral (I# a), fromIntegral (W# b), fromIntegral (W# c), fromIntegral (I# d))
+
+decodeDouble_Int64 :: Double -> (Integer, Integer)
+decodeDouble_Int64 (D# x) =
+  let !(# a, b #) = decodeDouble_Int64# x
+  in (fromIntegral (I# a), fromIntegral (I# b))
