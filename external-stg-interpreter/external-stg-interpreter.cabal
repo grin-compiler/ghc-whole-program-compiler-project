@@ -13,8 +13,13 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:
+    Foreign.LibFFI.Closure
+
     Stg.Interpreter
     Stg.Interpreter.Base
+    Stg.Interpreter.FFI
+    Stg.Interpreter.Rts
+    Stg.Interpreter.Debug
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array
@@ -50,10 +55,19 @@ library
   ghc-options:         -Wall -fobject-code
   build-depends:       base,
                        ghc-prim,
+                       unix,
+                       libffi,
                        bytestring,
                        containers,
                        primitive,
                        vector,
                        mtl,
                        external-stg
+  default-language:    Haskell2010
+
+executable ext-stg-interpreter
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  build-depends:       base < 5.0,
+                       external-stg-interpreter
   default-language:    Haskell2010
