@@ -1,24 +1,34 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
+
 module Stg.Interpreter where
 
------ FFI expoerimental
-import Foreign.Storable
+import GHC.Stack
+import qualified GHC.Exts as Exts
 import Foreign.Ptr
-import Foreign.C.Types
-import Foreign.C.String
------
 
-import Control.Monad.State
+import Control.Concurrent
+import Control.Concurrent.MVar
+import Control.Monad.State.Strict
+import Control.Exception
+import qualified Data.Primitive.ByteArray as BA
 
 import Data.List (partition)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
+import qualified Data.IntMap as IntMap
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Internal as BS
+import System.Posix.DynamicLinker
 
 import Stg.Syntax
 import Stg.Program
 
 import Stg.Interpreter.Base
+import Stg.Interpreter.FFI
+import Stg.Interpreter.Rts
+import Stg.Interpreter.Debug
 
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
 import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
@@ -39,6 +49,8 @@ import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
 import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
 import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
 import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
+import qualified Stg.Interpreter.PrimOp.TagToEnum     as PrimTagToEnum
+import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
 
 {-
   Q: what is the operational semantic of StgApp
@@ -54,14 +66,35 @@ import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
     - call main
 -}
 
+{-
+data LitNumType
+  = LitNumInt     -- ^ @Int#@ - according to target machine
+  | LitNumInt64   -- ^ @Int64#@ - exactly 64 bits
+  | LitNumWord    -- ^ @Word#@ - according to target machine
+  | LitNumWord64  -- ^ @Word64#@ - exactly 64 bits
+  deriving (Eq, Ord, Generic, Show)
 
-evalArg :: Arg -> M Atom
+data Lit
+  = LitChar     !Char
+  | LitString   !BS.ByteString
+  | LitNumber   !LitNumType !Integer
+-}
+
+evalArg :: HasCallStack => Arg -> M Atom
 evalArg = \case
+  StgLitArg (LitString str) -> pure $ StringPtr 0 (str <> "\0") -- FIXME: StringPtr or Lit???)
+  StgLitArg (LitFloat f)    -> pure . FloatAtom $ realToFrac f
+  StgLitArg (LitDouble d)   -> pure . DoubleAtom $ realToFrac d
+  StgLitArg LitNullAddr     -> pure $ RawPtr nullPtr
+  StgLitArg (LitNumber LitNumInt n)     -> pure . IntAtom $ fromIntegral n
+  StgLitArg (LitNumber LitNumInt64 n)   -> pure . IntAtom $ fromIntegral n
+  StgLitArg (LitNumber LitNumWord n)    -> pure . WordAtom $ fromIntegral n
+  StgLitArg (LitNumber LitNumWord64 n)  -> pure . WordAtom $ fromIntegral n
   StgLitArg l -> pure $ Literal l
   StgVarArg b -> lookupEnv b
 
-builtinStgEval :: Atom -> M [Atom]
-builtinStgEval a = do
+builtinStgEval :: HasCallStack => Atom -> M [Atom]
+builtinStgEval a@HeapPtr{} = do
   o <- readHeap a
   case o of
     Con{}       -> pure [a]
@@ -75,6 +108,7 @@ builtinStgEval a = do
         let StgRhsClosure uf params e = hoCloBody
             HeapPtr l = a
             argsM = zipWithM_ addEnv params hoCloArgs
+        markExecuted l
         -- TODO: env or free var handling
         case uf of
           ReEntrant -> do
@@ -89,9 +123,11 @@ builtinStgEval a = do
             -- closure will only be entered once, and so need not be updated but may safely be blackholed.
             store l (Blackhole o)
             withEnv hoName hoEnv (argsM >> evalExpr e)
+--builtinStgEval x = pure [x] -- FIXME: this is a debug hack!! remove it!!!!!
+builtinStgEval a = stgErrorM $ "expected a thunk, got: " ++ show a
 
-builtinStgApply :: Atom -> [Atom] -> M [Atom]
-builtinStgApply a args = do
+builtinStgApply :: HasCallStack => Atom -> [Atom] -> M [Atom]
+builtinStgApply a@HeapPtr{} args = do
   let argCount      = length args
       HeapPtr addr  = a
   o <- readHeap a
@@ -111,7 +147,8 @@ builtinStgApply a args = do
       -> do
         let (satArgs, remArgs) = splitAt hoCloMissing args
         builtinStgApply a satArgs >>= \case
-          [f] -> builtinStgApply f remArgs
+          [f] -> do
+            builtinStgApply f remArgs
           r   -> stgErrorM $ "invalid over-application result: " ++ show r
 
       -- saturation
@@ -120,8 +157,48 @@ builtinStgApply a args = do
         newAp <- freshHeapAddress
         store newAp (o {hoCloArgs = hoCloArgs ++ args, hoCloMissing = hoCloMissing - argCount})
         builtinStgEval (HeapPtr newAp)
+builtinStgApply a _ = stgErrorM $ "expected a closure, got: " ++ show a
 
-evalExpr :: Expr -> M [Atom]
+heapObjectKind :: HeapObject -> String
+heapObjectKind = \case
+  Con{}       -> "Con"
+  Closure{}   -> "Closure"
+  Blackhole{} -> "Blackhole"
+
+peekResult :: [Atom] -> M String
+peekResult [hp@HeapPtr{}] = do
+  o <- readHeap hp
+  case o of
+    Con dc args -> pure $ "Con: " ++ show (dataConUniqueName dc) ++ " " ++ show args
+    Closure{..} -> pure $ "Closure missing: " ++ show hoCloMissing ++ " args: " ++ show hoCloArgs
+    Blackhole{} -> pure "Blackhole"
+peekResult r = pure $ show r
+
+assertWHNF :: HasCallStack => [Atom] -> AltType -> Binder -> Expr -> M ()
+assertWHNF [hp@HeapPtr{}] aty res e  = do
+  o <- readHeap hp
+  case o of
+    Con dc args -> pure ()
+    Closure{..}
+      | hoCloMissing == 0
+      , aty /= MultiValAlt 1
+      -> do
+          liftIO $ do
+            putStrLn "Thunk"
+            putStrLn ""
+            print aty
+            putStrLn ""
+            print res
+            putStrLn ""
+            print e
+            putStrLn ""
+          error "Thunk"
+      | otherwise         -> pure ()
+    Blackhole{} -> error "Blackhole"
+assertWHNF _ _ _ _ = pure ()
+
+
+evalExpr :: HasCallStack => Expr -> M [Atom]
 evalExpr = \case
   StgTick _ e       -> evalExpr e
   StgLit l          -> pure [Literal l] -- FIXME: LitString?? is it addr??
@@ -151,18 +228,53 @@ evalExpr = \case
     SingleValue LiftedRep -> do
       -- HINT: must be HeapPtr ; read heap ; check if Con or Closure ; eval if Closure ; return HeapPtr if Con
       v <- lookupEnv i
-      builtinStgEval v
+      --liftIO $ putStrLn $ "force: " ++ show (Id i) ++ " " ++ show v
+      result <- builtinStgEval v
+      --pResult <- peekResult result
+      --liftIO $ putStrLn $ "force-result: " ++ show (Id i) ++ " = " ++ show result ++ " " ++ pResult
+      pure result
 
-    SingleValue _ -> do
+    SingleValue UnliftedRep -> error "SingleValue UnliftedRep"
+
+    xxx@(SingleValue _) -> do
       -- HINT: unlifted and literals ; Unlifted must be a HeapPtr that points to a Con
       v <- lookupEnv i
-      pure [v]
+      case v of
+        HeapPtr{} -> error $ "xxx: " ++ show xxx
+        _ -> pure [v]
+      --pure [v]
+      --builtinStgEval v
 
     UnboxedTuple [LiftedRep] -> do
       v <- lookupEnv i
-      pure [v]
-
-    r -> stgErrorM $ "unsupported var rep: " ++ show r -- unboxed: is it possible??
+      {-
+      case binderDetails i of
+        JoinId 0 -> do
+      -}
+      case (show $ Id i) `elem` [ "base_GHC.Foreign.$j_s4kA"
+                                , "gloss-1.13.1.1-9h1aMufeUtm5ZHz3o9mip4_Graphics.Gloss.Internals.Interface.Backend.GLUT.$j_ssmU"
+                                ] of
+        True -> do
+          result <- builtinStgEval v
+          --pResult <- peekResult result
+          --liftIO $ putStrLn $ "force-result2: " ++ show (Id i) ++ " = " ++ show result ++ " " ++ pResult
+          pure result
+        _ -> do
+          error $ show $ "UnboxedTuple [LiftedRep]: " ++ show (Id i) ++ " " ++ show i
+      --- base_GHC.Foreign.$j_s4kA
+      --pure [v]
+{-
+    UnboxedTuple []
+      | binderId i == BinderId (Unique '0' 124) -- wired in coercion token
+      -> do
+        --v <- lookupEnv i
+        --result <- builtinStgEval v
+        --pResult <- peekResult result
+        --liftIO $ putStrLn $ "force-result2: " ++ show (Id i) ++ " = " ++ show result ++ " " ++ pResult
+        --pure result
+        pure []
+-}
+    r -> stgErrorM $ "unsupported var rep: " ++ show r ++ " " ++ show i -- unboxed: is it possible??
 
   -- fun app
   --  Q: should app always be lifted/unlifted?
@@ -171,12 +283,17 @@ evalExpr = \case
     SingleValue _ -> do
       args <- mapM evalArg l
       v <- lookupEnv i
-      builtinStgApply v args
+      --liftIO $ putStrLn $ "call: " ++ show (Id i) ++ " " ++ show args 
+      result <- builtinStgApply v args
+      --pResult <- peekResult result
+      --liftIO $ putStrLn $ "call-result: " ++ show (Id i) ++ " " ++ show args ++ " = " ++ show result ++ " " ++ pResult
+      pure result
 
     r -> stgErrorM $ "unsupported app rep: " ++ show r -- unboxed: invalid
 
   StgCase e resultId aty alts -> do
     result <- evalExpr e
+    assertWHNF result aty resultId e
     case aty of
       AlgAlt tc -> do
         let [v] = result
@@ -208,104 +325,61 @@ evalExpr = \case
 
   StgOpApp (StgPrimOp op) l t tc -> do
     args <- mapM evalArg l
-    evalPrimOp op args t tc
+    evalStack <- gets ssEvalStack
+    --liftIO $ putStrLn $ show (head evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
+    result <- evalPrimOp op args t tc
+    --liftIO $ putStrLn $ show (head evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = " ++ show result
+    markPrimOp op
+    pure result
 
-  StgOpApp fop@(StgFCallOp (ForeignCall{..})) l t _tc -> do
+  StgOpApp (StgFCallOp foreignCall) l t tc -> do
     args <- mapM evalArg l
-    case foreignCTarget of
-      StaticTarget _ "rts_setMainThread" _ _ -> pure []
-      StaticTarget _ "getOrSetGHCConcSignalSignalHandlerStore" _ _ -> pure [head args] -- WTF!
-      StaticTarget _ "stg_sig_install" _ _ -> pure [Literal (LitNumber LitNumInt (-1))]
-      StaticTarget _ "getProgArgv" _ _ -> do
-        let [ByteArrayPtr ba1 ptrArgc, ByteArrayPtr ba2 ptrArgv, Void] = args
-        liftIO $ do
-          -- HINT: getProgArgv :: Ptr CInt -> Ptr (Ptr CString) -> IO ()
-          poke (castPtr ptrArgc :: Ptr CInt) 0
-          poke (castPtr ptrArgv :: Ptr (Ptr CString)) nullPtr
-        pure []
-
-      StaticTarget _ "localeEncoding" _ _ -> do
-        -- const char* localeEncoding(void)
-        -- foreign import ccall unsafe "localeEncoding" c_localeEncoding :: IO CString
-        pure [StringPtr 0 "iso-8859-1"]
-
-      StaticTarget _ "hs_iconv_open" _ _ -> do
-        -- type IConv = CLong -- ToDo: (#type iconv_t)
-        -- foreign import ccall unsafe "hs_iconv_open" hs_iconv_open :: CString -> CString -> IO IConv
-        -- iconv_t hs_iconv_open(const char* tocode, const char* fromcode)
-        -- args:
-        --  [ByteArrayPtr (ByteArrayIdx {baId = 3, baPinned = True, baAlignment = 1}) 0x00000042020661a0,ByteArrayPtr (ByteArrayIdx {baId = 2, baPinned = True, baAlignment = 1}) 0x000000422183a7b0,Void]
-        pure [Literal (LitNumber LitNumInt 0)]
-{-
-      StaticTarget _ "hs_free_stable_ptr" _ _ -> pure []
-      StaticTarget _ "hs_iconv" _ _ -> pure [Literal (LitNumber LitNumWord 0)]
--}
-      _ -> stgErrorM $ "unsupported StgFCallOp: " ++ show fop ++ " :: " ++ show t ++ "\n args: " ++ show args
+    result <- evalFCallOp builtinStgApply foreignCall args t tc
+    evalStack <- gets ssEvalStack
+    --liftIO $ putStrLn $ show (head evalStack) ++ " " ++ show foreignCall ++ " " ++ show args ++ " = " ++ show result
+    markFFI foreignCall
+    pure result
 
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
-{-
-          (State# RealWorld -> (# State# RealWorld, a #) )
-       -> (b -> State# RealWorld -> (# State# RealWorld, a #) )
-       -> State# RealWorld
-       -> (# State# RealWorld, a #)
--}
 
-{-
-  | StgOpApp    StgOp         -- Primitive op or foreign call
-                [Arg' idOcc]  -- Saturated.
-                Type          -- result type
-                (Maybe tcOcc) -- result type name (required for tagToEnum wrapper generator)
-
-
-data StgOp
-  = StgPrimOp     !Name
-  | StgPrimCallOp !PrimCall
-  | StgFCallOp    !ForeignCall
-
-data PrimCall = PrimCall !BS8.ByteString !UnitId
-
-data ForeignCall
-  = ForeignCall
-  { foreignCTarget  :: !CCallTarget
-  , foreignCConv    :: !CCallConv
-  , foreignCSafety  :: !Safety
-  }
-
-data CCallTarget
-  = StaticTarget !SourceText !BS8.ByteString !(Maybe UnitId) !Bool
-  | DynamicTarget
-
-data CCallConv = CCallConv | CApiConv | StdCallConv | PrimCallConv | JavaScriptCallConv
-
--}
-
-matchFirstLit :: Atom -> [Alt] -> M [Atom]
-matchFirstLit (Literal lit) alts = case head $ [a | a@Alt{..} <- alts, matchLit lit altCon] ++ (error $ "no lit match" ++ show (lit, map altCon alts)) of
+matchFirstLit :: HasCallStack => Atom -> [Alt] -> M [Atom]
+matchFirstLit a ([Alt AltDefault _ rhs]) = evalExpr rhs
+matchFirstLit atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (atom, map altCon alts)) of
   Alt{..} -> do
     evalExpr altRHS
-matchFirstLit a ([Alt AltDefault _ rhs]) = evalExpr rhs
 matchFirstLit l alts = error $ "no lit match" ++ show (l, map altCon alts)
 
-matchLit :: Lit -> AltCon -> Bool
+matchLit :: HasCallStack => Atom -> AltCon -> Bool
 matchLit a = \case
   AltDataCon{}  -> False
-  AltLit l      -> a == l
+  AltLit l      -> a == convertAltLit l
   AltDefault    -> True
 
-matchFirstCon :: HeapObject -> [Alt] -> M [Atom]
-matchFirstCon (Con dc args) alts = case head [a | a@Alt{..} <- alts, matchCon dc altCon] of
+convertAltLit :: Lit -> Atom
+convertAltLit = \case
+  LitFloat f                -> FloatAtom $ realToFrac f
+  LitDouble d               -> DoubleAtom $ realToFrac d
+  LitNullAddr               -> RawPtr nullPtr
+  LitNumber LitNumInt n     -> IntAtom $ fromIntegral n
+  LitNumber LitNumInt64 n   -> IntAtom $ fromIntegral n
+  LitNumber LitNumWord n    -> WordAtom $ fromIntegral n
+  LitNumber LitNumWord64 n  -> WordAtom $ fromIntegral n
+  l -> Literal l
+
+matchFirstCon :: HasCallStack => HeapObject -> [Alt] -> M [Atom]
+matchFirstCon (Con dc args) alts = case head $ [a | a@Alt{..} <- alts, matchCon dc altCon] ++ error "no matching alts" of
   Alt{..} -> do
     zipWithM_ addEnv altBinders args
     evalExpr altRHS
 
-matchCon :: DataCon -> AltCon -> Bool
+matchCon :: HasCallStack => DataCon -> AltCon -> Bool
 matchCon a = \case
   AltDataCon dc -> dataConUniqueName a == dataConUniqueName dc
   AltLit{}      -> False
   AltDefault    -> True
 
-declareBinding :: Binding -> M ()
+declareBinding :: HasCallStack => Binding -> M ()
 declareBinding = \case
   StgNonRec i rhs -> do
     a <- freshHeapAddress
@@ -319,7 +393,7 @@ declareBinding = \case
     forM_ (zip ls l) $ \(a, (i, rhs)) -> do
       storeRhs i a rhs
 
-storeRhs :: Binder -> Addr -> Rhs -> M ()
+storeRhs :: HasCallStack => Binder -> Addr -> Rhs -> M ()
 storeRhs i a = \case
   StgRhsCon dc l -> do
     args <- mapM evalArg l
@@ -331,7 +405,7 @@ storeRhs i a = \case
 
 -----------------------
 
-declareTopBindings :: [Module] -> M ()
+declareTopBindings :: HasCallStack => [Module] -> M ()
 declareTopBindings mods = do
   let (strings, closures) = partition isStringLit $ (concatMap moduleTopBindings) mods
       isStringLit = \case
@@ -354,24 +428,37 @@ declareTopBindings mods = do
   forM_ (zip addrList bindings) $ \(a, (i, rhs)) -> do
     storeRhs i a rhs
 
-test :: IO ()
+
+test :: HasCallStack => IO ()
 test = do
   mods <- getFullpakModules "minigame.fullpak"
+  --mods <- getFullpakModules "tsumupto.fullpak"
+  --mods <- getFullpakModules "words.fullpak"
   let run = do
         declareTopBindings mods
-        rootMain <- unId . head . Map.keys <$> gets ssEnv
+        initRtsSupport mods
+        env <- gets ssEnv
+        liftIO $ putStrLn $ "top Id count: " ++ show (Map.size env)
+        let rootMain = unId . head $ [i | i <- Map.keys env, show i == "main_:Main.main"]
+        limit <- gets ssNextAddr
+        modify' $ \s@StgState{..} -> s {ssAddressAfterInit = limit}
         evalExpr (StgApp rootMain [StgLitArg LitNullAddr] (SingleValue VoidRep) mempty)
+        showDebug builtinStgApply
 
-  s@StgState{..} <- execStateT run emptyStgState
+  stateStore <- newEmptyMVar
+  dl <- dlopen "./libHSbase-4.14.0.0.cbits.so" [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
+  flip catch (\e -> do {dlclose dl; throw (e :: SomeException)}) $ do
+    s@StgState{..} <- execStateT run (emptyStgState (PrintableMVar stateStore) dl)
+    dlclose dl
 
-  putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
-  print ssNextAddr
-  print $ head $ Map.toList ssEnv
-  -- TODO: handle :Main.main properly ; currenlty it is in conflict with Main.main
+    --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
+    --print ssNextAddr
+    --print $ head $ Map.toList ssEnv
+    -- TODO: handle :Main.main properly ; currenlty it is in conflict with Main.main
 
 ---------------------- primops
 
-evalPrimOp :: Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp :: HasCallStack => Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp =
   PrimAddr.evalPrimOp $
   PrimArray.evalPrimOp $
@@ -384,7 +471,7 @@ evalPrimOp =
   PrimInt16.evalPrimOp $
   PrimInt8.evalPrimOp $
   PrimInt.evalPrimOp $
-  PrimMutVar.evalPrimOp $
+  PrimMutVar.evalPrimOp builtinStgApply $
   PrimMVar.evalPrimOp $
   PrimNarrowings.evalPrimOp $
   PrimStablePointer.evalPrimOp $
@@ -392,5 +479,7 @@ evalPrimOp =
   PrimWord16.evalPrimOp $
   PrimWord8.evalPrimOp $
   PrimWord.evalPrimOp $
+  PrimTagToEnum.evalPrimOp builtinStgEval $
+  PrimUnsafe.evalPrimOp $
   unsupported where
     unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args

@@ -3,7 +3,9 @@ module Stg.Interpreter.Base where
 
 import Data.Word
 import Foreign.Ptr
-import Control.Monad.State
+import Control.Monad.State.Strict
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
@@ -13,7 +15,10 @@ import qualified Data.ByteString.Char8 as BS8
 import Data.Vector (Vector)
 import qualified Data.Primitive.ByteArray as BA
 import Control.Monad.Primitive
+import System.Posix.DynamicLinker
+import Control.Concurrent.MVar
 
+import GHC.Stack
 import Text.Printf
 import Debug.Trace
 import Stg.Syntax
@@ -96,6 +101,8 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | Literal   !Lit             -- Q: should we allow string literals, or should string lits be modeled as StringPtr?
   | StringPtr !Int !ByteString  -- HINT: StgTopStringLit ; maybe include its origin? ; the PrimRep is AddrRep
   | Void
+  | IntAtom       !Int
+  | WordAtom      !Word
   | FloatAtom     !Float
   | DoubleAtom    !Double
   | StablePointer !Atom -- TODO: need proper implementation
@@ -108,9 +115,10 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | ArrayArray        !ArrayArrIdx
   | MutableArrayArray !ArrayArrIdx
   | ByteArrayPtr      !ByteArrayIdx !(Ptr Word8)  -- raw ptr to the byte array
+  | RawPtr            !(Ptr Word8)                -- raw ptr to a values with unknown origin (i.e. FFI)
   | ByteArray         !ByteArrayIdx
   | MutableByteArray  !ByteArrayIdx
-  | WeakPointer
+  | WeakPointer       !Atom !Atom !(Maybe Atom) -- key, value, finalizer
   | ThreadId
   | LiftedUndefined
   deriving (Show, Eq, Ord)
@@ -126,6 +134,9 @@ type Stack  = [(Env, StackContinuation)]
   Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
 -}
 
+newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
+instance Show (PrintableMVar a) where
+  show _ = "MVar"
 
 data StgState
   = StgState
@@ -146,11 +157,26 @@ data StgState
   , ssSmallMutableArrays  :: IntMap (Vector Atom)
   , ssArrayArrays         :: IntMap (Vector Atom)
   , ssMutableArrayArrays  :: IntMap (Vector Atom)
-  }
-  deriving (Show, Eq, Ord)
 
-emptyStgState :: StgState
-emptyStgState = StgState
+  , ssExceptionHandlers   :: [(PrintableMVar Bool, Atom)]
+
+  -- FFI related
+  , ssCBitsMap            :: DL
+  , ssStateStore          :: PrintableMVar StgState
+
+  , ssRtsSupport          :: Rts
+
+  -- debug
+  , ssExecutedClosures    :: Set Int
+  , ssExecutedPrimOps     :: Set Name
+  , ssExecutedFFI         :: Set ForeignCall
+  , ssWeakPointers        :: Set Atom
+  , ssAddressAfterInit    :: Int
+  }
+  deriving (Show)
+
+emptyStgState :: PrintableMVar StgState -> DL -> StgState
+emptyStgState stateStore dl = StgState
   { ssHeap      = mempty
   , ssEnv       = mempty
   , ssEvalStack = []
@@ -167,23 +193,93 @@ emptyStgState = StgState
   , ssSmallMutableArrays  = mempty
   , ssArrayArrays         = mempty
   , ssMutableArrayArrays  = mempty
+
+  , ssExceptionHandlers   = []
+
+  -- FFI related
+  , ssCBitsMap            = dl
+  , ssStateStore          = stateStore
+
+  , ssRtsSupport          = undefined
+  , ssExecutedClosures    = Set.empty
+  , ssExecutedPrimOps     = Set.empty
+  , ssExecutedFFI         = Set.empty
+  , ssWeakPointers        = Set.empty
+  , ssAddressAfterInit    = 0
   }
+
+{-
+        base_GHCziTopHandler_runIO_closure
+        base_GHCziTopHandler_runNonIO_closure
+
+    - collect the necessary DataCons for these constructors
+        rts_mkChar      Czh_con_info
+        rts_mkInt       Izh_con_info
+        rts_mkInt8      I8zh_con_info
+        rts_mkInt16     I16zh_con_info
+        rts_mkInt32     I32zh_con_info
+        rts_mkInt64     I64zh_con_info
+        rts_mkWord      Wzh_con_info
+        rts_mkWord8     W8zh_con_info
+        rts_mkWord16    W16zh_con_info
+        rts_mkWord32    W32zh_con_info
+        rts_mkWord64    W64zh_con_info
+        rts_mkPtr       Ptr_con_info
+        rts_mkFunPtr    FunPtr_con_info
+        rts_mkFloat     Fzh_con_info
+        rts_mkDouble    Dzh_con_info
+        rts_mkStablePtr StablePtr_con_info
+        rts_mkBool      True_closure, False_closure
+        rts_mkString    unpackCString_closure
+-}
+
+data Rts
+  = Rts
+  -- data constructors needed for FFI argument boxing from the base library
+  { rtsCharCon      :: DataCon
+  , rtsIntCon       :: DataCon
+  , rtsInt8Con      :: DataCon
+  , rtsInt16Con     :: DataCon
+  , rtsInt32Con     :: DataCon
+  , rtsInt64Con     :: DataCon
+  , rtsWordCon      :: DataCon
+  , rtsWord8Con     :: DataCon
+  , rtsWord16Con    :: DataCon
+  , rtsWord32Con    :: DataCon
+  , rtsWord64Con    :: DataCon
+  , rtsPtrCon       :: DataCon
+  , rtsFunPtrCon    :: DataCon
+  , rtsFloatCon     :: DataCon
+  , rtsDoubleCon    :: DataCon
+  , rtsStablePtrCon :: DataCon
+  , rtsTrueCon      :: DataCon
+  , rtsFalseCon     :: DataCon
+
+  -- closures used by FFI wrapper code ; heap address of the closure
+  , rtsUnpackCString       :: Atom
+  , rtsTopHandlerRunIO     :: Atom
+  , rtsTopHandlerRunNonIO  :: Atom
+  }
+  deriving (Show)
 
 type M = StateT StgState IO
 
-freshHeapAddress :: M Addr
-freshHeapAddress = state $ \s@StgState{..} -> (ssNextAddr, s {ssNextAddr = succ ssNextAddr})
+freshHeapAddress :: HasCallStack => M Addr
+freshHeapAddress = do
+  limit <- gets ssNextAddr
+  --liftIO $ print limit
+  state $ \s@StgState{..} -> (ssNextAddr, s {ssNextAddr = succ ssNextAddr})
 
-allocAndStore :: HeapObject -> M Addr
+allocAndStore :: HasCallStack => HeapObject -> M Addr
 allocAndStore o = do
   a <- freshHeapAddress
   store a o
   pure a
 
-store :: Addr -> HeapObject -> M ()
+store :: HasCallStack => Addr -> HeapObject -> M ()
 store a o = modify' $ \s -> s {ssHeap = IntMap.insert a o (ssHeap s)}
 
-addEnv :: Binder -> Atom -> M ()
+addEnv :: HasCallStack => Binder -> Atom -> M ()
 addEnv b a = modify' $ \s -> s {ssEnv = Map.insert (Id b) a (ssEnv s)}
 
 stgErrorM :: String -> M a
@@ -191,7 +287,7 @@ stgErrorM msg = do
   es <- gets ssEvalStack
   error $ unlines ["eval stack:", show es, msg]
 
-lookupEnv :: Binder -> M Atom
+lookupEnv :: HasCallStack => Binder -> M Atom
 lookupEnv b
  | binderId b == BinderId (Unique '0' 21) -- void#
  = pure Void
@@ -204,29 +300,32 @@ lookupEnv b
     Nothing -> stgErrorM $ "unknown variable: " ++ show b
     Just a  -> pure a
 
-update :: Atom -> [Atom] -> M [Atom]
+update :: HasCallStack => Atom -> [Atom] -> M [Atom]
 update (HeapPtr dst) result@[src] = do
   o <- readHeap src
   store dst o
   pure result
 
-withEnv :: Id -> Env -> M a -> M a
+{-# NOINLINE withEnv #-}
+withEnv :: HasCallStack => Id -> Env -> M a -> M a
 withEnv i env m = do
   save <- gets ssEnv
   saveES <- gets ssEvalStack
-  modify' $ \s -> s {ssEnv = env, ssEvalStack = [i]}
-  res <- trace (printf "eval %-40s %s" (BS8.unpack . getModuleName . binderModule $ unId i) (show i)) $ m
+  modify' $ \s -> s {ssEnv = env, ssEvalStack = i : saveES}
+  --res <- trace (printf "eval %-40s %s" (BS8.unpack . getModuleName . binderModule $ unId i) (show i)) $  m
+  res <- m
   modify' $ \s -> s {ssEnv = save, ssEvalStack = saveES}
   pure res
 
-readHeap :: Atom -> M HeapObject
+readHeap :: HasCallStack => Atom -> M HeapObject
 readHeap (HeapPtr l) = do
   h <- gets ssHeap
   case IntMap.lookup l h of
     Nothing -> stgErrorM $ "unknown heap address: " ++ show l
     Just o  -> pure o
+readHeap v = error $ "readHeap: could not read heap object: " ++ show v
 
-readHeapCon :: Atom -> M HeapObject
+readHeapCon :: HasCallStack => Atom -> M HeapObject
 readHeapCon a = readHeap a >>= \o -> case o of
     Con{} -> pure o
     _     -> stgErrorM $ "expected con but got: " ++ show o
@@ -238,56 +337,86 @@ type PrimOpEval = Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 type BuiltinStgEval = Atom -> M [Atom]
 type BuiltinStgApply = Atom -> [Atom] -> M [Atom]
 
-lookupMutVar :: Int -> M Atom
+lookupMutVar :: HasCallStack => Int -> M Atom
 lookupMutVar m = do
   IntMap.lookup m <$> gets ssMutVars >>= \case
     Nothing -> stgErrorM $ "unknown MutVar: " ++ show m
     Just a  -> pure a
 
-lookupMVar :: Int -> M (Maybe Atom)
+lookupMVar :: HasCallStack => Int -> M (Maybe Atom)
 lookupMVar m = do
   IntMap.lookup m <$> gets ssMVars >>= \case
     Nothing -> stgErrorM $ "unknown MVar: " ++ show m
     Just a  -> pure a
 
-lookupArray :: Int -> M (Vector Atom)
+lookupArray :: HasCallStack => Int -> M (Vector Atom)
 lookupArray m = do
   IntMap.lookup m <$> gets ssArrays >>= \case
     Nothing -> stgErrorM $ "unknown Array: " ++ show m
     Just a  -> pure a
 
-lookupMutableArray :: Int -> M (Vector Atom)
+lookupMutableArray :: HasCallStack => Int -> M (Vector Atom)
 lookupMutableArray m = do
   IntMap.lookup m <$> gets ssMutableArrays >>= \case
     Nothing -> stgErrorM $ "unknown MutableArray: " ++ show m
     Just a  -> pure a
 
-lookupSmallArray :: Int -> M (Vector Atom)
+lookupSmallArray :: HasCallStack => Int -> M (Vector Atom)
 lookupSmallArray m = do
   IntMap.lookup m <$> gets ssSmallArrays >>= \case
     Nothing -> stgErrorM $ "unknown SmallArray: " ++ show m
     Just a  -> pure a
 
-lookupSmallMutableArray :: Int -> M (Vector Atom)
+lookupSmallMutableArray :: HasCallStack => Int -> M (Vector Atom)
 lookupSmallMutableArray m = do
   IntMap.lookup m <$> gets ssSmallMutableArrays >>= \case
     Nothing -> stgErrorM $ "unknown SmallMutableArray: " ++ show m
     Just a  -> pure a
 
-lookupArrayArray :: Int -> M (Vector Atom)
+lookupArrayArray :: HasCallStack => Int -> M (Vector Atom)
 lookupArrayArray m = do
   IntMap.lookup m <$> gets ssArrayArrays >>= \case
     Nothing -> stgErrorM $ "unknown ArrayArray: " ++ show m
     Just a  -> pure a
 
-lookupMutableArrayArray :: Int -> M (Vector Atom)
+lookupMutableArrayArray :: HasCallStack => Int -> M (Vector Atom)
 lookupMutableArrayArray m = do
   IntMap.lookup m <$> gets ssMutableArrayArrays >>= \case
     Nothing -> stgErrorM $ "unknown MutableArrayArray: " ++ show m
     Just a  -> pure a
 
-lookupByteArrayDescriptor :: Int -> M ByteArrayDescriptor
+lookupByteArrayDescriptor :: HasCallStack => Int -> M ByteArrayDescriptor
 lookupByteArrayDescriptor m = do
   IntMap.lookup m <$> gets ssMutableByteArrays >>= \case
     Nothing -> stgErrorM $ "unknown ByteArrayDescriptor: " ++ show m
     Just a  -> pure a
+
+lookupByteArrayDescriptorI :: HasCallStack => ByteArrayIdx -> M ByteArrayDescriptor
+lookupByteArrayDescriptorI = lookupByteArrayDescriptor . baId
+
+{-# NOINLINE liftIOAndBorrowStgState #-}
+liftIOAndBorrowStgState :: HasCallStack => IO a -> M a
+liftIOAndBorrowStgState action = do
+  stateStore <- gets $ unPrintableMVar . ssStateStore
+  before <- get
+  (result, after) <- liftIO $ do
+    -- save current state
+    putMVar stateStore before
+    -- execute acition
+    r <- action
+    -- load the state back
+    s <- takeMVar stateStore
+    pure (r, s)
+
+  put after
+  pure result
+
+-- debug
+markExecuted :: Int -> M ()
+markExecuted i = modify' $ \s@StgState{..} -> s {ssExecutedClosures = Set.insert i ssExecutedClosures}
+
+markPrimOp :: Name -> M ()
+markPrimOp i = modify' $ \s@StgState{..} -> s {ssExecutedPrimOps = Set.insert i ssExecutedPrimOps}
+
+markFFI :: ForeignCall -> M ()
+markFFI i = modify' $ \s@StgState{..} -> s {ssExecutedFFI = Set.insert i ssExecutedFFI}
