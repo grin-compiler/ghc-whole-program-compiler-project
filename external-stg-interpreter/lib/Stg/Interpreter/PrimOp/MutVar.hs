@@ -7,10 +7,12 @@ import qualified Data.IntMap as IntMap
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV i = Literal (LitNumber LitNumInt i)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: BuiltinStgApply -> PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
 
   -- newMutVar# :: a -> State# s -> (# State# s, MutVar# s a #)
   ("newMutVar#", [a, _s]) -> do
@@ -34,7 +36,13 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ("sameMutVar#", [MutVar a, MutVar b]) -> do
     pure [IntV $ if a == b then 1 else 0]
 
-  -- TODO: atomicModifyMutVar2# :: MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
+  -- atomicModifyMutVar2# :: MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
+  ("atomicModifyMutVar2#", [MutVar m, fun, Void]) -> do
+    -- TODO: make this atomic in the STG interpreter monad
+    old <- lookupMutVar m
+    [new] <- builtinStgApply fun [old]
+    pure [old, new]
+
   -- TODO: atomicModifyMutVar_# :: MutVar# s a -> (a -> a) -> State# s -> (# State# s, a, a #)
   -- TODO: casMutVar# :: MutVar# s a -> a -> a -> State# s -> (# State# s, Int#, a #)
 

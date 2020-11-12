@@ -8,8 +8,8 @@ import GHC.Prim
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV i    = Literal (LitNumber LitNumInt i)
-pattern WordV w   = Literal (LitNumber LitNumWord w)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 
@@ -124,12 +124,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   _ -> fallback op args t tc
 
-decodeDouble_2Int :: Double -> (Integer, Integer, Integer, Integer)
+decodeDouble_2Int :: Double -> (Int, Word, Word, Int)
 decodeDouble_2Int (D# x) =
   let !(# a, b, c, d #) = decodeDouble_2Int# x
   in (fromIntegral (I# a), fromIntegral (W# b), fromIntegral (W# c), fromIntegral (I# d))
 
-decodeDouble_Int64 :: Double -> (Integer, Integer)
+decodeDouble_Int64 :: Double -> (Int, Int)
 decodeDouble_Int64 (D# x) =
   let !(# a, b #) = decodeDouble_Int64# x
   in (fromIntegral (I# a), fromIntegral (I# b))

@@ -1,18 +1,35 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.WeakPointer where
 
+import Control.Monad.State
+import qualified Data.Set as Set
+
 import Stg.Syntax
 import Stg.Interpreter.Base
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  ("mkWeakNoFinalizer#", [_o, _b, _w]) -> pure [WeakPointer] -- o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
+  -- mkWeak# :: o -> b -> (State# RealWorld -> (# State# RealWorld, c #)) -> State# RealWorld -> (# State# RealWorld, Weak# b #)
+  ("mkWeak#", [key, value, finalizer, _w]) -> do
+    let wp = WeakPointer key value (Just finalizer)
+    modify' $ \s@StgState{..} -> s {ssWeakPointers = Set.insert wp ssWeakPointers}
+    pure [wp]
+
+  -- mkWeakNoFinalizer# :: o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
+  ("mkWeakNoFinalizer#", [key, value, _w]) -> do
+    let wp = WeakPointer key value Nothing
+    modify' $ \s@StgState{..} -> s {ssWeakPointers = Set.insert wp ssWeakPointers}
+    pure [wp]
 
   ("touch#", [o, _s]) -> do
     -- o -> State# RealWorld -> State# RealWorld
     pure []
 
+{-
+  ("makeStablePtr#", [a, _s]) -> pure [StablePointer a] -- a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
+  ("deRefStablePtr#", [StablePointer a, _s]) -> pure [a] -- TODO: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
+-}
   _ -> fallback op args t tc
 
 {-

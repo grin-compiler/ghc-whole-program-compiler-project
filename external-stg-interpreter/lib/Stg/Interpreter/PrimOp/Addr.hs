@@ -1,27 +1,43 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Addr where
 
+import Control.Monad.State
+import Data.Word
+import Data.Int
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Internal as BS
+import Foreign.Ptr
+import Foreign.Storable
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
 pattern CharV c = Literal (LitChar c)
-pattern IntV i  = Literal (LitNumber LitNumInt i)
-pattern WordV i = Literal (LitNumber LitNumWord i)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- plusAddr# :: Addr# -> Int# -> Addr#
   -- TODO: design and implement this properly!!
-  ("plusAddr#", [StringPtr base str, Literal (LitNumber LitNumInt offset)]) -> do
+  ("plusAddr#", [StringPtr base str, IntV offset]) -> do
     pure [StringPtr (base + fromIntegral offset) str]
-
-  ("plusAddr#", [a, IntV offset]) -> do
+  ("plusAddr#", [a@ByteArrayPtr{}, Literal (LitNumber LitNumInt 0)]) -> do
     pure [a]
+  -- unsupported StgPrimOp: "plusAddr#" args: [ByteArrayPtr (ByteArrayIdx {baId = 4, baPinned = True, baAlignment = 4}) 0x000000421a5aedd8,Literal (LitNumber LitNumInt 0)]
+  ("plusAddr#", [RawPtr p, IntV offset]) -> do
+    pure [RawPtr $ plusPtr p (fromIntegral offset)]
+  ("plusAddr#", [ByteArrayPtr _ba p, IntV offset]) -> do
+    pure [RawPtr $ plusPtr p (fromIntegral offset)]
 
   -- minusAddr# :: Addr# -> Addr# -> Int#
+  ("minusAddr#", [RawPtr p1, ByteArrayPtr _ p2]) -> do
+    pure [IntV . fromIntegral $ minusPtr p1 p2]
+
+
   -- remAddr# :: Addr# -> Int# -> Int#
   -- addr2Int# :: Addr# -> Int#
   -- int2Addr# :: Int# -> Addr#
@@ -38,6 +54,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- indexCharOffAddr# :: Addr# -> Int# -> Char#
   ("indexCharOffAddr#", [StringPtr base str, IntV offset]) -> do
+    -- 8 bit char
     pure [CharV $ BS8.index str (base + fromIntegral offset)]
 
   -- indexWideCharOffAddr# :: Addr# -> Int# -> Char#
@@ -58,79 +75,156 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- readCharOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Char# #)
 
   -- readWideCharOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Char# #)
-  {-
-  ("readWideCharOffAddr#", [addr, IntV offset, _s]) -> do
-    pure [CharV 'a']
-  -}
+  ("readWideCharOffAddr#", [ByteArrayPtr _ba p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr Char) (fromIntegral index)
+      pure [CharV v]
+
   -- readIntOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
   -- readWordOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
 
   -- readAddrOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Addr# #)
-  -- TODO: design and implement this properly!!
-  ("readAddrOffAddr#", [addr, IntV _, _s]) -> do
-    pure [Literal LitNullAddr]
+  ("readAddrOffAddr#", [ByteArrayPtr _ba p, IntV index, _s]) -> do
+    --  unsupported StgPrimOp: "readAddrOffAddr#" args: [ByteArrayPtr (ByteArrayIdx {baId = 1, baPinned = True, baAlignment = 8}) 0x0000004213e9a1d8,Literal (LitNumber LitNumInt 0),Void]
+    -- RawPtr            !(Ptr Word8)                -- raw ptr to a values with unknown origin (i.e. FFI)
+    -- peekElemOff :: Ptr a -> Int -> IO a
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) (fromIntegral index)
+      pure [RawPtr v]
+  ("readAddrOffAddr#", [RawPtr p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) (fromIntegral index)
+      pure [RawPtr v]
 
   -- readFloatOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Float# #)
+  ("readFloatOffAddr#", [ByteArrayPtr _ p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr Float) (fromIntegral index)
+      pure [FloatAtom v]
+
   -- readDoubleOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Double# #)
   -- readStablePtrOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, StablePtr# a #)
 
   -- readInt8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
-  -- TODO: design and implement this properly!!
-  ("readInt8OffAddr#", [addr, IntV offset, _s]) -> do
-    pure [IntV 0]
+  ("readInt8OffAddr#", [a1@(RawPtr p), IntV index, _s]) -> do
+    liftIO $ do
+      --print a1
+      v <- peekElemOff (castPtr p :: Ptr Int8) (fromIntegral index)
+      pure [IntV $ fromIntegral v]
+  ("readInt8OffAddr#", [StringPtr offset bs, IntV index, _s]) -> do
+    pure [IntV . fromIntegral $ BS.index bs (offset + fromIntegral index)]
+  ("readInt8OffAddr#", [ByteArrayPtr _ p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr Int8) (fromIntegral index)
+      pure [IntV $ fromIntegral v]
 
   -- readInt16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
+
   -- readInt32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, INT32 #)
+  ("readInt32OffAddr#", [ByteArrayPtr _ p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr Int32) (fromIntegral index)
+      pure [IntV $ fromIntegral v]
+
   -- readInt64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, INT64 #)
 
   -- readWord8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
-  ("readWord8OffAddr#", [addr, IntV offset, _s]) -> do
-    pure [WordV 2]
+  ("readWord8OffAddr#", [ByteArrayPtr _ba p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr Word8) (fromIntegral index)
+      pure [WordV $ fromIntegral v]
+  ("readWord8OffAddr#", [RawPtr p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr Word8) (fromIntegral index)
+      pure [WordV $ fromIntegral v]
 
   -- readWord16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
+
   -- readWord32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, WORD32 #)
+  ("readWord32OffAddr#", [ByteArrayPtr _ p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr Word32) (fromIntegral index)
+      pure [WordV $ fromIntegral v]
 
   -- readWord64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, WORD64 #)
-  ("readWord64OffAddr#", [addr, IntV offset, _s]) -> do
-    pure [WordV 1]
+  ("readWord64OffAddr#", [ByteArrayPtr _ p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr Word64) (fromIntegral index)
+      pure [WordV $ fromIntegral v]
 
   -- writeCharOffAddr# :: Addr# -> Int# -> Char# -> State# s -> State# s
 
   -- writeWideCharOffAddr# :: Addr# -> Int# -> Char# -> State# s -> State# s
-  ("writeWideCharOffAddr#", [a, b, c, _s]) -> do
-  -- "writeWideCharOffAddr#" args: [Literal LitNullAddr,Literal (LitNumber LitNumInt 0),Literal (LitChar 'a'),Void]
-    pure [] -- TODO
+  ("writeWideCharOffAddr#", [ByteArrayPtr _ p, IntV index, CharV value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr Char) (fromIntegral index) value
+    pure []
+
 
   -- writeIntOffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
   -- writeWordOffAddr# :: Addr# -> Int# -> Word# -> State# s -> State# s
 
   -- writeAddrOffAddr# :: Addr# -> Int# -> Addr# -> State# s -> State# s
-  ("writeAddrOffAddr#", [a, b, c, _s]) -> do
-    pure [] -- TODO
+  ("writeAddrOffAddr#", [ByteArrayPtr _ p, IntV index, ByteArrayPtr _ value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr (Ptr Word8)) (fromIntegral index) value
+    pure []
+    -- unsupported StgPrimOp: "writeAddrOffAddr#" args:
+      -- [ ByteArrayPtr (ByteArrayIdx {baId = 6, baPinned = True, baAlignment = 8}) 0x000000421fb11148
+      -- , Literal (LitNumber LitNumInt 0)
+      -- , ByteArrayPtr (ByteArrayIdx {baId = 4, baPinned = True, baAlignment = 4}) 0x000000421df7fdd8
+      -- , Void
+      -- ]
+
+  ("writeAddrOffAddr#", [ByteArrayPtr _ p, IntV index, RawPtr value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr (Ptr Word8)) (fromIntegral index) value
+    pure []
+  ("writeAddrOffAddr#", [ByteArrayPtr _ p, IntV index, Literal LitNullAddr, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr (Ptr Word8)) (fromIntegral index) nullPtr
+    pure []
 
   -- writeFloatOffAddr# :: Addr# -> Int# -> Float# -> State# s -> State# s
   -- writeDoubleOffAddr# :: Addr# -> Int# -> Double# -> State# s -> State# s
   -- writeStablePtrOffAddr# :: Addr# -> Int# -> StablePtr# a -> State# s -> State# s
 
   -- writeInt8OffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
-  ("writeInt8OffAddr#", [a, b, c, _s]) -> do
-  -- "writeInt8OffAddr#" args: [Literal LitNullAddr,Literal (LitNumber LitNumInt 0),Literal (LitNumber LitNumInt 85),Void]
-    pure [] -- TODO
+  ("writeInt8OffAddr#", [ByteArrayPtr _ p, IntV index, IntV value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr Int8) (fromIntegral index) (fromIntegral value)
+    pure []
 
   -- writeInt16OffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
+
   -- writeInt32OffAddr# :: Addr# -> Int# -> INT32 -> State# s -> State# s
+  ("writeInt32OffAddr#", [ByteArrayPtr _ p, IntV index, IntV value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr Int32) (fromIntegral index) (fromIntegral value)
+    pure []
+
   -- writeInt64OffAddr# :: Addr# -> Int# -> INT64 -> State# s -> State# s
 
   -- writeWord8OffAddr# :: Addr# -> Int# -> Word# -> State# s -> State# s
-  ("writeWord8OffAddr#", [a, b, c, _s]) -> do
-    pure [] -- TODO
+  ("writeWord8OffAddr#", [ByteArrayPtr _ p, IntV index, WordV value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr Word8) (fromIntegral index) (fromIntegral value)
+    pure []
+  ("writeWord8OffAddr#", [RawPtr p, IntV index, WordV value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr Word8) (fromIntegral index) (fromIntegral value)
+    pure []
+
 
   -- writeWord16OffAddr# :: Addr# -> Int# -> Word# -> State# s -> State# s
   -- writeWord32OffAddr# :: Addr# -> Int# -> WORD32 -> State# s -> State# s
 
   -- writeWord64OffAddr# :: Addr# -> Int# -> WORD64 -> State# s -> State# s
-  ("writeWord64OffAddr#", [a, b, c, _s]) -> do
-    pure [] -- TODO
+  ("writeWord64OffAddr#", [ByteArrayPtr _ p, IntV index, WordV value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr Word64) (fromIntegral index) (fromIntegral value)
+    pure []
+
 
   _ -> fallback op args t tc
 

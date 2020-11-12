@@ -5,7 +5,9 @@ import GHC.Float
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV i    = Literal (LitNumber LitNumInt i)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 
@@ -111,6 +113,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- decodeFloat_Int# :: Float# -> (# Int#, Int# #)
   ("decodeFloat_Int#", [FloatV a]) -> do
     let (x,y) = decodeFloat a
-    pure [IntV x, IntV $ fromIntegral y]
+    pure [IntV $ fromIntegral x, IntV y]
 
   _ -> fallback op args t tc

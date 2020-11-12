@@ -1,19 +1,89 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.Exceptions where
 
+import Control.Monad.State
+import Control.Concurrent.MVar
+
 import Stg.Syntax
 import Stg.Interpreter.Base
 
 evalPrimOp :: BuiltinStgApply -> PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
 
-  ("catch#", [f, h, w]) -> builtinStgApply f [w]
-  ("getMaskingState#", [w]) -> pure [Literal $ LitNumber LitNumInt 1] -- State# RealWorld -> (# State# RealWorld, Int# #)
+  ("getMaskingState#", [w]) -> pure [Literal $ LitNumber LitNumInt 0] -- State# RealWorld -> (# State# RealWorld, Int# #)
   ("maskUninterruptible#", [a]) -> pure [a] -- TODO : (State# RealWorld -> (# State# RealWorld, a #)) -> (State# RealWorld -> (# State# RealWorld, a #))
   -- HACK:
   ("maskUninterruptible#", [a, b]) -> builtinStgApply a [b]
 
+  ("maskAsyncExceptions#", [a, b]) -> builtinStgApply a [b]
+  ("unmaskAsyncExceptions#", [a, b]) -> builtinStgApply a [b]
+
+
+  {-
+    catch# :: (State# RealWorld -> (# State# RealWorld, a #) )
+           -> (b -> State# RealWorld -> (# State# RealWorld, a #) )
+           -> State# RealWorld
+           -> (# State# RealWorld, a #)
+  -}
+  ("catch#", [f, h, w]) -> do
+    -- push handler
+    exStackSize <- length <$> gets ssExceptionHandlers
+    exFlag <- liftIO $ newMVar False
+    modify' $ \s@StgState{..} -> s {ssExceptionHandlers = (PrintableMVar exFlag, h) : ssExceptionHandlers}
+    -- run action
+    result <- builtinStgApply f [w]
+    -- pop handler
+    modify' $ \s@StgState{..} -> s {ssExceptionHandlers = filter (\(PrintableMVar f, h) -> f /= exFlag) ssExceptionHandlers}
+    pure result
+
+  -- raise# :: b -> o
+  ("raise#", [a]) -> do
+    evalStack <- gets ssEvalStack
+    liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
+
+    exHandler <- gets ssExceptionHandlers >>= findExHandler
+    builtinStgApply exHandler [a, Void]
+
+  -- raiseDivZero# :: Void# -> o
+  -- raiseUnderflow# :: Void# -> o
+  -- raiseOverflow# :: Void# -> o
+
+  -- raiseIO# :: a -> State# RealWorld -> (# State# RealWorld, b #)
+  ("raiseIO#", [a, s]) -> do
+    evalStack <- gets ssEvalStack
+    liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
+
+    exHandler <- gets ssExceptionHandlers >>= findExHandler
+    builtinStgApply exHandler [a, s]
+
+  {-
+    maskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #))
+                         -> (State# RealWorld -> (# State# RealWorld, a #))
+  -}
+
+  {-
+    maskUninterruptible# :: (State# RealWorld -> (# State# RealWorld, a #))
+                         -> (State# RealWorld -> (# State# RealWorld, a #))
+  -}
+
+  {-
+    unmaskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #))
+                           -> (State# RealWorld -> (# State# RealWorld, a #))
+  -}
+
+  -- getMaskingState# :: State# RealWorld -> (# State# RealWorld, Int# #)
+
   _ -> fallback op args t tc
+
+
+findExHandler :: [(PrintableMVar Bool, Atom)] -> M Atom
+findExHandler [] = error "empty exception stack (raise#)"
+findExHandler ((PrintableMVar f, h) : l) = do
+  liftIO (readMVar f) >>= \case
+    True  -> findExHandler l
+    False -> do
+      liftIO $ swapMVar f True
+      pure h
 
 {-
 ------------------------------------------------------------------------

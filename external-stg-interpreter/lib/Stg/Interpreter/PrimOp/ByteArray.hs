@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ByteArray where
 
+import Data.Word
 import Control.Monad.State
 import qualified Data.IntMap as IntMap
 import qualified Data.Primitive.ByteArray as BA
@@ -8,12 +9,13 @@ import qualified Data.Primitive.ByteArray as BA
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV :: Integer -> Atom
-pattern IntV i = Literal (LitNumber LitNumInt i)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 lookupByteArray :: Int -> M BA.ByteArray
 lookupByteArray baId = do
-  desc@ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
+  ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
   case baaByteArray of
     Just ba -> pure ba
     Nothing -> stgErrorM $ "unknown ByteArray: " ++ show baId
@@ -45,7 +47,62 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- construction
 
   -- newByteArray# :: Int# -> State# s -> (# State# s, MutableByteArray# s #)
+  ("newByteArray#", [IntV size, _s]) -> do
+    let sizeI       = fromIntegral size
+        alignmentI  = 1
+
+    ba <- liftIO $ BA.newByteArray sizeI
+
+    -- debug
+    liftIO $ BA.fillByteArray ba 0 sizeI 0
+
+    byteArrays <- gets ssMutableByteArrays
+    let next  = IntMap.size byteArrays
+        desc  = ByteArrayDescriptor
+          { baaMutableByteArray = ba
+          , baaByteArray        = Nothing
+          , baaPinned           = False
+          , baaAlignment        = alignmentI
+          }
+
+    modify' $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays}
+
+    let baIdx = ByteArrayIdx
+          { baId        = next
+          , baPinned    = False
+          , baAlignment = alignmentI
+          }
+    pure [MutableByteArray baIdx]
+
+
   -- newPinnedByteArray# :: Int# -> State# s -> (# State# s, MutableByteArray# s #)
+  ("newPinnedByteArray#", [IntV size, _s]) -> do
+    let sizeI       = fromIntegral size
+        alignmentI  = 1
+
+    ba <- liftIO $ BA.newPinnedByteArray sizeI
+
+    -- debug
+    liftIO $ BA.fillByteArray ba 0 sizeI 0
+
+    byteArrays <- gets ssMutableByteArrays
+    let next  = IntMap.size byteArrays
+        desc  = ByteArrayDescriptor
+          { baaMutableByteArray = ba
+          , baaByteArray        = Nothing
+          , baaPinned           = True
+          , baaAlignment        = alignmentI
+          }
+
+    modify' $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays}
+
+    let baIdx = ByteArrayIdx
+          { baId        = next
+          , baPinned    = True
+          , baAlignment = alignmentI
+          }
+    pure [MutableByteArray baIdx]
+
 
   -- newAlignedPinnedByteArray# :: Int# -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
   ("newAlignedPinnedByteArray#", [IntV size, IntV alignment, _s]) -> do
@@ -53,6 +110,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
         alignmentI  = fromIntegral alignment
 
     ba <- liftIO $ BA.newAlignedPinnedByteArray sizeI alignmentI
+
+    -- debug
+    liftIO $ BA.fillByteArray ba 0 sizeI 0
 
     byteArrays <- gets ssMutableByteArrays
     let next  = IntMap.size byteArrays
@@ -82,6 +142,13 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- byteArrayContents# :: ByteArray# -> Addr#
   ("byteArrayContents#", [ByteArray baIdx@ByteArrayIdx{..}]) -> do
     ba <- lookupByteArray baId
+    let ptr = BA.byteArrayContents ba
+    pure [ByteArrayPtr baIdx ptr]
+
+  -- FIXME: GHC Core Coercions allow this:
+  ("byteArrayContents#", [MutableByteArray baIdx@ByteArrayIdx{..}]) -> do
+    ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
+    ba <- liftIO $ BA.unsafeFreezeByteArray baaMutableByteArray
     let ptr = BA.byteArrayContents ba
     pure [ByteArrayPtr baIdx ptr]
 
@@ -185,7 +252,13 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- writeInt32Array# :: MutableByteArray# s -> Int# -> INT32 -> State# s -> State# s
   -- writeInt64Array# :: MutableByteArray# s -> Int# -> INT64 -> State# s -> State# s
   -- writeWord8Array# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
+
   -- writeWord16Array# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
+  ("writeWord16Array#", [MutableByteArray baIdx@ByteArrayIdx{..}, IntV index, WordV value, Void]) -> do
+    ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
+    liftIO $ BA.writeByteArray baaMutableByteArray (fromIntegral index) (fromIntegral value :: Word16)
+    pure []
+
   -- writeWord32Array# :: MutableByteArray# s -> Int# -> WORD32 -> State# s -> State# s
   -- writeWord64Array# :: MutableByteArray# s -> Int# -> WORD64 -> State# s -> State# s
   -- writeWord8ArrayAsChar# :: MutableByteArray# s -> Int# -> Char# -> State# s -> State# s

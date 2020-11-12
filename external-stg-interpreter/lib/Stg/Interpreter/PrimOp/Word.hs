@@ -12,8 +12,9 @@ import Stg.Interpreter.Base
 
 type PrimWord = Word64
 
-pattern IntV i    = Literal (LitNumber LitNumInt i)
-pattern WordV w   = Literal (LitNumber LitNumWord w)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -209,7 +210,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   _ -> fallback op args t tc
 
 -- TODO: Replace this with GHC.Word bitReverse when base 4.14 is used.
-bitReverse :: forall a . (FiniteBits a, Integral a) => a -> Integer
+bitReverse :: forall a . (FiniteBits a, Integral a) => a -> Word
 bitReverse x =
   let n = finiteBitSize x - 1
       bits = [ (n - i, b)

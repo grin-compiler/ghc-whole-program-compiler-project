@@ -6,8 +6,10 @@ import Stg.Interpreter.Base
 
 import Data.Int
 
-pattern Int16V i  = Literal (LitNumber LitNumInt i)
-pattern IntV i    = Literal (LitNumber LitNumInt i)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

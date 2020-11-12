@@ -13,8 +13,8 @@ type PrimInt  = Int64
 type PrimWord = Word64
 
 pattern CharV c   = Literal (LitChar c)
-pattern IntV i    = Literal (LitNumber LitNumInt i)
-pattern WordV w   = Literal (LitNumber LitNumWord w)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 
