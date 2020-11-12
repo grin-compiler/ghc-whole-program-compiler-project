@@ -50,8 +50,8 @@ getAppInfo ghcStgAppFname = do
       pkgLibs   = parseSection content "package_hs_libs:"
       cLibs     = filter (isPrefixOf "-lC") pkgLibs
   archives <- Set.fromList . map takeFileName . concat <$> mapM (find always (extension ==? ".a")) libPaths
-  let cbits   = [o ++ ".cbits" | o <- pkgLibs, Set.member ("lib" ++ drop 2 o ++ ".cbits.a") archives]
-      stubs   = [o ++ ".stubs" | o <- pkgLibs, Set.member ("lib" ++ drop 2 o ++ ".stubs.a") archives]
+  let cbits   = [o ++ ".o_cbits" | o <- pkgLibs, Set.member ("lib" ++ drop 2 o ++ ".o_cbits.a") archives]
+      stubs   = [o ++ ".o_stubs" | o <- pkgLibs, Set.member ("lib" ++ drop 2 o ++ ".o_stubs.a") archives]
       ldOpts  = concat [stubs, cbits, cLibs, ldFlags, extraLibs]
   pure StgAppInfo
     { appIncludePaths   = incPaths
@@ -71,7 +71,7 @@ data StgModuleInfo
 getLibModuleMapping :: FilePath -> IO [StgModuleInfo]
 getLibModuleMapping stglibPath = do
   let packageName = takeFileName $ dropTrailingPathSeparator stglibPath
-  fname <- head <$> find always (extension ==? ".stglib") stglibPath
+  fname <- head <$> find always (extension ==? ".o_stglib") stglibPath
   content <- lines <$> readFile fname
   let modules   = parseSection content "modules:"
       modpakExt = takeExtension . head $ parseSection content "modpaks:"

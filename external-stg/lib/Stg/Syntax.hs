@@ -31,7 +31,20 @@ data Unique
   deriving (Eq, Ord, Generic)
 
 instance Show Unique where
- show (Unique c n) = c : show n
+ show (Unique c n) = c : iToBase62 n
+
+iToBase62 :: Int -> String
+iToBase62 n_ = go n_ "" where
+  go n cs | n < 62
+          = let c = chooseChar62 n in c : cs
+          | otherwise
+          = go q (c1 : cs) where (q, r) = quotRem n 62
+                                 c1 = chooseChar62 r
+
+  chooseChar62 :: Int -> Char
+  chooseChar62 n = chars62 !! n
+  chars62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 
 -- source location related
 
@@ -254,14 +267,14 @@ dataConUniqueName DataCon{..} = getUnitId dcUnitId <> "_" <> getModuleName dcMod
 binderUniqueName :: Binder -> Name
 binderUniqueName Binder{..}
  | binderId == rootMainBinderId
- = ":Main.main"
+ = "main_:Main.main"
 
  | otherwise
  = case binderScope of
-  LocalScope      -> if binderTopLevel
-                      then getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName <> BS8.pack ('.' : show u)
-                      else binderName <> BS8.pack ('.' : show u)
-  GlobalScope     -> getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName <> BS8.pack ('.' : show u)
+  LocalScope      -> if binderTopLevel || True
+                      then getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName <> BS8.pack ('_' : show u)
+                      else binderName <> BS8.pack ('_' : show u)
+  GlobalScope     -> getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName <> BS8.pack ('_' : show u)
   HaskellExported -> getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName
   ForeignExported -> getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName
   where
