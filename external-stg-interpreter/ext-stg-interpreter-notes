@@ -52,3 +52,17 @@ ffi libs:
   https://hackage.haskell.org/package/unix-2.7.2.2/docs/System-Posix-DynamicLinker.html
   https://hackage.haskell.org/package/rtld
   https://www.stackage.org/lts-16.16/package/libffi-0.1
+  https://wiki.haskell.org/Library/libffi
+
+Q: what is coercionToken# ?
+
+use cases:
+  use the interpreter as:
+    debugger
+    heap visualizer in the browser ; send the state as a json
+    concolic execution ; concrete and abstract checking strictness or liveness or lifetime, or validate the analysis
+    check new memory management methods
+    create ghc typed runtime system model ; synthetize a native implementation in a strictly typed system such as ATS
+    interpreter as jit compiler ; either typed x86 jit EDSL or luajit or javascript jit or llvmjit
+    on the fly origin tracking ; stop program and check everything on the source code
+    maybe the native backend should be automatically calculated from interpreter and not written from scratch at all??
