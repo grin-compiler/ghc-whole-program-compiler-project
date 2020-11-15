@@ -15,29 +15,29 @@ evalPrimOp :: BuiltinStgApply -> PrimOpEval -> Name -> [Atom] -> Type -> Maybe T
 evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
 
   -- newMutVar# :: a -> State# s -> (# State# s, MutVar# s a #)
-  ("newMutVar#", [a, _s]) -> do
+  ( "newMutVar#", [a, _s]) -> do
     mutVars <- gets ssMutVars
     let next = IntMap.size mutVars
     modify' $ \s -> s {ssMutVars = IntMap.insert next a mutVars}
     pure [MutVar next]
 
   -- readMutVar# :: MutVar# s a -> State# s -> (# State# s, a #)
-  ("readMutVar#", [MutVar m, _s]) -> do
+  ( "readMutVar#", [MutVar m, _s]) -> do
     a <- lookupMutVar m
     pure [a]
 
   -- writeMutVar# :: MutVar# s a -> a -> State# s -> State# s
-  ("writeMutVar#", [MutVar m, a, _s]) -> do
+  ( "writeMutVar#", [MutVar m, a, _s]) -> do
     _ <- lookupMutVar m -- check existence
     modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m a ssMutVars}
     pure []
 
   -- sameMutVar# :: MutVar# s a -> MutVar# s a -> Int#
-  ("sameMutVar#", [MutVar a, MutVar b]) -> do
+  ( "sameMutVar#", [MutVar a, MutVar b]) -> do
     pure [IntV $ if a == b then 1 else 0]
 
   -- atomicModifyMutVar2# :: MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
-  ("atomicModifyMutVar2#", [MutVar m, fun, Void]) -> do
+  ( "atomicModifyMutVar2#", [MutVar m, fun, Void]) -> do
     -- TODO: make this atomic in the STG interpreter monad
     old <- lookupMutVar m
     [new] <- builtinStgApply fun [old]

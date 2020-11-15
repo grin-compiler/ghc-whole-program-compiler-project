@@ -27,7 +27,7 @@ evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- newSmallArray# :: Int# -> a -> State# s -> (# State# s, SmallMutableArray# s a #)
-  ("newSmallArray#", [IntV i, a, _s]) -> do
+  ( "newSmallArray#", [IntV i, a, _s]) -> do
     smallMutableArrays <- gets ssSmallMutableArrays
     let next  = IntMap.size smallMutableArrays
         v     = V.replicate (fromIntegral i) a
@@ -35,56 +35,56 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [SmallMutableArray $ SmallMutArrIdx next]
 
   -- sameSmallMutableArray# :: SmallMutableArray# s a -> SmallMutableArray# s a -> Int#
-  ("sameMutableArray#", [SmallMutableArray a, SmallMutableArray b]) -> do
+  ( "sameMutableArray#", [SmallMutableArray a, SmallMutableArray b]) -> do
     pure [IntV $ if a == b then 1 else 0]
 
   -- shrinkSmallMutableArray# :: SmallMutableArray# s a -> Int# -> State# s -> State# s
-  ("shrinkSmallMutableArray#",[SmallMutableArray src,IntV n,_s]) -> do
+  ( "shrinkSmallMutableArray#",[SmallMutableArray src,IntV n,_s]) -> do
     v <- lookupSmallArrIdx src
     updateSmallArrIdx src $ V.slice 0 (fromIntegral n) v
     pure []
 
   -- readSmallArray# :: SmallMutableArray# s a -> Int# -> State# s -> (# State# s, a #)
-  ("readSmallArray#", [SmallMutableArray a, IntV i, _s]) -> do
+  ( "readSmallArray#", [SmallMutableArray a, IntV i, _s]) -> do
     v <- lookupSmallArrIdx a
     pure [v V.! (fromIntegral i)]
 
   -- writeSmallArray#" :: SmallMutableArray# s a -> Int# -> a -> State# s -> State# s
-  ("writeSmallArray#", [SmallMutableArray m, IntV i, a, _s]) -> do
+  ( "writeSmallArray#", [SmallMutableArray m, IntV i, a, _s]) -> do
     v <- lookupSmallArrIdx m
     updateSmallArrIdx m (v V.// [(fromIntegral i, a)])
     pure []
 
   -- sizeofSmallArray# :: SmallArray# a -> Int#
-  ("sizeofSmallArray#", [SmallArray a]) -> do
+  ( "sizeofSmallArray#", [SmallArray a]) -> do
     v <- lookupSmallArrIdx a
     pure [IntV . fromIntegral $ V.length v]
 
   -- sizeofSmallMutableArray# :: SmallMutableArray# s a -> Int#
-  ("sizeofSmallMutableArray#", [SmallMutableArray a]) -> do
+  ( "sizeofSmallMutableArray#", [SmallMutableArray a]) -> do
     v <- lookupSmallArrIdx a
     pure [IntV . fromIntegral $ V.length v]
 
   -- getSizeofSmallMutableArray# :: SmallMutableArray# s a -> State# s -> (# State# s, Int# #)
-  ("getSizeofSmallMutableArray#", [SmallMutableArray a, _s]) -> do
+  ( "getSizeofSmallMutableArray#", [SmallMutableArray a, _s]) -> do
     v <- lookupSmallArrIdx a
     pure [IntV . fromIntegral $ V.length v]
 
   -- indexSmallArray# :: SmallArray# a -> Int# -> (# a #)
-  ("indexSmallArray#", [SmallArray a, IntV i]) -> do
+  ( "indexSmallArray#", [SmallArray a, IntV i]) -> do
     v <- lookupSmallArrIdx a
     pure [v V.! (fromIntegral i)]
 
   -- unsafeFreezeSmallArray# :: SmallMutableArray# s a -> State# s -> (# State# s, SmallArray# a #)
-  ("unsafeFreezeSmallArray#", [SmallMutableArray v, _s]) -> do
+  ( "unsafeFreezeSmallArray#", [SmallMutableArray v, _s]) -> do
     pure [SmallArray v]
 
   -- unsafeThawSmallArray# :: SmallArray# a -> State# s -> (# State# s, SmallMutableArray# s a #)
-  ("unsafeThawSmallArray#", [SmallArray v, _s]) -> do
+  ( "unsafeThawSmallArray#", [SmallArray v, _s]) -> do
     pure [SmallMutableArray v]
 
   -- copySmallArray# :: SmallArray# a -> Int# -> SmallMutableArray# s a -> Int# -> Int# -> State# s -> State# s
-  ("copySmallArray#", [SmallArray src, IntV os, SmallMutableArray dst, IntV od, IntV n, _s]) -> do
+  ( "copySmallArray#", [SmallArray src, IntV os, SmallMutableArray dst, IntV od, IntV n, _s]) -> do
     vsrc <- lookupSmallArrIdx src
     vdst <- lookupSmallArrIdx dst
     let vdst' = vdst V.// [ (fromIntegral di, v)
@@ -97,7 +97,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- copySmallMutableArray# :: SmallMutableArray# s a -> Int# -> SmallMutableArray# s a -> Int# -> Int# -> State# s -> State# s
-  ("copySmallMutableArray#", [SmallMutableArray src, IntV os, SmallMutableArray dst, IntV od, IntV n, _s]) -> do
+  ( "copySmallMutableArray#", [SmallMutableArray src, IntV os, SmallMutableArray dst, IntV od, IntV n, _s]) -> do
     vsrc <- lookupSmallArrIdx src
     vdst <- lookupSmallArrIdx dst
     let vdst' = vdst V.// [ (fromIntegral di, v)
@@ -110,7 +110,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- cloneSmallArray# :: SmallArray# a -> Int# -> Int# -> SmallArray# a
-  ("cloneSmallArray#", [SmallArray src, IntV o, IntV n]) -> do
+  ( "cloneSmallArray#", [SmallArray src, IntV o, IntV n]) -> do
     vsrc <- lookupSmallArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
@@ -118,7 +118,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       in ([SmallArray $ SmallArrIdx next], s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays})
 
   -- cloneSmallMutableArray# :: SmallMutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, SmallMutableArray# s a #)
-  ("cloneSmallMutableArray#", [SmallMutableArray src, IntV o, IntV n, _s]) -> do
+  ( "cloneSmallMutableArray#", [SmallMutableArray src, IntV o, IntV n, _s]) -> do
     vsrc <- lookupSmallArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
@@ -126,7 +126,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       in ([SmallMutableArray $ SmallMutArrIdx next], s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays})
 
   -- freezeSmallArray# :: SmallMutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, SmallArray# a #)
-  ("freezeSmallArray#", [SmallMutableArray src, IntV o, IntV n, _s]) -> do
+  ( "freezeSmallArray#", [SmallMutableArray src, IntV o, IntV n, _s]) -> do
     vsrc <- lookupSmallArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
@@ -134,7 +134,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       in ([SmallArray $ SmallArrIdx next], s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays})
 
   -- thawSmallArray# :: SmallArray# a -> Int# -> Int# -> State# s -> (# State# s, SmallMutableArray# s a #)
-  ("thawSmallArray#", [SmallArray src, IntV o, IntV n, _s]) -> do
+  ( "thawSmallArray#", [SmallArray src, IntV o, IntV n, _s]) -> do
     vsrc <- lookupSmallArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
@@ -142,7 +142,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       in ([SmallMutableArray $ SmallMutArrIdx next], s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays})
 
   -- casSmallArray# :: SmallMutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
-  ("casSmallArray#", [SmallMutableArray src, IntV o, old, new, _s]) -> do
+  ( "casSmallArray#", [SmallMutableArray src, IntV o, old, new, _s]) -> do
     vsrc <- lookupSmallArrIdx src
     let current = vsrc V.! (fromIntegral o)
     if current == old

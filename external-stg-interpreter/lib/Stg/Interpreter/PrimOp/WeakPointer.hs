@@ -11,18 +11,18 @@ evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- mkWeak# :: o -> b -> (State# RealWorld -> (# State# RealWorld, c #)) -> State# RealWorld -> (# State# RealWorld, Weak# b #)
-  ("mkWeak#", [key, value, finalizer, _w]) -> do
+  ( "mkWeak#", [key, value, finalizer, _w]) -> do
     let wp = WeakPointer key value (Just finalizer)
     modify' $ \s@StgState{..} -> s {ssWeakPointers = Set.insert wp ssWeakPointers}
     pure [wp]
 
   -- mkWeakNoFinalizer# :: o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
-  ("mkWeakNoFinalizer#", [key, value, _w]) -> do
+  ( "mkWeakNoFinalizer#", [key, value, _w]) -> do
     let wp = WeakPointer key value Nothing
     modify' $ \s@StgState{..} -> s {ssWeakPointers = Set.insert wp ssWeakPointers}
     pure [wp]
 
-  ("touch#", [o, _s]) -> do
+  ( "touch#", [o, _s]) -> do
     -- o -> State# RealWorld -> State# RealWorld
     pure []
 

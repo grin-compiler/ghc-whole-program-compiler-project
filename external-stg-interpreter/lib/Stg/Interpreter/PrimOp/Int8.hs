@@ -15,48 +15,48 @@ evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- extendInt8# :: Int8# -> Int#
-  ("extendInt8#",   [Int8V a]) -> pure [IntV  $ fromIntegral (fromIntegral a :: Int)]
+  ( "extendInt8#",   [Int8V a]) -> pure [IntV  $ fromIntegral (fromIntegral a :: Int)]
 
   -- narrowInt8# :: Int# -> Int8#
-  ("narrowInt8#",   [IntV a]) -> pure [Int8V  $ fromIntegral (fromIntegral a :: Int8)]
+  ( "narrowInt8#",   [IntV a]) -> pure [Int8V  $ fromIntegral (fromIntegral a :: Int8)]
 
   -- negateInt8# :: Int8# -> Int8#
-  ("negateInt8#",   [Int8V a]) -> pure [Int8V (-a)]
+  ( "negateInt8#",   [Int8V a]) -> pure [Int8V (-a)]
 
   -- plusInt8# :: Int8# -> Int8# -> Int8#
-  ("plusInt8#",     [Int8V a, Int8V b]) -> pure [Int8V $ a + b]
+  ( "plusInt8#",     [Int8V a, Int8V b]) -> pure [Int8V $ a + b]
 
   -- subInt8# :: Int8# -> Int8# -> Int8#
-  ("subInt8#",      [Int8V a, Int8V b]) -> pure [Int8V $ a - b]
+  ( "subInt8#",      [Int8V a, Int8V b]) -> pure [Int8V $ a - b]
 
   -- timesInt8# :: Int8# -> Int8# -> Int8#
-  ("timesInt8#",    [Int8V a, Int8V b]) -> pure [Int8V $ a * b]
+  ( "timesInt8#",    [Int8V a, Int8V b]) -> pure [Int8V $ a * b]
 
   -- quotInt8# :: Int8# -> Int8# -> Int8#
-  ("quotInt8#",     [Int8V a, Int8V b]) -> pure [Int8V $ a `quot` b]  -- NOTE: int8 / int8 in C
+  ( "quotInt8#",     [Int8V a, Int8V b]) -> pure [Int8V $ a `quot` b]  -- NOTE: int8 / int8 in C
 
   -- remInt8# :: Int8# -> Int8# -> Int8#
-  ("remInt8#",      [Int8V a, Int8V b]) -> pure [Int8V $ a `rem` b]   -- NOTE: int8 % int8 in C
+  ( "remInt8#",      [Int8V a, Int8V b]) -> pure [Int8V $ a `rem` b]   -- NOTE: int8 % int8 in C
 
   -- quotRemInt8# :: Int8# -> Int8# -> (# Int8#, Int8# #)
-  ("quotRemInt8#",  [Int8V a, Int8V b]) -> pure [Int8V $ a `quot` b, Int8V $ a `rem` b]
+  ( "quotRemInt8#",  [Int8V a, Int8V b]) -> pure [Int8V $ a `quot` b, Int8V $ a `rem` b]
 
   -- eqInt8# :: Int8# -> Int8# -> Int#
-  ("eqInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a == b then 1 else 0]
+  ( "eqInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a == b then 1 else 0]
 
   -- geInt8# :: Int8# -> Int8# -> Int#
-  ("geInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a >= b then 1 else 0]
+  ( "geInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a >= b then 1 else 0]
 
   -- gtInt8# :: Int8# -> Int8# -> Int#
-  ("gtInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a > b  then 1 else 0]
+  ( "gtInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a > b  then 1 else 0]
 
   -- leInt8# :: Int8# -> Int8# -> Int#
-  ("leInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a <= b then 1 else 0]
+  ( "leInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a <= b then 1 else 0]
 
   -- ltInt8# :: Int8# -> Int8# -> Int#
-  ("ltInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a < b  then 1 else 0]
+  ( "ltInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a < b  then 1 else 0]
 
   -- neInt8# :: Int8# -> Int8# -> Int#
-  ("neInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a /= b then 1 else 0]
+  ( "neInt8#",       [Int8V a, Int8V b]) -> pure [IntV $ if a /= b then 1 else 0]
 
   _ -> fallback op args t tc

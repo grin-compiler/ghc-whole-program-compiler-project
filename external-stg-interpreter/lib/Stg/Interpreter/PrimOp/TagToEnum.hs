@@ -13,7 +13,7 @@ evalPrimOp :: BuiltinStgEval -> PrimOpEval -> Name -> [Atom] -> Type -> Maybe Ty
 evalPrimOp builtinStgEval fallback op args t tc = case (op, args) of
 
   -- dataToTag# :: a -> Int#  -- Zero-indexed; the first constructor has tag zero
-  ("dataToTag#", [ho@HeapPtr{}]) -> do
+  ( "dataToTag#", [ho@HeapPtr{}]) -> do
     [whnf@HeapPtr{}] <- builtinStgEval ho -- HINT: force thunks
     (Con dataCon []) <- readHeapCon whnf
     case findIndex (\d -> dcId d == dcId dataCon) (tcDataCons (dcTyCon dataCon)) of
@@ -21,7 +21,7 @@ evalPrimOp builtinStgEval fallback op args t tc = case (op, args) of
       Just i -> pure [IntV $ fromIntegral i]
 
   -- tagToEnum# :: Int# -> a
-  ("tagToEnum#", [IntV i]) -> do
+  ( "tagToEnum#", [IntV i]) -> do
     Just tyc <- pure tc
     let dc = tcDataCons tyc !! (fromIntegral i)
     loc <- allocAndStore (Con dc [])
