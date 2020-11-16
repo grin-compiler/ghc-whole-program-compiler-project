@@ -106,8 +106,7 @@ allowedSymbols = Set.fromList
 mkFFIArg :: Atom -> M (Maybe FFI.Arg)
 mkFFIArg = \case
   Void              -> pure Nothing
-  ByteArrayPtr _ p  -> pure . Just $ FFI.argPtr p
-  RawPtr p          -> pure . Just $ FFI.argPtr p
+  PtrAtom _ p       -> pure . Just $ FFI.argPtr p
   IntV i            -> pure . Just $ FFI.argInt $ fromIntegral i
   WordV w           -> pure . Just $ FFI.argWord $ fromIntegral w
   FloatAtom f       -> pure . Just . FFI.argCFloat $ CFloat f
@@ -138,7 +137,7 @@ evalForeignCall funPtr cArgs retType = case retType of
 
   UnboxedTuple [AddrRep] -> do
     result <- FFI.callFFI funPtr (FFI.retPtr FFI.retWord8) cArgs
-    pure [RawPtr result]
+    pure [PtrAtom RawPtr result]
 
   UnboxedTuple [FloatRep] -> do
     CFloat result <- FFI.callFFI funPtr FFI.retCFloat cArgs
@@ -162,18 +161,19 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
       StaticTarget _ "lockFile" _ _ -> pure [IntV 0]
       StaticTarget _ "unlockFile" _ _ -> pure [IntV 0]
       StaticTarget _ "rtsSupportsBoundThreads" _ _ -> pure [IntV 0]
-      StaticTarget _ "getProgArgv" _ _ -> do
-        let [ByteArrayPtr ba1 ptrArgc, ByteArrayPtr ba2 ptrArgv, Void] = args
-        liftIO $ do
-          -- HINT: getProgArgv :: Ptr CInt -> Ptr (Ptr CString) -> IO ()
-          poke (castPtr ptrArgc :: Ptr CInt) 0
+      StaticTarget _ "getProgArgv" _ _
+        | [PtrAtom (ByteArrayPtr ba1) ptrArgc, PtrAtom (ByteArrayPtr ba2) ptrArgv, Void] <- args
+        -> do
+          liftIO $ do
+            -- HINT: getProgArgv :: Ptr CInt -> Ptr (Ptr CString) -> IO ()
+            poke (castPtr ptrArgc :: Ptr CInt) 0
 
-          -- FIXME: this has a race condition with the GC!!!! because it is pure
-          arr1 <- newArray ['\0']
-          arr2 <- newArray [arr1, nullPtr]
+            -- FIXME: this has a race condition with the GC!!!! because it is pure
+            arr1 <- newArray ['\0']
+            arr2 <- newArray [arr1, nullPtr]
 
-          poke (castPtr ptrArgv :: Ptr (Ptr CString)) (castPtr arr2 :: Ptr CString )
-        pure []
+            poke (castPtr ptrArgv :: Ptr (Ptr CString)) (castPtr arr2 :: Ptr CString )
+          pure []
 
       StaticTarget _ "shutdownHaskellAndExit" _ _
         | [IntV retCode, IntV fastExit, Void] <- args
@@ -187,7 +187,7 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
         liftIO $ putStrLn $ "errorBelch: " ++ show args
         pure []
       StaticTarget _ "errorBelch2" _ _
-        | [ByteArrayPtr bai1 _, ByteArrayPtr bai2 _, Void] <- args
+        | [PtrAtom (ByteArrayPtr bai1) _, PtrAtom (ByteArrayPtr bai2) _, Void] <- args
         -> do
           let
             showByteArray b = do
@@ -209,8 +209,8 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
         | [ IntV 1
           , StablePointer (fun@HeapPtr{})
           , Literal (LitLabel{})
-          , StringPtr 0 typeCString
-          , StringPtr 0 hsTypeCString
+          , PtrAtom (StringPtr 0 typeCString) _
+          , PtrAtom (StringPtr 0 hsTypeCString) _
           , Void
           ] <- args
         , UnboxedTuple [AddrRep] <- t
@@ -231,7 +231,7 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
           let Just (typeString, _)    = BS8.unsnoc typeCString
               Just (hsTypeString, _)  = BS8.unsnoc hsTypeCString
           (funPtr, _freeWrapper) <- createAdjustor builtinStgApply fun (BS8.unpack typeString) (BS8.unpack hsTypeString)
-          pure [RawPtr $ castFunPtrToPtr funPtr]
+          pure [PtrAtom RawPtr $ castFunPtrToPtr funPtr]
 
 ------------------------------------------
 
@@ -250,7 +250,7 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
             evalForeignCall funPtr cArgs t
 
       DynamicTarget
-        | (RawPtr funPtr) : funArgs <- args
+        | (PtrAtom RawPtr funPtr) : funArgs <- args
         -> do
           cArgs <- catMaybes <$> mapM mkFFIArg funArgs
           liftIOAndBorrowStgState $ do
@@ -289,7 +289,7 @@ charToGetter c p = case c of
   's' -> WordV . fromIntegral <$> peek (castPtr p :: Ptr Word16)
   'B' -> IntV  . fromIntegral <$> peek (castPtr p :: Ptr Int8)
   'b' -> WordV . fromIntegral <$> peek (castPtr p :: Ptr Word8)
-  'p' -> RawPtr <$> peek (castPtr p)
+  'p' -> PtrAtom RawPtr <$> peek (castPtr p)
   x   -> error $ "charToGetter: unknown type " ++ show x
 
 charToSetter :: Char -> Ptr FFI.CValue -> Atom -> IO ()
@@ -306,7 +306,7 @@ charToSetter c p a = case (c, a) of
   ('s', WordV v)      -> poke (castPtr p :: Ptr Word16) $ fromIntegral v
   ('B', IntV  v)      -> poke (castPtr p :: Ptr Int8)   $ fromIntegral v
   ('b', WordV v)      -> poke (castPtr p :: Ptr Word8)  $ fromIntegral v
-  ('p', RawPtr v)     -> poke (castPtr p) v
+  ('p', PtrAtom RawPtr v)  -> poke (castPtr p) v
   x   -> error $ "charToSetter: unknown type " ++ show x
 
 {-# NOINLINE ffiCallbackBridge #-}
@@ -369,15 +369,15 @@ boxFFIAtom c a = case (c, a) of
   ('z', WordV _)       -> mkWiredInCon rtsWord32Con  [a]
   ('w', WordV _)       -> mkWiredInCon rtsWord64Con  [a]
 
-  ('p', RawPtr _)     -> mkWiredInCon rtsPtrCon     [a]
-  ('*', RawPtr _)     -> mkWiredInCon rtsFunPtrCon  [a]
+  ('p', PtrAtom RawPtr _)     -> mkWiredInCon rtsPtrCon     [a]
+  ('*', PtrAtom RawPtr _)     -> mkWiredInCon rtsFunPtrCon  [a]
 
   ('f', FloatAtom _)  -> mkWiredInCon rtsFloatCon   [a]
   ('d', DoubleAtom _) -> mkWiredInCon rtsDoubleCon  [a]
 
-  ('P', RawPtr _)     -> mkWiredInCon rtsStablePtrCon   [a]
+  ('P', PtrAtom RawPtr _)     -> mkWiredInCon rtsStablePtrCon   [a]
   ('b', IntV i)       -> mkWiredInCon (if i == 0 then rtsFalseCon else rtsTrueCon) []
-  ('s', RawPtr _)     -> error "TODO: support C string FFI arg boxing"
+  ('s', PtrAtom RawPtr _)     -> error "TODO: support C string FFI arg boxing"
   x                   -> error $ "boxFFIAtom - unknown pattern: " ++ show x
 
 mkWiredInCon :: (Rts -> DataCon) -> [Atom] -> M Atom
