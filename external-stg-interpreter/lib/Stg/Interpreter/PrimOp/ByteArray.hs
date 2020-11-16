@@ -6,6 +6,7 @@ import Data.Word
 import Data.Char
 import Foreign.Ptr
 import Foreign.Storable
+import Foreign.Marshal.Utils
 import Control.Monad.State
 import qualified Data.IntMap as IntMap
 import qualified Data.Primitive.ByteArray as BA
@@ -709,7 +710,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       , ByteArray ByteArrayIdx{baId = baIdB}, IntV offsetB
       , IntV length
       ]
-  ) -> do
+   ) -> do
     baA <- lookupByteArray baIdA
     baB <- lookupByteArray baIdB
     case BA.compareByteArrays baA offsetA baB offsetB length of
@@ -721,13 +722,53 @@ evalPrimOp fallback op args t tc = case (op, args) of
   --    copy and fill
   ---------------------------------------------
 
-  -- TODO
   -- copyByteArray# :: ByteArray# -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  ( "copyByteArray#",
+      [ ByteArray ByteArrayIdx{baId = baIdSrc},        IntV offsetSrc
+      , MutableByteArray ByteArrayIdx{baId = baIdDst}, IntV offsetDst
+      , IntV length
+      ]
+   ) -> do
+    src <- getByteArrayContentPtr baIdSrc
+    dst <- getByteArrayContentPtr baIdDst
+    liftIO $ copyBytes (plusPtr dst offsetDst) (plusPtr src offsetSrc) length
+    pure []
+
   -- copyMutableByteArray# :: MutableByteArray# s -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  ( "copyMutableByteArray#",
+      [ MutableByteArray ByteArrayIdx{baId = baIdSrc}, IntV offsetSrc
+      , MutableByteArray ByteArrayIdx{baId = baIdDst}, IntV offsetDst
+      , IntV length
+      ]
+   ) -> do
+    src <- getByteArrayContentPtr baIdSrc
+    dst <- getByteArrayContentPtr baIdDst
+    liftIO $ copyBytes (plusPtr dst offsetDst) (plusPtr src offsetSrc) length
+    pure []
+
   -- copyByteArrayToAddr# :: ByteArray# -> Int# -> Addr# -> Int# -> State# s -> State# s
+  ( "copyByteArrayToAddr#", [ByteArray ByteArrayIdx{..}, IntV offset, PtrAtom _ dst, IntV length, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    liftIO $ copyBytes dst (plusPtr p offset) length
+    pure []
+
   -- copyMutableByteArrayToAddr# :: MutableByteArray# s -> Int# -> Addr# -> Int# -> State# s -> State# s
+  ( "copyMutableByteArrayToAddr#", [MutableByteArray ByteArrayIdx{..}, IntV offset, PtrAtom _ dst, IntV length, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    liftIO $ copyBytes dst (plusPtr p offset) length
+    pure []
+
   -- copyAddrToByteArray# :: Addr# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  ( "copyAddrToByteArray#", [PtrAtom _ src, MutableByteArray ByteArrayIdx{..}, IntV offset, IntV length, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    liftIO $ copyBytes (plusPtr p offset) src length
+    pure []
+
   -- setByteArray# :: MutableByteArray# s -> Int# -> Int# -> Int# -> State# s -> State# s
+  ( "setByteArray#", [MutableByteArray ByteArrayIdx{..}, IntV offset, IntV length, IntV value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    liftIO $ fillBytes (plusPtr p offset) (fromIntegral value :: Word8) length
+    pure []
 
   ---------------------------------------------
   --    atomic operations
@@ -783,76 +824,6 @@ primop  ResizeMutableByteArrayOp_Char "resizeMutableByteArray#" GenPrimOp
    with out_of_line = True
         has_side_effects = True
 
-
-primop  CopyByteArrayOp "copyByteArray#" GenPrimOp
-  ByteArray# -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-  {{\tt copyByteArray# src src_ofs dst dst_ofs n} copies the range
-   starting at offset {\tt src_ofs} of length {\tt n} from the
-   {\tt ByteArray#} {\tt src} to the {\tt MutableByteArray#} {\tt dst}
-   starting at offset {\tt dst_ofs}.  Both arrays must fully contain
-   the specified ranges, but this is not checked.  The two arrays must
-   not be the same array in different states, but this is not checked
-   either.}
-  with
-  has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4}
-  can_fail = True
-
-primop  CopyMutableByteArrayOp "copyMutableByteArray#" GenPrimOp
-  MutableByteArray# s -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-  {Copy a range of the first MutableByteArray\# to the specified region in the second MutableByteArray\#.
-   Both arrays must fully contain the specified ranges, but this is not checked. The regions are
-   allowed to overlap, although this is only possible when the same array is provided
-   as both the source and the destination.}
-  with
-  has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
-  can_fail = True
-
-primop  CopyByteArrayToAddrOp "copyByteArrayToAddr#" GenPrimOp
-  ByteArray# -> Int# -> Addr# -> Int# -> State# s -> State# s
-  {Copy a range of the ByteArray\# to the memory range starting at the Addr\#.
-   The ByteArray\# and the memory region at Addr\# must fully contain the
-   specified ranges, but this is not checked. The Addr\# must not point into the
-   ByteArray\# (e.g. if the ByteArray\# were pinned), but this is not checked
-   either.}
-  with
-  has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4}
-  can_fail = True
-
-primop  CopyMutableByteArrayToAddrOp "copyMutableByteArrayToAddr#" GenPrimOp
-  MutableByteArray# s -> Int# -> Addr# -> Int# -> State# s -> State# s
-  {Copy a range of the MutableByteArray\# to the memory range starting at the
-   Addr\#. The MutableByteArray\# and the memory region at Addr\# must fully
-   contain the specified ranges, but this is not checked. The Addr\# must not
-   point into the MutableByteArray\# (e.g. if the MutableByteArray\# were
-   pinned), but this is not checked either.}
-  with
-  has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4}
-  can_fail = True
-
-primop  CopyAddrToByteArrayOp "copyAddrToByteArray#" GenPrimOp
-  Addr# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-  {Copy a memory range starting at the Addr\# to the specified range in the
-   MutableByteArray\#. The memory region at Addr\# and the ByteArray\# must fully
-   contain the specified ranges, but this is not checked. The Addr\# must not
-   point into the MutableByteArray\# (e.g. if the MutableByteArray\# were pinned),
-   but this is not checked either.}
-  with
-  has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4}
-  can_fail = True
-
-primop  SetByteArrayOp "setByteArray#" GenPrimOp
-  MutableByteArray# s -> Int# -> Int# -> Int# -> State# s -> State# s
-  {{\tt setByteArray# ba off len c} sets the byte range {\tt [off, off+len]} of
-   the {\tt MutableByteArray#} to the byte {\tt c}.}
-  with
-  has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
-  can_fail = True
 
 -- Atomic operations
 
