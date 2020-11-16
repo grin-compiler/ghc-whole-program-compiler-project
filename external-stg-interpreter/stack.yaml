@@ -3,3 +3,6 @@ resolver: lts-16.13
 packages:
   - '.'
   - 'external-stg'
+
+extra-deps:
+  - primitive-0.7.1.0

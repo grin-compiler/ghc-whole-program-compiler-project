@@ -80,17 +80,21 @@ data Lit
   | LitNumber   !LitNumType !Integer
 -}
 
+evalLiteral :: HasCallStack => Lit -> M Atom
+evalLiteral = \case
+  LitString str -> getCStringConstantPtrAtom str
+  LitFloat f    -> pure . FloatAtom $ realToFrac f
+  LitDouble d   -> pure . DoubleAtom $ realToFrac d
+  LitNullAddr   -> pure $ PtrAtom RawPtr nullPtr
+  LitNumber LitNumInt n     -> pure . IntAtom $ fromIntegral n
+  LitNumber LitNumInt64 n   -> pure . IntAtom $ fromIntegral n
+  LitNumber LitNumWord n    -> pure . WordAtom $ fromIntegral n
+  LitNumber LitNumWord64 n  -> pure . WordAtom $ fromIntegral n
+  l -> pure $ Literal l
+
 evalArg :: HasCallStack => Arg -> M Atom
 evalArg = \case
-  StgLitArg (LitString str) -> pure $ StringPtr 0 (str <> "\0") -- FIXME: StringPtr or Lit???)
-  StgLitArg (LitFloat f)    -> pure . FloatAtom $ realToFrac f
-  StgLitArg (LitDouble d)   -> pure . DoubleAtom $ realToFrac d
-  StgLitArg LitNullAddr     -> pure $ RawPtr nullPtr
-  StgLitArg (LitNumber LitNumInt n)     -> pure . IntAtom $ fromIntegral n
-  StgLitArg (LitNumber LitNumInt64 n)   -> pure . IntAtom $ fromIntegral n
-  StgLitArg (LitNumber LitNumWord n)    -> pure . WordAtom $ fromIntegral n
-  StgLitArg (LitNumber LitNumWord64 n)  -> pure . WordAtom $ fromIntegral n
-  StgLitArg l -> pure $ Literal l
+  StgLitArg l -> evalLiteral l
   StgVarArg b -> lookupEnv b
 
 builtinStgEval :: HasCallStack => Atom -> M [Atom]
@@ -201,7 +205,7 @@ assertWHNF _ _ _ _ = pure ()
 evalExpr :: HasCallStack => Expr -> M [Atom]
 evalExpr = \case
   StgTick _ e       -> evalExpr e
-  StgLit l          -> pure [Literal l] -- FIXME: LitString?? is it addr??
+  StgLit l          -> pure <$> evalLiteral l
   StgConApp dc l _
     -- HINT: make and return unboxed tuple
     | UnboxedTupleCon{} <- dcRep dc
@@ -360,7 +364,7 @@ convertAltLit :: Lit -> Atom
 convertAltLit = \case
   LitFloat f                -> FloatAtom $ realToFrac f
   LitDouble d               -> DoubleAtom $ realToFrac d
-  LitNullAddr               -> RawPtr nullPtr
+  LitNullAddr               -> PtrAtom RawPtr nullPtr
   LitNumber LitNumInt n     -> IntAtom $ fromIntegral n
   LitNumber LitNumInt64 n   -> IntAtom $ fromIntegral n
   LitNumber LitNumWord n    -> WordAtom $ fromIntegral n
@@ -413,7 +417,8 @@ declareTopBindings mods = do
         _                 -> False
   -- bind string lits
   forM_ strings $ \(StgTopStringLit b str) -> do
-    addEnv b (StringPtr 0 (str <> "\0")) -- FIXME: StringPtr or Lit???)
+    strPtr <- getCStringConstantPtrAtom str
+    addEnv b strPtr
 
   -- bind closures
   let bindings = concatMap getBindings closures

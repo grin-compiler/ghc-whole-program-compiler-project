@@ -12,11 +12,13 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Internal as BS
 import Data.Vector (Vector)
 import qualified Data.Primitive.ByteArray as BA
 import Control.Monad.Primitive
 import System.Posix.DynamicLinker
 import Control.Concurrent.MVar
+import Foreign.ForeignPtr.Unsafe
 
 import GHC.Stack
 import Text.Printf
@@ -96,11 +98,17 @@ instance Eq ByteArrayDescriptor where
 instance Ord ByteArrayDescriptor where
   _ `compare` _ = EQ -- TODO
 
+data PtrOrigin
+  = CStringPtr    !ByteString       -- null terminated string
+  | ByteArrayPtr  !ByteArrayIdx     -- raw ptr to the byte array
+  | RawPtr                          -- raw ptr to a values with unknown origin (i.e. FFI)
+  deriving (Show, Eq, Ord)
+
 data Atom     -- Q: should atom fit into a cpu register? A: yes
   = HeapPtr   !Addr
-  | Literal   !Lit             -- Q: should we allow string literals, or should string lits be modeled as StringPtr?
-  | StringPtr !Int !ByteString  -- HINT: StgTopStringLit ; maybe include its origin? ; the PrimRep is AddrRep
+  | Literal   !Lit  -- TODO: remove this
   | Void
+  | PtrAtom       !PtrOrigin !(Ptr Word8)
   | IntAtom       !Int
   | WordAtom      !Word
   | FloatAtom     !Float
@@ -114,8 +122,6 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | SmallMutableArray !SmallArrIdx
   | ArrayArray        !ArrayArrIdx
   | MutableArrayArray !ArrayArrIdx
-  | ByteArrayPtr      !ByteArrayIdx !(Ptr Word8)  -- raw ptr to the byte array
-  | RawPtr            !(Ptr Word8)                -- raw ptr to a values with unknown origin (i.e. FFI)
   | ByteArray         !ByteArrayIdx
   | MutableByteArray  !ByteArrayIdx
   | WeakPointer       !Atom !Atom !(Maybe Atom) -- key, value, finalizer
@@ -145,6 +151,10 @@ data StgState
 --  , ssStack     :: [(Env, StackContinuation)] -- TODO: use reified stack instead of the host language stack
   , ssEvalStack :: [Id]
   , ssNextAddr  :: !Int
+
+  -- string constants ; models the program memory's static constant region
+  -- HINT: the value is a PtrAtom that points to the key BS's content
+  , ssCStringConstants    :: Map ByteString Atom
 
   -- primop related
 
@@ -181,6 +191,8 @@ emptyStgState stateStore dl = StgState
   , ssEnv       = mempty
   , ssEvalStack = []
   , ssNextAddr  = 0
+
+  , ssCStringConstants    = mempty
 
   -- primop related
 
@@ -285,7 +297,7 @@ addEnv b a = modify' $ \s -> s {ssEnv = Map.insert (Id b) a (ssEnv s)}
 stgErrorM :: String -> M a
 stgErrorM msg = do
   es <- gets ssEvalStack
-  error $ unlines ["eval stack:", show es, msg]
+  error $ unlines $ msg : "eval stack:" : map (\x -> "  " ++ show x) es
 
 lookupEnv :: HasCallStack => Binder -> M Atom
 lookupEnv b
@@ -420,3 +432,17 @@ markPrimOp i = modify' $ \s@StgState{..} -> s {ssExecutedPrimOps = Set.insert i 
 
 markFFI :: ForeignCall -> M ()
 markFFI i = modify' $ \s@StgState{..} -> s {ssExecutedFFI = Set.insert i ssExecutedFFI}
+
+-- string constants
+-- NOTE: the string gets extended with a null terminator
+getCStringConstantPtrAtom :: ByteString -> M Atom
+getCStringConstantPtrAtom key = do
+  strMap <- gets ssCStringConstants
+  case Map.lookup key strMap of
+    Just a  -> pure a
+    Nothing -> do
+      let bsCString = BS8.snoc key '\0'
+          (bsFPtr, bsOffset, _bsLen) = BS.toForeignPtr bsCString
+          a = PtrAtom (CStringPtr bsCString) $ plusPtr (unsafeForeignPtrToPtr bsFPtr) bsOffset
+      modify' $ \s -> s {ssCStringConstants = Map.insert key a strMap}
+      pure a

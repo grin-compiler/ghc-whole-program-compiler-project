@@ -209,8 +209,8 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
         | [ IntV 1
           , StablePointer (fun@HeapPtr{})
           , Literal (LitLabel{})
-          , PtrAtom (StringPtr 0 typeCString) _
-          , PtrAtom (StringPtr 0 hsTypeCString) _
+          , PtrAtom (CStringPtr typeCString) _
+          , PtrAtom (CStringPtr hsTypeCString) _
           , Void
           ] <- args
         , UnboxedTuple [AddrRep] <- t
@@ -223,7 +223,7 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
             [ Literal (LitNumber LitNumInt 1)
             , StablePointer (HeapPtr 120502)
             , Literal (LitLabel "zdGLUTzm2zi7zi0zi15zm1pzzTWDEZZBcYHcS36qZZ2lppzdGraphicsziUIziGLUTziRawziCallbackszdGLUTzzm2zzi7zzi0zzi15zzm1pzzzzTWDEZZZZBcYHcS36qZZZZ2lppzuGraphicszziUIzziGLUTzziRawzziCallbackszumakeDisplayFunc" (FunctionLabel Nothing))
-            , StringPtr 0 "\NUL"
+            , CStringPtr 0 "\NUL"
             , Void
             ]
           -}
