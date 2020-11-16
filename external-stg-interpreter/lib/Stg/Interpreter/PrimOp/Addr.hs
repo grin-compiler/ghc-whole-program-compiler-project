@@ -102,7 +102,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
       pure [DoubleAtom v]
 
   -- indexStablePtrOffAddr# :: Addr# -> Int# -> StablePtr# a
-  -- TODO
+  ( "indexStablePtrOffAddr#", [PtrAtom _ p, IntV index]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
+      pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr v) v]
 
   -- indexInt8OffAddr# :: Addr# -> Int# -> Int#
   ( "indexInt8OffAddr#", [PtrAtom _ p, IntV index]) -> do
@@ -197,7 +200,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
       pure [DoubleAtom v]
 
   -- readStablePtrOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, StablePtr# a #)
-  -- TODO
+  ( "readStablePtrOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+    liftIO $ do
+      v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
+      pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr v) v]
 
   -- readInt8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
   ( "readInt8OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
@@ -292,7 +298,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- writeStablePtrOffAddr# :: Addr# -> Int# -> StablePtr# a -> State# s -> State# s
-  -- TODO
+  ( "writeStablePtrOffAddr#", [PtrAtom _ p, IntV index, PtrAtom _ value, _s]) -> do
+    liftIO $ do
+      pokeElemOff (castPtr p :: Ptr (Ptr Word8)) index value
+    pure []
 
   -- writeInt8OffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
   ( "writeInt8OffAddr#", [PtrAtom _ p, IntV index, IntV value, _s]) -> do

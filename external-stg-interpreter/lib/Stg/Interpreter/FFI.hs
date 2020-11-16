@@ -207,7 +207,7 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
       -- support for exporting haskell function (GHC RTS specific)
       StaticTarget _ "createAdjustor" _ _
         | [ IntV 1
-          , StablePointer (fun@HeapPtr{})
+          , PtrAtom StablePtr{} sp
           , Literal (LitLabel{})
           , PtrAtom (CStringPtr typeCString) _
           , PtrAtom (CStringPtr hsTypeCString) _
@@ -215,6 +215,7 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
           ] <- args
         , UnboxedTuple [AddrRep] <- t
         -> do
+          fun@HeapPtr{} <- lookupStablePointerPtr sp
           {-
           unsupported StgFCallOp: StgFCallOp
             (ForeignCall {foreignCTarget = StaticTarget NoSourceText "createAdjustor" Nothing True, foreignCConv = CCallConv, foreignCSafety = PlayRisky})

@@ -203,7 +203,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [DoubleAtom value]
 
   -- indexStablePtrArray# :: ByteArray# -> Int# -> StablePtr# a
-  -- TODO
+  ( "indexStablePtrArray#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
+    p <- getByteArrayContentPtr baId
+    value <- liftIO (peekElemOff (castPtr p) index :: IO (Ptr Word8))
+    pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
   -- indexInt8Array# :: ByteArray# -> Int# -> Int#
   ( "indexInt8Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
@@ -286,7 +289,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [DoubleAtom value]
 
   -- indexWord8ArrayAsStablePtr# :: ByteArray# -> Int# -> StablePtr# a
-  -- TODO
+  ( "indexWord8ArrayAsStablePtr#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
+    p <- getByteArrayContentPtr baId
+    value <- liftIO (peekByteOff p offset :: IO (Ptr Word8))
+    pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
   -- indexWord8ArrayAsInt16# :: ByteArray# -> Int# -> Int#
   ( "indexWord8ArrayAsInt16#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
@@ -385,7 +391,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [DoubleAtom value]
 
   -- readStablePtrArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, StablePtr# a #)
-  -- TODO
+  ( "readStablePtrArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    value <- liftIO (peekElemOff (castPtr p) index :: IO (Ptr Word8))
+    pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
   -- readInt8Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
   ( "readInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
@@ -468,7 +477,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [DoubleAtom value]
 
   -- readWord8ArrayAsStablePtr# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, StablePtr# a #)
-  -- TODO
+  ( "readWord8ArrayAsStablePtr#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    value <- liftIO (peekByteOff p offset :: IO (Ptr Word8))
+    pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
   -- readWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
   ( "readWord8ArrayAsInt16#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
@@ -567,7 +579,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- writeStablePtrArray# :: MutableByteArray# s -> Int# -> StablePtr# a -> State# s -> State# s
-  -- TODO
+  ( "writeStablePtrArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, PtrAtom _ value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    liftIO $ pokeElemOff (castPtr p) index value
+    pure []
 
   -- writeInt8Array# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
   ( "writeInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
@@ -650,7 +665,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- writeWord8ArrayAsStablePtr# :: MutableByteArray# s -> Int# -> StablePtr# a -> State# s -> State# s
-  -- TODO
+  ( "writeWord8ArrayAsStablePtr#", [MutableByteArray ByteArrayIdx{..}, IntV offset, PtrAtom _ value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    liftIO $ pokeByteOff p offset value
+    pure []
 
   -- writeWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
   ( "writeWord8ArrayAsInt16#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do

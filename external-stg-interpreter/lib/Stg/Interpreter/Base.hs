@@ -102,8 +102,10 @@ data PtrOrigin
   = CStringPtr    !ByteString       -- null terminated string
   | ByteArrayPtr  !ByteArrayIdx     -- raw ptr to the byte array
   | RawPtr                          -- raw ptr to a values with unknown origin (i.e. FFI)
+  | StablePtr     !Int              -- stable pointer must have AddrRep
   deriving (Show, Eq, Ord)
 
+-- TODO: detect coercions during the evaluation
 data Atom     -- Q: should atom fit into a cpu register? A: yes
   = HeapPtr   !Addr
   | Literal   !Lit  -- TODO: remove this
@@ -113,7 +115,6 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | WordAtom      !Word
   | FloatAtom     !Float
   | DoubleAtom    !Double
-  | StablePointer !Atom -- TODO: need proper implementation
   | MVar          !Int
   | MutVar        !Int
   | Array             !ArrIdx
@@ -125,6 +126,7 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | ByteArray         !ByteArrayIdx
   | MutableByteArray  !ByteArrayIdx
   | WeakPointer       !Atom !Atom !(Maybe Atom) -- key, value, finalizer
+  | StableName        !Int
   | ThreadId
   | LiftedUndefined
   deriving (Show, Eq, Ord)
@@ -158,6 +160,7 @@ data StgState
 
   -- primop related
 
+  , ssStablePointers      :: IntMap Atom
   , ssMutableByteArrays   :: IntMap ByteArrayDescriptor
   , ssMVars               :: IntMap (Maybe Atom)
   , ssMutVars             :: IntMap Atom
@@ -196,6 +199,7 @@ emptyStgState stateStore dl = StgState
 
   -- primop related
 
+  , ssStablePointers      = mempty
   , ssMutableByteArrays   = mempty
   , ssMVars               = mempty
   , ssMutVars             = mempty
@@ -348,6 +352,17 @@ type PrimOpEval = Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 
 type BuiltinStgEval = Atom -> M [Atom]
 type BuiltinStgApply = Atom -> [Atom] -> M [Atom]
+
+lookupStablePointerPtr :: HasCallStack => Ptr Word8 -> M Atom
+lookupStablePointerPtr sp = do
+  let IntPtr spId = ptrToIntPtr sp
+  lookupStablePointer spId
+
+lookupStablePointer :: HasCallStack => Int -> M Atom
+lookupStablePointer spId = do
+  IntMap.lookup spId <$> gets ssStablePointers >>= \case
+    Nothing -> stgErrorM $ "unknown StablePointer: " ++ show spId
+    Just a  -> pure a
 
 lookupMutVar :: HasCallStack => Int -> M Atom
 lookupMutVar m = do
