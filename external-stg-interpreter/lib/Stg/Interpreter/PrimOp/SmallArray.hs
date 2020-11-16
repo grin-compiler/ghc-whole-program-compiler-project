@@ -62,6 +62,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- sizeofSmallMutableArray# :: SmallMutableArray# s a -> Int#
   ( "sizeofSmallMutableArray#", [SmallMutableArray a]) -> do
+    -- DEPRECATED: Use 'getSizeofSmallMutableArray#' instead
     v <- lookupSmallArrIdx a
     pure [IntV . fromIntegral $ V.length v]
 

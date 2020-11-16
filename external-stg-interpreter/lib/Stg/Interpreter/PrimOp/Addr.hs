@@ -32,9 +32,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "remAddr#", [PtrAtom _ a, IntV b])             -> pure [IntV $ fromIntegral (ptrToIntPtr a) `rem` b]   -- NOTE: int % int in C
 
   -- addr2Int# :: Addr# -> Int#
+  -- DEPRECATED: This operation is strongly deprecated.
   ( "addr2Int#", [PtrAtom _ a])                    -> pure [IntV . fromIntegral $ ptrToIntPtr a]
 
   -- int2Addr# :: Int# -> Addr#
+  -- DEPRECATED: This operation is strongly deprecated.
   ( "int2Addr#", [IntV i])                         -> pure [PtrAtom RawPtr . intPtrToPtr $ IntPtr i]
 
   -- gtAddr# :: Addr# -> Addr# -> Int#
