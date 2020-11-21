@@ -5,6 +5,7 @@ import Stg.Syntax
 import Stg.Interpreter.Base
 
 import Data.Word
+import Data.Bits
 
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
@@ -13,13 +14,14 @@ pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  -- TODO: extendWord16# :: Word16# -> Word#
+  -- extendWord16# :: Word16# -> Word#
+  ( "extendWord16#",   [Word16V a])            -> pure [WordV a]
 
   -- narrowWord16# :: Word# -> Word16#
-  ( "narrowWord16#",   [WordV a])  -> pure [Word16V $ fromIntegral (fromIntegral a :: Word16)]
+  ( "narrowWord16#",   [WordV a])              -> pure [Word16V $ fromIntegral (fromIntegral a :: Word16)]
 
   -- notWord16# :: Word16# -> Word16#
-  -- TODO: implement correctly ("notWord16#",  [Word16V a])  -> pure [Word16V $ complement a]
+  ( "notWord16#",      [Word16V a])            -> pure [Word16V $ fromIntegral (complement $ fromIntegral a :: Word16)]
 
   -- plusWord16# :: Word16# -> Word16# -> Word16#
   ( "plusWord16#",     [Word16V a, Word16V b]) -> pure [Word16V $ a + b]
