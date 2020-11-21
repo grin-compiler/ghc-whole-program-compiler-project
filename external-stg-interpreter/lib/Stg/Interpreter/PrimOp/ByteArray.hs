@@ -792,6 +792,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   --    atomic operations
   ---------------------------------------------
 
+  -- NOTE: CPU atomic
   -- TODO
   -- atomicReadIntArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
   -- atomicWriteIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s

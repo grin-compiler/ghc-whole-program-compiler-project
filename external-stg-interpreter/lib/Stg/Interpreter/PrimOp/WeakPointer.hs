@@ -30,6 +30,21 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ("makeStablePtr#", [a, _s]) -> pure [StablePointer a] -- a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
   ("deRefStablePtr#", [StablePointer a, _s]) -> pure [a] -- TODO: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
 -}
+
+
+  --------------------------
+
+  -- mkWeak# :: o -> b
+  --         -> (State# RealWorld -> (# State# RealWorld, c #))
+  --         ->  State# RealWorld -> (# State# RealWorld, Weak# b #)
+
+  -- mkWeakNoFinalizer# :: o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
+
+  -- addCFinalizerToWeak# :: Addr# -> Addr# -> Int# -> Addr# -> Weak# b -> State# RealWorld -> (# State# RealWorld, Int# #)
+  -- deRefWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, a #)
+  -- finalizeWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, (State# RealWorld -> (# State# RealWorld, b #) ) #)
+  -- touch# :: o -> State# RealWorld -> State# RealWorld
+
   _ -> fallback op args t tc
 
 {-

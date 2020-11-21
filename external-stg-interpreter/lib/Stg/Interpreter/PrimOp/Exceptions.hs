@@ -18,6 +18,7 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
   ("maskAsyncExceptions#", [a, b]) -> builtinStgApply a [b]
   ("unmaskAsyncExceptions#", [a, b]) -> builtinStgApply a [b]
 
+  -----------------------------------------------------------
 
   {-
     catch# :: (State# RealWorld -> (# State# RealWorld, a #) )

@@ -7,6 +7,21 @@ import Stg.Interpreter.Base
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
+  -- par# :: a -> Int#
+  -- DEPRECATED: Use 'spark#' instead
+
+  -- SEE: newSpark c function
+  -- spark# :: a -> State# s -> (# State# s, a #)
+
+  -- SEE: newSpark c function
+  -- seq# :: a -> State# s -> (# State# s, a #)
+
+  -- SEE: stg_getSparkzh
+  -- getSpark# :: State# s -> (# State# s, Int#, a #)
+
+  -- SEE: stg_numSparkszh
+  -- numSparks# :: State# s -> (# State# s, Int# #)
+
   _ -> fallback op args t tc
 
 {-

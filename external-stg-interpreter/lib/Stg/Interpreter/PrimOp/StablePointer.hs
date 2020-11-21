@@ -41,6 +41,16 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "stableNameToInt#", [StableName a]) -> do
     undefined -- TODO
 -}
+
+  ---------------------------------------
+
+  -- makeStablePtr# :: a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
+  -- deRefStablePtr# :: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
+  -- eqStablePtr# :: StablePtr# a -> StablePtr# a -> Int#
+  -- makeStableName# :: a -> State# RealWorld -> (# State# RealWorld, StableName# a #)
+  -- eqStableName# :: StableName# a -> StableName# b -> Int#
+  -- stableNameToInt# :: StableName# a -> Int#
+
   _ -> fallback op args t tc
 
 {-

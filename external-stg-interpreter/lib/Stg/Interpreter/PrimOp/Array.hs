@@ -129,6 +129,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       in ([MutableArray $ MutArrIdx next], s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays})
 
   -- casArray# :: MutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
+  -- NOTE: CPU atomic
   ( "casArray#", [MutableArray src, IntV o, old, new, _s]) -> do
     vsrc <- lookupArrIdx src
     let current = vsrc V.! (fromIntegral o)

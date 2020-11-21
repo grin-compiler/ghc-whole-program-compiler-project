@@ -37,14 +37,21 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
     pure [IntV $ if a == b then 1 else 0]
 
   -- atomicModifyMutVar2# :: MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
-  ( "atomicModifyMutVar2#", [MutVar m, fun, Void]) -> do
-    -- TODO: make this atomic in the STG interpreter monad
+  -- TODO: make this atomic in the STG interpreter monad
+  -- SEE: stg_atomicModifyMutVar2zh
+  -- NOTE: CPU atomic
+  ( "atomicModifyMutVar2#", [MutVar m, fun, _s]) -> do
     old <- lookupMutVar m
     [new] <- builtinStgApply fun [old]
     pure [old, new]
 
   -- TODO: atomicModifyMutVar_# :: MutVar# s a -> (a -> a) -> State# s -> (# State# s, a, a #)
+  -- SEE: stg_atomicModifyMutVarzuzh
+  -- NOTE: CPU atomic
+
   -- TODO: casMutVar# :: MutVar# s a -> a -> a -> State# s -> (# State# s, Int#, a #)
+  -- SEE: stg_casMutVarzh
+  -- NOTE: CPU atomic
 
   _ -> fallback op args t tc
 

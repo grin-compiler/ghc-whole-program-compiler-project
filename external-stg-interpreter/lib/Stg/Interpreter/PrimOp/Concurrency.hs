@@ -9,6 +9,17 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   ("myThreadId#", [w]) -> pure [ThreadId] -- State# RealWorld -> (# State# RealWorld, ThreadId# #)
   ("noDuplicate#", [_s]) -> pure [] --  State# s -> State# s
+  -------------------------
+
+  -- fork# :: a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  -- forkOn# :: Int# -> a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  -- killThread# :: ThreadId# -> a -> State# RealWorld -> State# RealWorld
+  -- yield# :: State# RealWorld -> State# RealWorld
+  -- myThreadId# :: State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  -- labelThread# :: ThreadId# -> Addr# -> State# RealWorld -> State# RealWorld
+  -- isCurrentThreadBound# :: State# RealWorld -> (# State# RealWorld, Int# #)
+  -- noDuplicate# :: State# s -> State# s
+  -- threadStatus# :: ThreadId# -> State# RealWorld -> (# State# RealWorld, Int#, Int#, Int# #)
 
   _ -> fallback op args t tc
 

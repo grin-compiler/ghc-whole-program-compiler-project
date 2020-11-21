@@ -7,6 +7,24 @@ import Stg.Interpreter.Base
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
+  -- atomically# :: (State# RealWorld -> (# State# RealWorld, a #) )
+  --             ->  State# RealWorld -> (# State# RealWorld, a #)
+
+  -- retry# :: State# RealWorld -> (# State# RealWorld, a #)
+  -- catchRetry# :: (State# RealWorld -> (# State# RealWorld, a #) )
+  --             -> (State# RealWorld -> (# State# RealWorld, a #) )
+  --             -> (State# RealWorld -> (# State# RealWorld, a #) )
+
+  -- catchSTM# :: (State# RealWorld -> (# State# RealWorld, a #) )
+  --           -> (b -> State# RealWorld -> (# State# RealWorld, a #) )
+  --           -> (State# RealWorld -> (# State# RealWorld, a #) )
+
+  -- newTVar# :: a -> State# s -> (# State# s, TVar# s a #)
+  -- readTVar# :: TVar# s a -> State# s -> (# State# s, a #)
+  -- readTVarIO# :: TVar# s a -> State# s -> (# State# s, a #)
+  -- writeTVar# :: TVar# s a -> a -> State# s -> State# s
+  -- sameTVar# :: TVar# s a -> TVar# s a -> Int#
+
   _ -> fallback op args t tc
 
 {-

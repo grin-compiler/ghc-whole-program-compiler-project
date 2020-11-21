@@ -7,6 +7,10 @@ import Stg.Interpreter.Base
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
+  -- delay# :: Int# -> State# s -> State# s
+  -- waitRead# :: Int# -> State# s -> State# s
+  -- waitWrite# :: Int# -> State# s -> State# s
+
   _ -> fallback op args t tc
 
 {-

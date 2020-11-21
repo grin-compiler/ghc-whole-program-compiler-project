@@ -7,6 +7,18 @@ import Stg.Interpreter.Base
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
+  -- compactNew# :: Word# -> State# RealWorld -> (# State# RealWorld, Compact# #)
+  -- compactResize# :: Compact# -> Word# -> State# RealWorld -> State# RealWorld
+  -- compactContains# :: Compact# -> a -> State# RealWorld -> (# State# RealWorld, Int# #)
+  -- compactContainsAny# :: a -> State# RealWorld -> (# State# RealWorld, Int# #)
+  -- compactGetFirstBlock# :: Compact# -> State# RealWorld -> (# State# RealWorld, Addr#, Word# #)
+  -- compactGetNextBlock# :: Compact# -> Addr# -> State# RealWorld -> (# State# RealWorld, Addr#, Word# #)
+  -- compactAllocateBlock# :: Word# -> Addr# -> State# RealWorld -> (# State# RealWorld, Addr# #)
+  -- compactFixupPointers# :: Addr# -> Addr# -> State# RealWorld -> (# State# RealWorld, Compact#, Addr# #)
+  -- compactAdd# :: Compact# -> a -> State# RealWorld -> (# State# RealWorld, a #)
+  -- compactAddWithSharing# :: Compact# -> a -> State# RealWorld -> (# State# RealWorld, a #)
+  -- compactSize# :: Compact# -> State# RealWorld -> (# State# RealWorld, Word# #)
+
   _ -> fallback op args t tc
 
 {-
