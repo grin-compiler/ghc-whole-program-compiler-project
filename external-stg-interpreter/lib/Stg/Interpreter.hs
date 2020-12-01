@@ -92,10 +92,10 @@ evalLiteral = \case
   LitNumber LitNumWord64 n  -> pure . WordAtom $ fromIntegral n
   l -> pure $ Literal l
 
-evalArg :: HasCallStack => Arg -> M Atom
-evalArg = \case
+evalArg :: HasCallStack => Env -> Arg -> M Atom
+evalArg localEnv = \case
   StgLitArg l -> evalLiteral l
-  StgVarArg b -> lookupEnv b
+  StgVarArg b -> lookupEnv localEnv b
 
 builtinStgEval :: HasCallStack => Atom -> M [Atom]
 builtinStgEval a@HeapPtr{} = do
@@ -111,22 +111,22 @@ builtinStgEval a@HeapPtr{} = do
       -> do
         let StgRhsClosure uf params e = hoCloBody
             HeapPtr l = a
-            argsM = zipWithM_ addEnv params hoCloArgs
+            extendedEnv = addManyBindersToEnv params hoCloArgs hoEnv
         markExecuted l
         -- TODO: env or free var handling
         case uf of
           ReEntrant -> do
             -- closure may be entered multiple times, but should not be updated or blackholed.
-            withEnv hoName hoEnv (argsM >> evalExpr e)
+            evalExpr extendedEnv e
           Updatable -> do
             -- closure should be updated after evaluation (and may be blackholed during evaluation).
+            stackPush (Update l)
             store l (Blackhole o)
-            result <- withEnv hoName hoEnv (argsM >> evalExpr e)
-            update a result
+            evalExpr extendedEnv e
           SingleEntry -> do
             -- closure will only be entered once, and so need not be updated but may safely be blackholed.
             store l (Blackhole o)
-            withEnv hoName hoEnv (argsM >> evalExpr e)
+            evalExpr extendedEnv e
 --builtinStgEval x = pure [x] -- FIXME: this is a debug hack!! remove it!!!!!
 builtinStgEval a = stgErrorM $ "expected a thunk, got: " ++ show a
 
@@ -150,10 +150,8 @@ builtinStgApply a@HeapPtr{} args = do
       | hoCloMissing - argCount < 0
       -> do
         let (satArgs, remArgs) = splitAt hoCloMissing args
-        builtinStgApply a satArgs >>= \case
-          [f] -> do
-            builtinStgApply f remArgs
-          r   -> stgErrorM $ "invalid over-application result: " ++ show r
+        stackPush (Apply remArgs)
+        builtinStgApply a satArgs
 
       -- saturation
       | hoCloMissing - argCount == 0
@@ -178,8 +176,8 @@ peekResult [hp@HeapPtr{}] = do
     Blackhole{} -> pure "Blackhole"
 peekResult r = pure $ show r
 
-assertWHNF :: HasCallStack => [Atom] -> AltType -> Binder -> Expr -> M ()
-assertWHNF [hp@HeapPtr{}] aty res e  = do
+assertWHNF :: HasCallStack => [Atom] -> AltType -> Binder -> M ()
+assertWHNF [hp@HeapPtr{}] aty res = do
   o <- readHeap hp
   case o of
     Con dc args -> pure ()
@@ -194,44 +192,112 @@ assertWHNF [hp@HeapPtr{}] aty res e  = do
             putStrLn ""
             print res
             putStrLn ""
-            print e
-            putStrLn ""
           error "Thunk"
       | otherwise         -> pure ()
     Blackhole{} -> error "Blackhole"
-assertWHNF _ _ _ _ = pure ()
+assertWHNF _ _ _ = pure ()
 
+{-
+  machine state:
+    stack
+    local env (local bindings only = non-top-level)
+    global env (top-level bindings only) (read-only)
+    heap
 
-evalExpr :: HasCallStack => Expr -> M [Atom]
-evalExpr = \case
-  StgTick _ e       -> evalExpr e
+  NOTES:
+    closure execution always clears the local env (Apply stack constructor)
+    case continuation restores the saved local env (Case stack constructor)
+    the update stack constructor does not touch the local environment
+
+  IDEA:
+    model the local environment as a parameter of evalExpr
+-}
+
+evalStackMachine :: [Atom] -> M [Atom]
+evalStackMachine result = do
+  stackPop >>= \case
+    Nothing         -> pure result
+    Just stackCont  -> evalStackContinuation result stackCont >>= evalStackMachine
+
+evalStackContinuation :: [Atom] -> StackContinuation -> M [Atom]
+evalStackContinuation result = \case
+  Apply args
+    | [fun@HeapPtr{}] <- result
+    -> builtinStgApply fun args
+
+  Update dstAddr
+    | [src@HeapPtr{}] <- result
+    -> do
+      o <- readHeap src
+      store dstAddr o
+      pure result
+
+  -- HINT: STG IR uses 'case' expressions to chain instructions with strict evaluation
+  CaseOf localEnv resultBinder altType alts -> do
+    assertWHNF result altType resultBinder
+    case altType of
+      AlgAlt tc -> do
+        let v = case result of
+              [l] -> l
+              _   -> error $ "expected a single value: " ++ show result
+            extendedEnv = addBinderToEnv resultBinder v localEnv
+        con <- readHeapCon v
+        case alts of
+          d@(Alt AltDefault _ _) : al -> matchFirstCon extendedEnv con $ al ++ [d]
+          _ -> matchFirstCon extendedEnv con alts
+
+      PrimAlt r -> do
+        let lit = case result of
+              [l] -> l
+              _   -> error $ "expected a single value: " ++ show result
+            extendedEnv = addBinderToEnv resultBinder lit localEnv
+        case alts of
+          d@(Alt AltDefault _ _) : al -> matchFirstLit extendedEnv lit $ al ++ [d]
+          _ -> matchFirstLit extendedEnv lit alts
+
+      MultiValAlt _n -> do -- unboxed tuple
+        -- NOTE: result binder is not assigned
+        let [Alt{..}] = alts
+            extendedEnv = addManyBindersToEnv altBinders result localEnv
+        evalExpr extendedEnv altRHS
+
+      PolyAlt -> do
+        let [Alt{..}]   = alts
+            [v]         = result
+            extendedEnv = addBinderToEnv resultBinder v $                 -- HINT: bind the result
+                          addManyBindersToEnv altBinders result localEnv  -- HINT: bind alt params
+        evalExpr extendedEnv altRHS
+
+evalExpr :: HasCallStack => Env -> Expr -> M [Atom]
+evalExpr localEnv = \case
+  StgTick _ e       -> evalExpr localEnv e
   StgLit l          -> pure <$> evalLiteral l
   StgConApp dc l _
     -- HINT: make and return unboxed tuple
     | UnboxedTupleCon{} <- dcRep dc
-    -> mapM evalArg l   -- Q: is this only for unboxed tuple? could datacon be heap allocated?
+    -> mapM (evalArg localEnv) l   -- Q: is this only for unboxed tuple? could datacon be heap allocated?
 
     -- HINT: create boxed datacon on the heap
     | otherwise
     -> do
-      args <- mapM evalArg l
+      args <- mapM (evalArg localEnv) l
       loc <- allocAndStore (Con dc args)
       pure [HeapPtr loc]
 
   StgLet b e -> do
-    declareBinding b
-    evalExpr e
+    extendedEnv <- declareBinding localEnv b
+    evalExpr extendedEnv e
 
   StgLetNoEscape b e -> do -- TODO: do not allocate closure on heap, instead put into env (stack) allocated closure ; model stack allocated heap objects
-    declareBinding b
-    evalExpr e
+    extendedEnv <- declareBinding localEnv b
+    evalExpr extendedEnv e
 
   -- var
   StgApp i [] _t _ -> case binderType i of
 
     SingleValue LiftedRep -> do
       -- HINT: must be HeapPtr ; read heap ; check if Con or Closure ; eval if Closure ; return HeapPtr if Con
-      v <- lookupEnv i
+      v <- lookupEnv localEnv i
       --liftIO $ putStrLn $ "force: " ++ show (Id i) ++ " " ++ show v
       result <- builtinStgEval v
       --pResult <- peekResult result
@@ -242,7 +308,7 @@ evalExpr = \case
 
     xxx@(SingleValue _) -> do
       -- HINT: unlifted and literals ; Unlifted must be a HeapPtr that points to a Con
-      v <- lookupEnv i
+      v <- lookupEnv localEnv i
       case v of
         HeapPtr{} -> error $ "xxx: " ++ show xxx
         _ -> pure [v]
@@ -250,7 +316,7 @@ evalExpr = \case
       --builtinStgEval v
 
     UnboxedTuple [LiftedRep] -> do
-      v <- lookupEnv i
+      v <- lookupEnv localEnv i
       {-
       case binderDetails i of
         JoinId 0 -> do
@@ -258,13 +324,14 @@ evalExpr = \case
       case (show $ Id i) `elem` [ "base_GHC.Foreign.$j_s4kA"
                                 , "gloss-1.13.1.1-9h1aMufeUtm5ZHz3o9mip4_Graphics.Gloss.Internals.Interface.Backend.GLUT.$j_ssmU"
                                 ] of
-        True -> do
+        _True -> do
           result <- builtinStgEval v
           --pResult <- peekResult result
           --liftIO $ putStrLn $ "force-result2: " ++ show (Id i) ++ " = " ++ show result ++ " " ++ pResult
           pure result
         _ -> do
           error $ show $ "UnboxedTuple [LiftedRep]: " ++ show (Id i) ++ " " ++ show i
+          pure [v]
       --- base_GHC.Foreign.$j_s4kA
       --pure [v]
 {-
@@ -285,8 +352,8 @@ evalExpr = \case
   --  Q: what does unlifted app mean? (i.e. no Ap node, but saturated calls to known functions only?)
   StgApp i l _t _ -> case binderType i of
     SingleValue _ -> do
-      args <- mapM evalArg l
-      v <- lookupEnv i
+      args <- mapM (evalArg localEnv) l
+      v <- lookupEnv localEnv i
       --liftIO $ putStrLn $ "call: " ++ show (Id i) ++ " " ++ show args 
       result <- builtinStgApply v args
       --pResult <- peekResult result
@@ -295,40 +362,12 @@ evalExpr = \case
 
     r -> stgErrorM $ "unsupported app rep: " ++ show r -- unboxed: invalid
 
-  StgCase e resultId aty alts -> do
-    result <- evalExpr e
-    assertWHNF result aty resultId e
-    case aty of
-      AlgAlt tc -> do
-        let [v] = result
-        addEnv resultId v -- HINT: bind the result
-        con <- readHeapCon v
-        case alts of
-          d@(Alt AltDefault _ _) : al -> matchFirstCon con $ al ++ [d]
-          _ -> matchFirstCon con alts
-
-      PrimAlt r -> do
-        let [lit] = result
-        addEnv resultId lit -- HINT: bind the result
-        case alts of
-          d@(Alt AltDefault _ _) : al -> matchFirstLit lit $ al ++ [d]
-          _ -> matchFirstLit lit alts
-
-      MultiValAlt _n -> do -- unboxed tuple
-        -- NOTE: result binder is not assigned
-        let [Alt{..}] = alts
-        zipWithM_ addEnv altBinders result
-        evalExpr altRHS
-
-      PolyAlt -> do
-        let [v] = result
-        addEnv resultId v -- HINT: bind the result
-        let [Alt{..}] = alts
-        zipWithM_ addEnv altBinders result
-        evalExpr altRHS
+  StgCase e scrutineeResult altType alts -> do
+    stackPush (CaseOf localEnv scrutineeResult altType alts)
+    evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
-    args <- mapM evalArg l
+    args <- mapM (evalArg localEnv) l
     evalStack <- gets ssEvalStack
     --liftIO $ putStrLn $ show (head evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
     result <- evalPrimOp op args t tc
@@ -337,7 +376,7 @@ evalExpr = \case
     pure result
 
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
-    args <- mapM evalArg l
+    args <- mapM (evalArg localEnv) l
     result <- evalFCallOp builtinStgApply foreignCall args t tc
     evalStack <- gets ssEvalStack
     --liftIO $ putStrLn $ show (head evalStack) ++ " " ++ show foreignCall ++ " " ++ show args ++ " = " ++ show result
@@ -347,12 +386,12 @@ evalExpr = \case
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
 
-matchFirstLit :: HasCallStack => Atom -> [Alt] -> M [Atom]
-matchFirstLit a ([Alt AltDefault _ rhs]) = evalExpr rhs
-matchFirstLit atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (atom, map altCon alts)) of
+matchFirstLit :: HasCallStack => Env -> Atom -> [Alt] -> M [Atom]
+matchFirstLit localEnv a ([Alt AltDefault _ rhs]) = evalExpr localEnv rhs
+matchFirstLit localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (atom, map altCon alts)) of
   Alt{..} -> do
-    evalExpr altRHS
-matchFirstLit l alts = error $ "no lit match" ++ show (l, map altCon alts)
+    evalExpr localEnv altRHS
+matchFirstLit localEnv l alts = error $ "no lit match" ++ show (localEnv, l, map altCon alts)
 
 matchLit :: HasCallStack => Atom -> AltCon -> Bool
 matchLit a = \case
@@ -371,11 +410,12 @@ convertAltLit = \case
   LitNumber LitNumWord64 n  -> WordAtom $ fromIntegral n
   l -> Literal l
 
-matchFirstCon :: HasCallStack => HeapObject -> [Alt] -> M [Atom]
-matchFirstCon (Con dc args) alts = case head $ [a | a@Alt{..} <- alts, matchCon dc altCon] ++ error "no matching alts" of
+
+matchFirstCon :: HasCallStack => Env -> HeapObject -> [Alt] -> M [Atom]
+matchFirstCon localEnv (Con dc args) alts = case head $ [a | a@Alt{..} <- alts, matchCon dc altCon] ++ error "no matching alts" of
   Alt{..} -> do
-    zipWithM_ addEnv altBinders args
-    evalExpr altRHS
+    let extendedEnv = addManyBindersToEnv altBinders args localEnv
+    evalExpr extendedEnv altRHS
 
 matchCon :: HasCallStack => DataCon -> AltCon -> Bool
 matchCon a = \case
@@ -383,29 +423,31 @@ matchCon a = \case
   AltLit{}      -> False
   AltDefault    -> True
 
-declareBinding :: HasCallStack => Binding -> M ()
-declareBinding = \case
-  StgNonRec i rhs -> do
-    a <- freshHeapAddress
-    addEnv i (HeapPtr a)
-    storeRhs i a rhs
+declareBinding :: HasCallStack => Env -> Binding -> M Env
+declareBinding localEnv = \case
+  StgNonRec b rhs -> do
+    addr <- freshHeapAddress
+    storeRhs localEnv b addr rhs
+    pure $ addBinderToEnv b (HeapPtr addr) localEnv
+
   StgRec l -> do
-    ls <- forM l $ \(i, _) -> do
-      a <- freshHeapAddress
-      addEnv i (HeapPtr a)
-      pure a
-    forM_ (zip ls l) $ \(a, (i, rhs)) -> do
-      storeRhs i a rhs
+    (ls, newEnvItems) <- fmap unzip . forM l $ \(b, _) -> do
+      addr <- freshHeapAddress
+      pure (addr, (b, (HeapPtr addr)))
+    let extendedEnv = addZippedBindersToEnv newEnvItems localEnv
+    forM_ (zip ls l) $ \(addr, (b, rhs)) -> do
+      storeRhs extendedEnv b addr rhs
+    pure extendedEnv
 
-storeRhs :: HasCallStack => Binder -> Addr -> Rhs -> M ()
-storeRhs i a = \case
+storeRhs :: HasCallStack => Env -> Binder -> Addr -> Rhs -> M ()
+storeRhs localEnv i addr = \case
   StgRhsCon dc l -> do
-    args <- mapM evalArg l
-    store a (Con dc args)
+    args <- mapM (evalArg localEnv) l
+    store addr (Con dc args)
 
-  cl@(StgRhsClosure _ l _) -> do
-    env <- gets ssEnv -- TODO: pruning
-    store a (Closure (Id i) cl env [] (length l))
+  cl@(StgRhsClosure _ paramNames _) -> do
+    let prunedEnv = localEnv -- TODO: do pruning to keep only the live/later referred variables
+    store addr (Closure (Id i) cl prunedEnv [] (length paramNames))
 
 -----------------------
 
@@ -416,38 +458,41 @@ declareTopBindings mods = do
         StgTopStringLit{} -> True
         _                 -> False
   -- bind string lits
-  forM_ strings $ \(StgTopStringLit b str) -> do
+  stringEnv <- forM strings $ \(StgTopStringLit b str) -> do
     strPtr <- getCStringConstantPtrAtom str
-    addEnv b strPtr
+    pure (Id b, strPtr)
 
   -- bind closures
   let bindings = concatMap getBindings closures
       getBindings = \case
         StgTopLifted (StgNonRec i rhs) -> [(i, rhs)]
         StgTopLifted (StgRec l) -> l
-  addrList <- forM bindings $ \(i, _) -> do
-    a <- freshHeapAddress
-    addEnv i (HeapPtr a)
-    pure a
 
-  forM_ (zip addrList bindings) $ \(a, (i, rhs)) -> do
-    storeRhs i a rhs
+  (closureEnv, rhsList) <- fmap unzip . forM bindings $ \(b, rhs) -> do
+    addr <- freshHeapAddress
+    pure ((Id b, HeapPtr addr), (b, addr, rhs))
+
+  -- set the top level binder env
+  modify' $ \s@StgState{..} -> s {ssStaticGlobalEnv = Map.fromList $ stringEnv ++ closureEnv}
+
+  -- HINT: top level closures does not capture local variables
+  forM_ rhsList $ \(b, addr, rhs) -> storeRhs mempty b addr rhs
 
 
 test :: HasCallStack => IO ()
 test = do
-  mods <- getFullpakModules "minigame.fullpak"
-  --mods <- getFullpakModules "tsumupto.fullpak"
+  --mods <- getFullpakModules "minigame.fullpak"
+  mods <- getFullpakModules "tsumupto.fullpak"
   --mods <- getFullpakModules "words.fullpak"
   let run = do
         declareTopBindings mods
         initRtsSupport mods
-        env <- gets ssEnv
+        env <- gets ssStaticGlobalEnv
         liftIO $ putStrLn $ "top Id count: " ++ show (Map.size env)
         let rootMain = unId . head $ [i | i <- Map.keys env, show i == "main_:Main.main"]
         limit <- gets ssNextAddr
         modify' $ \s@StgState{..} -> s {ssAddressAfterInit = limit}
-        evalExpr (StgApp rootMain [StgLitArg LitNullAddr] (SingleValue VoidRep) mempty)
+        evalExpr mempty (StgApp rootMain [StgLitArg LitNullAddr] (SingleValue VoidRep) mempty) >>= evalStackMachine
         showDebug builtinStgApply
 
   stateStore <- newEmptyMVar

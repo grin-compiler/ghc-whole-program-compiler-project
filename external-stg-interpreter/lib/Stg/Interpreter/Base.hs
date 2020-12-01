@@ -4,6 +4,7 @@ module Stg.Interpreter.Base where
 import Data.Word
 import Foreign.Ptr
 import Control.Monad.State.Strict
+import Data.List (foldl')
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
@@ -37,27 +38,6 @@ instance Show Id where
   show (Id a) = BS8.unpack $ binderUniqueName a
 
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
-
-data HeapObject
-  = Con
-    { hoCon         :: DataCon
-    , hoConArgs     :: [Atom]
-    }
-  | Closure
-    { hoName        :: Id
-    , hoCloBody     :: StgRhsClosure
-    , hoEnv         :: Env    -- local environment ; with live variables only, everything else is pruned
-    , hoCloArgs     :: [Atom]
-    , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
-    }
-  | Blackhole HeapObject
-  deriving (Show, Eq, Ord)
-
-data StackContinuation
-  = CaseOf  Id AltType [Alt]  -- pattern match on the result
-  | Update  Addr                  -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
-  | Apply   [Atom]                -- apply args on the result heap object
-  deriving (Show, Eq, Ord)
 
 data ArrIdx
   = MutArrIdx !Int
@@ -105,10 +85,19 @@ data PtrOrigin
   | StablePtr     !Int              -- stable pointer must have AddrRep
   deriving (Show, Eq, Ord)
 
+data WeakPtrDescriptor
+  = WeakPtrDescriptor
+  { wpdKey          :: Atom
+  , wpdVale         :: Maybe Atom -- live or dead
+  , wpdFinalizer    :: Maybe Atom -- closure
+  , wpdCFinalizers  :: [(Atom, Maybe Atom, Atom)] -- fun, env ptr, data ptr
+  }
+  deriving (Show, Eq, Ord)
+
 -- TODO: detect coercions during the evaluation
 data Atom     -- Q: should atom fit into a cpu register? A: yes
-  = HeapPtr   !Addr
-  | Literal   !Lit  -- TODO: remove this
+  = HeapPtr       !Addr
+  | Literal       !Lit  -- TODO: remove this
   | Void
   | PtrAtom       !PtrOrigin !(Ptr Word8)
   | IntAtom       !Int
@@ -125,7 +114,7 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | MutableArrayArray !ArrayArrIdx
   | ByteArray         !ByteArrayIdx
   | MutableByteArray  !ByteArrayIdx
-  | WeakPointer       !Atom !Atom !(Maybe Atom) -- key, value, finalizer
+  | WeakPointer       !Int
   | StableName        !Int
   | ThreadId
   | LiftedUndefined
@@ -133,10 +122,31 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
 
 type ReturnValue = [Atom]
 
+data HeapObject
+  = Con
+    { hoCon         :: DataCon
+    , hoConArgs     :: [Atom]
+    }
+  | Closure
+    { hoName        :: Id
+    , hoCloBody     :: StgRhsClosure
+    , hoEnv         :: Env    -- local environment ; with live variables only, everything else is pruned
+    , hoCloArgs     :: [Atom]
+    , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
+    }
+  | Blackhole HeapObject
+  deriving (Show, Eq, Ord)
+
+data StackContinuation
+  = CaseOf  Env Binder AltType [Alt]  -- pattern match on the result ; carries the closure's local environment
+  | Update  Addr                      -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
+  | Apply   [Atom]                    -- apply args on the result heap object
+  deriving (Show, Eq, Ord)
+
 type Addr   = Int
 type Heap   = IntMap HeapObject
 type Env    = Map Id Atom   -- NOTE: must contain only the defined local variables
-type Stack  = [(Env, StackContinuation)]
+type Stack  = [StackContinuation]
 
 {-
   Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
@@ -148,9 +158,9 @@ instance Show (PrintableMVar a) where
 
 data StgState
   = StgState
-  { ssHeap      :: !Heap
-  , ssEnv       :: !Env
---  , ssStack     :: [(Env, StackContinuation)] -- TODO: use reified stack instead of the host language stack
+  { ssHeap                :: !Heap
+  , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
+  , ssStack               :: [StackContinuation]
   , ssEvalStack :: [Id]
   , ssNextAddr  :: !Int
 
@@ -160,6 +170,8 @@ data StgState
 
   -- primop related
 
+  , ssStableNameMap       :: Map Atom Int
+  , ssWeakPointers        :: IntMap WeakPtrDescriptor
   , ssStablePointers      :: IntMap Atom
   , ssMutableByteArrays   :: IntMap ByteArrayDescriptor
   , ssMVars               :: IntMap (Maybe Atom)
@@ -183,22 +195,24 @@ data StgState
   , ssExecutedClosures    :: Set Int
   , ssExecutedPrimOps     :: Set Name
   , ssExecutedFFI         :: Set ForeignCall
-  , ssWeakPointers        :: Set Atom
   , ssAddressAfterInit    :: Int
   }
   deriving (Show)
 
 emptyStgState :: PrintableMVar StgState -> DL -> StgState
 emptyStgState stateStore dl = StgState
-  { ssHeap      = mempty
-  , ssEnv       = mempty
-  , ssEvalStack = []
-  , ssNextAddr  = 0
+  { ssHeap                = mempty
+  , ssStaticGlobalEnv     = mempty
+  , ssStack               = []
+  , ssEvalStack           = []
+  , ssNextAddr            = 0
 
   , ssCStringConstants    = mempty
 
   -- primop related
 
+  , ssStableNameMap       = mempty
+  , ssWeakPointers        = mempty
   , ssStablePointers      = mempty
   , ssMutableByteArrays   = mempty
   , ssMVars               = mempty
@@ -220,34 +234,8 @@ emptyStgState stateStore dl = StgState
   , ssExecutedClosures    = Set.empty
   , ssExecutedPrimOps     = Set.empty
   , ssExecutedFFI         = Set.empty
-  , ssWeakPointers        = Set.empty
   , ssAddressAfterInit    = 0
   }
-
-{-
-        base_GHCziTopHandler_runIO_closure
-        base_GHCziTopHandler_runNonIO_closure
-
-    - collect the necessary DataCons for these constructors
-        rts_mkChar      Czh_con_info
-        rts_mkInt       Izh_con_info
-        rts_mkInt8      I8zh_con_info
-        rts_mkInt16     I16zh_con_info
-        rts_mkInt32     I32zh_con_info
-        rts_mkInt64     I64zh_con_info
-        rts_mkWord      Wzh_con_info
-        rts_mkWord8     W8zh_con_info
-        rts_mkWord16    W16zh_con_info
-        rts_mkWord32    W32zh_con_info
-        rts_mkWord64    W64zh_con_info
-        rts_mkPtr       Ptr_con_info
-        rts_mkFunPtr    FunPtr_con_info
-        rts_mkFloat     Fzh_con_info
-        rts_mkDouble    Dzh_con_info
-        rts_mkStablePtr StablePtr_con_info
-        rts_mkBool      True_closure, False_closure
-        rts_mkString    unpackCString_closure
--}
 
 data Rts
   = Rts
@@ -275,10 +263,24 @@ data Rts
   , rtsUnpackCString       :: Atom
   , rtsTopHandlerRunIO     :: Atom
   , rtsTopHandlerRunNonIO  :: Atom
+
+  -- rts helper custom closures
+  , rtsApply2Args   :: Atom
+  , rtsTuple2Proj0  :: Atom
   }
   deriving (Show)
 
 type M = StateT StgState IO
+
+-- stack operations
+
+stackPush :: StackContinuation -> M ()
+stackPush sc = modify' $ \s@StgState{..} -> s {ssStack = sc : ssStack}
+
+stackPop :: M (Maybe StackContinuation)
+stackPop = state $ \s@StgState{..} -> (case ssStack of {[] -> Nothing ; c : _ -> Just c}, s {ssStack = tail ssStack})
+
+-- heap operations
 
 freshHeapAddress :: HasCallStack => M Addr
 freshHeapAddress = do
@@ -295,43 +297,34 @@ allocAndStore o = do
 store :: HasCallStack => Addr -> HeapObject -> M ()
 store a o = modify' $ \s -> s {ssHeap = IntMap.insert a o (ssHeap s)}
 
-addEnv :: HasCallStack => Binder -> Atom -> M ()
-addEnv b a = modify' $ \s -> s {ssEnv = Map.insert (Id b) a (ssEnv s)}
-
 stgErrorM :: String -> M a
 stgErrorM msg = do
   es <- gets ssEvalStack
   error $ unlines $ msg : "eval stack:" : map (\x -> "  " ++ show x) es
 
-lookupEnv :: HasCallStack => Binder -> M Atom
-lookupEnv b
+addBinderToEnv :: Binder -> Atom -> Env -> Env
+addBinderToEnv b = Map.insert (Id b)
+
+addZippedBindersToEnv :: [(Binder, Atom)] -> Env -> Env
+addZippedBindersToEnv bvList env = foldl' (\e (b, v) -> Map.insert (Id b) v e) env bvList
+
+addManyBindersToEnv :: [Binder] -> [Atom] -> Env -> Env
+addManyBindersToEnv binders values = addZippedBindersToEnv $ zip binders values
+
+lookupEnv :: HasCallStack => Env -> Binder -> M Atom
+lookupEnv localEnv b
  | binderId b == BinderId (Unique '0' 21) -- void#
  = pure Void
  | binderId b == BinderId (Unique '0' 15) -- realWorld#
  = pure Void
  | otherwise
  = do
-  env <- gets ssEnv
+  env <- if binderTopLevel b
+          then gets ssStaticGlobalEnv
+          else pure localEnv
   case Map.lookup (Id b) env of
     Nothing -> stgErrorM $ "unknown variable: " ++ show b
     Just a  -> pure a
-
-update :: HasCallStack => Atom -> [Atom] -> M [Atom]
-update (HeapPtr dst) result@[src] = do
-  o <- readHeap src
-  store dst o
-  pure result
-
-{-# NOINLINE withEnv #-}
-withEnv :: HasCallStack => Id -> Env -> M a -> M a
-withEnv i env m = do
-  save <- gets ssEnv
-  saveES <- gets ssEvalStack
-  modify' $ \s -> s {ssEnv = env, ssEvalStack = i : saveES}
-  --res <- trace (printf "eval %-40s %s" (BS8.unpack . getModuleName . binderModule $ unId i) (show i)) $  m
-  res <- m
-  modify' $ \s -> s {ssEnv = save, ssEvalStack = saveES}
-  pure res
 
 readHeap :: HasCallStack => Atom -> M HeapObject
 readHeap (HeapPtr l) = do
@@ -346,12 +339,23 @@ readHeapCon a = readHeap a >>= \o -> case o of
     Con{} -> pure o
     _     -> stgErrorM $ "expected con but got: " ++ show o
 
+readHeapClosure :: HasCallStack => Atom -> M HeapObject
+readHeapClosure a = readHeap a >>= \o -> case o of
+    Closure{} -> pure o
+    _ -> stgErrorM $ "expected closure but got: " ++ show o
+
 -- primop related
 
 type PrimOpEval = Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 
 type BuiltinStgEval = Atom -> M [Atom]
 type BuiltinStgApply = Atom -> [Atom] -> M [Atom]
+
+lookupWeakPointerDescriptor :: HasCallStack => Int -> M WeakPtrDescriptor
+lookupWeakPointerDescriptor wpId = do
+  IntMap.lookup wpId <$> gets ssWeakPointers >>= \case
+    Nothing -> stgErrorM $ "unknown WeakPointer: " ++ show wpId
+    Just a  -> pure a
 
 lookupStablePointerPtr :: HasCallStack => Ptr Word8 -> M Atom
 lookupStablePointerPtr sp = do

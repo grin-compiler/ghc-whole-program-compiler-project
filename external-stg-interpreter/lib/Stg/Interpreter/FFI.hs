@@ -48,6 +48,8 @@ data ForeignCall
   , foreignCSafety  :: !Safety
   }
 
+data Safety = PlaySafe | PlayInterruptible | PlayRisky
+
 data CCallTarget
   = StaticTarget !SourceText !BS8.ByteString !(Maybe UnitId) !Bool
   | DynamicTarget
@@ -243,7 +245,7 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
           cArgs <- catMaybes <$> mapM mkFFIArg args
           dl <- gets ssCBitsMap
           liftIOAndBorrowStgState $ do
-            when ("hs_OpenGLRaw_getProcAddress" == foreignSymbol) $ do
+            when (False || "hs_OpenGLRaw_getProcAddress" == foreignSymbol) $ do
               print args
               getLine
               pure ()
@@ -310,6 +312,26 @@ charToSetter c p a = case (c, a) of
   ('p', PtrAtom RawPtr v)  -> poke (castPtr p) v
   x   -> error $ "charToSetter: unknown type " ++ show x
 
+{-
+void zdGLUTzm2zi7zi0zi15zm1pzzTWDEZZBcYHcS36qZZ2lppzdGraphicsziUIziGLUTziRawziCallbackszdGLUTzzm2zzi7zzi0zzi15zzm1pzzzzTWDEZZZZBcYHcS36qZZZZ2lppzuGraphicszziUIzziGLUTzziRawzziCallbackszumakePositionFunc
+  ( StgStablePtr the_stableptr
+  , HsInt32 a1
+  , HsInt32 a2)
+{
+Capability *cap;
+HaskellObj ret;
+cap = rts_lock();
+rts_evalIO( &cap
+          , rts_apply(cap
+           , (HaskellObj)runIO_closure
+           , rts_apply(cap
+            , rts_apply(cap, (StgClosure*)deRefStablePtr(the_stableptr), rts_mkInt32(cap,a1))
+            , rts_mkInt32(cap,a2))) ,&ret);
+rts_checkSchedStatus("zdGLUTzm2zi7zi0zi15zm1pzzTWDEZZBcYHcS36qZZ2lppzdGraphicsziUIziGLUTziRawziCallbackszdGLUTzzm2zzi7zzi0zzi15zzm1pzzzzTWDEZZZZBcYHcS36qZZZZ2lppzuGraphicszziUIzziGLUTzziRawzziCallbackszumakePositionFunc",cap);
+rts_unlock(cap);
+}
+-}
+
 {-# NOINLINE ffiCallbackBridge #-}
 ffiCallbackBridge :: HasCallStack => BuiltinStgApply -> MVar StgState -> Atom -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
 ffiCallbackBridge builtinStgApply stateStore fun typeString hsTypeString _cif retStorage argsStoragePtr _userData = do
@@ -325,13 +347,18 @@ ffiCallbackBridge builtinStgApply stateStore fun typeString hsTypeString _cif re
 
   putStrLn $ "[callback BEGIN] " ++ show fun
   before <- takeMVar stateStore
-  (result, after) <- flip runStateT before $ do
+  let freshStack = before {ssStack = []}
+  (result, after) <- flip runStateT freshStack $ do
     -- TODO: box FFI arg atoms
     --  i.e. rts_mkWord8
     -- TODO: check how the stubs are generated and what types are need to be boxed
     boxedArgs <- zipWithM boxFFIAtom hsArgsType argAtoms
+    -- !!!!!!!!!!!!!!!!!!!!!!!!!!
+    -- Q: what stack show we use here?
+    -- !!!!!!!!!!!!!!!!!!!!!!!!!!
+    undefined
     builtinStgApply fun $ boxedArgs ++ [Void]
-  putMVar stateStore after
+  putMVar stateStore $ after {ssStack = ssStack before}
   putStrLn $ "[callback END]   " ++ show fun
 
   -- HINT: need some kind of channel between the IO world and the interpreters StateT IO

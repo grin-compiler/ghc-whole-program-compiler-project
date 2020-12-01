@@ -56,7 +56,7 @@ showClosures addr = do
     result <- builtinStgEval (HeapPtr i)
     liftIO $ putStrLn $ "forced: " ++ show i ++ " got: " ++ show result
   -}
-
+{-
 showWeakPointers :: BuiltinStgApply -> M ()
 showWeakPointers builtinStgApply = do
   wl <- gets ssWeakPointers
@@ -64,7 +64,7 @@ showWeakPointers builtinStgApply = do
   forM_ [finalizer | WeakPointer _ _ (Just finalizer) <- Set.toList wl] $ \f -> do
     result <- builtinStgApply f [Void]
     liftIO $ putStrLn $ "run finalizer: " ++ show f ++ " got: " ++ show result
-
+-}
 showByteArrays :: M ()
 showByteArrays = do
   arrs <- gets ssMutableByteArrays
@@ -115,4 +115,4 @@ showDebug builtinStgApply = do
   liftIO $ putStrLn "\n-------------------------------------------\n"
   liftIO $ putStrLn "WeakPointers:"
   liftIO $ putStrLn "\n-------------------------------------------\n"
-  showWeakPointers builtinStgApply
+  --showWeakPointers builtinStgApply
