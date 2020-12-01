@@ -19,23 +19,55 @@ pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 initRtsSupport :: [Module] -> M ()
 initRtsSupport mods = do
-  let rtsModSet = Set.fromList [(UnitId u, ModuleName m) | (u, m, _, _, _) <- wiredInCons]
-      dcMap     = Map.fromList
-                    [ ((moduleUnitId, moduleName, tcName, dcName), dc)
-                    | m@Module{..} <- mods
-                    , Set.member (moduleUnitId, moduleName) rtsModSet
-                    , (tcU, tcMs) <- moduleTyCons
-                    , tcU == moduleUnitId
-                    , (tcM, tcs) <- tcMs
-                    , tcM == moduleName
-                    , TyCon{..} <- tcs
-                    , dc@DataCon{..} <- tcDataCons
-                    ]
-      rts = foldl' setCon Rts{} wiredInCons
-      setCon r (u, m, t, d, setter) = case Map.lookup (UnitId u, ModuleName m, t, d) dcMap of
+  -- collect rts related modules
+  let rtsModSet = Set.fromList $
+                    [(UnitId u, ModuleName m) | (u, m, _, _, _) <- wiredInCons] ++
+                    [(UnitId u, ModuleName m) | (u, m, _, _) <- wiredInClosures]
+      rtsMods = [m | m@Module{..} <- mods, Set.member (moduleUnitId, moduleName) rtsModSet]
+
+  -- lookup wired-in constructors
+  let dcMap = Map.fromList
+                [ ((moduleUnitId, moduleName, tcName, dcName), dc)
+                | m@Module{..} <- rtsMods
+                , (tcU, tcMs) <- moduleTyCons
+                , tcU == moduleUnitId
+                , (tcM, tcs) <- tcMs
+                , tcM == moduleName
+                , TyCon{..} <- tcs
+                , dc@DataCon{..} <- tcDataCons
+                ]
+
+  forM_ wiredInCons $ \(u, m, t, d, setter) -> do
+    case Map.lookup (UnitId u, ModuleName m, t, d) dcMap of
         Nothing -> error $ "missing wired in data con: " ++ show (u, m, t, d)
-        Just dc -> setter r dc
-  modify' $ \s -> s {ssRtsSupport = rts}
+        Just dc -> modify' $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport dc}
+
+  -- lookup wired-in closures
+  let getBindings = \case
+        StgTopLifted (StgNonRec i _) -> [i]
+        StgTopLifted (StgRec l) -> map fst l
+        _ -> []
+      closureMap = Map.fromList
+                [ ((uId, mName, bName), topBinding)
+                | m@Module{..} <- rtsMods
+                , topBinding@Binder{..} <- concatMap getBindings moduleTopBindings
+                , (uId, mName, bName, _) <- wiredInClosures
+                , UnitId uId == moduleUnitId
+                , ModuleName mName == moduleName
+                , bName == binderName
+                ]
+
+  forM_ wiredInClosures $ \(u, m, n, setter) -> do
+    case Map.lookup (u, m, n) closureMap of
+        Nothing -> error $ "missing wired in closure: " ++ show (u, m, n)
+        Just b  -> do
+          cl <- lookupEnv mempty b
+          modify' $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport cl}
+
+  -- TODO: add these
+  --  rtsApply2Args   :: Atom
+  --  rtsTuple2Proj0  :: Atom
+  pure ()
 
 -- HINT: needed for FFI value boxing
 wiredInCons :: [(Name, Name, Name, Name, Rts -> DataCon -> Rts)]
@@ -60,19 +92,46 @@ wiredInCons =
   , ("ghc-prim",  "GHC.Types",  "Bool",       "True",       \s dc -> s {rtsTrueCon      = dc})
   , ("ghc-prim",  "GHC.Types",  "Bool",       "False",      \s dc -> s {rtsFalseCon     = dc})
   ]
+{-
+         "-Wl,-u,ghczmprim_GHCziTuple_Z0T_closure"
+-}
 
 {-
-        base_GHCziTopHandler_runIO_closure
-        base_GHCziTopHandler_runNonIO_closure
-        rts_mkString    unpackCString_closure
+  TODO:
+    bind wired in closures when allocating static top level closures
 -}
+wiredInClosures :: [(Name, Name, Name, Rts -> Atom -> Rts)]
+wiredInClosures =
+  -- unit-id,     module,                   binder,                         closure setter
+  [ ("base",      "GHC.TopHandler",         "runIO",                        \s cl -> s {rtsTopHandlerRunIO      = cl})
+  , ("base",      "GHC.TopHandler",         "runNonIO",                     \s cl -> s {rtsTopHandlerRunNonIO   = cl})
+  , ("base",      "GHC.Pack",               "unpackCString",                \s cl -> s {rtsUnpackCString        = cl})
+  ]
 {-
-data Rts
-  = Rts
-  -- closures used by FFI wrapper code ; heap address of the closure
-  , rtsUnpackCString       :: Atom
-  , rtsTopHandlerRunIO     :: Atom
-  , rtsTopHandlerRunNonIO  :: Atom
-  }
-  deriving (Show)
+  , ("base",      "GHC.Weak",               "runFinalizerBatch",
+  , ("base",      "GHC.IO.Exception",       "stackOverflow",
+  , ("base",      "GHC.IO.Exception",       "heapOverflow",
+  , ("base",      "GHC.IO.Exception",       "allocationLimitExceeded",
+  , ("base",      "GHC.IO.Exception",       "blockedIndefinitelyOnMVar",
+  , ("base",      "GHC.IO.Exception",       "blockedIndefinitelyOnSTM",
+  , ("base",      "GHC.IO.Exception",       "cannotCompactFunction",
+  , ("base",      "GHC.IO.Exception",       "cannotCompactPinned",
+  , ("base",      "GHC.IO.Exception",       "cannotCompactMutable",
+  , ("base",      "Control.Exception.Base", "absentSumFieldError",
+  , ("base",      "Control.Exception.Base", "nonTermination",
+  , ("base",      "Control.Exception.Base", "nestedAtomically",
+  , ("base",      "GHC.Event.Thread",       "blockedOnBadFD",
+  , ("base",      "GHC.Conc.Sync",          "runSparks",
+  , ("base",      "GHC.Conc.IO",            "ensureIOManagerIsRunning",
+  , ("base",      "GHC.Conc.IO",            "ioManagerCapabilitiesChanged",
+  , ("base",      "GHC.Conc.Signal",        "runHandlersPtr",
+  , ("base",      "GHC.TopHandler",         "flushStdHandles",
+  , ("base",      "GHC.TopHandler",         "runMainIO",
+-}
+
+{-
+#if !defined(mingw32_HOST_OS)
+    getStablePtr((StgPtr)blockedOnBadFD_closure);
+    getStablePtr((StgPtr)runHandlersPtr_closure);
+#endif
 -}

@@ -37,64 +37,46 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
     pure [IntV $ if a == b then 1 else 0]
 
   -- atomicModifyMutVar2# :: MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
-  -- TODO: make this atomic in the STG interpreter monad
-  -- SEE: stg_atomicModifyMutVar2zh
-  -- NOTE: CPU atomic
   ( "atomicModifyMutVar2#", [MutVar m, fun, _s]) -> do
+    Rts{..} <- gets ssRtsSupport
+    -- NOTE: CPU atomic
     old <- lookupMutVar m
-    [new] <- builtinStgApply fun [old]
-    pure [old, new]
 
-  -- TODO: atomicModifyMutVar_# :: MutVar# s a -> (a -> a) -> State# s -> (# State# s, a, a #)
-  -- SEE: stg_atomicModifyMutVarzuzh
-  -- NOTE: CPU atomic
+    -- transform through fun, get a pair result
+    ap2 <- readHeapClosure rtsApply2Args
+    lazyNewTup2Value <- HeapPtr <$> allocAndStore (ap2 {hoCloArgs = [fun, old], hoCloMissing = 0})
 
-  -- TODO: casMutVar# :: MutVar# s a -> a -> a -> State# s -> (# State# s, Int#, a #)
-  -- SEE: stg_casMutVarzh
+    -- get the first value ud the pair
+    tup2Prj0 <- readHeapClosure rtsTuple2Proj0
+    lazyNewMutVarValue <- HeapPtr <$> allocAndStore (tup2Prj0 {hoCloArgs = [lazyNewTup2Value], hoCloMissing = 0})
+
+    -- update mutvar
+    modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m lazyNewMutVarValue ssMutVars}
+    pure [old, lazyNewTup2Value]
+
+  -- atomicModifyMutVar_# :: MutVar# s a -> (a -> a) -> State# s -> (# State# s, a, a #)
+  ( "atomicModifyMutVar_#", [MutVar m, fun, _s]) -> do
+    Rts{..} <- gets ssRtsSupport
+    -- NOTE: CPU atomic
+    old <- lookupMutVar m
+
+    -- transform through fun, get the new value
+    ap2 <- readHeapClosure rtsApply2Args
+    lazyNewMutVarValue <- HeapPtr <$> allocAndStore (ap2 {hoCloArgs = [fun, old], hoCloMissing = 0})
+
+    -- update mutvar
+    modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m lazyNewMutVarValue ssMutVars}
+    pure [old, lazyNewMutVarValue]
+
+  -- casMutVar# :: MutVar# s a -> a -> a -> State# s -> (# State# s, Int#, a #)
+  ( "casMutVar#", [MutVar m, old, new, _s]) -> do
   -- NOTE: CPU atomic
+    current <- lookupMutVar m
+    if current == old
+      then do
+        modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m new ssMutVars}
+        pure [IntV 0, new]
+      else do
+        pure [IntV 1, old]
 
   _ -> fallback op args t tc
-
-{-
--- Note [Why not an unboxed tuple in atomicModifyMutVar2#?]
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
---
--- Looking at the type of atomicModifyMutVar2#, one might wonder why
--- it doesn't return an unboxed tuple. e.g.,
---
---   MutVar# s a -> (a -> (# a, b #)) -> State# s -> (# State# s, a, (# a, b #) #)
---
--- The reason is that atomicModifyMutVar2# relies on laziness for its atomicity.
--- Given a MutVar# containing x, atomicModifyMutVar2# merely replaces
--- its contents with a thunk of the form (fst (f x)). This can be done using an
--- atomic compare-and-swap as it is merely replacing a pointer.
-
-primop  AtomicModifyMutVar2Op "atomicModifyMutVar2#" GenPrimOp
-   MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
-   { Modify the contents of a {\tt MutVar\#}, returning the previous
-     contents and the result of applying the given function to the
-     previous contents. Note that this isn't strictly
-     speaking the correct type for this function; it should really be
-     {\tt MutVar\# s a -> (a -> (a,b)) -> State\# s -> (\# State\# s, a, (a, b) \#)},
-     but we don't know about pairs here. }
-   with
-   out_of_line = True
-   has_side_effects = True
-   can_fail         = True
-
-primop  AtomicModifyMutVar_Op "atomicModifyMutVar_#" GenPrimOp
-   MutVar# s a -> (a -> a) -> State# s -> (# State# s, a, a #)
-   { Modify the contents of a {\tt MutVar\#}, returning the previous
-     contents and the result of applying the given function to the
-     previous contents. }
-   with
-   out_of_line = True
-   has_side_effects = True
-   can_fail         = True
-
-primop  CasMutVarOp "casMutVar#" GenPrimOp
-  MutVar# s a -> a -> a -> State# s -> (# State# s, Int#, a #)
-   with
-   out_of_line = True
-   has_side_effects = True
--}
