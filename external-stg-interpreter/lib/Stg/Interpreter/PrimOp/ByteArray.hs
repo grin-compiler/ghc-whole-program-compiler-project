@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ByteArray where
 
+import Data.Bits
 import Data.Int
 import Data.Word
 import Data.Char
@@ -792,17 +793,76 @@ evalPrimOp fallback op args t tc = case (op, args) of
   --    atomic operations
   ---------------------------------------------
 
-  -- NOTE: CPU atomic
-  -- TODO
   -- atomicReadIntArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  ( "atomicReadIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- TODO: CPU atomic
+    value <- liftIO (peekElemOff (castPtr p) index :: IO Int)
+    pure [IntV value]
+
   -- atomicWriteIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
+  ( "atomicWriteIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- TODO: CPU atomic
+    liftIO $ pokeElemOff (castPtr p) index value
+    pure []
+
   -- casIntArray# :: MutableByteArray# s -> Int# -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  ( "casIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV old, IntV new, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    current <- liftIO (peekElemOff (castPtr p) index :: IO Int)
+    when (current == old) $ do
+      liftIO $ pokeElemOff (castPtr p) index new
+    pure [IntV current]
+
   -- fetchAddIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  ( "fetchAddIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    original <- liftIO (peekElemOff (castPtr p) index :: IO Int)
+    liftIO $ pokeElemOff (castPtr p) index (original + value)
+    pure [IntV original]
+
   -- fetchSubIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  ( "fetchSubIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    original <- liftIO (peekElemOff (castPtr p) index :: IO Int)
+    liftIO $ pokeElemOff (castPtr p) index (original - value)
+    pure [IntV original]
+
   -- fetchAndIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  ( "fetchAndIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    original <- liftIO (peekElemOff (castPtr p) index :: IO Int)
+    liftIO $ pokeElemOff (castPtr p) index (original .&. value)
+    pure [IntV original]
+
   -- fetchNandIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  ( "fetchNandIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    original <- liftIO (peekElemOff (castPtr p) index :: IO Int)
+    liftIO $ pokeElemOff (castPtr p) index (complement $ original .&. value)
+    pure [IntV original]
+
   -- fetchOrIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  ( "fetchOrIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    original <- liftIO (peekElemOff (castPtr p) index :: IO Int)
+    liftIO $ pokeElemOff (castPtr p) index (original .|. value)
+    pure [IntV original]
+
   -- fetchXorIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
+  ( "fetchXorIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    original <- liftIO (peekElemOff (castPtr p) index :: IO Int)
+    liftIO $ pokeElemOff (castPtr p) index (original `xor` value)
+    pure [IntV original]
 
   _ -> fallback op args t tc
 
@@ -826,7 +886,6 @@ primtype ByteArray#
 
 primtype MutableByteArray# s
 
-
 primop  ResizeMutableByteArrayOp_Char "resizeMutableByteArray#" GenPrimOp
    MutableByteArray# s -> Int# -> State# s -> (# State# s,MutableByteArray# s #)
    {Resize (unpinned) mutable byte array to new specified size (in bytes).
@@ -842,79 +901,4 @@ primop  ResizeMutableByteArrayOp_Char "resizeMutableByteArray#" GenPrimOp
     case a new {\tt MutableByteArray\#} had to be allocated.}
    with out_of_line = True
         has_side_effects = True
-
-
--- Atomic operations
-
-primop  AtomicReadByteArrayOp_Int "atomicReadIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
-   {Given an array and an offset in machine words, read an element. The
-    index is assumed to be in bounds. Implies a full memory barrier.}
-   with has_side_effects = True
-        can_fail = True
-
-primop  AtomicWriteByteArrayOp_Int "atomicWriteIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-   {Given an array and an offset in machine words, write an element. The
-    index is assumed to be in bounds. Implies a full memory barrier.}
-   with has_side_effects = True
-        can_fail = True
-
-primop CasByteArrayOp_Int "casIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-   {Given an array, an offset in machine words, the expected old value, and
-    the new value, perform an atomic compare and swap i.e. write the new
-    value if the current value matches the provided old value. Returns
-    the value of the element before the operation. Implies a full memory
-    barrier.}
-   with has_side_effects = True
-        can_fail = True
-
-primop FetchAddByteArrayOp_Int "fetchAddIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-   {Given an array, and offset in machine words, and a value to add,
-    atomically add the value to the element. Returns the value of the
-    element before the operation. Implies a full memory barrier.}
-   with has_side_effects = True
-        can_fail = True
-
-primop FetchSubByteArrayOp_Int "fetchSubIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-   {Given an array, and offset in machine words, and a value to subtract,
-    atomically subtract the value to the element. Returns the value of
-    the element before the operation. Implies a full memory barrier.}
-   with has_side_effects = True
-        can_fail = True
-
-primop FetchAndByteArrayOp_Int "fetchAndIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-   {Given an array, and offset in machine words, and a value to AND,
-    atomically AND the value to the element. Returns the value of the
-    element before the operation. Implies a full memory barrier.}
-   with has_side_effects = True
-        can_fail = True
-
-primop FetchNandByteArrayOp_Int "fetchNandIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-   {Given an array, and offset in machine words, and a value to NAND,
-    atomically NAND the value to the element. Returns the value of the
-    element before the operation. Implies a full memory barrier.}
-   with has_side_effects = True
-        can_fail = True
-
-primop FetchOrByteArrayOp_Int "fetchOrIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-   {Given an array, and offset in machine words, and a value to OR,
-    atomically OR the value to the element. Returns the value of the
-    element before the operation. Implies a full memory barrier.}
-   with has_side_effects = True
-        can_fail = True
-
-primop FetchXorByteArrayOp_Int "fetchXorIntArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-   {Given an array, and offset in machine words, and a value to XOR,
-    atomically XOR the value to the element. Returns the value of the
-    element before the operation. Implies a full memory barrier.}
-   with has_side_effects = True
-        can_fail = True
 -}
