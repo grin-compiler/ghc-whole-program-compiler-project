@@ -4,6 +4,7 @@ module Stg.Interpreter.PrimOp.StablePointer where
 import Foreign.Ptr
 import Control.Monad.State
 import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 
 import Stg.Syntax
 import Stg.Interpreter.Base
@@ -12,6 +13,8 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
+
+  -- Stable Pointer
 
   -- makeStablePtr# :: a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
   ( "makeStablePtr#", [a, _s]) -> do
@@ -26,68 +29,27 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- eqStablePtr# :: StablePtr# a -> StablePtr# a -> Int#
   ( "eqStablePtr#", [PtrAtom _ a, PtrAtom _ b]) -> do
-      pure [IntV $ if a == b then 1 else 0]
+    pure [IntV $ if a == b then 1 else 0]
 
-{-
+
+  -- Stable Name
+
   -- makeStableName# :: a -> State# RealWorld -> (# State# RealWorld, StableName# a #)
   ( "makeStableName#", [a, _s]) -> do
-    undefined -- TODO
+    snMap <- gets ssStableNameMap
+    case Map.lookup a snMap of
+      Just snId -> pure [StableName snId]
+      Nothing -> do
+        let snId = Map.size snMap
+        modify' $ \s -> s {ssStableNameMap = Map.insert a snId snMap}
+        pure [StableName snId]
 
   -- eqStableName# :: StableName# a -> StableName# b -> Int#
   ( "eqStableName#", [StableName a, StableName b]) -> do
-    undefined -- TODO
+    pure [IntV $ if a == b then 1 else 0]
 
   -- stableNameToInt# :: StableName# a -> Int#
-  ( "stableNameToInt#", [StableName a]) -> do
-    undefined -- TODO
--}
-
-  ---------------------------------------
-
-  -- makeStablePtr# :: a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
-  -- deRefStablePtr# :: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
-  -- eqStablePtr# :: StablePtr# a -> StablePtr# a -> Int#
-  -- makeStableName# :: a -> State# RealWorld -> (# State# RealWorld, StableName# a #)
-  -- eqStableName# :: StableName# a -> StableName# b -> Int#
-  -- stableNameToInt# :: StableName# a -> Int#
+  ( "stableNameToInt#", [StableName snId]) -> do
+    pure [IntV snId]
 
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Stable pointers and names"
-------------------------------------------------------------------------
-
-primtype StablePtr# a
-
-primtype StableName# a
-
-primop  MakeStablePtrOp "makeStablePtr#" GenPrimOp
-   a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
-   with
-   has_side_effects = True
-   out_of_line      = True
-
-primop  DeRefStablePtrOp "deRefStablePtr#" GenPrimOp
-   StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
-   with
-   has_side_effects = True
-   out_of_line      = True
-
-primop  EqStablePtrOp "eqStablePtr#" GenPrimOp
-   StablePtr# a -> StablePtr# a -> Int#
-   with
-   has_side_effects = True
-
-primop  MakeStableNameOp "makeStableName#" GenPrimOp
-   a -> State# RealWorld -> (# State# RealWorld, StableName# a #)
-   with
-   has_side_effects = True
-   out_of_line      = True
-
-primop  EqStableNameOp "eqStableName#" GenPrimOp
-   StableName# a -> StableName# b -> Int#
-
-primop  StableNameToIntOp "stableNameToInt#" GenPrimOp
-   StableName# a -> Int#
--}

@@ -1,97 +1,66 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.WeakPointer where
 
 import Control.Monad.State
-import qualified Data.Set as Set
+import qualified Data.IntMap as IntMap
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+
+newWeakPointer :: Atom -> Atom -> Maybe Atom -> M Int
+newWeakPointer key value finalizer = do
+  weakPointers <- gets ssWeakPointers
+  let next  = IntMap.size weakPointers
+      desc  = WeakPtrDescriptor
+        { wpdKey          = key
+        , wpdVale         = Just value
+        , wpdFinalizer    = finalizer
+        , wpdCFinalizers  = []
+        }
+
+  modify' $ \s -> s {ssWeakPointers = IntMap.insert next desc weakPointers}
+  pure next
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- mkWeak# :: o -> b -> (State# RealWorld -> (# State# RealWorld, c #)) -> State# RealWorld -> (# State# RealWorld, Weak# b #)
   ( "mkWeak#", [key, value, finalizer, _w]) -> do
-    let wp = WeakPointer key value (Just finalizer)
-    modify' $ \s@StgState{..} -> s {ssWeakPointers = Set.insert wp ssWeakPointers}
-    pure [wp]
+    wpId <- newWeakPointer key value (Just finalizer)
+    pure [WeakPointer wpId]
 
   -- mkWeakNoFinalizer# :: o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
   ( "mkWeakNoFinalizer#", [key, value, _w]) -> do
-    let wp = WeakPointer key value Nothing
-    modify' $ \s@StgState{..} -> s {ssWeakPointers = Set.insert wp ssWeakPointers}
-    pure [wp]
-
-  ( "touch#", [o, _s]) -> do
-    -- o -> State# RealWorld -> State# RealWorld
-    pure []
-
-{-
-  ("makeStablePtr#", [a, _s]) -> pure [StablePointer a] -- a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
-  ("deRefStablePtr#", [StablePointer a, _s]) -> pure [a] -- TODO: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
--}
-
-
-  --------------------------
-
-  -- mkWeak# :: o -> b
-  --         -> (State# RealWorld -> (# State# RealWorld, c #))
-  --         ->  State# RealWorld -> (# State# RealWorld, Weak# b #)
-
-  -- mkWeakNoFinalizer# :: o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
+    wpId <- newWeakPointer key value Nothing
+    pure [WeakPointer wpId]
 
   -- addCFinalizerToWeak# :: Addr# -> Addr# -> Int# -> Addr# -> Weak# b -> State# RealWorld -> (# State# RealWorld, Int# #)
+  ( "addCFinalizerToWeak#", [fun, dataPtr, IntV hasEnv, envPtr, WeakPointer wpId, _w]) -> do
+    wpd@WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
+    let desc = wpd {wpdCFinalizers = (fun, if hasEnv == 0 then Nothing else Just envPtr, dataPtr) : wpdCFinalizers}
+    modify' $ \s@StgState{..} -> s {ssWeakPointers = IntMap.insert wpId desc ssWeakPointers}
+    pure [IntV $ if wpdVale == Nothing then 0 else 1]
+
   -- deRefWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, a #)
+  ( "deRefWeak#", [WeakPointer wpId, _w]) -> do
+    WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
+    case wpdVale of
+      Just v  -> pure [IntV 1, v]
+      Nothing -> pure [IntV 0, LiftedUndefined]
+
   -- finalizeWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, (State# RealWorld -> (# State# RealWorld, b #) ) #)
+  -- TODO
+
   -- touch# :: o -> State# RealWorld -> State# RealWorld
+  ( "touch#", [_o, _s]) -> do
+    -- see more about 'touch#': https://gitlab.haskell.org/ghc/ghc/-/wikis/hidden-dangers-of-touch
+    pure []
 
   _ -> fallback op args t tc
 
 {-
-------------------------------------------------------------------------
-section "Weak pointers"
-------------------------------------------------------------------------
-
-primtype Weak# b
-
--- note that tyvar "o" denotes openAlphaTyVar
-
-primop  MkWeakOp "mkWeak#" GenPrimOp
-   o -> b -> (State# RealWorld -> (# State# RealWorld, c #))
-     -> State# RealWorld -> (# State# RealWorld, Weak# b #)
-   { {\tt mkWeak# k v finalizer s} creates a weak reference to value {\tt k},
-     with an associated reference to some value {\tt v}. If {\tt k} is still
-     alive then {\tt v} can be retrieved using {\tt deRefWeak#}. Note that
-     the type of {\tt k} must be represented by a pointer (i.e. of kind {\tt
-     TYPE 'LiftedRep} or {\tt TYPE 'UnliftedRep}). }
-   with
-   has_side_effects = True
-   out_of_line      = True
-
-primop  MkWeakNoFinalizerOp "mkWeakNoFinalizer#" GenPrimOp
-   o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
-   with
-   has_side_effects = True
-   out_of_line      = True
-
-primop  AddCFinalizerToWeakOp "addCFinalizerToWeak#" GenPrimOp
-   Addr# -> Addr# -> Int# -> Addr# -> Weak# b
-          -> State# RealWorld -> (# State# RealWorld, Int# #)
-   { {\tt addCFinalizerToWeak# fptr ptr flag eptr w} attaches a C
-     function pointer {\tt fptr} to a weak pointer {\tt w} as a finalizer. If
-     {\tt flag} is zero, {\tt fptr} will be called with one argument,
-     {\tt ptr}. Otherwise, it will be called with two arguments,
-     {\tt eptr} and {\tt ptr}. {\tt addCFinalizerToWeak#} returns
-     1 on success, or 0 if {\tt w} is already dead. }
-   with
-   has_side_effects = True
-   out_of_line      = True
-
-primop  DeRefWeakOp "deRefWeak#" GenPrimOp
-   Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, a #)
-   with
-   has_side_effects = True
-   out_of_line      = True
 
 primop  FinalizeWeakOp "finalizeWeak#" GenPrimOp
    Weak# a -> State# RealWorld -> (# State# RealWorld, Int#,
@@ -104,10 +73,4 @@ primop  FinalizeWeakOp "finalizeWeak#" GenPrimOp
    with
    has_side_effects = True
    out_of_line      = True
-
-primop TouchOp "touch#" GenPrimOp
-   o -> State# RealWorld -> State# RealWorld
-   with
-   code_size = { 0 }
-   has_side_effects = True
 -}
