@@ -116,7 +116,7 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | MutableByteArray  !ByteArrayIdx
   | WeakPointer       !Int
   | StableName        !Int
-  | ThreadId
+  | ThreadId          !Int
   | LiftedUndefined
   deriving (Show, Eq, Ord)
 
@@ -160,13 +160,17 @@ data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
-  , ssStack               :: [StackContinuation]
   , ssEvalStack :: [Id]
   , ssNextAddr  :: !Int
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
   , ssCStringConstants    :: Map ByteString Atom
+
+  -- threading
+  , ssThreads             :: IntMap ThreadState
+  , ssCurrentThreadId     :: Int
+  , ssScheduledThreadIds  :: [Int]  -- HINT: one round
 
   -- primop related
 
@@ -203,7 +207,6 @@ emptyStgState :: PrintableMVar StgState -> DL -> StgState
 emptyStgState stateStore dl = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
-  , ssStack               = []
   , ssEvalStack           = []
   , ssNextAddr            = 0
 
@@ -272,13 +275,75 @@ data Rts
 
 type M = StateT StgState IO
 
+-- thread operations
+
+createThread :: M (Int, ThreadState)
+createThread = do
+  let ts = ThreadState
+        { tsCurrentResult   = []
+        , tsStack           = []
+        , tsStatus          = ThreadRunning
+        , tsBlockExceptions = False
+        , tsInterruptible   = True
+        , tsBound           = False
+        , tsLocked          = False
+        , tsCapability      = 0 -- TODO: implement capability handling
+        , tsLabel           = Nothing
+        }
+  threads <- gets ssThreads
+  let threadId  = IntMap.size threads
+  modify' $ \s -> s {ssThreads = IntMap.insert threadId ts threads}
+  pure (threadId, ts)
+
+switchToThread :: Int -> M ()
+switchToThread tid = do
+  modify' $ \s -> s {ssCurrentThreadId = tid}
+
+updateThreadState :: Int -> ThreadState -> M ()
+updateThreadState tid ts = do
+  modify' $ \s@StgState{..} -> s {ssThreads = IntMap.insert tid ts ssThreads}
+
+lookupThreadState :: HasCallStack => Int -> M ThreadState
+lookupThreadState tid = do
+  IntMap.lookup tid <$> gets ssThreads >>= \case
+    Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
+    Just a  -> pure a
+
+scheduleToTheEnd :: Int -> M ()
+scheduleToTheEnd tid = pure () -- TODO
+
+requestContextSwitch :: M ()
+requestContextSwitch = pure () -- TODO
+
+scheduleThreads :: M ()
+scheduleThreads = pure () -- TODO
+
 -- stack operations
 
+{-
+  , ssThreads             :: IntMap ThreadState
+  , ssCurrentThreadId     :: Int
+
+  = ThreadState
+  { tsCurrentResult   :: [Atom] -- Q: do we need this?
+  , tsStack           :: ![StackContinuation]
+  , tsStatus          :: !ThreadStatus
+  , tsBlockExceptions :: !Bool
+  , tsInterruptible   :: !Bool
+  }
+-}
 stackPush :: StackContinuation -> M ()
-stackPush sc = modify' $ \s@StgState{..} -> s {ssStack = sc : ssStack}
+stackPush sc = do
+  let pushFun ts@ThreadState{..} = ts {tsStack = sc : tsStack}
+  modify' $ \s@StgState{..} -> s {ssThreads = IntMap.adjust pushFun ssCurrentThreadId ssThreads}
 
 stackPop :: M (Maybe StackContinuation)
-stackPop = state $ \s@StgState{..} -> (case ssStack of {[] -> Nothing ; c : _ -> Just c}, s {ssStack = tail ssStack})
+stackPop = do
+  let tailFun ts@ThreadState{..} = ts {tsStack = tail tsStack}
+  Just ts@ThreadState{..} <- state $ \s@StgState{..} -> (IntMap.lookup ssCurrentThreadId ssThreads, s {ssThreads = IntMap.adjust tailFun ssCurrentThreadId ssThreads})
+  pure $ case tsStack of
+    []    -> Nothing
+    c : _ -> Just c
 
 -- heap operations
 
@@ -429,6 +494,8 @@ lookupByteArrayDescriptorI = lookupByteArrayDescriptor . baId
 liftIOAndBorrowStgState :: HasCallStack => IO a -> M a
 liftIOAndBorrowStgState action = do
   stateStore <- gets $ unPrintableMVar . ssStateStore
+  -- HINT: remember the local thread id
+  myThread <- gets ssCurrentThreadId
   before <- get
   (result, after) <- liftIO $ do
     -- save current state
@@ -440,6 +507,8 @@ liftIOAndBorrowStgState action = do
     pure (r, s)
 
   put after
+  -- HINT: continue the local thread
+  switchToThread myThread
   pure result
 
 -- debug
@@ -465,3 +534,133 @@ getCStringConstantPtrAtom key = do
           a = PtrAtom (CStringPtr bsCString) $ plusPtr (unsafeForeignPtrToPtr bsFPtr) bsOffset
       modify' $ \s -> s {ssCStringConstants = Map.insert key a strMap}
       pure a
+
+---------------------------------------------
+-- threading
+
+data ThreadState
+  = ThreadState
+  { tsCurrentResult   :: [Atom] -- Q: do we need this?
+  , tsStack           :: ![StackContinuation]
+  , tsStatus          :: !ThreadStatus
+  , tsBlockExceptions :: !Bool
+  , tsInterruptible   :: !Bool
+  , tsBound           :: !Bool
+  , tsLocked          :: !Bool
+  , tsCapability      :: !Int   -- NOTE: the thread is running on this capability
+  , tsLabel           :: !(Maybe ByteString)
+  }
+  deriving (Eq, Ord, Show)
+
+--------------
+
+data BlockReason
+  = BlockedOnMVar
+        -- ^blocked on 'MVar'
+  {- possibly (see 'threadstatus' below):
+  | BlockedOnMVarRead
+        -- ^blocked on reading an empty 'MVar'
+  -}
+  | BlockedOnBlackHole
+        -- ^blocked on a computation in progress by another thread
+  | BlockedOnException
+        -- ^blocked in 'throwTo'
+  | BlockedOnSTM
+        -- ^blocked in 'retry' in an STM transaction
+  | BlockedOnForeignCall
+        -- ^currently in a foreign call
+  | BlockedOnOther
+        -- ^blocked on some other resource.  Without @-threaded@,
+        -- I\/O and 'Control.Concurrent.threadDelay' show up as
+        -- 'BlockedOnOther', with @-threaded@ they show up as 'BlockedOnMVar'.
+  deriving (Eq, Ord, Show)
+
+-- | The current status of a thread
+data ThreadStatus
+  = ThreadRunning
+        -- ^the thread is currently runnable or running
+  | ThreadFinished
+        -- ^the thread has finished
+  | ThreadBlocked  BlockReason
+        -- ^the thread is blocked on some resource
+  | ThreadDied
+        -- ^the thread received an uncaught exception
+  deriving (Eq, Ord, Show)
+{-
+threadStatus :: ThreadId -> IO ThreadStatus
+threadStatus (ThreadId t) = IO $ \s ->
+   case threadStatus# t s of
+    (# s', stat, _cap, _locked #) -> (# s', mk_stat (I# stat) #)
+   where
+        -- NB. keep these in sync with includes/rts/Constants.h
+     mk_stat 0  = ThreadRunning
+     mk_stat 1  = ThreadBlocked BlockedOnMVar
+     mk_stat 2  = ThreadBlocked BlockedOnBlackHole
+     mk_stat 6  = ThreadBlocked BlockedOnSTM
+     mk_stat 10 = ThreadBlocked BlockedOnForeignCall
+     mk_stat 11 = ThreadBlocked BlockedOnForeignCall
+     mk_stat 12 = ThreadBlocked BlockedOnException
+     mk_stat 14 = ThreadBlocked BlockedOnMVar -- possibly: BlockedOnMVarRead
+     -- NB. these are hardcoded in rts/PrimOps.cmm
+     mk_stat 16 = ThreadFinished
+     mk_stat 17 = ThreadDied
+     mk_stat _  = ThreadBlocked BlockedOnOther
+-}
+
+{-
+data BlockedStatus
+  = NotBlocked
+  | BlockedOnMVar
+  | BlockedOnMVarRead
+  | BlockedOnBlackHole
+  | BlockedOnRead
+  | BlockedOnWrite
+  | BlockedOnDelay
+  | BlockedOnSTM
+  -- Win32 only
+  | BlockedOnDoProc
+  -- Only relevant for THREADED_RTS
+  | BlockedOnCCall
+  | BlockedOnCCall_Interruptible
+
+  -- Involved in a message sent to tso->msg_cap
+  | BlockedOnMsgThrowTo
+  | ThreadMigrating
+-}
+
+{-
+#define NotBlocked          0
+#define BlockedOnMVar       1
+#define BlockedOnMVarRead   14 /* TODO: renumber me, see #9003 */
+#define BlockedOnBlackHole  2
+#define BlockedOnRead       3
+#define BlockedOnWrite      4
+#define BlockedOnDelay      5
+#define BlockedOnSTM        6
+
+/* Win32 only: */
+#define BlockedOnDoProc     7
+
+/* Only relevant for THREADED_RTS: */
+#define BlockedOnCCall      10
+#define BlockedOnCCall_Interruptible 11
+   /* same as above but permit killing the worker thread */
+
+/* Involved in a message sent to tso->msg_cap */
+#define BlockedOnMsgThrowTo 12
+
+/* The thread is not on any run queues, but can be woken up
+   by tryWakeupThread() */
+#define ThreadMigrating     13
+
+-}
+{-
+/*
+ * Constants for the what_next field of a TSO, which indicates how it
+ * is to be run.
+ */
+#define ThreadRunGHC    1       /* return to address on top of stack */
+#define ThreadInterpret 2       /* interpret this thread */
+#define ThreadKilled    3       /* thread has died, don't run it */
+#define ThreadComplete  4       /* thread has finished */
+-}

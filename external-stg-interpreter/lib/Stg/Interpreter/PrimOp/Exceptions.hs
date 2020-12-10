@@ -11,8 +11,9 @@ evalPrimOp :: BuiltinStgApply -> PrimOpEval -> Name -> [Atom] -> Type -> Maybe T
 evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
 
   ("getMaskingState#", [w]) -> pure [Literal $ LitNumber LitNumInt 0] -- State# RealWorld -> (# State# RealWorld, Int# #)
-  ("maskUninterruptible#", [a]) -> pure [a] -- TODO : (State# RealWorld -> (# State# RealWorld, a #)) -> (State# RealWorld -> (# State# RealWorld, a #))
-  -- HACK:
+
+  -- NOTE: the type signature below does not return a function
+  --  ("maskUninterruptible#", [a]) -> pure [a] -- TODO : (State# RealWorld -> (# State# RealWorld, a #)) -> (State# RealWorld -> (# State# RealWorld, a #))
   ("maskUninterruptible#", [a, b]) -> builtinStgApply a [b]
 
   ("maskAsyncExceptions#", [a, b]) -> builtinStgApply a [b]
@@ -39,6 +40,7 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
 
   -- raise# :: b -> o
   ("raise#", [a]) -> do
+    -- TODO: update all balckholes with raise ex until the catch frame during the stack unwind
     evalStack <- gets ssEvalStack
     liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
 
@@ -57,21 +59,9 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
     exHandler <- gets ssExceptionHandlers >>= findExHandler
     builtinStgApply exHandler [a, s]
 
-  {-
-    maskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #))
-                         -> (State# RealWorld -> (# State# RealWorld, a #))
-  -}
-
-  {-
-    maskUninterruptible# :: (State# RealWorld -> (# State# RealWorld, a #))
-                         -> (State# RealWorld -> (# State# RealWorld, a #))
-  -}
-
-  {-
-    unmaskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #))
-                           -> (State# RealWorld -> (# State# RealWorld, a #))
-  -}
-
+  -- maskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
+  -- maskUninterruptible# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
+  -- unmaskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
   -- getMaskingState# :: State# RealWorld -> (# State# RealWorld, Int# #)
 
   _ -> fallback op args t tc

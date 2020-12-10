@@ -347,18 +347,19 @@ ffiCallbackBridge builtinStgApply stateStore fun typeString hsTypeString _cif re
 
   putStrLn $ "[callback BEGIN] " ++ show fun
   before <- takeMVar stateStore
-  let freshStack = before {ssStack = []}
-  (result, after) <- flip runStateT freshStack $ do
+  (result, after) <- flip runStateT before $ do
+    (ffiThread, _ts) <- createThread
+    switchToThread ffiThread
     -- TODO: box FFI arg atoms
     --  i.e. rts_mkWord8
     -- TODO: check how the stubs are generated and what types are need to be boxed
     boxedArgs <- zipWithM boxFFIAtom hsArgsType argAtoms
     -- !!!!!!!!!!!!!!!!!!!!!!!!!!
-    -- Q: what stack show we use here?
+    -- Q: what stack shall we use here?
     -- !!!!!!!!!!!!!!!!!!!!!!!!!!
     undefined
     builtinStgApply fun $ boxedArgs ++ [Void]
-  putMVar stateStore $ after {ssStack = ssStack before}
+  putMVar stateStore after
   putStrLn $ "[callback END]   " ++ show fun
 
   -- HINT: need some kind of channel between the IO world and the interpreters StateT IO
