@@ -102,7 +102,7 @@ builtinStgEval a@HeapPtr{} = do
   o <- readHeap a
   case o of
     Con{}       -> pure [a]
-    Blackhole t -> stgErrorM $ "blackhole ; loop in evaluation of : " ++ show t
+    BlackHole t -> stgErrorM $ "blackhole ; loop in evaluation of : " ++ show t
     Closure{..}
       | hoCloMissing /= 0
       -> pure [a]
@@ -121,11 +121,11 @@ builtinStgEval a@HeapPtr{} = do
           Updatable -> do
             -- closure should be updated after evaluation (and may be blackholed during evaluation).
             stackPush (Update l)
-            store l (Blackhole o)
+            store l (BlackHole o)
             evalExpr extendedEnv e
           SingleEntry -> do
             -- closure will only be entered once, and so need not be updated but may safely be blackholed.
-            store l (Blackhole o)
+            store l (BlackHole o)
             evalExpr extendedEnv e
 --builtinStgEval x = pure [x] -- FIXME: this is a debug hack!! remove it!!!!!
 builtinStgEval a = stgErrorM $ "expected a thunk, got: " ++ show a
@@ -137,7 +137,7 @@ builtinStgApply a@HeapPtr{} args = do
   o <- readHeap a
   case o of
     Con{}       -> stgErrorM $ "unexpexted con at apply: " ++ show o
-    Blackhole t -> stgErrorM $ "blackhole ; loop in application of : " ++ show t
+    BlackHole t -> stgErrorM $ "blackhole ; loop in application of : " ++ show t
     Closure{..}
       -- under saturation
       | hoCloMissing - argCount > 0
@@ -165,7 +165,7 @@ heapObjectKind :: HeapObject -> String
 heapObjectKind = \case
   Con{}       -> "Con"
   Closure{}   -> "Closure"
-  Blackhole{} -> "Blackhole"
+  BlackHole{} -> "BlackHole"
 
 peekResult :: [Atom] -> M String
 peekResult [hp@HeapPtr{}] = do
@@ -173,7 +173,7 @@ peekResult [hp@HeapPtr{}] = do
   case o of
     Con dc args -> pure $ "Con: " ++ show (dataConUniqueName dc) ++ " " ++ show args
     Closure{..} -> pure $ "Closure missing: " ++ show hoCloMissing ++ " args: " ++ show hoCloArgs
-    Blackhole{} -> pure "Blackhole"
+    BlackHole{} -> pure "BlackHole"
 peekResult r = pure $ show r
 
 assertWHNF :: HasCallStack => [Atom] -> AltType -> Binder -> M ()
@@ -194,7 +194,7 @@ assertWHNF [hp@HeapPtr{}] aty res = do
             putStrLn ""
           error "Thunk"
       | otherwise         -> pure ()
-    Blackhole{} -> error "Blackhole"
+    BlackHole{} -> error "BlackHole"
 assertWHNF _ _ _ = pure ()
 
 {-
