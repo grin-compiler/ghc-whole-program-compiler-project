@@ -1,41 +1,76 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.DelayWait where
+
+import Control.Monad.State
+import Data.Time.Clock
+import Data.Fixed
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+
+pattern IntV i = IntAtom i
+
+{-
+  NOTE:
+    these primops are only used by programs that are linked with the non-concurrent RTS
+    in the multithreded RTS mode they are not used / invalid (in the GHC implementation)
+    this is an ugly design, needs to be fixed in the future!
+-}
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- delay# :: Int# -> State# s -> State# s
+  ( "delay#", [IntV usDelay, _s]) -> do
+    -- safety check
+    ts@ThreadState{..} <- getCurrentThreadState
+    unless (tsStatus == ThreadRunning) $
+      error $ "expected running thread status, but got: " ++ show tsStatus
+
+    -- calculate target time
+    t0 <- liftIO getCurrentTime
+    let delayTime   = secondsToNominalDiffTime $ (fromIntegral usDelay :: Pico) / 1000000
+        targetTime  = addUTCTime delayTime t0
+
+    -- set blocked reason
+    tid <- gets ssCurrentThreadId
+    updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnDelay targetTime})
+
+    -- reschedule threads
+    scheduleToTheEnd tid
+    scheduleThreads
+    pure []
+
   -- waitRead# :: Int# -> State# s -> State# s
+  ( "waitRead#", [IntV fd, _s]) -> do
+    -- safety check
+    ts@ThreadState{..} <- getCurrentThreadState
+    unless (tsStatus == ThreadRunning) $
+      error $ "expected running thread status, but got: " ++ show tsStatus
+
+    -- set blocked reason
+    tid <- gets ssCurrentThreadId
+    updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnRead fd})
+
+    -- reschedule threads
+    scheduleToTheEnd tid
+    scheduleThreads
+    pure []
+
   -- waitWrite# :: Int# -> State# s -> State# s
+  ( "waitWrite#", [IntV fd, _s]) -> do
+    -- safety check
+    ts@ThreadState{..} <- getCurrentThreadState
+    unless (tsStatus == ThreadRunning) $
+      error $ "expected running thread status, but got: " ++ show tsStatus
+
+    -- set blocked reason
+    tid <- gets ssCurrentThreadId
+    updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnWrite fd})
+
+    -- reschedule threads
+    scheduleToTheEnd tid
+    scheduleThreads
+    pure []
 
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Delay/wait operations"
-------------------------------------------------------------------------
-
-primop  DelayOp "delay#" GenPrimOp
-   Int# -> State# s -> State# s
-   {Sleep specified number of microseconds.}
-   with
-   has_side_effects = True
-   out_of_line      = True
-
-primop  WaitReadOp "waitRead#" GenPrimOp
-   Int# -> State# s -> State# s
-   {Block until input is available on specified file descriptor.}
-   with
-   has_side_effects = True
-   out_of_line      = True
-
-primop  WaitWriteOp "waitWrite#" GenPrimOp
-   Int# -> State# s -> State# s
-   {Block until output is possible on specified file descriptor.}
-   with
-   has_side_effects = True
-   out_of_line      = True
--}
