@@ -106,6 +106,9 @@ wiredInClosures =
   [ ("base",      "GHC.TopHandler",         "runIO",                        \s cl -> s {rtsTopHandlerRunIO      = cl})
   , ("base",      "GHC.TopHandler",         "runNonIO",                     \s cl -> s {rtsTopHandlerRunNonIO   = cl})
   , ("base",      "GHC.Pack",               "unpackCString",                \s cl -> s {rtsUnpackCString        = cl})
+  , ("base",      "GHC.Exception.Type",     "divZeroException",             \s cl -> s {rtsDivZeroException     = cl})
+  , ("base",      "GHC.Exception.Type",     "underflowException",           \s cl -> s {rtsUnderflowException   = cl})
+  , ("base",      "GHC.Exception.Type",     "overflowException",            \s cl -> s {rtsOverflowException    = cl})
   ]
 {-
   , ("base",      "GHC.Weak",               "runFinalizerBatch",
