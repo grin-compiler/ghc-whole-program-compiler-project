@@ -55,6 +55,7 @@ library
   ghc-options:         -Wall -fobject-code
   build-depends:       base,
                        ghc-prim,
+                       time,
                        unix,
                        libffi,
                        bytestring,

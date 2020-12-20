@@ -20,6 +20,7 @@ import Control.Monad.Primitive
 import System.Posix.DynamicLinker
 import Control.Concurrent.MVar
 import Foreign.ForeignPtr.Unsafe
+import Data.Time.Clock
 
 import GHC.Stack
 import Text.Printf
@@ -94,6 +95,13 @@ data WeakPtrDescriptor
   }
   deriving (Show, Eq, Ord)
 
+data MVarDescriptor
+  = MVarDescriptor
+  { mvdValue    :: Maybe Atom
+  , mvdQueue    :: [Int] -- thread id, blocking in this mvar ; this is required only for the fairness ; INVARIANT: BlockedOnReads are present at the beginning of the queue
+  }
+  deriving (Show, Eq, Ord)
+
 -- TODO: detect coercions during the evaluation
 data Atom     -- Q: should atom fit into a cpu register? A: yes
   = HeapPtr       !Addr
@@ -134,13 +142,15 @@ data HeapObject
     , hoCloArgs     :: [Atom]
     , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
     }
-  | Blackhole HeapObject
+  | BlackHole HeapObject
   deriving (Show, Eq, Ord)
 
 data StackContinuation
-  = CaseOf  Env Binder AltType [Alt]  -- pattern match on the result ; carries the closure's local environment
-  | Update  Addr                      -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
-  | Apply   [Atom]                    -- apply args on the result heap object
+  = CaseOf  !Env !Binder !AltType ![Alt]  -- pattern match on the result ; carries the closure's local environment
+  | Update  !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
+  | Apply   ![Atom]                       -- apply args on the result heap object
+  | Catch   !Atom !Bool !Bool             -- catch frame ; exception handler, block async exceptions, interruptible
+  | RestoreExMask !Bool !Bool             -- saved: block async exceptions, interruptible
   deriving (Show, Eq, Ord)
 
 type Addr   = Int
@@ -178,7 +188,7 @@ data StgState
   , ssWeakPointers        :: IntMap WeakPtrDescriptor
   , ssStablePointers      :: IntMap Atom
   , ssMutableByteArrays   :: IntMap ByteArrayDescriptor
-  , ssMVars               :: IntMap (Maybe Atom)
+  , ssMVars               :: IntMap MVarDescriptor
   , ssMutVars             :: IntMap Atom
   , ssArrays              :: IntMap (Vector Atom)
   , ssMutableArrays       :: IntMap (Vector Atom)
@@ -186,8 +196,6 @@ data StgState
   , ssSmallMutableArrays  :: IntMap (Vector Atom)
   , ssArrayArrays         :: IntMap (Vector Atom)
   , ssMutableArrayArrays  :: IntMap (Vector Atom)
-
-  , ssExceptionHandlers   :: [(PrintableMVar Bool, Atom)]
 
   -- FFI related
   , ssCBitsMap            :: DL
@@ -227,8 +235,6 @@ emptyStgState stateStore dl = StgState
   , ssArrayArrays         = mempty
   , ssMutableArrayArrays  = mempty
 
-  , ssExceptionHandlers   = []
-
   -- FFI related
   , ssCBitsMap            = dl
   , ssStateStore          = stateStore
@@ -263,9 +269,14 @@ data Rts
   , rtsFalseCon     :: DataCon
 
   -- closures used by FFI wrapper code ; heap address of the closure
-  , rtsUnpackCString       :: Atom
-  , rtsTopHandlerRunIO     :: Atom
-  , rtsTopHandlerRunNonIO  :: Atom
+  , rtsUnpackCString      :: Atom
+  , rtsTopHandlerRunIO    :: Atom
+  , rtsTopHandlerRunNonIO :: Atom
+
+  -- closures used by the exception primitives
+  , rtsDivZeroException   :: Atom
+  , rtsUnderflowException :: Atom
+  , rtsOverflowException  :: Atom
 
   -- rts helper custom closures
   , rtsApply2Args   :: Atom
@@ -308,6 +319,11 @@ lookupThreadState tid = do
   IntMap.lookup tid <$> gets ssThreads >>= \case
     Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
     Just a  -> pure a
+
+getCurrentThreadState :: M ThreadState
+getCurrentThreadState = do
+  tid <- gets ssCurrentThreadId
+  lookupThreadState tid
 
 scheduleToTheEnd :: Int -> M ()
 scheduleToTheEnd tid = pure () -- TODO
@@ -439,7 +455,7 @@ lookupMutVar m = do
     Nothing -> stgErrorM $ "unknown MutVar: " ++ show m
     Just a  -> pure a
 
-lookupMVar :: HasCallStack => Int -> M (Maybe Atom)
+lookupMVar :: HasCallStack => Int -> M MVarDescriptor
 lookupMVar m = do
   IntMap.lookup m <$> gets ssMVars >>= \case
     Nothing -> stgErrorM $ "unknown MVar: " ++ show m
@@ -538,11 +554,17 @@ getCStringConstantPtrAtom key = do
 ---------------------------------------------
 -- threading
 
+data AsyncExceptionMask
+  = NonBlocked
+  | Blocked     {aemInterruptible :: Bool}
+  deriving (Eq, Ord, Show)
+
 data ThreadState
   = ThreadState
-  { tsCurrentResult   :: [Atom] -- Q: do we need this?
+  { tsCurrentResult   :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
   , tsStack           :: ![StackContinuation]
   , tsStatus          :: !ThreadStatus
+--  , tsAsyncExMask     :: !AsyncExceptionMask
   , tsBlockExceptions :: !Bool
   , tsInterruptible   :: !Bool
   , tsBound           :: !Bool
@@ -555,36 +577,22 @@ data ThreadState
 --------------
 
 data BlockReason
-  = BlockedOnMVar
-        -- ^blocked on 'MVar'
-  {- possibly (see 'threadstatus' below):
-  | BlockedOnMVarRead
-        -- ^blocked on reading an empty 'MVar'
-  -}
+  = BlockedOnMVar         Int (Maybe Atom) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
+  | BlockedOnMVarRead     Int -- mvar id
   | BlockedOnBlackHole
-        -- ^blocked on a computation in progress by another thread
-  | BlockedOnException
-        -- ^blocked in 'throwTo'
+  | BlockedOnThrowAsyncException
   | BlockedOnSTM
-        -- ^blocked in 'retry' in an STM transaction
   | BlockedOnForeignCall
-        -- ^currently in a foreign call
-  | BlockedOnOther
-        -- ^blocked on some other resource.  Without @-threaded@,
-        -- I\/O and 'Control.Concurrent.threadDelay' show up as
-        -- 'BlockedOnOther', with @-threaded@ they show up as 'BlockedOnMVar'.
+  | BlockedOnRead         Int -- file descriptor
+  | BlockedOnWrite        Int -- file descriptor
+  | BlockedOnDelay        UTCTime -- target time to wake up thread
   deriving (Eq, Ord, Show)
 
--- | The current status of a thread
 data ThreadStatus
   = ThreadRunning
-        -- ^the thread is currently runnable or running
+  | ThreadBlocked   BlockReason
   | ThreadFinished
-        -- ^the thread has finished
-  | ThreadBlocked  BlockReason
-        -- ^the thread is blocked on some resource
   | ThreadDied
-        -- ^the thread received an uncaught exception
   deriving (Eq, Ord, Show)
 {-
 threadStatus :: ThreadId -> IO ThreadStatus
