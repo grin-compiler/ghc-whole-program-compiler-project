@@ -35,6 +35,7 @@ import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
 import qualified Stg.Interpreter.PrimOp.ByteArray     as PrimByteArray
 import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
 import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
+import qualified Stg.Interpreter.PrimOp.Parallelism   as PrimParallelism
 import qualified Stg.Interpreter.PrimOp.Exceptions    as PrimExceptions
 import qualified Stg.Interpreter.PrimOp.Float         as PrimFloat
 import qualified Stg.Interpreter.PrimOp.Double        as PrimDouble
@@ -515,6 +516,7 @@ evalPrimOp =
   PrimByteArray.evalPrimOp $
   PrimChar.evalPrimOp $
   PrimConcurrency.evalPrimOp $
+  PrimParallelism.evalPrimOp $
   PrimExceptions.evalPrimOp builtinStgApply $
   PrimFloat.evalPrimOp $
   PrimDouble.evalPrimOp $

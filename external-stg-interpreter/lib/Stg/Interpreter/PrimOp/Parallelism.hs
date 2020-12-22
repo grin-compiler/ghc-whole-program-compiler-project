@@ -1,62 +1,41 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Parallelism where
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+
+{-
+  NOTE:
+    - these primops are for multi core evaluation
+    - on single core evaluation they do nothing
+    - the ext-stg interpreter is a single core evaluator
+-}
+
+pattern IntV i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- par# :: a -> Int#
   -- DEPRECATED: Use 'spark#' instead
+  ( "par#", [_a]) -> do
+    pure [IntV 1]
 
-  -- SEE: newSpark c function
   -- spark# :: a -> State# s -> (# State# s, a #)
+  ( "spark#", [a, _s]) -> do
+    pure [a]
 
-  -- SEE: newSpark c function
   -- seq# :: a -> State# s -> (# State# s, a #)
+  ( "seq#", [a, _s]) -> do
+    stackPush $ Apply []
+    pure [a]
 
-  -- SEE: stg_getSparkzh
   -- getSpark# :: State# s -> (# State# s, Int#, a #)
+  ( "getSpark#", [_s]) -> do
+    pure [IntV 0, LiftedUndefined]
 
-  -- SEE: stg_numSparkszh
   -- numSparks# :: State# s -> (# State# s, Int# #)
+  ( "numSparks#", [_s]) -> do
+    pure [IntV 0]
 
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Parallelism"
-------------------------------------------------------------------------
-
-primop  ParOp "par#" GenPrimOp
-   a -> Int#
-   with
-      -- Note that Par is lazy to avoid that the sparked thing
-      -- gets evaluated strictly, which it should *not* be
-   has_side_effects = True
-   code_size = { primOpCodeSizeForeignCall }
-   deprecated_msg = { Use 'spark#' instead }
-
-primop SparkOp "spark#" GenPrimOp
-   a -> State# s -> (# State# s, a #)
-   with has_side_effects = True
-   code_size = { primOpCodeSizeForeignCall }
-
-primop SeqOp "seq#" GenPrimOp
-   a -> State# s -> (# State# s, a #)
-   -- See Note [seq# magic] in GHC.Core.Op.ConstantFold
-
-primop GetSparkOp "getSpark#" GenPrimOp
-   State# s -> (# State# s, Int#, a #)
-   with
-   has_side_effects = True
-   out_of_line = True
-
-primop NumSparks "numSparks#" GenPrimOp
-   State# s -> (# State# s, Int# #)
-   { Returns the number of sparks in the local spark pool. }
-   with
-   has_side_effects = True
-   out_of_line = True
--}
