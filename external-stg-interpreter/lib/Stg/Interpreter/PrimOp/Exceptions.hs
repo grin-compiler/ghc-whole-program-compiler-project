@@ -125,26 +125,35 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
   _ -> fallback op args t tc
 
 raiseEx :: Atom -> M [Atom]
-raiseEx ex = do
-  exHandler <- findExHandlerAndUnwindStack
-  stackPush $ Apply [ex, Void]
-  pure [exHandler]
+raiseEx ex = unwindStack where
+  unwindStack = do
+    stackPop >>= \case
+      Nothing -> do
+        -- the stack is empty, kill the thread
+        ts <- getCurrentThreadState
+        tid <- gets ssCurrentThreadId
+        updateThreadState tid (ts {tsStatus = ThreadDied})
+        pure []
 
-findExHandlerAndUnwindStack :: M Atom
-findExHandlerAndUnwindStack = do
-  -- TODO: update all balckholes with raise ex until the catch frame during the stack unwind
-  stackPop >>= \case
-    Nothing -> error "TODO: kill thread"
-    Just (Catch exHandler b i) -> pure exHandler
-    Just (Update blackHole) -> error "TODO: update black hole with raise exception"
-    _ -> findExHandlerAndUnwindStack
+      Just (Catch exHandler bEx iEx) -> do
+        -- HINT: the catch primop does not modify the async exception masking, so the following code is needed only when the async exceptions are not masked
+        unless bEx $ do
+          -- mask async excpetions before running the handler
+          ts <- getCurrentThreadState
+          tid <- gets ssCurrentThreadId
+          updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = iEx}
+          stackPush $ RestoreExMask bEx iEx
 
-{-
-  TODO:
-    - handle masking
-    - handle blackhole update with raise exception op
-    - handle stack underflow => kill thread
--}
+        -- run the exception handler
+        stackPush $ Apply [ex, Void]
+        pure [exHandler]
+
+      Just (Update addr) -> do
+        -- update the (balckholed/running) thunk with the exception value
+        store addr $ RaiseException ex
+        unwindStack
+
+      _ -> unwindStack
 
 {-
 primop  UnmaskAsyncExceptionsOp "unmaskAsyncExceptions#" GenPrimOp
