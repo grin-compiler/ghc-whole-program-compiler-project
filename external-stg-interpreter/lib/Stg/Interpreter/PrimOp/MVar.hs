@@ -22,7 +22,7 @@ handleTakeMVar_ValueFullCase m mvd@MVarDescriptor{..} = do
       -- HINT: every blocked thread in the queue waits for an empty mvar to write their value in it
       -- NOTE: finished and dead threads are not present in the waiting queue
       -- wake up thread
-      ts <- lookupThreadState tid
+      ts <- getThreadState tid
       updateThreadState tid (ts {tsStatus = ThreadRunning})
       -- put the thread's new value to mvar
       let ThreadBlocked (BlockedOnMVar _ (Just v)) = tsStatus ts
@@ -34,7 +34,7 @@ handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
   -- HINT: first handle the blocked readMVar case, it does not consume the value
   --       BlockedOnMVarRead are always at the beginning of the queue, process all of them
   let processReads tids@(tid : tidTail) = do
-        ts@ThreadState{..} <- lookupThreadState tid
+        ts@ThreadState{..} <- getThreadState tid
         case tsStatus of
           ThreadBlocked (BlockedOnMVarRead _) -> do
             updateThreadState tid (ts {tsStatus = ThreadRunning, tsCurrentResult = [v]})
@@ -54,7 +54,7 @@ handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
       -- HINT: every blocked thread in the queue waits for an incoming value to take
       -- NOTE: finished and dead threads are not present in the waiting queue
       -- wake up thread and pass the new vale to the thread as a result of the blocked takeMVar
-      ts <- lookupThreadState tid
+      ts <- getThreadState tid
       updateThreadState tid (ts {tsStatus = ThreadRunning, tsCurrentResult = [v]})
 
       -- update wait queue
