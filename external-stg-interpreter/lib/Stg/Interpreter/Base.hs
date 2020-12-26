@@ -143,6 +143,11 @@ data HeapObject
     , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
     }
   | BlackHole HeapObject
+  | ApStack                   -- HINT: needed for the async exceptions
+    { hoResult      :: [Atom]
+    , hoStack       :: [StackContinuation]
+    }
+  | RaiseException Atom
   deriving (Show, Eq, Ord)
 
 data StackContinuation
@@ -291,15 +296,16 @@ type M = StateT StgState IO
 createThread :: M (Int, ThreadState)
 createThread = do
   let ts = ThreadState
-        { tsCurrentResult   = []
-        , tsStack           = []
-        , tsStatus          = ThreadRunning
-        , tsBlockExceptions = False
-        , tsInterruptible   = True
-        , tsBound           = False
-        , tsLocked          = False
-        , tsCapability      = 0 -- TODO: implement capability handling
-        , tsLabel           = Nothing
+        { tsCurrentResult     = []
+        , tsStack             = []
+        , tsStatus            = ThreadRunning
+        , tsBlockedExceptions = []
+        , tsBlockExceptions   = False
+        , tsInterruptible     = True
+        , tsBound             = False
+        , tsLocked            = False
+        , tsCapability        = 0 -- TODO: implement capability handling
+        , tsLabel             = Nothing
         }
   threads <- gets ssThreads
   let threadId  = IntMap.size threads
@@ -314,8 +320,8 @@ updateThreadState :: Int -> ThreadState -> M ()
 updateThreadState tid ts = do
   modify' $ \s@StgState{..} -> s {ssThreads = IntMap.insert tid ts ssThreads}
 
-lookupThreadState :: HasCallStack => Int -> M ThreadState
-lookupThreadState tid = do
+getThreadState :: HasCallStack => Int -> M ThreadState
+getThreadState tid = do
   IntMap.lookup tid <$> gets ssThreads >>= \case
     Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
     Just a  -> pure a
@@ -323,7 +329,7 @@ lookupThreadState tid = do
 getCurrentThreadState :: M ThreadState
 getCurrentThreadState = do
   tid <- gets ssCurrentThreadId
-  lookupThreadState tid
+  getThreadState tid
 
 scheduleToTheEnd :: Int -> M ()
 scheduleToTheEnd tid = pure () -- TODO
@@ -561,38 +567,40 @@ data AsyncExceptionMask
 
 data ThreadState
   = ThreadState
-  { tsCurrentResult   :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
-  , tsStack           :: ![StackContinuation]
-  , tsStatus          :: !ThreadStatus
+  { tsCurrentResult     :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
+  , tsStack             :: ![StackContinuation]
+  , tsStatus            :: !ThreadStatus
 --  , tsAsyncExMask     :: !AsyncExceptionMask
-  , tsBlockExceptions :: !Bool
-  , tsInterruptible   :: !Bool
-  , tsBound           :: !Bool
-  , tsLocked          :: !Bool
-  , tsCapability      :: !Int   -- NOTE: the thread is running on this capability
-  , tsLabel           :: !(Maybe ByteString)
+  , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
+  , tsBlockExceptions   :: !Bool  -- block async exceptions
+  , tsInterruptible     :: !Bool  -- interruptible blocking of async exception
+  , tsBound             :: !Bool
+  , tsLocked            :: !Bool  -- Q: what is this for? is this necessary?
+  , tsCapability        :: !Int   -- NOTE: the thread is running on this capability ; Q: is this necessary?
+  , tsLabel             :: !(Maybe ByteString)
   }
   deriving (Eq, Ord, Show)
 
 --------------
 
+-- NOTE: the BlockReason data type is some kind of reification of the blocking operation
 data BlockReason
   = BlockedOnMVar         Int (Maybe Atom) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
-  | BlockedOnMVarRead     Int -- mvar id
+  | BlockedOnMVarRead     Int       -- mvar id
   | BlockedOnBlackHole
-  | BlockedOnThrowAsyncException
+  | BlockedOnThrowAsyncEx Int Atom  -- target thread id, exception
   | BlockedOnSTM
-  | BlockedOnForeignCall
-  | BlockedOnRead         Int -- file descriptor
-  | BlockedOnWrite        Int -- file descriptor
-  | BlockedOnDelay        UTCTime -- target time to wake up thread
+  | BlockedOnForeignCall            -- RTS name: BlockedOnCCall
+  | BlockedOnRead         Int       -- file descriptor
+  | BlockedOnWrite        Int       -- file descriptor
+  | BlockedOnDelay        UTCTime   -- target time to wake up thread
   deriving (Eq, Ord, Show)
 
 data ThreadStatus
   = ThreadRunning
   | ThreadBlocked   BlockReason
-  | ThreadFinished
-  | ThreadDied
+  | ThreadFinished  -- RTS name: ThreadComplete
+  | ThreadDied      -- RTS name: ThreadKilled
   deriving (Eq, Ord, Show)
 {-
 threadStatus :: ThreadId -> IO ThreadStatus

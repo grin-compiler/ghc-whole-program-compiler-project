@@ -57,7 +57,64 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [ThreadId newTId]
 
   -- killThread# :: ThreadId# -> a -> State# RealWorld -> State# RealWorld
-  -- TODO
+  ( "killThread#", [ThreadId tidTarget, exception, _s]) -> do
+    tid <- gets ssCurrentThreadId
+    case tid == tidTarget of
+      True -> do
+        -- killMyself
+        {-
+          the thread might survive
+            Q: how?
+            A: a catch frame can save the thread so that it will handle the exception
+        -}
+        removeFromQueues tidTarget
+        let myResult = [] -- HINT: this is the result of the killThread# primop
+        raiseAsyncEx myResult tidTarget exception
+
+        -- return the result that the raise async ex has calculated
+        tsCurrentResult <$> getCurrentThreadState
+
+      False -> do
+        -- kill other thread
+        targetTS <- getThreadState tidTarget
+
+        let blockIfNotInterruptible_raiseOtherwise
+              | tsBlockExceptions targetTS
+              , not (tsInterruptible targetTS)  = block
+              | otherwise                       = raise
+
+            blockIfBlocked_raiseOtherwise
+              | tsBlockExceptions targetTS  = block
+              | otherwise                   = raise
+
+            block = do
+              -- add our thread id and exception to target's blocked excpetions queue
+              updateThreadState tidTarget (targetTS {tsBlockedExceptions = tid : tsBlockedExceptions targetTS})
+              -- block our thread
+              myTS <- getCurrentThreadState
+              updateThreadState tid (myTS {tsStatus = ThreadBlocked $ BlockedOnThrowAsyncEx tidTarget exception})
+              pure [] -- TODO: return to scheduler ; every thread block operation must return to the scheduler
+
+            raise = do
+              removeFromQueues tidTarget
+              raiseAsyncEx (tsCurrentResult targetTS) tidTarget exception
+              pure []
+
+        case tsStatus targetTS of
+          ThreadFinished  -> pure []  -- NOTE: nothing to do
+          ThreadDied      -> pure []  -- NOTE: nothing to do
+          ThreadRunning   -> blockIfBlocked_raiseOtherwise
+          ThreadBlocked blockReason -> case blockReason of
+
+            BlockedOnForeignCall{}  -> block
+            BlockedOnBlackHole{}    -> blockIfBlocked_raiseOtherwise
+            BlockedOnThrowAsyncEx{} -> blockIfNotInterruptible_raiseOtherwise
+            BlockedOnSTM{}          -> blockIfNotInterruptible_raiseOtherwise
+            BlockedOnMVar{}         -> blockIfNotInterruptible_raiseOtherwise
+            BlockedOnMVarRead{}     -> blockIfNotInterruptible_raiseOtherwise
+            BlockedOnRead{}         -> blockIfNotInterruptible_raiseOtherwise
+            BlockedOnWrite{}        -> blockIfNotInterruptible_raiseOtherwise
+            BlockedOnDelay{}        -> blockIfNotInterruptible_raiseOtherwise
 
   -- yield# :: State# RealWorld -> State# RealWorld
   ( "yield#", [_s]) -> do
@@ -85,12 +142,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- noDuplicate# :: State# s -> State# s
   ( "noDuplicate#", [_s]) -> do
-    -- NOTE: the stg interpreter is not concurrent, so this is a no-op
+    -- NOTE: the stg interpreter is not parallel, so this is a no-op
     pure []
 
   -- threadStatus# :: ThreadId# -> State# RealWorld -> (# State# RealWorld, Int#, Int#, Int# #)
   ( "threadStatus#", [ThreadId tid, _s]) -> do
-    ThreadState{..} <- lookupThreadState tid
+    ThreadState{..} <- getThreadState tid
     -- HINT:  includes/rts/Constants.h
     --        base:GHC.Conc.Sync.threadStatus
     let statusCode = case tsStatus of
@@ -98,33 +155,64 @@ evalPrimOp fallback op args t tc = case (op, args) of
           ThreadFinished  -> 16
           ThreadDied      -> 17
           ThreadBlocked r -> case r of
-            BlockedOnMVar{}       -> 1
-            BlockedOnMVarRead{}   -> 14
-            BlockedOnBlackHole    -> 2
-            BlockedOnSTM          -> 6
-            BlockedOnForeignCall  -> 10
-            BlockedOnRead{}       -> 3
-            BlockedOnWrite{}      -> 4
-            BlockedOnDelay{}      -> 5
-            BlockedOnThrowAsyncException -> 12
+            BlockedOnMVar{}         -> 1
+            BlockedOnMVarRead{}     -> 14
+            BlockedOnBlackHole      -> 2
+            BlockedOnSTM            -> 6
+            BlockedOnForeignCall    -> 10
+            BlockedOnRead{}         -> 3
+            BlockedOnWrite{}        -> 4
+            BlockedOnDelay{}        -> 5
+            BlockedOnThrowAsyncEx{} -> 12
 
     pure [IntV statusCode, IntV tsCapability, IntV $ if tsLocked then 1 else 0]
 
   _ -> fallback op args t tc
 
-{-
-primop  KillThreadOp "killThread#"  GenPrimOp
-   ThreadId# -> a -> State# RealWorld -> State# RealWorld
-   with
-   has_side_effects = True
-   out_of_line      = True
--}
 
-{-
-  ThreadState
-    - stack
-    - bound
-    - status stuff
-      - why_blocked
-      - what_next
--}
+raiseAsyncEx :: [Atom] -> Int -> Atom -> M ()
+raiseAsyncEx lastResult tid exception = do
+  ts@ThreadState{..} <- getThreadState tid
+  let unwindStack result stackPiece = \case
+        -- no Catch stack frame is found, kill thread
+        [] -> do
+          updateThreadState tid (ts {tsStack = [], tsStatus = ThreadDied})
+
+        -- the thread continues with the excaption handler, also wakes up the thread if necessary
+        exStack@(Catch exHandler bEx iEx : _) -> do
+          updateThreadState tid $ ts
+            { tsCurrentResult   = [exception]
+            , tsStack           = Apply [] : exStack
+            , tsStatus          = ThreadRunning -- HINT: whatever blocked this thread now that operation got cancelled by the async exception
+            -- NOTE: Ensure that async exceptions are blocked now, so we don't get a surprise exception before we get around to executing the handler.
+            , tsBlockExceptions = True
+            , tsInterruptible   = iEx
+            }
+
+        -- replace Update with ApStack
+        Update addr : stackTail -> do
+          let apStack = ApStack
+                { hoResult  = result
+                , hoStack   = reverse stackPiece
+                }
+          store addr apStack
+          let newResult = [HeapPtr addr]
+          unwindStack newResult [Apply []] stackTail
+
+        -- collect stack frames for ApStack
+        stackHead : stackTail -> unwindStack result (stackHead : stackPiece) stackTail
+
+  unwindStack lastResult [] tsStack
+
+removeFromQueues :: Int -> M ()
+removeFromQueues tid = do
+  ThreadState{..} <- getThreadState tid
+  case tsStatus of
+    ThreadBlocked (BlockedOnMVar m _)   -> removeFromMVarQueue tid m
+    ThreadBlocked (BlockedOnMVarRead m) -> removeFromMVarQueue tid m
+    _                                   -> pure ()
+
+removeFromMVarQueue :: Int -> Int -> M ()
+removeFromMVarQueue tid m = do
+  let filterFun mvd@MVarDescriptor{..} = mvd {mvdQueue = filter (tid /=) mvdQueue}
+  modify' $ \s@StgState{..} -> s {ssMVars = IntMap.adjust filterFun m ssMVars}
