@@ -118,9 +118,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [IntV a, WordV b, WordV c, IntV d]
 
   -- decodeDouble_Int64# :: Double# -> (# Int#, Int# #)
-  ( "decodeDouble_Int64", [DoubleV x]) -> do
+  ( "decodeDouble_Int64#", [DoubleV x]) -> do
     let (a,b) = decodeDouble_Int64 x
-    pure [undefined, IntV b]
+    pure [IntV a, IntV b]
 
   _ -> fallback op args t tc
 
