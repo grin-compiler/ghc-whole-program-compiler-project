@@ -85,70 +85,70 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "uncheckedShiftRL#", [WordV a, IntV b])  -> pure [WordV $ unsafeShiftR a (fromIntegral b)] -- Shift right logical
 
   -- word2Int# :: Word# -> Int#
-  ( "word2Int#", [WordV a])          -> pure [IntV $ fromIntegral a] -- HINT: noop ; same bit level representation
+  ( "word2Int#", [WordV a])           -> pure [IntV $ fromIntegral a] -- HINT: noop ; same bit level representation
 
   -- gtWord# :: Word# -> Word# -> Int#
-  ( "gtWord#",   [WordV a, WordV b]) -> pure [IntV $ if a > b  then 1 else 0]
+  ( "gtWord#",   [WordV a, WordV b])  -> pure [IntV $ if a > b  then 1 else 0]
 
   -- geWord# :: Word# -> Word# -> Int#
-  ( "geWord#",   [WordV a, WordV b]) -> pure [IntV $ if a >= b then 1 else 0]
+  ( "geWord#",   [WordV a, WordV b])  -> pure [IntV $ if a >= b then 1 else 0]
 
   -- eqWord# :: Word# -> Word# -> Int#
-  ( "eqWord#",   [WordV a, WordV b]) -> pure [IntV $ if a == b then 1 else 0]
+  ( "eqWord#",   [WordV a, WordV b])  -> pure [IntV $ if a == b then 1 else 0]
 
   -- neWord# :: Word# -> Word# -> Int#
-  ( "neWord#",   [WordV a, WordV b]) -> pure [IntV $ if a /= b then 1 else 0]
+  ( "neWord#",   [WordV a, WordV b])  -> pure [IntV $ if a /= b then 1 else 0]
 
   -- ltWord# :: Word# -> Word# -> Int#
-  ( "ltWord#",   [WordV a, WordV b]) -> pure [IntV $ if a < b  then 1 else 0]
+  ( "ltWord#",   [WordV a, WordV b])  -> pure [IntV $ if a < b  then 1 else 0]
 
   -- leWord# :: Word# -> Word# -> Int#
-  ( "leWord#",   [WordV a, WordV b]) -> pure [IntV $ if a <= b then 1 else 0]
+  ( "leWord#",   [WordV a, WordV b])  -> pure [IntV $ if a <= b then 1 else 0]
 
   -- popCnt8# :: Word# -> Word#
-  ( "popCnt8#",  [WordV a])          -> pure [WordV . fromIntegral $ popCount (fromIntegral a :: Word8)]
+  ( "popCnt8#",  [WordV a])           -> pure [WordV . fromIntegral $ popCount (fromIntegral a :: Word8)]
 
   -- popCnt16# :: Word# -> Word#
-  ( "popCnt16#", [WordV a])          -> pure [WordV . fromIntegral $ popCount (fromIntegral a :: Word16)]
+  ( "popCnt16#", [WordV a])           -> pure [WordV . fromIntegral $ popCount (fromIntegral a :: Word16)]
 
   -- popCnt32# :: Word# -> Word#
-  ( "popCnt32#", [WordV a])          -> pure [WordV . fromIntegral $ popCount (fromIntegral a :: Word32)]
+  ( "popCnt32#", [WordV a])           -> pure [WordV . fromIntegral $ popCount (fromIntegral a :: Word32)]
 
   -- popCnt64# :: WORD64 -> Word#
-  ( "popCnt64#", [WordV a])          -> pure [WordV . fromIntegral $ popCount (fromIntegral a :: Word64)]
+  ( "popCnt64#", [WordV a])           -> pure [WordV . fromIntegral $ popCount (fromIntegral a :: Word64)]
 
   -- popCnt# :: Word# -> Word#
-  ( "popCnt#",   [WordV a])          -> pure [WordV . fromIntegral $ popCount a]
+  ( "popCnt#",   [WordV a])           -> pure [WordV . fromIntegral $ popCount a]
 
   -- pdep8# :: Word# -> Word# -> Word#
-  ( "pdep8#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep8 (fromIntegral a) (fromIntegral b)]
+  ( "pdep8#", [WordV a, WordV b])     -> pure [WordV $ fromIntegral $ pdep8 (fromIntegral a) (fromIntegral b)]
 
   -- pdep16# :: Word# -> Word# -> Word#
-  ( "pdep16#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep16 (fromIntegral a) (fromIntegral b)]
+  ( "pdep16#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pdep16 (fromIntegral a) (fromIntegral b)]
 
   -- pdep32# :: Word# -> Word# -> Word#
-  ( "pdep32#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep32 (fromIntegral a) (fromIntegral b)]
+  ( "pdep32#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pdep32 (fromIntegral a) (fromIntegral b)]
 
   -- pdep64# :: Word64 -> Word64 -> Word64
-  ( "pdep64#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep64 (fromIntegral a) (fromIntegral b)]
+  ( "pdep64#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pdep64 (fromIntegral a) (fromIntegral b)]
 
   -- pdep# :: Word# -> Word# -> Word#
-  ( "pdep#", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pdep (fromIntegral a) (fromIntegral b)]
+  ( "pdep#", [WordV a, WordV b])      -> pure [WordV $ fromIntegral $ pdep (fromIntegral a) (fromIntegral b)]
 
   -- pext8# :: Word# -> Word# -> Word#
-  ( "pext8", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext8 (fromIntegral a) (fromIntegral b)]
+  ( "pext8#", [WordV a, WordV b])     -> pure [WordV $ fromIntegral $ pext8 (fromIntegral a) (fromIntegral b)]
 
   -- pext16# :: Word# -> Word# -> Word#
-  ( "pext16", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext16 (fromIntegral a) (fromIntegral b)]
+  ( "pext16#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pext16 (fromIntegral a) (fromIntegral b)]
 
   -- pext32# :: Word# -> Word# -> Word#
-  ( "pext32", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext32 (fromIntegral a) (fromIntegral b)]
+  ( "pext32#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pext32 (fromIntegral a) (fromIntegral b)]
 
   -- pext64# :: Word64 -> Word64 -> Word64
-  ( "pext64", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext64 (fromIntegral a) (fromIntegral b)]
+  ( "pext64#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pext64 (fromIntegral a) (fromIntegral b)]
 
   -- pext# :: Word# -> Word# -> Word#
-  ( "pext", [WordV a, WordV b]) -> pure [WordV $ fromIntegral $ pext (fromIntegral a) (fromIntegral b)]
+  ( "pext#", [WordV a, WordV b])      -> pure [WordV $ fromIntegral $ pext (fromIntegral a) (fromIntegral b)]
 
   -- clz8# :: Word# -> Word#
   ( "clz8#",   [WordV a]) -> pure [WordV . fromIntegral $ countLeadingZeros (fromIntegral a :: Word8)]
@@ -181,19 +181,19 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "ctz#",    [WordV a]) -> pure [WordV . fromIntegral $ countTrailingZeros (fromIntegral a :: Word)]
 
   -- byteSwap16# :: Word# -> Word#
-  ( "byteSwap16#", [WordV a]) -> pure [WordV . fromIntegral $ byteSwap16 (fromIntegral a :: Word16)]
+  ( "byteSwap16#", [WordV a])   -> pure [WordV . fromIntegral $ byteSwap16 (fromIntegral a :: Word16)]
 
   -- byteSwap32# :: Word# -> Word#
-  ( "byteSwap32#", [WordV a]) -> pure [WordV . fromIntegral $ byteSwap32 (fromIntegral a :: Word32)]
+  ( "byteSwap32#", [WordV a])   -> pure [WordV . fromIntegral $ byteSwap32 (fromIntegral a :: Word32)]
 
   -- byteSwap64# :: WORD64 -> WORD64
-  ( "byteSwap64#", [WordV a]) -> pure [WordV . fromIntegral $ byteSwap64 (fromIntegral a :: Word64)]
+  ( "byteSwap64#", [WordV a])   -> pure [WordV . fromIntegral $ byteSwap64 (fromIntegral a :: Word64)]
 
   -- byteSwap# :: Word# -> Word#
-  ( "byteSwap#",   [WordV a]) -> pure [WordV . fromIntegral . byteSwap64 $ fromIntegral a]
+  ( "byteSwap#",   [WordV a])   -> pure [WordV . fromIntegral . byteSwap64 $ fromIntegral a]
 
   -- bitReverse8# :: Word# -> Word#
-  ( "bitReverse8#", [WordV a]) -> pure [WordV $ bitReverse @Word8 $ fromIntegral a]
+  ( "bitReverse8#", [WordV a])  -> pure [WordV $ bitReverse @Word8 $ fromIntegral a]
 
   -- bitReverse16# :: Word# -> Word#
   ( "bitReverse16#", [WordV a]) -> pure [WordV $ bitReverse @Word16 $ fromIntegral a]
@@ -205,7 +205,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "bitReverse64#", [WordV a]) -> pure [WordV $ bitReverse @Word64 $ fromIntegral a]
 
   -- bitReverse# :: Word# -> Word#
-  ( "bitReverse#", [WordV a]) -> pure [WordV $ bitReverse @Word64 $ fromIntegral a]
+  ( "bitReverse#", [WordV a])   -> pure [WordV $ bitReverse @Word64 $ fromIntegral a]
 
   _ -> fallback op args t tc
 
