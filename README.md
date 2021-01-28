@@ -58,6 +58,10 @@ I.e. `external-stg-compiler` is such an example.
 
 If you change the External STG IR, then GHC-WPC must be recompiled. If you just would like to use Ext-STG IR in you project then please follow the **(user) usage** instructions.
 
+0. Install (exact version):
+   - GHC 8.8.3
+   - happy 1.19.12
+   - alex 3.2.5
 1. Clone this repository.
    ```
    git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
