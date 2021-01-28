@@ -84,4 +84,3 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
 ## TODO
 **Ext-STG IR**
 - export IdInfo
-- export Tickish
