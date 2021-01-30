@@ -92,5 +92,9 @@ test-suite primop-test
 
   other-modules:       PrimOp.Word8Spec
                        PrimOp.Word16Spec
+                       PrimOp.IntSpec
                        PrimOp.Int8Spec
                        PrimOp.Int16Spec
+                       PrimOp.CharSpec
+                       PrimOp.NarrowingsSpec
+                       PrimOp.FloatSpec
