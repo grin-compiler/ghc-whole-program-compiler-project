@@ -19,6 +19,7 @@ import Codec.Archive.Zip
 
 import Stg.Syntax
 import Stg.IO
+import qualified Stg.GHC.Symbols as GHCSymbols
 
 moduleToModpak :: String -> String -> FilePath
 moduleToModpak modpakExt moduleName = replaceEq '.' '/' moduleName ++ modpakExt
@@ -108,8 +109,8 @@ getAppModuleMapping ghcStgAppFname = do
 getAppModpaks :: FilePath -> IO [FilePath]
 getAppModpaks ghcStgAppFname = map modModpakPath <$> getAppModuleMapping ghcStgAppFname
 
-collectProgramModules :: [FilePath] -> String -> String -> [(String, String, String)] -> IO [FilePath]
-collectProgramModules modpakFileNames unitId mod liveSymbols = do
+collectProgramModules' :: Bool -> [FilePath] -> String -> String -> [(String, String, String)] -> IO [FilePath]
+collectProgramModules' showLog modpakFileNames unitId mod liveSymbols = do
   -- filter dependenies only
   (fexportedList, depList) <- fmap unzip . forM modpakFileNames $ \fname -> do
     (_, u, m, _, _, hasForeignExport, deps) <- readModpakL fname modpakStgbinPath decodeStgbinInfo
@@ -127,12 +128,16 @@ collectProgramModules modpakFileNames unitId mod liveSymbols = do
       prunedDeps = catMaybes [Map.lookup m fnameMap | m <- Set.toList $ foldl calcDep mempty $ keyMain : rtsDeps ++ catMaybes fexportedList]
       rtsDeps = [(UnitId $ BS8.pack u, ModuleName $ BS8.pack m) | (u, m, _) <- liveSymbols]
 
-  putStrLn $ "all modules: " ++ show (length modpakFileNames)
-  putStrLn $ "app modules: " ++ show (length prunedDeps)
-  putStrLn $ "app dependencies:\n"
-  forM_ [mnameMap Map.! fname | fname <- prunedDeps] $ \(UnitId uid, ModuleName mod) -> do
-    printf "%-60s %s\n" (BS8.unpack uid) (BS8.unpack mod)
+  when showLog $ do
+    putStrLn $ "all modules: " ++ show (length modpakFileNames)
+    putStrLn $ "app modules: " ++ show (length prunedDeps)
+    putStrLn $ "app dependencies:\n"
+    forM_ [mnameMap Map.! fname | fname <- prunedDeps] $ \(UnitId uid, ModuleName mod) -> do
+      printf "%-60s %s\n" (BS8.unpack uid) (BS8.unpack mod)
   pure prunedDeps
+
+collectProgramModules :: [FilePath] -> String -> String -> [(String, String, String)] -> IO [FilePath]
+collectProgramModules = collectProgramModules' True
 
 -- .fullpak
 getFullpakModules :: FilePath -> IO [Module]
@@ -144,3 +149,11 @@ getFullpakModules fullpakPath = do
     forM modules $ \m -> do
       s <- liftIO $ mkEntrySelector $ m </> modpakStgbinPath
       decodeStgbin . BSL.fromStrict <$> getEntry s
+
+-- .ghc_stgapp
+getGhcStgAppModules :: FilePath -> IO [Module]
+getGhcStgAppModules ghcstgappPath = do
+  modinfoList <- getAppModuleMapping ghcstgappPath
+  appModpaks <- collectProgramModules' False (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
+  forM appModpaks $ \modpakName -> do
+    readModpakL modpakName modpakStgbinPath decodeStgbin
