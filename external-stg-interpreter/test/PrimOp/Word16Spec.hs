@@ -15,7 +15,6 @@ import Stg.Interpreter.PrimOp.Word16
 
 import GHC.Exts
 import GHC.Word
-import GHC.Int
 
 runTests :: IO ()
 runTests = hspec spec
