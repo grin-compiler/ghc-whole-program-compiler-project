@@ -2,3 +2,6 @@ resolver: lts-16.13
 
 packages:
   - '.'
+
+extra-deps:
+  - zip-1.7.0

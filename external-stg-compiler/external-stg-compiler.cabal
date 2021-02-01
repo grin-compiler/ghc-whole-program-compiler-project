@@ -93,17 +93,3 @@ executable show-ghc-stg
                      , external-stg-compiler
                      , filepath
   default-language:    Haskell2010
-
-executable mkfullpak
-  hs-source-dirs:      app
-  main-is:             mkfullpak.hs
-  build-depends:       base
-                     , containers
-                     , exceptions
-                     , optparse-applicative
-                     , filepath
-                     , bytestring
-                     , zip
-                     , external-stg
-                     , external-stg-compiler
-  default-language:    Haskell2010
