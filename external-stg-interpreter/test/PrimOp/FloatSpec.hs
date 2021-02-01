@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, CPP #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, CPP, ScopedTypeVariables #-}
 
 module PrimOp.FloatSpec where
 
@@ -9,7 +9,7 @@ import Test.QuickCheck
 import Test.QuickCheck.Modifiers
 import Test.QuickCheck.Monadic
 
-import Stg.Syntax (Name)
+import Stg.Syntax (Name, Type(..))
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimOp.Float
 
@@ -20,11 +20,25 @@ runTests = hspec spec
 
 evalOp :: Name -> [Atom] -> PropertyM IO [Atom]
 evalOp op args = run $ do
-  let value = evalPrimOp (error "evalPrimOp fallback") op args (error "primop type") (error "type constructor")
+  let dummyType   = PolymorphicRep
+      dummyTyCon  = Nothing
+      dummyFun    = \_ _ _ _ -> pure []
+      value = evalPrimOp dummyFun op args dummyType dummyTyCon
+  evalStateT value (emptyStgState undefined undefined)
+
+evalOp2 :: Name -> [Atom] -> IO [Atom]
+evalOp2 op args = do
+  let dummyType   = PolymorphicRep
+      dummyTyCon  = Nothing
+      dummyFun    = \_ _ _ _ -> pure []
+      value = evalPrimOp dummyFun op args dummyType dummyTyCon
   evalStateT value (emptyStgState undefined undefined)
 
 unboxFloat :: Float -> Float#
 unboxFloat (F# x) = x
+
+shouldReturnShow :: (HasCallStack, Show a, Eq a) => IO a -> a -> Expectation
+shouldReturnShow m a = fmap show m `shouldReturn` show a
 
 spec :: Spec
 spec = do
@@ -138,31 +152,63 @@ spec = do
         [FloatV stgVal] <- evalOp "cosFloat#" [FloatV a]
         assert $ stgVal == (F# (cosFloat# (unboxFloat a)))
 
-{-
+    it "tanFloat#" $
+      property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
+        [FloatV stgVal] <- evalOp "tanFloat#" [FloatV a]
+        assert $ stgVal == (F# (tanFloat# (unboxFloat a)))
 
-  -- tanFloat# :: Float# -> Float#
+    it "asinFloat#" $
+      property $ \(a :: Float)-> do
+        evalOp2 "asinFloat#" [FloatV a] `shouldReturnShow` [FloatV (F# (asinFloat# (unboxFloat a)))]
 
-  -- asinFloat# :: Float# -> Float#
+    it "acosFloat#" $
+      property $ \(a :: Float) -> do
+        evalOp2 "acosFloat#" [FloatV a] `shouldReturnShow` [FloatV (F# (acosFloat# (unboxFloat a)))]
 
-  -- acosFloat# :: Float# -> Float#
+    it "atanFloat#" $
+      property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
+        [FloatV stgVal] <- evalOp "atanFloat#" [FloatV a]
+        assert $ stgVal == (F# (atanFloat# (unboxFloat a)))
 
-  -- atanFloat# :: Float# -> Float#
+    it "sinhFloat#" $
+      property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
+        [FloatV stgVal] <- evalOp "sinhFloat#" [FloatV a]
+        assert $ stgVal == (F# (sinhFloat# (unboxFloat a)))
 
-  -- sinhFloat# :: Float# -> Float#
+    it "coshFloat#" $
+      property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
+        [FloatV stgVal] <- evalOp "coshFloat#" [FloatV a]
+        assert $ stgVal == (F# (coshFloat# (unboxFloat a)))
 
-  -- coshFloat# :: Float# -> Float#
+    it "tanhFloat#" $
+      property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
+        [FloatV stgVal] <- evalOp "tanhFloat#" [FloatV a]
+        assert $ stgVal == (F# (tanhFloat# (unboxFloat a)))
 
-  -- tanhFloat# :: Float# -> Float#
+    it "asinhFloat#" $
+      property $ \(a :: Float) -> do
+        evalOp2 "asinhFloat#" [FloatV a] `shouldReturnShow` [FloatV (F# (asinhFloat# (unboxFloat a)))]
 
-  -- asinhFloat# :: Float# -> Float#
+    it "acoshFloat#" $
+      property $ \(a :: Float) -> do
+        evalOp2 "acoshFloat#" [FloatV a] `shouldReturnShow` [FloatV (F# (acoshFloat# (unboxFloat a)))]
 
-  -- acoshFloat# :: Float# -> Float#
+    it "atanhFloat#" $
+      property $ \(a :: Float) -> do
+        evalOp2 "atanhFloat#" [FloatV a] `shouldReturnShow` [FloatV (F# (atanhFloat# (unboxFloat a)))]
 
-  -- atanhFloat# :: Float# -> Float#
+    it "powerFloat#" $
+      property $ \(a :: Float, b :: Float) -> do
+        evalOp2 "powerFloat#" [FloatV a, FloatV b] `shouldReturnShow` [FloatV (F# (powerFloat# (unboxFloat a) (unboxFloat b)))]
 
-  -- powerFloat# :: Float# -> Float# -> Float#
+    it "float2Double#" $
+      property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
+        [DoubleV stgVal] <- evalOp "float2Double#" [FloatV a]
+        assert $ stgVal == (D# (float2Double# (unboxFloat a)))
 
-  -- float2Double# ::  Float# -> Double#
+    it "decodeFloat_Int#" $
+      property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
+        [IntV stgVal1, IntV stgVal2] <- evalOp "decodeFloat_Int#" [FloatV a]
 
-  -- decodeFloat_Int# :: Float# -> (# Int#, Int# #)
--}
+        let !(# x, y #) = decodeFloat_Int# (unboxFloat a)
+        assert $ (stgVal1, stgVal2) == (I# x, I# y)

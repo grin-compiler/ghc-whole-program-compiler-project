@@ -98,3 +98,5 @@ test-suite primop-test
                        PrimOp.CharSpec
                        PrimOp.NarrowingsSpec
                        PrimOp.FloatSpec
+                       PrimOp.DoubleSpec
+                       PrimOp.WordSpec
