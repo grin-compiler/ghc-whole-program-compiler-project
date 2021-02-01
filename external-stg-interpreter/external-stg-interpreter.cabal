@@ -100,3 +100,4 @@ test-suite primop-test
                        PrimOp.FloatSpec
                        PrimOp.DoubleSpec
                        PrimOp.WordSpec
+                       PrimOp.AddrSpec
