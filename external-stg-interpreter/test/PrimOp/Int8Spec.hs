@@ -9,7 +9,7 @@ import Test.QuickCheck
 import Test.QuickCheck.Modifiers
 import Test.QuickCheck.Monadic
 
-import Stg.Syntax (Name)
+import Stg.Syntax (Name, Type(..))
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimOp.Int8
 
@@ -21,7 +21,10 @@ runTests = hspec spec
 
 evalOp :: Name -> [Atom] -> PropertyM IO [Atom]
 evalOp op args = run $ do
-  let value = evalPrimOp (error "evalPrimOp fallback") op args (error "primop type") (error "type constructor")
+  let dummyType   = PolymorphicRep
+      dummyTyCon  = Nothing
+      dummyFun    = \_ _ _ _ -> pure []
+      value = evalPrimOp dummyFun op args dummyType dummyTyCon
   evalStateT value (emptyStgState undefined undefined)
 
 {-
