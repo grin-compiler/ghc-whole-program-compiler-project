@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.MiscEtc where
 
+import Foreign.Ptr
+
 import Stg.Syntax
 import Stg.Interpreter.Base
 
@@ -8,11 +10,22 @@ evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- getCCSOf# :: a -> State# s -> (# State# s, Addr# #)
+
   -- getCurrentCCS# :: a -> State# s -> (# State# s, Addr# #)
+  ( "getCurrentCCS#", [_, _]) -> do
+    -- HINT: follows the non profiling mode semantics
+    pure [PtrAtom RawPtr nullPtr]
+
   -- clearCCS# :: (State# s -> (# State# s, a #)) -> State# s -> (# State# s, a #)
+
   -- traceEvent# :: Addr# -> State# s -> State# s
+  ( "traceEvent#", [_, _]) -> pure [] -- TODO: this is a FAKE implementation
+
   -- traceBinaryEvent# :: Addr# -> Int# -> State# s -> State# s
+
   -- traceMarker# :: Addr# -> State# s -> State# s
+  ( "traceMarker#", [_, _]) -> pure [] -- TODO: this is a FAKE implementation
+
   -- setThreadAllocationCounter# :: INT64 -> State# RealWorld -> State# RealWorld
 
   _ -> fallback op args t tc
