@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
 module Stg.Interpreter.PrimOp.Addr where
 
 import Control.Monad.State
@@ -29,7 +29,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "minusAddr#", [PtrAtom _ p1, PtrAtom _ p2])    -> pure [IntV $ minusPtr p1 p2]
 
   -- remAddr# :: Addr# -> Int# -> Int#
-  ( "remAddr#", [PtrAtom _ a, IntV b])             -> pure [IntV $ fromIntegral (ptrToIntPtr a) `rem` b]   -- NOTE: int % int in C
+  ( "remAddr#", [PtrAtom _ a, IntV b]) -> do
+    -- NOTE: the GHC codegen semantics is: word % word
+    -- see: https://gitlab.haskell.org/ghc/ghc/-/issues/19332
+    pure [IntV $ fromIntegral (ptrToWordPtr a `rem` fromIntegral b)]
 
   -- addr2Int# :: Addr# -> Int#
   -- DEPRECATED: This operation is strongly deprecated.
