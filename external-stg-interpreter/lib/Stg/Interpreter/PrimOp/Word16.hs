@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
 module Stg.Interpreter.PrimOp.Word16 where
 
 import Stg.Syntax
@@ -37,10 +37,10 @@ evalPrimOp fallback op args t tc = do
   ( "timesWord16#",   [Word16V a, Word16V b]) -> pure [Word16V . w  $ w16 a * w16 b]
 
   -- quotWord16# :: Word16# -> Word16# -> Word16#
-  ( "quotWord16#",    [Word16V a, Word16V b]) -> pure [Word16V . w  $ w16 a `quot` w16 b]  -- NOTE: uint8 / uint8 in C
+  ( "quotWord16#",    [Word16V a, Word16V b]) -> pure [Word16V . w  $ w16 a `quot` w16 b]  -- NOTE: uint16 / uint16 in C
 
   -- remWord16# :: Word16# -> Word16# -> Word16#
-  ( "remWord16#",     [Word16V a, Word16V b]) -> pure [Word16V . w  $ w16 a `rem` w16 b]   -- NOTE: uint8 % uint8 in C
+  ( "remWord16#",     [Word16V a, Word16V b]) -> pure [Word16V . w  $ w16 a `rem` w16 b]   -- NOTE: uint16 % uint16 in C
 
   -- quotRemWord16# :: Word16# -> Word16# -> (# Word16#, Word16# #)
   ( "quotRemWord16#", [Word16V a, Word16V b]) -> pure [Word16V . w $ w16 a `quot` w16 b, Word16V . w $ w16 a `rem` w16 b]
