@@ -127,7 +127,23 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- resizeMutableByteArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s,MutableByteArray# s #)
-  -- TODO
+  ( "resizeMutableByteArray#", [MutableByteArray baIdx@ByteArrayIdx{..}, IntV newSizeInBytes, _s]) -> do
+    desc@ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
+    -- sanity check
+    when baaPinned $ do
+      stgErrorM $ "(undefined behaviour) resizeMutableByteArray# on pinned MutableByteArray, primop args: " ++ show args
+    -- HINT: the current implementation is always inplace
+    resizedBA <- liftIO $ BA.resizeMutableByteArray baaMutableByteArray newSizeInBytes
+    let desc' = ByteArrayDescriptor
+                { baaMutableByteArray = resizedBA
+                , baaByteArray        = Nothing
+                , baaPinned           = False
+                , baaAlignment        = baAlignment
+                }
+    modify' $ \s@StgState{..} -> s {ssMutableByteArrays = IntMap.insert baId desc' ssMutableByteArrays}
+    -- TODO: do inplace when the new size <= old size, otherwise allocate new array and copy the required amount of content
+    -- NOTE: always inplace resize should work also for the interpreter, so it is ok for now
+    pure [MutableByteArray baIdx]
 
   -- unsafeFreezeByteArray# :: MutableByteArray# s -> State# s -> (# State# s, ByteArray# #)
   ( "unsafeFreezeByteArray#", [MutableByteArray baIdx@ByteArrayIdx{..}, _s]) -> do
@@ -348,14 +364,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ---------------------------------------------
 
   -- readCharArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
-  ( "readCharArray#", [ByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
+  ( "readCharArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     -- 8 bit char
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word8)
     pure [CharV . chr $ fromIntegral value]
 
   -- readWideCharArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
-  ( "readWideCharArray#", [ByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
+  ( "readWideCharArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     -- 32 bit unicode char
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Char)
@@ -446,87 +462,87 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [WordV $ fromIntegral value]
 
   -- readWord8ArrayAsChar# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
-  ( "readWord8ArrayAsChar#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsChar#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     -- 8 bit char
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word8)
     pure [CharV . chr $ fromIntegral value]
 
   -- readWord8ArrayAsWideChar# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
-  ( "readWord8ArrayAsWideChar#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsWideChar#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     -- 32 bit unicode char
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Char)
     pure [CharV value]
 
   -- readWord8ArrayAsAddr# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Addr# #)
-  ( "readWord8ArrayAsAddr#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsAddr#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO (Ptr Word8))
     pure [PtrAtom RawPtr value]
 
   -- readWord8ArrayAsFloat# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Float# #)
-  ( "readWord8ArrayAsFloat#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsFloat#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Float)
     pure [FloatAtom value]
 
   -- readWord8ArrayAsDouble# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Double# #)
-  ( "readWord8ArrayAsDouble#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsDouble#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Double)
     pure [DoubleAtom value]
 
   -- readWord8ArrayAsStablePtr# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, StablePtr# a #)
-  ( "readWord8ArrayAsStablePtr#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsStablePtr#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO (Ptr Word8))
     pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
   -- readWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
-  ( "readWord8ArrayAsInt16#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsInt16#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int16)
     pure [IntV $ fromIntegral value]
 
   -- readWord8ArrayAsInt32# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT32 #)
-  ( "readWord8ArrayAsInt32#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsInt32#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int32)
     pure [IntV $ fromIntegral value]
 
   -- readWord8ArrayAsInt64# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT64 #)
-  ( "readWord8ArrayAsInt64#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsInt64#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int64)
     pure [IntV $ fromIntegral value]
 
   -- readWord8ArrayAsInt# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
-  ( "readWord8ArrayAsInt#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsInt#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int)
     pure [IntV value]
 
   -- readWord8ArrayAsWord16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
-  ( "readWord8ArrayAsWord16#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsWord16#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word16)
     pure [WordV $ fromIntegral value]
 
   -- readWord8ArrayAsWord32# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD32 #)
-  ( "readWord8ArrayAsWord32#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsWord32#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word32)
     pure [WordV $ fromIntegral value]
 
   -- readWord8ArrayAsWord64# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD64 #)
-  ( "readWord8ArrayAsWord64#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsWord64#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word64)
     pure [WordV $ fromIntegral value]
 
   -- readWord8ArrayAsWord# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
-  ( "readWord8ArrayAsWord#", [ByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
+  ( "readWord8ArrayAsWord#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word)
     pure [WordV value]
@@ -745,7 +761,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "copyByteArray#",
       [ ByteArray ByteArrayIdx{baId = baIdSrc},        IntV offsetSrc
       , MutableByteArray ByteArrayIdx{baId = baIdDst}, IntV offsetDst
-      , IntV length
+      , IntV length, _s
       ]
    ) -> do
     src <- getByteArrayContentPtr baIdSrc
@@ -757,7 +773,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "copyMutableByteArray#",
       [ MutableByteArray ByteArrayIdx{baId = baIdSrc}, IntV offsetSrc
       , MutableByteArray ByteArrayIdx{baId = baIdDst}, IntV offsetDst
-      , IntV length
+      , IntV length, _s
       ]
    ) -> do
     src <- getByteArrayContentPtr baIdSrc
@@ -865,40 +881,3 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure [IntV original]
 
   _ -> fallback op args t tc
-
-{-
-------------------------------------------------------------------------
-section "Byte Arrays"
-        {Operations on {\tt ByteArray\#}. A {\tt ByteArray\#} is a just a region of
-         raw memory in the garbage-collected heap, which is not
-         scanned for pointers. It carries its own size (in bytes).
-         There are
-         three sets of operations for accessing byte array contents:
-         index for reading from immutable byte arrays, and read/write
-         for mutable byte arrays.  Each set contains operations for a
-         range of useful primitive data types.  Each operation takes
-         an offset measured in terms of the size of the primitive type
-         being read or written.}
-
-------------------------------------------------------------------------
-
-primtype ByteArray#
-
-primtype MutableByteArray# s
-
-primop  ResizeMutableByteArrayOp_Char "resizeMutableByteArray#" GenPrimOp
-   MutableByteArray# s -> Int# -> State# s -> (# State# s,MutableByteArray# s #)
-   {Resize (unpinned) mutable byte array to new specified size (in bytes).
-    The returned {\tt MutableByteArray\#} is either the original
-    {\tt MutableByteArray\#} resized in-place or, if not possible, a newly
-    allocated (unpinned) {\tt MutableByteArray\#} (with the original content
-    copied over).
-
-    To avoid undefined behaviour, the original {\tt MutableByteArray\#} shall
-    not be accessed anymore after a {\tt resizeMutableByteArray\#} has been
-    performed.  Moreover, no reference to the old one should be kept in order
-    to allow garbage collection of the original {\tt MutableByteArray\#} in
-    case a new {\tt MutableByteArray\#} had to be allocated.}
-   with out_of_line = True
-        has_side_effects = True
--}
