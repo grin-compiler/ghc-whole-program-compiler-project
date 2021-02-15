@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, TypeApplications #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, TypeApplications, Strict #-}
 {-# LANGUAGE ScopedTypeVariables, MagicHash #-}
 module Stg.Interpreter.PrimOp.Word where
 
@@ -25,20 +25,23 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- addWordC# :: Word# -> Word# -> (# Word#, Int# #)
   ( "addWordC#",     [WordV a, WordV b]) -> pure
                                         [ WordV $ a + b
-                                        , IntV $ if fromIntegral a + (fromIntegral b :: Integer) > fromIntegral (maxBound :: PrimWord) then 1 else 0
-                                        ]
+                                        , IntV . carry $ fromIntegral a + fromIntegral b
+                                        ] where
+                                            carry :: Integer -> Int
+                                            carry x = if x < fromIntegral (minBound :: PrimWord) || x > fromIntegral (maxBound :: PrimWord) then 1 else 0
 
   -- subWordC# :: Word# -> Word# -> (# Word#, Int# #)
   ( "subWordC#",     [WordV a, WordV b]) -> pure
-                                        [ WordV $ a + b
-                                        , IntV $ if fromIntegral a - (fromIntegral b :: Integer) < fromIntegral (minBound :: PrimWord) then 1 else 0
-                                        ]
+                                        [ WordV $ a - b
+                                        , IntV . carry $ fromIntegral a - fromIntegral b
+                                        ] where
+                                            carry :: Integer -> Int
+                                            carry x = if x < fromIntegral (minBound :: PrimWord) || x > fromIntegral (maxBound :: PrimWord) then 1 else 0
 
   -- plusWord2# :: Word# -> Word# -> (# Word#, Word# #)
   ( "plusWord2#",    [WordV a, WordV b]) -> pure [WordV (fromIntegral hi), WordV (fromIntegral lo)] where
     res = fromIntegral a + fromIntegral b :: Integer
-    hi  = res `quot` fromIntegral (1 + maxBound :: PrimWord)
-    lo  = res - hi
+    (hi, lo)  = res `quotRem` (1 + fromIntegral (maxBound :: PrimWord))
 
   -- minusWord# :: Word# -> Word# -> Word#
   ( "minusWord#",    [WordV a, WordV b]) -> pure [WordV $ a - b]
@@ -49,8 +52,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- timesWord2# :: Word# -> Word# -> (# Word#, Word# #)
   ( "timesWord2#",   [WordV a, WordV b]) -> pure [WordV (fromIntegral hi), WordV (fromIntegral lo)] where
     res = fromIntegral a * fromIntegral b :: Integer
-    hi  = res `quot` fromIntegral (1 + maxBound :: PrimWord)
-    lo  = res - hi
+    (hi, lo)  = res `quotRem` (1 + fromIntegral (maxBound :: PrimWord))
 
   -- quotWord# :: Word# -> Word# -> Word#
   ( "quotWord#",     [WordV a, WordV b]) -> pure [WordV $ a `quot` b]  -- NOTE: uint / uint in C
@@ -63,7 +65,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- quotRemWord2# :: Word# -> Word# -> Word# -> (# Word#, Word# #)
   ( "quotRemWord2#", [WordV hi, WordV lo, WordV b']) -> pure [WordV . fromIntegral $ a `quot` b, WordV . fromIntegral $ a `rem` b] where
-    a = fromIntegral hi * fromIntegral (1 + maxBound :: PrimWord) + fromIntegral lo :: Integer
+    a = fromIntegral hi * (1 + fromIntegral (maxBound :: PrimWord)) + fromIntegral lo :: Integer
     b = fromIntegral b' :: Integer
 
   -- and# :: Word# -> Word# -> Word#

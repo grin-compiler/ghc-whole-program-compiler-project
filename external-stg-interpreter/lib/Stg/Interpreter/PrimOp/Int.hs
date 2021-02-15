@@ -1,6 +1,9 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns #-}
 module Stg.Interpreter.PrimOp.Int where
 
+import GHC.Exts
+import Foreign.Storable (sizeOf)
 import Data.Int
 import Data.Word
 import Data.Bits
@@ -30,7 +33,30 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- *# :: Int# -> Int# -> Int#
   ( "*#", [IntV a, IntV b]) -> pure [IntV $ a * b]
 
-  -- TODO: primop   IntMul2Op    "timesInt2#" GenPrimOp Int# -> Int# -> (# Int#, Int#, Int# #)
+  -- timesInt2# :: Int# -> Int# -> (# Int#, Int#, Int# #)
+  ( "timesInt2#", [IntV a, IntV b]) -> pure [IntV isHighNeeded, IntV hi, IntV lo] where
+    (isHighNeeded, hi, lo) = genericIMul2 a b
+
+    -- HINT: this code is from suite/tests/codeGen/should_run/cgrun079.hs
+    --       genericIMul2 is a generic implementation of the timesInt2# primop
+    genericIMul2 :: Int -> Int -> (Int,Int,Int)
+    genericIMul2 x y = (c,h,l)
+       where
+          (p,l) = timesWord2 (fromIntegral x) (fromIntegral y)
+          h = p - f x y - f y x
+          c = if h == carryFill l then 0 else 1
+          f u v = carryFill u .&. v
+
+          -- Return either 00..00 or FF..FF depending on the carry
+          carryFill :: Int -> Int
+          carryFill x = x `shiftR` (wordSizeInBits - 1)
+
+    wordSizeInBits :: Int
+    wordSizeInBits = 8 * sizeOf (0 :: Word)
+
+    timesWord2 :: Word -> Word -> (Int,Int)
+    timesWord2 (W# x) (W# y) = case timesWord2# x y of
+       (# h, l #) -> (I# (word2Int# h), I# (word2Int# l))
 
   -- mulIntMayOflo# :: Int# -> Int# -> Int#
   ( "mulIntMayOflo#",  [IntV a, IntV b]) -> pure [IntV $ if fromIntegral a * (fromIntegral b :: Integer) > fromIntegral (maxBound :: PrimInt) then 1 else 0]
@@ -62,14 +88,18 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- addIntC# :: Int# -> Int# -> (# Int#, Int# #)
   ( "addIntC#",        [IntV a, IntV b]) -> pure
                                         [ IntV $ a + b
-                                        , IntV $ if fromIntegral a + (fromIntegral b :: Integer) > fromIntegral (maxBound :: PrimInt) then 1 else 0
-                                        ]
+                                        , IntV . carry $ fromIntegral a + fromIntegral b
+                                        ] where
+                                            carry :: Integer -> Int
+                                            carry x = if x < fromIntegral (minBound :: PrimInt) || x > fromIntegral (maxBound :: PrimInt) then 1 else 0
 
   -- subIntC# :: Int# -> Int# -> (# Int#, Int# #)
   ( "subIntC#",        [IntV a, IntV b]) -> pure
-                                        [ IntV $ a + b
-                                        , IntV $ if fromIntegral a - (fromIntegral b :: Integer) < fromIntegral (minBound :: PrimInt) then 1 else 0
-                                        ]
+                                        [ IntV $ a - b
+                                        , IntV . carry $ fromIntegral a - fromIntegral b
+                                        ] where
+                                            carry :: Integer -> Int
+                                            carry x = if x < fromIntegral (minBound :: PrimInt) || x > fromIntegral (maxBound :: PrimInt) then 1 else 0
 
   -- ># :: Int# -> Int# -> Int#
   ( ">#",  [IntV a, IntV b]) -> pure [IntV $ if a > b  then 1 else 0]
