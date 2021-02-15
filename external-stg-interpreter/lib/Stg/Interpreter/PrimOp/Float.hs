@@ -1,6 +1,8 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns #-}
 module Stg.Interpreter.PrimOp.Float where
 
+import GHC.Exts
 import GHC.Float
 import Stg.Syntax
 import Stg.Interpreter.Base
@@ -105,14 +107,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "atanhFloat#",   [FloatV a]) -> pure [FloatV $ atanhFloat a]
 
   -- powerFloat# :: Float# -> Float# -> Float#
-  ( "powerFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ a ** b]
+  ( "powerFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ powerFloat a b]
 
   -- float2Double# ::  Float# -> Double#
   ( "float2Double#", [FloatV a]) -> pure [DoubleV $ realToFrac a]
 
   -- decodeFloat_Int# :: Float# -> (# Int#, Int# #)
-  ( "decodeFloat_Int#", [FloatV a]) -> do
-    let (x,y) = decodeFloat a
-    pure [IntV $ fromIntegral x, IntV y]
+  ( "decodeFloat_Int#", [FloatV (F# a)]) -> do
+    let !(# mantissa, exponent #) = decodeFloat_Int# a
+    pure [IntV (I# mantissa), IntV (I# exponent)]
 
   _ -> fallback op args t tc

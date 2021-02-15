@@ -1,10 +1,10 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, Strict #-}
 module Stg.Interpreter.PrimOp.Double where
 
 import GHC.Word
 import GHC.Int
 import GHC.Float
-import GHC.Prim
+import GHC.Exts
 import Stg.Syntax
 import Stg.Interpreter.Base
 
@@ -113,23 +113,15 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "**##", [DoubleV a, DoubleV b]) -> pure [DoubleV $ a ** b]
 
   -- decodeDouble_2Int# :: Double# -> (# Int#, Word#, Word#, Int# #)
-  ( "decodeDouble_2Int#", [DoubleV x]) -> do
-    let (a,b,c,d) = decodeDouble_2Int x
-    pure [IntV a, WordV b, WordV c, IntV d]
+  ( "decodeDouble_2Int#", [DoubleV (D# x)]) -> do
+    -- NOTE: map back to GHC primop
+    let !(# a, b, c, d #) = decodeDouble_2Int# x
+    pure [IntV (I# a), WordV (W# b), WordV (W# c), IntV (I# d)]
 
   -- decodeDouble_Int64# :: Double# -> (# Int#, Int# #)
-  ( "decodeDouble_Int64#", [DoubleV x]) -> do
-    let (a,b) = decodeDouble_Int64 x
-    pure [IntV a, IntV b]
+  ( "decodeDouble_Int64#", [DoubleV (D# x)]) -> do
+    -- NOTE: map back to GHC primop
+    let !(# a, b #) = decodeDouble_Int64# x
+    pure [IntV (I# a), IntV (I# b)]
 
   _ -> fallback op args t tc
-
-decodeDouble_2Int :: Double -> (Int, Word, Word, Int)
-decodeDouble_2Int (D# x) =
-  let !(# a, b, c, d #) = decodeDouble_2Int# x
-  in (fromIntegral (I# a), fromIntegral (W# b), fromIntegral (W# c), fromIntegral (I# d))
-
-decodeDouble_Int64 :: Double -> (Int, Int)
-decodeDouble_Int64 (D# x) =
-  let !(# a, b #) = decodeDouble_Int64# x
-  in (fromIntegral (I# a), fromIntegral (I# b))
