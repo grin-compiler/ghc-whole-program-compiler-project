@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
-module Stg.Interpreter.Rts (initRtsSupport) where
+module Stg.Interpreter.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
 
 import GHC.Stack
 import Control.Monad.State
@@ -10,6 +10,7 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 
 import Stg.Syntax
+import Stg.Reconstruct
 import Stg.Interpreter.Base
 
 pattern CharV c = Literal (LitChar c)
@@ -17,8 +18,18 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-initRtsSupport :: [Module] -> M ()
-initRtsSupport mods = do
+emptyRts progName progArgs = Rts
+  { rtsGlobalStore  = Map.empty
+  , rtsProgName     = progName
+  , rtsProgArgs     = progArgs
+  }
+
+initRtsSupport :: String -> [String] -> [Module] -> M ()
+initRtsSupport progName progArgs mods = do
+
+  -- create empty Rts data con, it is filled gradually
+  modify' $ \s@StgState{..} -> s {ssRtsSupport = emptyRts progName progArgs}
+
   -- collect rts related modules
   let rtsModSet = Set.fromList $
                     [(UnitId u, ModuleName m) | (u, m, _, _, _) <- wiredInCons] ++
@@ -64,10 +75,23 @@ initRtsSupport mods = do
           cl <- lookupEnv mempty b
           modify' $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport cl}
 
-  -- TODO: add these
-  --  rtsApply2Args   :: Atom
-  --  rtsTuple2Proj0  :: Atom
-  pure ()
+globalStoreSymbols :: Set.Set Name
+globalStoreSymbols = Set.fromList
+  [ "getOrSetGHCConcSignalSignalHandlerStore"
+  , "getOrSetGHCConcWindowsPendingDelaysStore"
+  , "getOrSetGHCConcWindowsIOManagerThreadStore"
+  , "getOrSetGHCConcWindowsProddingStore"
+  , "getOrSetSystemEventThreadEventManagerStore"
+  , "getOrSetSystemEventThreadIOManagerThreadStore"
+  , "getOrSetSystemTimerThreadEventManagerStore"
+  , "getOrSetSystemTimerThreadIOManagerThreadStore"
+  , "getOrSetLibHSghcFastStringTable"
+  , "getOrSetLibHSghcPersistentLinkerState"
+  , "getOrSetLibHSghcInitLinkerDone"
+  , "getOrSetLibHSghcGlobalDynFlags"
+  , "getOrSetLibHSghcStaticOptions"
+  , "getOrSetLibHSghcStaticOptionsReady"
+  ]
 
 -- HINT: needed for FFI value boxing
 wiredInCons :: [(Name, Name, Name, Name, Rts -> DataCon -> Rts)]
@@ -103,13 +127,17 @@ wiredInCons =
 wiredInClosures :: [(Name, Name, Name, Rts -> Atom -> Rts)]
 wiredInClosures =
   -- unit-id,     module,                   binder,                         closure setter
-  [ ("base",      "GHC.TopHandler",         "runIO",                        \s cl -> s {rtsTopHandlerRunIO      = cl})
-  , ("base",      "GHC.TopHandler",         "runNonIO",                     \s cl -> s {rtsTopHandlerRunNonIO   = cl})
-  , ("base",      "GHC.Pack",               "unpackCString",                \s cl -> s {rtsUnpackCString        = cl})
-  , ("base",      "GHC.Exception.Type",     "divZeroException",             \s cl -> s {rtsDivZeroException     = cl})
-  , ("base",      "GHC.Exception.Type",     "underflowException",           \s cl -> s {rtsUnderflowException   = cl})
-  , ("base",      "GHC.Exception.Type",     "overflowException",            \s cl -> s {rtsOverflowException    = cl})
+  [ ("base",      "GHC.TopHandler",         "runIO",                        \s cl -> s {rtsTopHandlerRunIO            = cl})
+  , ("base",      "GHC.TopHandler",         "runNonIO",                     \s cl -> s {rtsTopHandlerRunNonIO         = cl})
+  , ("base",      "GHC.TopHandler",         "flushStdHandles",              \s cl -> s {rtsTopHandlerFlushStdHandles  = cl})
+  , ("base",      "GHC.Pack",               "unpackCString",                \s cl -> s {rtsUnpackCString              = cl})
+  , ("base",      "GHC.Exception.Type",     "divZeroException",             \s cl -> s {rtsDivZeroException           = cl})
+  , ("base",      "GHC.Exception.Type",     "underflowException",           \s cl -> s {rtsUnderflowException         = cl})
+  , ("base",      "GHC.Exception.Type",     "overflowException",            \s cl -> s {rtsOverflowException          = cl})
+  , (":ext-stg",  ":ExtStg.RTS.Support",    "applyFun1Arg",                 \s cl -> s {rtsApplyFun1Arg               = cl})
+  , (":ext-stg",  ":ExtStg.RTS.Support",    "tuple2Proj0",                  \s cl -> s {rtsTuple2Proj0                = cl})
   ]
+
 {-
   , ("base",      "GHC.Weak",               "runFinalizerBatch",
   , ("base",      "GHC.IO.Exception",       "stackOverflow",
@@ -128,7 +156,6 @@ wiredInClosures =
   , ("base",      "GHC.Conc.IO",            "ensureIOManagerIsRunning",
   , ("base",      "GHC.Conc.IO",            "ioManagerCapabilitiesChanged",
   , ("base",      "GHC.Conc.Signal",        "runHandlersPtr",
-  , ("base",      "GHC.TopHandler",         "flushStdHandles",
   , ("base",      "GHC.TopHandler",         "runMainIO",
 -}
 
@@ -138,3 +165,78 @@ wiredInClosures =
     getStablePtr((StgPtr)runHandlersPtr_closure);
 #endif
 -}
+
+extStgRtsSupportModule :: Module
+extStgRtsSupportModule = reconModule $ Module
+  { modulePhase               = "ext-stg interpreter"
+  , moduleUnitId              = UnitId ":ext-stg"
+  , moduleName                = ModuleName ":ExtStg.RTS.Support"
+  , moduleSourceFilePath      = Nothing
+  , moduleForeignStubs        = NoStubs
+  , moduleHasForeignExported  = False
+  , moduleDependency          = [(UnitId "ghc-prim", [ModuleName "GHC.Tuple"])]
+  , moduleExternalTopIds      = []
+  , moduleTyCons              = [(UnitId "ghc-prim", [(ModuleName "GHC.Tuple", [tup2STyCon])])]
+  , moduleTopBindings         = [tuple2Proj0, applyFun1Arg]
+  , moduleForeignFiles        = []
+  } where
+      u :: Int -> Unique
+      u = Unique '+'
+
+      sbinder :: Int -> Name -> Scope -> SBinder
+      sbinder i n s = SBinder
+                      { sbinderName     = n
+                      , sbinderId       = BinderId $ u i
+                      , sbinderType     = SingleValue LiftedRep
+                      , sbinderTypeSig  = mempty
+                      , sbinderScope    = s
+                      , sbinderDetails  = VanillaId
+                      , sbinderInfo     = mempty
+                      , sbinderDefLoc   = UnhelpfulSpan ""
+                      }
+
+      localLiftedVanillaId :: Int -> Name -> (BinderId, SBinder)
+      localLiftedVanillaId i n = (BinderId $ u i, sbinder i n LocalScope)
+
+      exportedLiftedVanillaId :: Int -> Name -> SBinder
+      exportedLiftedVanillaId i n = sbinder i n HaskellExported
+
+      tup2DCOcc       = DataConId $ u 0
+      tup2SDataCon    = SDataCon
+                        { sdcName   = "(,)"
+                        , sdcId     = tup2DCOcc
+                        , sdcRep    = AlgDataCon [LiftedRep, LiftedRep]
+                        , sdcWorker = exportedLiftedVanillaId 666 "fake ext-stg Tup2 worker"
+                        , sdcDefLoc = UnhelpfulSpan ""
+                        }
+      tup2TCOcc       = TyConId $ u 1
+      tup2STyCon      = STyCon
+                        { stcName     = "(,)"
+                        , stcId       = tup2TCOcc
+                        , stcDataCons = [tup2SDataCon]
+                        , stcDefLoc   = UnhelpfulSpan ""
+                        }
+
+      -- code for tuple2Proj0 = \t -> case t of GHC.Tuple.(,) a b -> a
+      (aOcc, aBnd)    = localLiftedVanillaId 100 "a"
+      (_,    bBnd)    = localLiftedVanillaId 101 "b"
+      (tOcc, tBnd)    = localLiftedVanillaId 102 "t"
+      (_,    rBnd)    = localLiftedVanillaId 103 "r"
+
+      tuple2Proj0Bnd  = exportedLiftedVanillaId 104 "tuple2Proj0"
+      tuple2Proj0     = StgTopLifted $ StgNonRec tuple2Proj0Bnd $ StgRhsClosure Updatable [tBnd] $
+                          StgCase (StgApp tOcc [] (SingleValue LiftedRep) mempty) rBnd (AlgAlt tup2TCOcc)
+                            [ Alt
+                              { altCon      = AltDataCon tup2DCOcc
+                              , altBinders  = [aBnd, bBnd]
+                              , altRHS      = StgApp aOcc [] (SingleValue LiftedRep) mempty
+                              }
+                            ]
+
+      -- code for applyFun1Arg = \f p -> f p
+      (fOcc, fBnd)    = localLiftedVanillaId 200 "f"
+      (pOcc, pBnd)    = localLiftedVanillaId 201 "p"
+
+      applyFun1ArgBnd = exportedLiftedVanillaId 202 "applyFun1Arg"
+      applyFun1Arg    = StgTopLifted $ StgNonRec applyFun1ArgBnd $ StgRhsClosure Updatable [fBnd, pBnd] $
+                          StgApp fOcc [StgVarArg pOcc] (SingleValue LiftedRep) mempty
