@@ -61,6 +61,8 @@ main = do
             [ "module.ghcstg"
             , "module.ghccore"
             , "module.hs"
+            , "module.cmm"
+            , "module.s"
             ]
       forM_ files $ \fn -> do
         (src, dst) <- liftIO $ do
