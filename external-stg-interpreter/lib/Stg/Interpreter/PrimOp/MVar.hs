@@ -24,6 +24,7 @@ handleTakeMVar_ValueFullCase m mvd@MVarDescriptor{..} = do
       -- wake up thread
       ts <- getThreadState tid
       updateThreadState tid (ts {tsStatus = ThreadRunning})
+      --liftIO $ putStrLn $ " * (handleTakeMVar_ValueFullCase) mvar unblock, unblocked tid: " ++ show tid
       -- put the thread's new value to mvar
       let ThreadBlocked (BlockedOnMVar _ (Just v)) = tsStatus ts
           newValue = mvd {mvdValue = Just v, mvdQueue = tidTail}
@@ -33,11 +34,13 @@ handlePutMVar_ValueEmptyCase :: Int -> MVarDescriptor -> Atom -> M ()
 handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
   -- HINT: first handle the blocked readMVar case, it does not consume the value
   --       BlockedOnMVarRead are always at the beginning of the queue, process all of them
-  let processReads tids@(tid : tidTail) = do
+  let processReads [] = pure []
+      processReads tids@(tid : tidTail) = do
         ts@ThreadState{..} <- getThreadState tid
         case tsStatus of
           ThreadBlocked (BlockedOnMVarRead _) -> do
             updateThreadState tid (ts {tsStatus = ThreadRunning, tsCurrentResult = [v]})
+            --liftIO $ putStrLn $ " * (handlePutMVar_ValueEmptyCase, processReads) mvar unblock, unblocked tid: " ++ show tid
             processReads tidTail
 
           _ -> pure tids
@@ -56,6 +59,7 @@ handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
       -- wake up thread and pass the new vale to the thread as a result of the blocked takeMVar
       ts <- getThreadState tid
       updateThreadState tid (ts {tsStatus = ThreadRunning, tsCurrentResult = [v]})
+      --liftIO $ putStrLn $ " * (handlePutMVar_ValueEmptyCase) mvar unblock, unblocked tid: " ++ show tid
 
       -- update wait queue
       let newValue = mvd {mvdQueue = tidTail}
@@ -66,11 +70,21 @@ appendMVarQueue m tid = do
   let appendFun mvd = mvd {mvdQueue = mvdQueue mvd ++ [tid]}
   modify' $ \s@StgState{..} -> s {ssMVars = IntMap.adjust appendFun m ssMVars}
 
+reportOp :: Name -> [Atom] -> M ()
+reportOp op args = do
+  {-
+  tid <- gets ssCurrentThreadId
+  liftIO $ do
+    putStrLn $ show tid ++ "  " ++ show op ++ " " ++ show args
+  -}
+  pure ()
+
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- newMVar# :: State# s -> (# State# s, MVar# s a #)
   ( "newMVar#", [_s]) -> do
+    reportOp op args
     state (\s@StgState{..} ->
       let next  = IntMap.size ssMVars
           value = MVarDescriptor {mvdValue = Nothing, mvdQueue = []}
@@ -78,7 +92,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- takeMVar# :: MVar# s a -> State# s -> (# State# s, a #)
   ( "takeMVar#", [MVar m, _s]) -> do
+    reportOp op args
     mvd@MVarDescriptor{..} <- lookupMVar m
+    --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Nothing -> do
         -- block current thread on this MVar
@@ -86,16 +102,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
         tid <- gets ssCurrentThreadId
         ts <- getCurrentThreadState
         updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnMVar m Nothing})
+        --liftIO $ putStrLn $ " * mvar block, blocked tid: " ++ show tid
 
         -- add to mvar's waiting queue
         appendMVarQueue m tid
 
         -- reschedule threads
-        scheduleToTheEnd tid
-        scheduleThreads
-
-        -- the result is the newly scheduled thread's last result
-        tsCurrentResult <$> getCurrentThreadState
+        stackPush $ RunScheduler SR_ThreadBlocked
+        pure [] -- NOTE: the real return value will be calculated when the tread is unblocked
 
       Just a -> do
         handleTakeMVar_ValueFullCase m mvd
@@ -103,7 +117,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- tryTakeMVar# :: MVar# s a -> State# s -> (# State# s, Int#, a #)
   ( "tryTakeMVar#", [MVar m, _s]) -> do
+    reportOp op args
     mvd@MVarDescriptor{..} <- lookupMVar m
+    --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Nothing -> do
         pure [IntV 0, LiftedUndefined]
@@ -113,7 +129,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- putMVar# :: MVar# s a -> a -> State# s -> State# s
   ( "putMVar#", [MVar m, a, _s]) -> do
+    reportOp op args
     mvd@MVarDescriptor{..} <- lookupMVar m
+    --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Just{} -> do
         -- block current thread on this MVar
@@ -121,16 +139,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
         tid <- gets ssCurrentThreadId
         ts <- getCurrentThreadState
         updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnMVar m (Just a)})
+        --liftIO $ putStrLn $ " * mvar block, blocked tid: " ++ show tid
 
         -- add to mvar's waiting queue
         appendMVarQueue m tid
 
         -- reschedule threads
-        scheduleToTheEnd tid
-        scheduleThreads
-
-        -- the result is the newly scheduled thread's last result
-        tsCurrentResult <$> getCurrentThreadState
+        stackPush $ RunScheduler SR_ThreadBlocked
+        pure []
 
       Nothing -> do
         handlePutMVar_ValueEmptyCase m mvd a
@@ -138,7 +154,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- tryPutMVar# :: MVar# s a -> a -> State# s -> (# State# s, Int# #)
   ( "tryPutMVar#", [MVar m, a, _s]) -> do
+    reportOp op args
     mvd@MVarDescriptor{..} <- lookupMVar m
+    --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Nothing -> do
         handlePutMVar_ValueEmptyCase m mvd a
@@ -148,7 +166,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- readMVar# :: MVar# s a -> State# s -> (# State# s, a #)
   ( "readMVar#", [MVar m, _s]) -> do
+    reportOp op args
     mvd@MVarDescriptor{..} <- lookupMVar m
+    --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Nothing -> do
         -- block current thread on this MVar
@@ -156,32 +176,36 @@ evalPrimOp fallback op args t tc = case (op, args) of
         tid <- gets ssCurrentThreadId
         ts <- getCurrentThreadState
         updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnMVarRead m})
+        --liftIO $ putStrLn $ " * mvar block, blocked tid: " ++ show tid
 
         -- add to mvar's waiting queue
         appendMVarQueue m tid
 
         -- reschedule threads
-        scheduleToTheEnd tid
-        scheduleThreads
+        stackPush $ RunScheduler SR_ThreadBlocked
+        pure [] -- NOTE: the real return value will be calculated when the tread is unblocked
 
-        -- the result is the newly scheduled thread's last result
-        tsCurrentResult <$> getCurrentThreadState
       Just a -> pure [a]
 
   -- tryReadMVar# :: MVar# s a -> State# s -> (# State# s, Int#, a #)
   ( "tryReadMVar#", [MVar m, _s]) -> do
+    reportOp op args
     MVarDescriptor{..} <- lookupMVar m
+    --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Nothing -> pure [IntV 0, LiftedUndefined]
       Just a  -> pure [IntV 1, a]
 
   -- sameMVar# :: MVar# s a -> MVar# s a -> Int#
   ( "sameMVar#", [MVar a, MVar b]) -> do
+    reportOp op args
     pure [IntV $ if a == b then 1 else 0]
 
   -- isEmptyMVar# :: MVar# s a -> State# s -> (# State# s, Int# #)
   ( "isEmptyMVar#", [MVar m, _s]) -> do
+    reportOp op args
     MVarDescriptor{..} <- lookupMVar m
+    --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Nothing -> pure [IntV 1]
       Just _  -> pure [IntV 0]
