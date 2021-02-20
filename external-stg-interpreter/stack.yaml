@@ -6,3 +6,4 @@ packages:
 
 extra-deps:
   - primitive-0.7.1.0
+  - zip-1.7.0
