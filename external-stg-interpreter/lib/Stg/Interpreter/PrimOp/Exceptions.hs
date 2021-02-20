@@ -8,12 +8,8 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: BuiltinStgApply -> PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
-
-  ("unmaskAsyncExceptions#", [a, b]) -> builtinStgApply a [b]
-
-  -----------------------------------------------------------
+evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp fallback op args t tc = case (op, args) of
 
   {-
     catch# :: (State# RealWorld -> (# State# RealWorld, a #) )
@@ -33,7 +29,7 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
   ( "raise#", [ex]) -> do
     -- for debug only
     evalStack <- gets ssEvalStack
-    liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
+    --liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
 
     raiseEx ex -- implementation
 
@@ -56,7 +52,7 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
   ( "raiseIO#", [ex, s]) -> do
     -- for debug only
     evalStack <- gets ssEvalStack
-    liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
+    --liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
 
     raiseEx ex -- implementation
 
@@ -101,7 +97,18 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
 
     -- set new masking state
     unless (tsBlockExceptions == False && tsInterruptible == False) $ do
-      undefined -- TODO
+      updateThreadState tid $ ts {tsBlockExceptions = False, tsInterruptible = False}
+      stackPush $ RestoreExMask tsBlockExceptions tsInterruptible
+      {-
+        -- TODO: raise async exception eagerly, then run the io action
+        maybePerformBlockedException ; non-zero (one) if an exception was raised, zero otherwise
+          foreach in the blocked exceptions queue:
+            throwToSingleThreaded (target, alias me) ; 1. remove from queues ; 2. raise async
+            tryWakeupThread (source) ; NOTE: recheck blocking conditions, turns thread into running state if the blocker has disappeared
+      -}
+      -- !!!!!!!!!!!!!!!!!!!!!!!!!!!
+      pure () -- TODO
+      -- !!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     -- run action
     stackPush $ Apply [w]
