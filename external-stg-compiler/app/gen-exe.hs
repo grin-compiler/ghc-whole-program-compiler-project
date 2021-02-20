@@ -23,6 +23,8 @@ import Data.Binary
 import qualified GHC.Driver.Types as GHC
 import qualified GHC.Utils.Outputable as GHC
 
+import qualified Data.ByteString as BS
+
 {-
   TODO: LTO-DFE
     done - app module pruning
@@ -55,6 +57,7 @@ main = do
   livenessAnalysisLogM appModpaks
 
   let oStg = [s ++ ".o" | s <- appModpaks]
+
   forM_ oStg $ \obj -> do
     fileExists <- doesFileExist obj
     when fileExists $ removeFile obj
@@ -63,10 +66,18 @@ main = do
     withTaskGroup 4 $ \g -> do
       mapTasks g [callProcess "gen-obj" f | f <- chunksOf 1 appModpaks]
 
+  putStrLn $ "linking exe"
+
   StgAppInfo{..} <- getAppInfo stgAppFname
 
   let cg = NCG
 
-  putStrLn $ "linking exe"
+  print $ "appCLikeObjFiles: " ++ show appCLikeObjFiles
+  appCLikeObjFiles' <- forM appCLikeObjFiles $ \fname -> do
+    o <- BS.readFile fname
+    let newObjName = fname ++ ".o"
+    BS.writeFile newObjName o
+    pure newObjName
+  print $ "appCLikeObjFiles: " ++ show appCLikeObjFiles'
 
-  compileProgram cg appIncludePaths appLibPaths appLdOptions (appCLikeObjFiles ++ oStg) GHC.NoStubs [] []
+  compileProgram cg appNoHsMain appIncludePaths appLibPaths appLdOptions (appCLikeObjFiles' ++ oStg) GHC.NoStubs [] []

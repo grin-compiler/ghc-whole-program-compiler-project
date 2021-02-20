@@ -122,8 +122,8 @@ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName 
   pure ()
 
 
-compileProgram :: Backend -> [String] -> [String] -> [String] -> [String] -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> IO ()
-compileProgram backend incPaths libPaths ldOpts clikeFiles stubs tyCons topBinds_simple = runGhc (Just libdir) $ do
+compileProgram :: Backend -> Bool -> [String] -> [String] -> [String] -> [String] -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> IO ()
+compileProgram backend noHsMain incPaths libPaths ldOpts clikeFiles stubs tyCons topBinds_simple = runGhc (Just libdir) $ do
   dflags <- getSessionDynFlags
 
   liftIO $ do
@@ -171,6 +171,7 @@ type CollectedCCs
   -- Compile & Link
   dflags <- getSessionDynFlags
   pkgs <- setSessionDynFlags $
+    (if noHsMain then flip gopt_set Opt_NoHsMain else id) $
     dflags { hscTarget = target, ghcLink = LinkBinary, libraryPaths = libraryPaths dflags ++ libPaths, ldInputs = ldInputs dflags ++ map Option ldOpts
       , includePaths = addQuoteInclude (includePaths dflags) incPathsFixed
       }
