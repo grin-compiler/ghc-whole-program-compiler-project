@@ -21,7 +21,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     (newTId, newTS) <- createThread
     updateThreadState newTId $ newTS
       { tsCurrentResult   = [ioAction]
-      , tsStack           = [Apply [Void]]
+      , tsStack           = [Apply [Void], RunScheduler SR_ThreadFinished]
 
       -- NOTE: start blocked if the current thread is blocked
       , tsBlockExceptions = tsBlockExceptions currentTS
@@ -29,7 +29,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
       }
 
     scheduleToTheEnd newTId
-    requestContextSwitch
+
+    -- NOTE: context switch soon, but not immediately: we don't want every forkIO to force a context-switch.
+    requestContextSwitch  -- TODO: push continuation reschedule, reason request context switch
 
     pure [ThreadId newTId]
 
@@ -40,7 +42,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     (newTId, newTS) <- createThread
     updateThreadState newTId $ newTS
       { tsCurrentResult   = [ioAction]
-      , tsStack           = [Apply [Void]]
+      , tsStack           = [Apply [Void], RunScheduler SR_ThreadFinished]
 
       -- NOTE: start blocked if the current thread is blocked
       , tsBlockExceptions = tsBlockExceptions currentTS
@@ -52,7 +54,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
       }
 
     scheduleToTheEnd newTId
-    requestContextSwitch
+
+    -- NOTE: context switch soon, but not immediately: we don't want every forkIO to force a context-switch.
+    requestContextSwitch  -- TODO: push continuation reschedule, reason request context switch
 
     pure [ThreadId newTId]
 
@@ -71,6 +75,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
         let myResult = [] -- HINT: this is the result of the killThread# primop
         raiseAsyncEx myResult tidTarget exception
 
+        -- TODO: remove this below, problem: raiseAsyncEx may kill the thread ; model kill thread as return to scheduler operation with a descriptive reason
         -- return the result that the raise async ex has calculated
         tsCurrentResult <$> getCurrentThreadState
 
@@ -93,7 +98,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
               -- block our thread
               myTS <- getCurrentThreadState
               updateThreadState tid (myTS {tsStatus = ThreadBlocked $ BlockedOnThrowAsyncEx tidTarget exception})
-              pure [] -- TODO: return to scheduler ; every thread block operation must return to the scheduler
+              --liftIO $ putStrLn $ " * killThread#, blocked tid: " ++ show tid
+              -- push reschedule continuation, reason: block
+              stackPush $ RunScheduler SR_ThreadBlocked
+              pure []
 
             raise = do
               removeFromQueues tidTarget
@@ -118,9 +126,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- yield# :: State# RealWorld -> State# RealWorld
   ( "yield#", [_s]) -> do
-    currentTId <- gets ssCurrentThreadId
-    scheduleToTheEnd currentTId
-    scheduleThreads
+    stackPush $ RunScheduler SR_ThreadYield
     pure []
 
   -- myThreadId# :: State# RealWorld -> (# State# RealWorld, ThreadId# #)
@@ -177,12 +183,14 @@ raiseAsyncEx lastResult tid exception = do
         -- no Catch stack frame is found, kill thread
         [] -> do
           updateThreadState tid (ts {tsStack = [], tsStatus = ThreadDied})
+          -- TODO: reschedule continuation??
+          --stackPush $ RunScheduler SR_ThreadBlocked
 
         -- the thread continues with the excaption handler, also wakes up the thread if necessary
         exStack@(Catch exHandler bEx iEx : _) -> do
           updateThreadState tid $ ts
             { tsCurrentResult   = [exception]
-            , tsStack           = Apply [] : exStack
+            , tsStack           = Apply [] : exStack -- TODO: restore the catch frames exception mask, sync exceptions do it, and according the async ex pape it should be done here also
             , tsStatus          = ThreadRunning -- HINT: whatever blocked this thread now that operation got cancelled by the async exception
             -- NOTE: Ensure that async exceptions are blocked now, so we don't get a surprise exception before we get around to executing the handler.
             , tsBlockExceptions = True
