@@ -35,10 +35,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- set blocked reason
     tid <- gets ssCurrentThreadId
     updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnDelay targetTime})
+    --liftIO $ putStrLn $ show tid ++ "  (blocked) delay# " ++ show args
 
     -- reschedule threads
-    scheduleToTheEnd tid
-    scheduleThreads
+    stackPush $ RunScheduler SR_ThreadBlocked
     pure []
 
   -- waitRead# :: Int# -> State# s -> State# s
@@ -51,10 +51,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- set blocked reason
     tid <- gets ssCurrentThreadId
     updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnRead fd})
+    --liftIO $ putStrLn $ show tid ++ "  (blocked) waitRead# " ++ show args
 
     -- reschedule threads
-    scheduleToTheEnd tid
-    scheduleThreads
+    stackPush $ RunScheduler SR_ThreadBlocked
     pure []
 
   -- waitWrite# :: Int# -> State# s -> State# s
@@ -67,10 +67,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- set blocked reason
     tid <- gets ssCurrentThreadId
     updateThreadState tid (ts {tsStatus = ThreadBlocked $ BlockedOnWrite fd})
+    --liftIO $ putStrLn $ show tid ++ "  (blocked) waitWrite# " ++ show args
 
     -- reschedule threads
-    scheduleToTheEnd tid
-    scheduleThreads
+    stackPush $ RunScheduler SR_ThreadBlocked
     pure []
 
   _ -> fallback op args t tc
