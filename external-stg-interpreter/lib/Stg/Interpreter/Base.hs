@@ -151,11 +151,19 @@ data HeapObject
   deriving (Show, Eq, Ord)
 
 data StackContinuation
-  = CaseOf  !Env !Binder !AltType ![Alt]  -- pattern match on the result ; carries the closure's local environment
+  = CaseOf  !Id !Env !Binder !AltType ![Alt]  -- closure name (debug) ; pattern match on the result ; carries the closure's local environment
   | Update  !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
   | Apply   ![Atom]                       -- apply args on the result heap object
   | Catch   !Atom !Bool !Bool             -- catch frame ; exception handler, block async exceptions, interruptible
   | RestoreExMask !Bool !Bool             -- saved: block async exceptions, interruptible
+  | RunScheduler  !ScheduleReason
+  | DataToTagOp
+  deriving (Show, Eq, Ord)
+
+data ScheduleReason
+  = SR_ThreadFinished
+  | SR_ThreadBlocked
+  | SR_ThreadYield
   deriving (Show, Eq, Ord)
 
 type Addr   = Int
@@ -184,6 +192,8 @@ data StgState
 
   -- threading
   , ssThreads             :: IntMap ThreadState
+
+  -- thread scheduler related
   , ssCurrentThreadId     :: Int
   , ssScheduledThreadIds  :: [Int]  -- HINT: one round
 
@@ -206,13 +216,16 @@ data StgState
   , ssCBitsMap            :: DL
   , ssStateStore          :: PrintableMVar StgState
 
+  -- RTS related
   , ssRtsSupport          :: Rts
 
   -- debug
-  , ssExecutedClosures    :: Set Int
-  , ssExecutedPrimOps     :: Set Name
-  , ssExecutedFFI         :: Set ForeignCall
-  , ssAddressAfterInit    :: Int
+  , ssCurrentClosure      :: Id
+  , ssExecutedClosures    :: !(Set Int)
+  , ssExecutedPrimOps     :: !(Set Name)
+  , ssExecutedFFI         :: !(Set ForeignCall)
+  , ssExecutedPrimCalls   :: !(Set PrimCall)
+  , ssAddressAfterInit    :: !Int
   }
   deriving (Show)
 
@@ -224,6 +237,11 @@ emptyStgState stateStore dl = StgState
   , ssNextAddr            = 0
 
   , ssCStringConstants    = mempty
+
+  -- threading
+  , ssThreads             = mempty
+  , ssCurrentThreadId     = error "uninitialized ssCurrentThreadId"
+  , ssScheduledThreadIds  = []
 
   -- primop related
 
@@ -244,10 +262,14 @@ emptyStgState stateStore dl = StgState
   , ssCBitsMap            = dl
   , ssStateStore          = stateStore
 
-  , ssRtsSupport          = undefined
+  , ssRtsSupport          = error "uninitialized ssRtsSupport"
+
+  -- debug
+  , ssCurrentClosure      = error "uninitalized ssCurrentClosure"
   , ssExecutedClosures    = Set.empty
   , ssExecutedPrimOps     = Set.empty
   , ssExecutedFFI         = Set.empty
+  , ssExecutedPrimCalls   = Set.empty
   , ssAddressAfterInit    = 0
   }
 
@@ -274,9 +296,10 @@ data Rts
   , rtsFalseCon     :: DataCon
 
   -- closures used by FFI wrapper code ; heap address of the closure
-  , rtsUnpackCString      :: Atom
-  , rtsTopHandlerRunIO    :: Atom
-  , rtsTopHandlerRunNonIO :: Atom
+  , rtsUnpackCString              :: Atom
+  , rtsTopHandlerRunIO            :: Atom
+  , rtsTopHandlerRunNonIO         :: Atom
+  , rtsTopHandlerFlushStdHandles  :: Atom
 
   -- closures used by the exception primitives
   , rtsDivZeroException   :: Atom
@@ -284,61 +307,20 @@ data Rts
   , rtsOverflowException  :: Atom
 
   -- rts helper custom closures
-  , rtsApply2Args   :: Atom
+  , rtsApplyFun1Arg :: Atom
   , rtsTuple2Proj0  :: Atom
+
+  -- builtin special store, see FFI (i.e. getOrSetGHCConcSignalSignalHandlerStore)
+  , rtsGlobalStore  :: Map Name Atom
+
+  -- program contants
+  , rtsProgName     :: String
+  , rtsProgArgs     :: [String]
   }
   deriving (Show)
 
 type M = StateT StgState IO
 
--- thread operations
-
-createThread :: M (Int, ThreadState)
-createThread = do
-  let ts = ThreadState
-        { tsCurrentResult     = []
-        , tsStack             = []
-        , tsStatus            = ThreadRunning
-        , tsBlockedExceptions = []
-        , tsBlockExceptions   = False
-        , tsInterruptible     = True
-        , tsBound             = False
-        , tsLocked            = False
-        , tsCapability        = 0 -- TODO: implement capability handling
-        , tsLabel             = Nothing
-        }
-  threads <- gets ssThreads
-  let threadId  = IntMap.size threads
-  modify' $ \s -> s {ssThreads = IntMap.insert threadId ts threads}
-  pure (threadId, ts)
-
-switchToThread :: Int -> M ()
-switchToThread tid = do
-  modify' $ \s -> s {ssCurrentThreadId = tid}
-
-updateThreadState :: Int -> ThreadState -> M ()
-updateThreadState tid ts = do
-  modify' $ \s@StgState{..} -> s {ssThreads = IntMap.insert tid ts ssThreads}
-
-getThreadState :: HasCallStack => Int -> M ThreadState
-getThreadState tid = do
-  IntMap.lookup tid <$> gets ssThreads >>= \case
-    Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
-    Just a  -> pure a
-
-getCurrentThreadState :: M ThreadState
-getCurrentThreadState = do
-  tid <- gets ssCurrentThreadId
-  getThreadState tid
-
-scheduleToTheEnd :: Int -> M ()
-scheduleToTheEnd tid = pure () -- TODO
-
-requestContextSwitch :: M ()
-requestContextSwitch = pure () -- TODO
-
-scheduleThreads :: M ()
-scheduleThreads = pure () -- TODO
 
 -- stack operations
 
@@ -361,7 +343,7 @@ stackPush sc = do
 
 stackPop :: M (Maybe StackContinuation)
 stackPop = do
-  let tailFun ts@ThreadState{..} = ts {tsStack = tail tsStack}
+  let tailFun ts@ThreadState{..} = ts {tsStack = drop 1 tsStack}
   Just ts@ThreadState{..} <- state $ \s@StgState{..} -> (IntMap.lookup ssCurrentThreadId ssThreads, s {ssThreads = IntMap.adjust tailFun ssCurrentThreadId ssThreads})
   pure $ case tsStack of
     []    -> Nothing
@@ -386,8 +368,13 @@ store a o = modify' $ \s -> s {ssHeap = IntMap.insert a o (ssHeap s)}
 
 stgErrorM :: String -> M a
 stgErrorM msg = do
-  es <- gets ssEvalStack
-  error $ unlines $ msg : "eval stack:" : map (\x -> "  " ++ show x) es
+  tid <- gets ssCurrentThreadId
+  liftIO $ putStrLn $ " * stgErrorM: " ++ show msg
+  liftIO $ putStrLn $ "current thread id: " ++ show tid
+  reportThread tid
+  curClosure <- gets ssCurrentClosure
+  liftIO $ putStrLn $ "current closure: " ++ show curClosure
+  error "stgErrorM"
 
 addBinderToEnv :: Binder -> Atom -> Env -> Env
 addBinderToEnv b = Map.insert (Id b)
@@ -398,11 +385,18 @@ addZippedBindersToEnv bvList env = foldl' (\e (b, v) -> Map.insert (Id b) v e) e
 addManyBindersToEnv :: [Binder] -> [Atom] -> Env -> Env
 addManyBindersToEnv binders values = addZippedBindersToEnv $ zip binders values
 
+-- NOTE: for builtin uniques see: compiler/GHC/Builtin/Names.hs i.e. voidPrimIdKey
 lookupEnv :: HasCallStack => Env -> Binder -> M Atom
 lookupEnv localEnv b
+ | binderId b == BinderId (Unique '0' 124) -- coercionToken#
+ = pure Void
  | binderId b == BinderId (Unique '0' 21) -- void#
  = pure Void
  | binderId b == BinderId (Unique '0' 15) -- realWorld#
+ = pure Void
+ | binderId b == BinderId (Unique '0' 502) -- proxy#
+ = pure Void
+ | binderId b == BinderId (Unique '8' 1) -- GHC.Prim.(##)
  = pure Void
  | otherwise
  = do
@@ -424,19 +418,20 @@ readHeap v = error $ "readHeap: could not read heap object: " ++ show v
 readHeapCon :: HasCallStack => Atom -> M HeapObject
 readHeapCon a = readHeap a >>= \o -> case o of
     Con{} -> pure o
-    _     -> stgErrorM $ "expected con but got: " ++ show o
+    _     -> stgErrorM $ "expected con but got: "-- ++ show o
 
 readHeapClosure :: HasCallStack => Atom -> M HeapObject
 readHeapClosure a = readHeap a >>= \o -> case o of
     Closure{} -> pure o
-    _ -> stgErrorM $ "expected closure but got: " ++ show o
+    _ -> stgErrorM $ "expected closure but got: "-- ++ show o
 
 -- primop related
 
 type PrimOpEval = Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 
-type BuiltinStgEval = Atom -> M [Atom]
-type BuiltinStgApply = Atom -> [Atom] -> M [Atom]
+--type BuiltinStgEval = Atom -> M [Atom]
+--type BuiltinStgApply = Atom -> [Atom] -> M [Atom]
+type EvalOnNewThread = M [Atom] -> M [Atom]
 
 lookupWeakPointerDescriptor :: HasCallStack => Int -> M WeakPtrDescriptor
 lookupWeakPointerDescriptor wpId = do
@@ -534,14 +529,22 @@ liftIOAndBorrowStgState action = do
   pure result
 
 -- debug
+setInsert :: Ord a => a -> Set a -> Set a
+setInsert a s
+  | Set.member a s  = s
+  | otherwise       = Set.insert a s
+
 markExecuted :: Int -> M ()
-markExecuted i = modify' $ \s@StgState{..} -> s {ssExecutedClosures = Set.insert i ssExecutedClosures}
+markExecuted i = modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
 
 markPrimOp :: Name -> M ()
-markPrimOp i = modify' $ \s@StgState{..} -> s {ssExecutedPrimOps = Set.insert i ssExecutedPrimOps}
+markPrimOp i = modify' $ \s@StgState{..} -> s {ssExecutedPrimOps = setInsert i ssExecutedPrimOps}
 
 markFFI :: ForeignCall -> M ()
-markFFI i = modify' $ \s@StgState{..} -> s {ssExecutedFFI = Set.insert i ssExecutedFFI}
+markFFI i = modify' $ \s@StgState{..} -> s {ssExecutedFFI = setInsert i ssExecutedFFI}
+
+markPrimCall :: PrimCall -> M ()
+markPrimCall i = modify' $ \s@StgState{..} -> s {ssExecutedPrimCalls = setInsert i ssExecutedPrimCalls}
 
 -- string constants
 -- NOTE: the string gets extended with a null terminator
@@ -561,8 +564,8 @@ getCStringConstantPtrAtom key = do
 -- threading
 
 data AsyncExceptionMask
-  = NonBlocked
-  | Blocked     {aemInterruptible :: Bool}
+  = NotBlocked
+  | Blocked     {isInterruptible :: !Bool}
   deriving (Eq, Ord, Show)
 
 data ThreadState
@@ -570,10 +573,10 @@ data ThreadState
   { tsCurrentResult     :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
   , tsStack             :: ![StackContinuation]
   , tsStatus            :: !ThreadStatus
---  , tsAsyncExMask     :: !AsyncExceptionMask
   , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
   , tsBlockExceptions   :: !Bool  -- block async exceptions
   , tsInterruptible     :: !Bool  -- interruptible blocking of async exception
+--  , tsAsyncExMask     :: !AsyncExceptionMask
   , tsBound             :: !Bool
   , tsLocked            :: !Bool  -- Q: what is this for? is this necessary?
   , tsCapability        :: !Int   -- NOTE: the thread is running on this capability ; Q: is this necessary?
@@ -581,9 +584,103 @@ data ThreadState
   }
   deriving (Eq, Ord, Show)
 
+-- thread operations
+
+createThread :: M (Int, ThreadState)
+createThread = do
+  let ts = ThreadState
+        { tsCurrentResult     = []
+        , tsStack             = []
+        , tsStatus            = ThreadRunning
+        , tsBlockedExceptions = []
+        , tsBlockExceptions   = False
+        , tsInterruptible     = False
+        , tsBound             = False
+        , tsLocked            = False
+        , tsCapability        = 0 -- TODO: implement capability handling
+        , tsLabel             = Nothing
+        }
+  threads <- gets ssThreads
+  let threadId  = IntMap.size threads
+  modify' $ \s -> s {ssThreads = IntMap.insert threadId ts threads}
+  pure (threadId, ts)
+
+updateThreadState :: Int -> ThreadState -> M ()
+updateThreadState tid ts = do
+  modify' $ \s@StgState{..} -> s {ssThreads = IntMap.insert tid ts ssThreads}
+
+getThreadState :: HasCallStack => Int -> M ThreadState
+getThreadState tid = do
+  IntMap.lookup tid <$> gets ssThreads >>= \case
+    Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
+    Just a  -> pure a
+
+getCurrentThreadState :: M ThreadState
+getCurrentThreadState = do
+  tid <- gets ssCurrentThreadId
+  getThreadState tid
+
+switchToThread :: Int -> M () -- TODO: check what code uses this
+switchToThread tid = do
+  modify' $ \s -> s {ssCurrentThreadId = tid}
+{-
+  used by:
+    FFI.hs:   ffiCallbackBridge
+    Base.hs:  liftIOAndBorrowStgState
+-}
+{-
+insertThread :: Int -> ThreadState -> M ()
+insertThread = updateThreadState
+-}
+-- NOTE: only fork# and forkOn# uses requestContextSwitch
+requestContextSwitch :: M ()
+requestContextSwitch = do
+  -- NOTE: the semantics does not require immediate yielding, some latency is allowed
+  --        for simplicity we yield immediately
+  stackPush $ RunScheduler SR_ThreadYield
+{-
+  used by:
+    fork#   - yield
+    forkOn# - yield
+-}
+
+scheduleToTheEnd :: Int -> M ()
+scheduleToTheEnd tid = do
+  modify' $ \s -> s {ssScheduledThreadIds = ssScheduledThreadIds s ++ [tid]}
+
+{-
+  used by:
+    takeMVar#   - block
+    putMVar#    - block
+    readMVar#   - block
+    delay#      - block
+    waitRead#   - block
+    waitWrite#  - block
+    yield#      - yield
+
+    fork#       - yield (adds the new thread)
+    forkOn#     - yield (adds the new thread)
+-}
+
+{-
+  scheduler operations:
+    block
+    yield
+    finished
+
+  Q: how to add a newly created thread?
+     manually or via return-to-scheduler op?
+
+TODO:
+  distinct immediate reschedule and relaxed (soonish) context switch
+NOTE:
+  on the native stg machine the closure/basic block entry point allocates memory, so it is a safe point for context switch
+  in the native code the contect switch happens at safe points
+-}
+
 --------------
 
--- NOTE: the BlockReason data type is some kind of reification of the blocking operation
+-- NOTE: the BlockReason data type is some kind of reification of the blocked operation
 data BlockReason
   = BlockedOnMVar         Int (Maybe Atom) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
   | BlockedOnMVarRead     Int       -- mvar id
@@ -680,3 +777,23 @@ data BlockedStatus
 #define ThreadKilled    3       /* thread has died, don't run it */
 #define ThreadComplete  4       /* thread has finished */
 -}
+
+reportThreads :: M ()
+reportThreads = do
+  threadIds <- IntMap.keys <$> gets ssThreads
+  liftIO $ putStrLn $ "thread Ids: " ++ show threadIds
+  mapM_ reportThread threadIds
+
+reportThread :: Int -> M ()
+reportThread tid = do
+  endTS <- getThreadState tid
+  liftIO $ do
+    putStrLn ""
+    putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
+    putStrLn "stack:"
+    putStrLn $ unlines $ map show $ zip [0..] $ map showStackCont $ tsStack endTS
+    putStrLn ""
+
+showStackCont = \case
+  CaseOf clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", result var: " ++ show (Id b)
+  c -> show c
