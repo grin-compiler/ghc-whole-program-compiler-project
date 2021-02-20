@@ -3,6 +3,7 @@ module Stg.Interpreter.FFI where
 
 ----- FFI experimental
 import qualified GHC.Exts as Exts
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BS
 import Control.Concurrent
 
@@ -23,9 +24,21 @@ import Foreign.Marshal.Array
 import qualified Data.Primitive.ByteArray as BA
 import qualified Data.ByteString.Char8 as BS8
 -----
+import System.Exit
+import System.IO
+import System.FilePath
+import Text.Printf
+
+import Data.Time.Clock
+
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Map as Map
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 
 import GHC.Stack
 import Control.Monad.State.Strict
@@ -34,6 +47,7 @@ import Control.Concurrent.MVar
 import Stg.Syntax
 import Stg.Interpreter.Base
 import Stg.Interpreter.Debug
+import Stg.Interpreter.Rts (globalStoreSymbols)
 
 pattern CharV c = Literal (LitChar c)
 pattern IntV i  = IntAtom i -- Literal (LitNumber LitNumInt i)
@@ -150,40 +164,116 @@ evalForeignCall funPtr cArgs retType = case retType of
     pure [DoubleAtom result]
 
 {-# NOINLINE evalFCallOp #-}
-evalFCallOp :: BuiltinStgApply -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
+evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
     --evalStack <- gets ssEvalStack
-    --liftIO $ putStrLn $ show evalStack ++ " " ++ show foreignCTarget ++ " " ++ show args
+    --liftIO $ putStrLn $ "  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
+
+      ----------------
+      -- GHC RTS API
+      ----------------
+
+      -- static pointer API
+      {-
+        hs_spt_lookup
+        hs_spt_insert
+        hs_spt_insert_stableptr
+        hs_spt_remove
+        hs_spt_keys
+        hs_spt_key_count
+      -}
+
+      -- misc
+
       StaticTarget _ "freeHaskellFunctionPtr" _ _ -> pure [] -- TODO
       StaticTarget _ "performMajorGC" _ _ -> pure []
-      StaticTarget _ "rts_setMainThread" _ _ -> pure []
-      StaticTarget _ "getOrSetGHCConcSignalSignalHandlerStore" _ _ -> pure [head args] -- WTF!
-      StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]
+      StaticTarget _ "rts_setMainThread" _ _ -> pure [] -- TODO
+
+      StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]                          -- TODO: for testsuite
+
       StaticTarget _ "lockFile" _ _ -> pure [IntV 0]
       StaticTarget _ "unlockFile" _ _ -> pure [IntV 0]
       StaticTarget _ "rtsSupportsBoundThreads" _ _ -> pure [IntV 0]
+{-
+      StaticTarget _ "getMonotonicNSec" _ _
+        | [Void] <- args
+        -> do
+          now <- liftIO getCurrentTime
+          pure [WordV nSec]
+-}
+{-
+StgWord64 getMonotonicNSec(void)
+{
+#if defined(HAVE_CLOCK_GETTIME)
+    return getClockTime(CLOCK_ID);
+
+#elif defined(darwin_HOST_OS)
+
+    uint64_t time = mach_absolute_time();
+    return (time * timer_scaling_factor_numer) / timer_scaling_factor_denom;
+
+#else // use gettimeofday()
+
+    struct timeval tv;
+
+    if (gettimeofday(&tv, (struct timezone *) NULL) != 0) {
+        debugBlech("getMonotonicNSec: gettimeofday failed: %s", strerror(errno));
+    };
+    return (StgWord64)tv.tv_sec * 1000000000 +
+           (StgWord64)tv.tv_usec * 1000;
+
+#endif
+}
+
+-}
+      {-
+void
+getProgArgv(int *argc, char **argv[])
+{
+    if (argc) { *argc = prog_argc; }
+    if (argv) { *argv = prog_argv; }
+}
+      -}
       StaticTarget _ "getProgArgv" _ _
         | [PtrAtom (ByteArrayPtr ba1) ptrArgc, PtrAtom (ByteArrayPtr ba2) ptrArgv, Void] <- args
         -> do
+          Rts{..} <- gets ssRtsSupport
           liftIO $ do
             -- HINT: getProgArgv :: Ptr CInt -> Ptr (Ptr CString) -> IO ()
-            poke (castPtr ptrArgc :: Ptr CInt) 0
+            poke (castPtr ptrArgc :: Ptr CInt) (fromIntegral $ 1 + length rtsProgArgs)
 
             -- FIXME: this has a race condition with the GC!!!! because it is pure
-            arr1 <- newArray ['\0']
-            arr2 <- newArray [arr1, nullPtr]
+            arr1 <- newCString rtsProgName :: IO CString
+            args <- mapM newCString rtsProgArgs :: IO [CString]
+            arr2 <- newArray (arr1 : args ++ [nullPtr]) :: IO (Ptr CString)
 
-            poke (castPtr ptrArgv :: Ptr (Ptr CString)) (castPtr arr2 :: Ptr CString )
+            poke (castPtr ptrArgv :: Ptr (Ptr CString)) arr2--(castPtr arr2 :: Ptr CString )
           pure []
 
       StaticTarget _ "shutdownHaskellAndExit" _ _
         | [IntV retCode, IntV fastExit, Void] <- args
         , UnboxedTuple [] <- t
         -> do
-          showDebug builtinStgApply
-          error $ "shutdownHaskellAndExit exit code:  " ++ show retCode ++ ", fast exit: " ++ show fastExit
+          --showDebug evalOnNewThread
+          --error $ "shutdownHaskellAndExit exit code:  " ++ show retCode ++ ", fast exit: " ++ show fastExit
+          liftIO . exitWith $ case retCode of
+            0 -> ExitSuccess
+            n -> ExitFailure n
 
+      StaticTarget _ "debugBelch2" _ _
+        | [PtrAtom (ByteArrayPtr bai1) _, PtrAtom (ByteArrayPtr bai2) _, Void] <- args
+        -> do
+          let
+            showByteArray b = do
+              ByteArrayDescriptor{..} <- lookupByteArrayDescriptorI b
+              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
+          formatStr <- showByteArray bai1
+          value <- showByteArray bai2
+          liftIO $ do
+            hPutStr stderr $ printf formatStr value
+            hFlush stderr
+          pure []
 
       StaticTarget _ "errorBelch" _ _ -> do
         liftIO $ putStrLn $ "errorBelch: " ++ show args
@@ -194,13 +284,11 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
           let
             showByteArray b = do
               ByteArrayDescriptor{..} <- lookupByteArrayDescriptorI b
-              map BS.w2c . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
-          b1 <- showByteArray bai1
-          b2 <- showByteArray bai2
-          liftIO $ do
-            putStrLn $ "errorBelch2: " ++ show args
-            putStrLn b1
-            putStrLn b2
+              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
+          formatStr <- showByteArray bai1
+          value <- showByteArray bai2
+          Rts{..} <- gets ssRtsSupport
+          liftIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
           pure []
 
 {-
@@ -233,15 +321,26 @@ evalFCallOp builtinStgApply fCall@ForeignCall{..} args t _tc = do
           -- FIXME: _freeWrapper needs to be called otherwise it will leak the memory!!!!
           let Just (typeString, _)    = BS8.unsnoc typeCString
               Just (hsTypeString, _)  = BS8.unsnoc hsTypeCString
-          (funPtr, _freeWrapper) <- createAdjustor builtinStgApply fun (BS8.unpack typeString) (BS8.unpack hsTypeString)
+          (funPtr, _freeWrapper) <- createAdjustor evalOnNewThread fun (BS8.unpack typeString) (BS8.unpack hsTypeString)
           pure [PtrAtom RawPtr $ castFunPtrToPtr funPtr]
+
+      -- GHC RTS global store getOrSet function implementation
+      StaticTarget _ foreignSymbol _ _
+        | Set.member foreignSymbol globalStoreSymbols
+        , [value, Void] <- args
+        -> do
+            -- HINT: set once with the first value, then return it always, only for the globalStoreSymbols
+            store <- gets $ rtsGlobalStore . ssRtsSupport
+            case Map.lookup foreignSymbol store of
+              Nothing -> state $ \s@StgState{..} -> ([value], s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol value store}})
+              Just v  -> pure [v]
 
 ------------------------------------------
 
       StaticTarget _ foreignSymbol _ _
         -- | Set.member foreignSymbol allowedSymbols
         -> do
-          liftIO $ print foreignSymbol
+          --liftIO $ print foreignSymbol
           cArgs <- catMaybes <$> mapM mkFFIArg args
           dl <- gets ssCBitsMap
           liftIOAndBorrowStgState $ do
@@ -313,6 +412,11 @@ charToSetter c p a = case (c, a) of
   x   -> error $ "charToSetter: unknown type " ++ show x
 
 {-
+  rtsTopHandlerRunIO
+  rtsTopHandlerRunNonIO
+-}
+
+{-
 void zdGLUTzm2zi7zi0zi15zm1pzzTWDEZZBcYHcS36qZZ2lppzdGraphicsziUIziGLUTziRawziCallbackszdGLUTzzm2zzi7zzi0zzi15zzm1pzzzzTWDEZZZZBcYHcS36qZZZZ2lppzuGraphicszziUIzziGLUTzziRawzziCallbackszumakePositionFunc
   ( StgStablePtr the_stableptr
   , HsInt32 a1
@@ -331,10 +435,70 @@ rts_checkSchedStatus("zdGLUTzm2zi7zi0zi15zm1pzzTWDEZZBcYHcS36qZZ2lppzdGraphicszi
 rts_unlock(cap);
 }
 -}
+--------------------
+{-
+                 <> ptext (if is_IO_res_ty
+                                then (sLit "runIO_closure")
+                                else (sLit "runNonIO_closure"))
+-}
+
+
+{-
+/*
+ * rts_evalIO() evaluates a value of the form (IO a), forcing the action's
+ * result to WHNF before returning.
+ */
+void rts_evalIO (/* inout */ Capability **cap,
+                 /* in    */ HaskellObj p,
+                 /* out */   HaskellObj *ret)
+{
+    StgTSO* tso;
+
+    tso = createStrictIOThread(*cap, RtsFlags.GcFlags.initialStkSize, p);
+    scheduleWaitThread(tso,ret,cap);
+}
+
+/*
+ * Same as above, but also evaluate the result of the IO action
+ * to whnf while we're at it.
+ */
+
+StgTSO *
+createStrictIOThread(Capability *cap, W_ stack_size,  StgClosure *closure)
+{
+  StgTSO *t;
+  t = createThread(cap, stack_size);
+  pushClosure(t, (W_)&stg_forceIO_info);
+  pushClosure(t, (W_)&stg_ap_v_info);
+  pushClosure(t, (W_)closure);
+  pushClosure(t, (W_)&stg_enter_info);
+  return t;
+}
+
+/* -----------------------------------------------------------------------------
+    Strict IO application - performing an IO action and entering its result.
+
+    rts_evalIO() lets you perform Haskell IO actions from outside of
+    Haskell-land, returning back to you their result. Want this result
+    to be evaluated to WHNF by that time, so that we can easily get at
+    the int/char/whatever using the various get{Ty} functions provided
+    by the RTS API.
+
+    stg_forceIO takes care of this, performing the IO action and entering
+    the results that comes back.
+
+    ------------------------------------------------------------------------- */
+
+INFO_TABLE_RET(stg_forceIO, RET_SMALL, P_ info_ptr)
+    return (P_ ret)
+{
+    ENTER(ret);
+}
+-}
 
 {-# NOINLINE ffiCallbackBridge #-}
-ffiCallbackBridge :: HasCallStack => BuiltinStgApply -> MVar StgState -> Atom -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
-ffiCallbackBridge builtinStgApply stateStore fun typeString hsTypeString _cif retStorage argsStoragePtr _userData = do
+ffiCallbackBridge :: HasCallStack => EvalOnNewThread -> MVar StgState -> Atom -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
+ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif retStorage argsStoragePtr _userData = do
   let (retType : argsType) = typeString
       ('e' : hsRetType : hsArgsType) = hsTypeString
   -- read args from ffi
@@ -348,17 +512,36 @@ ffiCallbackBridge builtinStgApply stateStore fun typeString hsTypeString _cif re
   putStrLn $ "[callback BEGIN] " ++ show fun
   before <- takeMVar stateStore
   (result, after) <- flip runStateT before $ do
-    (ffiThread, _ts) <- createThread
-    switchToThread ffiThread
-    -- TODO: box FFI arg atoms
-    --  i.e. rts_mkWord8
-    -- TODO: check how the stubs are generated and what types are need to be boxed
-    boxedArgs <- zipWithM boxFFIAtom hsArgsType argAtoms
-    -- !!!!!!!!!!!!!!!!!!!!!!!!!!
-    -- Q: what stack shall we use here?
-    -- !!!!!!!!!!!!!!!!!!!!!!!!!!
-    undefined
-    builtinStgApply fun $ boxedArgs ++ [Void]
+    {-
+    oldThread <- gets ssCurrentThreadId
+    -- TODO: properly setup ffi thread
+    (tidFFI, tsFFI) <- createThread
+    insertThread tidFFI tsFFI
+    scheduleToTheEnd tidFFI
+    switchToThread tidFFI
+    -}
+    evalOnNewThread $ do
+      -- TODO: box FFI arg atoms
+      --  i.e. rts_mkWord8
+      -- TODO: check how the stubs are generated and what types are need to be boxed
+      boxedArgs <- zipWithM boxFFIAtom hsArgsType argAtoms
+      -- !!!!!!!!!!!!!!!!!!!!!!!!!!
+      -- Q: what stack shall we use here?
+      -- !!!!!!!!!!!!!!!!!!!!!!!!!!
+      stackPush $ Apply [] -- force result to WHNF
+      stackPush $ Apply $ boxedArgs ++ [Void]
+      pure [fun]
+{-
+--=============================================================================
+    -- force result to WHNF
+    resultLazy <- evalOnNewThread fun $ boxedArgs ++ [Void]
+    finalResult <- case resultLazy of
+      []            -> pure resultLazy
+      [valueThunk]  -> evalOnNewThread valueThunk []
+    switchToThread oldThread
+--=============================================================================
+    pure finalResult
+-}
   putMVar stateStore after
   putStrLn $ "[callback END]   " ++ show fun
 
@@ -371,13 +554,13 @@ ffiCallbackBridge builtinStgApply stateStore fun typeString hsTypeString _cif re
       -- NOTE: only single result is supported
       charToSetter retType retStorage retAtom
 
-createAdjustor :: HasCallStack => BuiltinStgApply -> Atom -> String -> String -> M (FunPtr a, IO ())
-createAdjustor builtinStgApply fun typeString hsTypeString = do
+createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> String -> String -> M (FunPtr a, IO ())
+createAdjustor evalOnNewThread fun typeString hsTypeString = do
   liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show typeString ++ " " ++ show hsTypeString
 
   let (retCType : argsCType) = map charToFFIType typeString
   stateStore <- gets $ unPrintableMVar . ssStateStore
-  liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge builtinStgApply stateStore fun typeString hsTypeString)
+  liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString)
 
 boxFFIAtom :: Char -> Atom -> M Atom
 boxFFIAtom c a = case (c, a) of
