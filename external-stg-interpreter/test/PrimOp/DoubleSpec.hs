@@ -169,15 +169,11 @@ spec = do
 
 
     it "decodeDouble_2Int#" $
-      property $ \(a :: Double) -> monadicIO $ do
-        [IntV stgVal1, WordV stgVal2, WordV stgVal3, IntV stgVal4] <- run $ evalOp "decodeDouble_2Int#" [DoubleV a]
-
+      property $ \(NonZero a :: NonZero Double) -> do
         let !(# x, y, z, w #) = decodeDouble_2Int# (unboxDouble a)
-        assert $ (stgVal1, stgVal2, stgVal3, stgVal4) == (I# x, W# y, W# z, I# w)
+        evalOp "decodeDouble_2Int#" [DoubleV a] `shouldReturn` [IntV (I# x), WordV (W# y), WordV (W# z), IntV (I# w)]
 
     it "decodeDouble_Int64#" $
-      property $ \(a :: Double) -> monadicIO $ do
-        [IntV stgVal1, IntV stgVal2] <- run $ evalOp "decodeDouble_Int64#" [DoubleV a]
-
+      property $ \(a :: Double) -> do
         let !(# x, y #) = decodeDouble_Int64# (unboxDouble a)
-        assert $ (stgVal1, stgVal2) == (I# x, I# y)
+        evalOp "decodeDouble_Int64#" [DoubleV a] `shouldReturn` [IntV (I# x), IntV (I# y)]
