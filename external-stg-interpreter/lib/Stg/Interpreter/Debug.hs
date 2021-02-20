@@ -85,12 +85,14 @@ showMarked :: M ()
 showMarked = do
   ops <- Set.toList <$> gets ssExecutedPrimOps
   ffis <- Set.toList <$> gets ssExecutedFFI
+  prims <- Set.toList <$> gets ssExecutedPrimCalls
   liftIO $ do
     mapM_ print ops
     mapM_ print ffis
+    mapM_ print prims
 
-showDebug :: BuiltinStgApply -> M ()
-showDebug builtinStgApply = do
+showDebug :: EvalOnNewThread -> M ()
+showDebug evalOnNewThread = do
   limit <- gets ssAddressAfterInit
   liftIO $ putStrLn "\n-------------------------------------------\n"
   liftIO $ putStrLn "Used primops and foreign functions:"
