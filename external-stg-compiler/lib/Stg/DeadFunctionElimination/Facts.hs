@@ -112,6 +112,7 @@ writeDfeFacts prefixPath Module{..} = do
         StgCase expr _ aty alts   -> visitExpr fun expr >> visitAltType fun aty >> mapM_ (visitAlt fun) alts
         StgLet b  e               -> visitBinding fun b >> visitExpr fun e
         StgLetNoEscape b  e       -> visitBinding fun b >> visitExpr fun e
+        StgTick _t e              -> visitExpr fun e
 
       visitAltType :: Name -> AltType -> IO ()
       visitAltType fun = \case

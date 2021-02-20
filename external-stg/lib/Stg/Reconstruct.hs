@@ -192,6 +192,7 @@ reconExpr bm = \case
                            in StgLet b' (reconExpr bm' e)
   StgLetNoEscape b e    -> let (bm', b') = reconBinding bm b
                            in StgLetNoEscape b' (reconExpr bm' e)
+  StgTick t e           -> StgTick t (reconExpr bm e)
 
 reconBinding :: BinderMap -> SBinding -> (BinderMap, Binding)
 reconBinding bm = \case

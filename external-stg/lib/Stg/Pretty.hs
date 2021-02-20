@@ -151,7 +151,7 @@ pprExpr' hasParens exp = case exp of
   StgConApp dc args _t  -> maybeParens hasParens $ (pretty dc) <+> (hsep $ map (pprArg) args)
   StgLet b e            -> maybeParens hasParens $ "let" <+> (align $ pprBinding b) <$$> "in" <+> align (pprExpr' False e)
   StgLetNoEscape b e    -> maybeParens hasParens $ "lettail" <+> (align $ pprBinding b) <$$> "in" <+> align (pprExpr' False e)
-
+  StgTick _tickish e    -> pprExpr' hasParens e
 
 instance Pretty Expr where
   pretty = pprExpr

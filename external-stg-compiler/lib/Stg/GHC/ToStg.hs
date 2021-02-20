@@ -406,6 +406,7 @@ cvtExpr = \case
   Ext.StgCase exp i at alts   -> StgCase <$> cvtExpr exp <*> cvtIdDef i <*> cvtAltType at <*> mapM cvtAlt alts
   Ext.StgLet b exp            -> StgLet noExtFieldSilent <$> cvtBinding b <*> cvtExpr exp
   Ext.StgLetNoEscape b exp    -> StgLetNoEscape noExtFieldSilent <$> cvtBinding b <*> cvtExpr exp
+  Ext.StgTick _t exp          -> cvtExpr exp -- TODO: convert tickish
 
 cvtArgs :: [Ext.Arg] -> M [StgArg]
 cvtArgs = mapM cvtArg
