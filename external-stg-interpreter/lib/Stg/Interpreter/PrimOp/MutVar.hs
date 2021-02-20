@@ -11,8 +11,8 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-evalPrimOp :: BuiltinStgApply -> PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp fallback op args t tc = case (op, args) of
 
   -- newMutVar# :: a -> State# s -> (# State# s, MutVar# s a #)
   ( "newMutVar#", [a, _s]) -> do
@@ -43,8 +43,8 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
     old <- lookupMutVar m
 
     -- transform through fun, get a pair result
-    ap2 <- readHeapClosure rtsApply2Args
-    lazyNewTup2Value <- HeapPtr <$> allocAndStore (ap2 {hoCloArgs = [fun, old], hoCloMissing = 0})
+    apFun <- readHeapClosure rtsApplyFun1Arg
+    lazyNewTup2Value <- HeapPtr <$> allocAndStore (apFun {hoCloArgs = [fun, old], hoCloMissing = 0})
 
     -- get the first value ud the pair
     tup2Prj0 <- readHeapClosure rtsTuple2Proj0
@@ -61,8 +61,8 @@ evalPrimOp builtinStgApply fallback op args t tc = case (op, args) of
     old <- lookupMutVar m
 
     -- transform through fun, get the new value
-    ap2 <- readHeapClosure rtsApply2Args
-    lazyNewMutVarValue <- HeapPtr <$> allocAndStore (ap2 {hoCloArgs = [fun, old], hoCloMissing = 0})
+    apFun <- readHeapClosure rtsApplyFun1Arg
+    lazyNewMutVarValue <- HeapPtr <$> allocAndStore (apFun {hoCloArgs = [fun, old], hoCloMissing = 0})
 
     -- update mutvar
     modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m lazyNewMutVarValue ssMutVars}
