@@ -18,8 +18,11 @@ library
     Stg.Interpreter
     Stg.Interpreter.Base
     Stg.Interpreter.FFI
+    Stg.Interpreter.PrimCall
     Stg.Interpreter.Rts
     Stg.Interpreter.Debug
+    Stg.Interpreter.IOManager
+    Stg.Interpreter.ThreadScheduler
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array
@@ -57,12 +60,15 @@ library
                        time,
                        unix,
                        filepath,
+                       directory,
                        libffi,
+                       text,
                        bytestring,
                        containers,
                        primitive,
                        vector,
                        mtl,
+                       inline-c,
                        external-stg
   default-language:    Haskell2010
 
