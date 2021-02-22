@@ -504,12 +504,13 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
   -- read args from ffi
   argsStorage <- peekArray (length argsType) argsStoragePtr
   argAtoms <- zipWithM charToGetter argsType argsStorage
-
+  {-
   putStrLn $ "got FFI callback: " ++ show fun ++ " " ++ show argAtoms
   putStrLn $ " typeString:   " ++ show typeString
   putStrLn $ " hsTypeString: " ++ show hsTypeString
 
   putStrLn $ "[callback BEGIN] " ++ show fun
+  -}
   before <- takeMVar stateStore
   (result, after) <- flip runStateT before $ do
     {-
@@ -543,7 +544,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
     pure finalResult
 -}
   putMVar stateStore after
-  putStrLn $ "[callback END]   " ++ show fun
+  --putStrLn $ "[callback END]   " ++ show fun
 
   -- HINT: need some kind of channel between the IO world and the interpreters StateT IO
   -- NOTE: stg apply fun argAtoms
@@ -556,7 +557,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
 
 createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> String -> String -> M (FunPtr a, IO ())
 createAdjustor evalOnNewThread fun typeString hsTypeString = do
-  liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show typeString ++ " " ++ show hsTypeString
+  --liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show typeString ++ " " ++ show hsTypeString
 
   let (retCType : argsCType) = map charToFFIType typeString
   stateStore <- gets $ unPrintableMVar . ssStateStore
