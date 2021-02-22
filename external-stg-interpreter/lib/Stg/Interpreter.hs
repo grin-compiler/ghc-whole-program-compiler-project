@@ -13,7 +13,7 @@ import Control.Monad.State.Strict
 import Control.Exception
 import qualified Data.Primitive.ByteArray as BA
 
-import Data.List (partition)
+import Data.List (partition, isSuffixOf)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -616,10 +616,9 @@ test = do
     _   -> pure (False, "tsumupto.fullpak", [])
 
   mods0 <- case takeExtension fullpak_name of
-    ".fullpak"          -> getFullpakModules fullpak_name
-    ".o_ghc_stgapp"     -> getGhcStgAppModules fullpak_name
-    ".dyn_o_ghc_stgapp" -> getGhcStgAppModules fullpak_name
-    _ -> error "unknown input file format"
+    ".fullpak"                          -> getFullpakModules fullpak_name
+    ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
+    _                                   -> error "unknown input file format"
 
   let mods      = extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension fullpak_name
