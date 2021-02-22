@@ -115,12 +115,13 @@ getAppModuleMapping ghcStgAppFname = do
   content <- lines <$> readFile ghcStgAppFname
   let [root]      = parseSection content "root:"
       [osuf]      = parseSection content "o_suffix:"
+      ways        = parseSection content "ways:"
       libPaths    = parsePathSection root content "pkg_lib_paths:"
       o_files     = parsePathSection root content "o_files:"
       extra_input = parsePathSection root content "extra_ld_inputs:"
       pkgLibs     = parseSection content "package_hs_libs:"
       pkgHSLibs   = [drop 4 n | n <- pkgLibs, isPrefixOf "-lHS" n]
-  stglibs <- mapM (findStglibForHSLib osuf libPaths) pkgHSLibs
+  stglibs <- mapM (findStglibForHSLib ways osuf libPaths) pkgHSLibs
   libModpaks <- mapM getLibModuleMapping stglibs
 
   extraAppModpaks <- filterM doesFileExist $ map (++ "_modpak") extra_input
@@ -188,15 +189,19 @@ getGhcStgAppModules ghcstgappPath = do
     readModpakL modpakName modpakStgbinPath decodeStgbin
 
 -- .stglib utility
-findStglibForHSLib :: String -> [FilePath] -> String -> IO FilePath
-findStglibForHSLib osuf hsLibPaths libName = do
+findStglibForHSLib :: [String] -> String -> [FilePath] -> String -> IO FilePath
+findStglibForHSLib ways osuf hsLibPaths libName = do
   -- HINT: e.g. libHSghc-boot-8.11.0.20201112-ghc8.11.0.20201112.dyn_o_stglib
-  let stglibName
+  let waySet = Set.fromList ways
+      stglibName
         | isPrefixOf "rts-1.0" libName  -- HACK!!
         = "libHSrts-1.0.o_stglib"
 
+        | Set.member "WayDyn" waySet
+        = "libHS" ++ libName ++ ".dyn_o_stglib"
+
         | otherwise
-        = "libHS" ++ libName ++ "." ++ osuf ++ "_stglib"
+        = "libHS" ++ libName ++ ".o_stglib"
 
   filesFound <- forM hsLibPaths $ \path -> do
     find always (fileName ==? stglibName) path
