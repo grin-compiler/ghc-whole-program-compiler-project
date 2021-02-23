@@ -124,20 +124,63 @@ skip_set = set(
 
   # needs STM primops
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/T12852.run/T12852.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/simplCore/should_run/T16066.run/T16066.o_ghc_stgapp'
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/stranal/should_run/T14171.run/T14171.o_ghc_stgapp'
 
   # needs RTS option parsing and heap mem limit support
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/simplCore/should_run/simplrun010.run/simplrun010.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/simplCore/should_run/T10830.run/T10830.o_ghc_stgapp'
 
   # needs detection of MVar blocked indefinitely
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/mdo/should_fail/mdofail006.run/mdofail006.o_ghc_stgapp'
 
+  # FFI symbol
+      # forkProcess
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/libposix/posix014.run/posix014.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/libposix/posix004.run/posix004.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/forkprocess01.run/forkprocess01.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/T1185.run/T1185.o_ghc_stgapp'
+      # rtsTimerSignal
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/libposix/posix009.run/posix009.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/libposix/posix006.run/posix006.o_ghc_stgapp'
+      # shutdownHaskellAndSignal
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/topHandler03.run/topHandler03.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/topHandler02.run/topHandler02.o_ghc_stgapp'
+      # hs_free_stable_ptr
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/stableptr005.run/stableptr005.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/stableptr004.run/stableptr004.o_ghc_stgapp'
+      # getMonotonicNSec
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/hWaitForInput-accurate-socket.run/hWaitForInput-accurate-socket.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/hWaitForInput-accurate-pipe.run/hWaitForInput-accurate-pipe.o_ghc_stgapp'
+      # getProcessElapsedTime\n
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/T8684.run/T8684.o_ghc_stgapp'
+      # externalPutMVar
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/concurrent/should_run/hs_try_putmvar002.run/hs_try_putmvar002.o_ghc_stgapp'
+
   # bug
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/process/tests/process011.run/process011.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/topHandler01.run/topHandler01.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/IO/hReady002.run/hReady002.o_ghc_stgapp'
+      #  called at lib/Stg/Interpreter/Base.hs:377:3
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/libposix/posix005.run/posix005.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/getEnvironment02.run/getEnvironment02.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/tests/getEnvironment01.run/getEnvironment01.o_ghc_stgapp'
+      # ext-stg-interpreter: lib/Stg/Interpreter.hs:(215,3)-(230,36): Non-exhaustive patterns in case
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/foldableArray.run/foldableArray.o_ghc_stgapp'
+      # Prelude.chr: bad argument: 671088640
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/IO/hSetEncoding001.run/hSetEncoding001.o_ghc_stgapp'
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/IO/encoding002.run/encoding002.o_ghc_stgapp'
   ])
 
 ################### OK (ALL)
-#OK: 644  ALL: 714
+"""
+Found: 1061 tests
+Summary:
+ OK:       873
+ FAIL:     87
+ TIMEOUT:  0
+ SKIPPED:  99
+"""
 test_paths = [
     '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/ado/'
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/array/'
@@ -177,8 +220,20 @@ test_paths = [
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/th/'
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/typecheck/'
 
+################ BUGS
+
   #OK, but needs args; checked manually
   , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/callarity/'
+
+  #OK: 21 FAIL: 46 (many bugs / unimplemented)
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/concurrent/'
+
+  #OK: 147  FAIL: 23 (many bugs and unimplemented)
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/'
+
+  #OK: 17  FAIL: 10 (many unimplemented)
+  , '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/'
+
   ]
 
 ################ UNIMPLEMENTED / WILL NOT BE IMPLEMENTED
@@ -188,16 +243,6 @@ test_paths = [
 #test_path = '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/ghc-heap/'
 #test_path = '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/stm/'
 
-################ BUGS
-
-#OK: 21 FAIL: 46 (many bugs / unimplemented)
-#test_paths = ['/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/concurrent/']
-
-#OK: 147  FAIL: 23 (many bugs and unimplemented)
-#test_paths = ['/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/']
-
-#OK: 17  FAIL: 10 (many unimplemented)
-#test_paths = ['/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/unix/']
 
 # to check
 
@@ -222,6 +267,7 @@ print('Found:', len(test_stderr_list), 'tests\n')
 ok_set = set()
 fail_set = set()
 timeout_set = set()
+skipped = 0
 
 for test_stderr in test_stderr_list:
   test_run, _ = os.path.splitext(test_stderr)
@@ -246,6 +292,7 @@ for test_stderr in test_stderr_list:
 
   if ghcstgapp_path in skip_set:
     print("SKIP: in skip set")
+    skipped += 1
     continue
 
   test_args = ''
@@ -304,6 +351,7 @@ print('\n\nSummary:')
 print(' OK:      ', len(ok_set))
 print(' FAIL:    ', len(fail_set))
 print(' TIMEOUT: ', len(timeout_set))
+print(' SKIPPED: ', skipped)
 
 print('\ntimeout list:')
 for n in list(sorted(timeout_set)):
