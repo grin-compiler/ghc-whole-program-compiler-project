@@ -344,10 +344,12 @@ getProgArgv(int *argc, char **argv[])
           cArgs <- catMaybes <$> mapM mkFFIArg args
           dl <- gets ssCBitsMap
           liftIOAndBorrowStgState $ do
+            {-
             when (False || "hs_OpenGLRaw_getProcAddress" == foreignSymbol) $ do
               print args
               getLine
               pure ()
+            -}
             funPtr <- dlsym dl $ BS8.unpack foreignSymbol
             evalForeignCall funPtr cArgs t
 

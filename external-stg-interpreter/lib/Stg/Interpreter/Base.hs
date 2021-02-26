@@ -19,6 +19,7 @@ import qualified Data.Primitive.ByteArray as BA
 import Control.Monad.Primitive
 import System.Posix.DynamicLinker
 import Control.Concurrent.MVar
+import Control.Concurrent.Chan.Unagi.Bounded
 import Foreign.ForeignPtr.Unsafe
 import Data.Time.Clock
 
@@ -30,10 +31,12 @@ import Stg.Syntax
 newtype Id = Id {unId :: Binder}
 
 instance Eq Id where
-  (Id a) == (Id b) = binderUniqueName a == binderUniqueName b -- FIXME: make this fast
+  (Id a) == (Id b) = binderUNameHash a == binderUNameHash b && binderUniqueName a == binderUniqueName b
 
 instance Ord Id where
-  compare (Id a) (Id b) = compare (binderUniqueName a) (binderUniqueName b) -- FIXME: make this fast
+  compare (Id a) (Id b) = case compare (binderUNameHash a) (binderUNameHash b) of
+    EQ  -> compare (binderUniqueName a) (binderUniqueName b)
+    x   -> x
 
 instance Show Id where
   show (Id a) = BS8.unpack $ binderUniqueName a
@@ -179,12 +182,41 @@ newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
 instance Show (PrintableMVar a) where
   show _ = "MVar"
 
+newtype DebuggerChan = DebuggerChan {getDebuggerChan :: (OutChan DebugCommand, InChan DebugOutput)} deriving Eq
+instance Show DebuggerChan where
+  show _ = "DebuggerChan"
+
+newtype NextDebugCommand = NextDebugCommand {getNextDebugCommand :: (Element DebugCommand, IO DebugCommand)}
+instance Show NextDebugCommand where
+  show _ = "NextDebugCommand"
+instance Eq NextDebugCommand where
+   _ == _ = True
+instance Ord NextDebugCommand where
+   compare _ _ = EQ
+
+data DebugCommand
+  = CmdListClosures
+  | CmdAddBreakpoint    Name
+  | CmdRemoveBreakpoint Name
+  | CmdStep
+  | CmdContinue
+  deriving (Show)
+
+data DebugOutput
+  = DbgOutClosureList   ![Name]
+  deriving (Show)
+
+data DebugState
+  = DbgRunProgram
+  | DbgStepByStep
+  deriving (Show)
+
 data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
   , ssEvalStack :: [Id]
-  , ssNextAddr  :: !Int
+  , ssNextAddr  :: {-# UNPACK #-} !Int
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
@@ -226,11 +258,19 @@ data StgState
   , ssExecutedFFI         :: !(Set ForeignCall)
   , ssExecutedPrimCalls   :: !(Set PrimCall)
   , ssAddressAfterInit    :: !Int
+
+  -- debugger API
+  , ssDebuggerChan        :: !DebuggerChan
+  , ssNextDebugCommand    :: !NextDebugCommand
+
+  , ssEvaluatedClosures   :: !(Set Name)
+  , ssBreakpoints         :: !(Set Name)
+  , ssDebugState          :: !DebugState
   }
   deriving (Show)
 
-emptyStgState :: PrintableMVar StgState -> DL -> StgState
-emptyStgState stateStore dl = StgState
+emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugCommand -> StgState
+emptyStgState stateStore dl dbgChan nextDbgCmd = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
   , ssEvalStack           = []
@@ -271,6 +311,14 @@ emptyStgState stateStore dl = StgState
   , ssExecutedFFI         = Set.empty
   , ssExecutedPrimCalls   = Set.empty
   , ssAddressAfterInit    = 0
+
+  -- debugger api
+  , ssDebuggerChan        = dbgChan
+  , ssNextDebugCommand    = nextDbgCmd
+
+  , ssEvaluatedClosures   = Set.empty
+  , ssBreakpoints         = Set.empty
+  , ssDebugState          = DbgRunProgram
   }
 
 data Rts
@@ -533,6 +581,9 @@ setInsert :: Ord a => a -> Set a -> Set a
 setInsert a s
   | Set.member a s  = s
   | otherwise       = Set.insert a s
+
+markClosure :: Name -> M ()
+markClosure n = modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = setInsert n ssEvaluatedClosures}
 
 markExecuted :: Int -> M ()
 markExecuted i = modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}

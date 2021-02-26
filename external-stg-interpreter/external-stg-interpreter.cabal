@@ -69,6 +69,7 @@ library
                        vector,
                        mtl,
                        inline-c,
+                       unagi-chan,
                        external-stg
   default-language:    Haskell2010
 
@@ -77,9 +78,13 @@ executable ext-stg-interpreter
   hs-source-dirs:      app
   main-is:             Main.hs
   build-depends:       base < 5.0,
+                       containers,
+                       bytestring,
+                       unagi-chan,
+                       optparse-applicative,
                        external-stg-interpreter
 
-  ghc-options: -rtsopts
+  ghc-options: -rtsopts -threaded
 
 test-suite primop-test
   default-language:    Haskell2010
