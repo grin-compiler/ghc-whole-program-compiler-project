@@ -49,9 +49,9 @@ writeDfeFacts prefixPath Module{..} = do
   -- export TyCon with DataCons
   factTyCon <- openFact "TyCon.facts"
   forM_ (concatMap snd . concatMap snd $ moduleTyCons) $ \tc -> do
-    let tcName = tyConUniqueName tc
+    let tcName = tcUniqueName tc
     forM_ (tcDataCons tc) $ \dc -> do
-      BS8.hPutStrLn factTyCon $ tcName <> "\t" <> dataConUniqueName dc
+      BS8.hPutStrLn factTyCon $ tcName <> "\t" <> dcUniqueName dc
   closeFact factTyCon
 
   -- from AST
@@ -70,11 +70,11 @@ writeDfeFacts prefixPath Module{..} = do
 
       addDataConRef :: Name -> DataCon -> IO ()
       addDataConRef fun dc = do
-        BS8.hPutStrLn factDataConReference $ fun <> "\t" <> dataConUniqueName dc
+        BS8.hPutStrLn factDataConReference $ fun <> "\t" <> dcUniqueName dc
 
       addTyConRef :: Name -> TyCon -> IO ()
       addTyConRef fun tc = do
-        BS8.hPutStrLn factTyConReference $ fun <> "\t" <> tyConUniqueName tc
+        BS8.hPutStrLn factTyConReference $ fun <> "\t" <> tcUniqueName tc
 
   let
       visitTopBinding :: TopBinding -> IO ()

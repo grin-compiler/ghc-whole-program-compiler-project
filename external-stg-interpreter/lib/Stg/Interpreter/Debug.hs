@@ -15,7 +15,7 @@ import Stg.Interpreter.Base
 showCons :: Int -> M ()
 showCons addr = do
   h <- gets ssHeap
-  liftIO $ mapM_ print [(i, dataConUniqueName dc, args) | x@(i, c@(Con dc args)) <- IntMap.toAscList h, i >= addr]
+  liftIO $ mapM_ print [(i, dcUniqueName dc, args) | x@(i, c@(Con dc args)) <- IntMap.toAscList h, i >= addr]
 
 {-
   | Closure

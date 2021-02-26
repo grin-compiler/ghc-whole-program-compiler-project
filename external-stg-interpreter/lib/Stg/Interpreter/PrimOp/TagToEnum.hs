@@ -15,7 +15,7 @@ dataToTagOp [whnf@HeapPtr{}] = do
   (Con dataCon _) <- readHeapCon whnf
 
   case findIndex (\d -> dcId d == dcId dataCon) (tcDataCons (dcTyCon dataCon)) of
-    Nothing -> stgErrorM $ "Data constructor tag is not found for " ++ show (dataConUniqueName dataCon)
+    Nothing -> stgErrorM $ "Data constructor tag is not found for " ++ show (dcUniqueName dataCon)
     Just i  -> pure [IntV i]
 dataToTagOp result = stgErrorM $ "dataToTagOp expected [HeapPtr], got: " ++ show result
 

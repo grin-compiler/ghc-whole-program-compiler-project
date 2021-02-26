@@ -177,6 +177,9 @@ data DataCon
   , dcTyCon  :: !TyCon
   , dcWorker :: !Binder
   , dcDefLoc :: !SrcSpan
+  -- optimization
+  , dcUniqueName  :: {-# UNPACK #-} !Name
+  , dcUNameHash   :: {-# UNPACK #-} !Int
   }
   deriving (Eq, Ord, Generic, Show)
 
@@ -188,6 +191,9 @@ data TyCon
   , tcModule    :: !ModuleName
   , tcDataCons  :: ![DataCon]
   , tcDefLoc    :: !SrcSpan
+  -- optimization
+  , tcUniqueName  :: {-# UNPACK #-} !Name
+  , tcUNameHash   :: {-# UNPACK #-} !Int
   }
   deriving (Eq, Ord, Generic, Show)
 
@@ -248,6 +254,9 @@ data Binder
     , binderUnitId    :: !UnitId
     , binderModule    :: !ModuleName
     , binderTopLevel  :: !Bool
+    -- optimization
+    , binderUniqueName  :: {-# UNPACK #-} !Name
+    , binderUNameHash   :: {-# UNPACK #-} !Int
     }
   deriving (Eq, Ord, Generic, Show)
 
@@ -258,27 +267,27 @@ data Scope
   | ForeignExported -- ^ visible for foreign libraries
   deriving (Eq, Ord, Generic, Show)
 
-tyConUniqueName :: TyCon -> Name
-tyConUniqueName TyCon{..} = getUnitId tcUnitId <> "_" <> getModuleName tcModule <> "." <> tcName
+mkTyConUniqueName :: UnitId -> ModuleName -> STyCon -> Name
+mkTyConUniqueName unitId modName STyCon{..} = getUnitId unitId <> "_" <> getModuleName modName <> "." <> stcName
 
-dataConUniqueName :: DataCon -> Name
-dataConUniqueName DataCon{..} = getUnitId dcUnitId <> "_" <> getModuleName dcModule <> "." <> dcName
+mkDataConUniqueName :: UnitId -> ModuleName -> SDataCon -> Name
+mkDataConUniqueName unitId modName SDataCon{..} = getUnitId unitId <> "_" <> getModuleName modName <> "." <> sdcName
 
-binderUniqueName :: Binder -> Name
-binderUniqueName Binder{..}
- | binderId == rootMainBinderId
+mkBinderUniqueName :: Bool -> UnitId -> ModuleName -> SBinder -> Name
+mkBinderUniqueName isTopLevel unitId modName SBinder{..}
+ | sbinderId == rootMainBinderId
  = "main_:Main.main"
 
  | otherwise
- = case binderScope of
-  LocalScope      -> if binderTopLevel || True
-                      then getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName <> BS8.pack ('_' : show u)
-                      else binderName <> BS8.pack ('_' : show u)
-  GlobalScope     -> getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName <> BS8.pack ('_' : show u)
-  HaskellExported -> getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName
-  ForeignExported -> getUnitId binderUnitId <> "_" <> getModuleName binderModule <> "." <> binderName
+ = case sbinderScope of
+  LocalScope      -> if isTopLevel || True
+                      then getUnitId unitId <> "_" <> getModuleName modName <> "." <> sbinderName <> BS8.pack ('_' : show u)
+                      else sbinderName <> BS8.pack ('_' : show u)
+  GlobalScope     -> getUnitId unitId <> "_" <> getModuleName modName <> "." <> sbinderName <> BS8.pack ('_' : show u)
+  HaskellExported -> getUnitId unitId <> "_" <> getModuleName modName <> "." <> sbinderName
+  ForeignExported -> getUnitId unitId <> "_" <> getModuleName modName <> "." <> sbinderName
   where
-    BinderId u = binderId
+    BinderId u = sbinderId
 
 rootMainBinderId :: BinderId
 rootMainBinderId = BinderId $ Unique '0' 101

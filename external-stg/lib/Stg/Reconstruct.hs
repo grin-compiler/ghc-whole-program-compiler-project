@@ -66,7 +66,7 @@ getTyCon BinderMap{..} i = case HM.lookup i bmTyConMap of
 -- "recon" == "reconstruct"
 
 reconLocalBinder :: BinderMap -> SBinder -> Binder
-reconLocalBinder BinderMap{..} SBinder{..} = -- HINT: local binders only
+reconLocalBinder BinderMap{..} b@SBinder{..} = -- HINT: local binders only
   Binder
   { binderName        = sbinderName
   , binderId          = sbinderId
@@ -79,10 +79,12 @@ reconLocalBinder BinderMap{..} SBinder{..} = -- HINT: local binders only
   , binderModule      = bmModule
   , binderScope       = LocalScope
   , binderTopLevel    = False
-  }
+  , binderUniqueName  = uName
+  , binderUNameHash   = hash uName
+  } where uName = mkBinderUniqueName False bmUnitId bmModule b
 
 reconDataCon :: UnitId -> ModuleName -> TyCon -> SDataCon -> DataCon
-reconDataCon u m tc SDataCon{..} = DataCon
+reconDataCon u m tc sdc@SDataCon{..} = DataCon
   { dcName    = sdcName
   , dcId      = sdcId
   , dcUnitId  = u
@@ -91,21 +93,25 @@ reconDataCon u m tc SDataCon{..} = DataCon
   , dcWorker  = mkTopBinder u m (sbinderScope sdcWorker) sdcWorker
   , dcDefLoc  = sdcDefLoc
   , dcTyCon   = tc
-  }
+  , dcUniqueName  = uName
+  , dcUNameHash   = hash uName
+  } where uName = mkDataConUniqueName u m sdc
 
 reconTyCon :: UnitId -> ModuleName -> STyCon -> TyCon
-reconTyCon u m STyCon{..} = tc where
+reconTyCon u m stc@STyCon{..} = tc where
   tc = TyCon
-    { tcName      = stcName
-    , tcId        = stcId
-    , tcUnitId    = u
-    , tcModule    = m
-    , tcDataCons  = map (reconDataCon u m tc) stcDataCons
-    , tcDefLoc    = stcDefLoc
-    }
+    { tcName        = stcName
+    , tcId          = stcId
+    , tcUnitId      = u
+    , tcModule      = m
+    , tcDataCons    = map (reconDataCon u m tc) stcDataCons
+    , tcDefLoc      = stcDefLoc
+    , tcUniqueName  = uName
+    , tcUNameHash   = hash uName
+    } where uName = mkTyConUniqueName u m stc
 
 mkTopBinder :: UnitId -> ModuleName -> Scope -> SBinder -> Binder
-mkTopBinder u m scope SBinder{..} =
+mkTopBinder u m scope b@SBinder{..} =
   Binder
   { binderName        = sbinderName
   , binderId          = sbinderId
@@ -118,7 +124,9 @@ mkTopBinder u m scope SBinder{..} =
   , binderModule      = m
   , binderScope       = scope
   , binderTopLevel    = True
-  }
+  , binderUniqueName  = uName
+  , binderUNameHash   = hash uName
+  } where uName = mkBinderUniqueName True u m (b {sbinderScope = scope})
 
 reconModule :: SModule -> Module
 reconModule Module{..} = mod where
