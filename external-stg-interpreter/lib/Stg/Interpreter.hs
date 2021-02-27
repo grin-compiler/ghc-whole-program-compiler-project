@@ -37,6 +37,7 @@ import Stg.Interpreter.FFI
 import Stg.Interpreter.Rts
 import Stg.Interpreter.Debug
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
+import qualified Stg.Interpreter.Debugger as Debugger
 
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
 import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
@@ -119,80 +120,6 @@ evalArg localEnv = \case
     }
 -}
 
-runDebugCommand :: DebugCommand -> M ()
-runDebugCommand cmd = do
-  liftIO $ putStrLn $ "runDebugCommand: " ++ show cmd
-  (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
-  case cmd of
-    CmdListClosures -> do
-      closures <- gets ssEvaluatedClosures
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutClosureList $ Set.toList closures
-
-    CmdAddBreakpoint n -> do
-      modify' $ \s@StgState{..} -> s {ssBreakpoints = setInsert n ssBreakpoints}
-
-    CmdRemoveBreakpoint n -> do
-      modify' $ \s@StgState{..} -> s {ssBreakpoints = Set.delete n ssBreakpoints}
-    _ -> do
-      liftIO $ putStrLn $ "ignore: " ++ show cmd
-
-queryNextDebugCommand :: M ()
-queryNextDebugCommand = do
-  (dbgCmd, _dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
-  nextCmd <- liftIO $ Unagi.tryReadChan dbgCmd
-  modify' $ \s@StgState{..} -> s {ssNextDebugCommand = NextDebugCommand nextCmd}
-
-runIncomingDebugCommands :: M ()
-runIncomingDebugCommands = do
-  (nextCmd, _) <- getNextDebugCommand <$> gets ssNextDebugCommand
-  liftIO (Unagi.tryRead nextCmd) >>= \case
-    Nothing -> pure ()
-    Just c  -> do
-      runDebugCommand c
-      queryNextDebugCommand
-      runIncomingDebugCommands
-
-runDebugCommandsBlocking :: M ()
-runDebugCommandsBlocking = do
-  (_, nextCmd) <- getNextDebugCommand <$> gets ssNextDebugCommand
-  queryNextDebugCommand
-  liftIO nextCmd >>= \case
-    CmdStep -> do
-      runIncomingDebugCommands
-
-    CmdContinue -> do
-      modify' $ \s@StgState{..} -> s {ssDebugState = DbgRunProgram}
-      runIncomingDebugCommands
-
-    cmd -> do
-      runDebugCommand cmd
-      runDebugCommandsBlocking
-
-checkBreakpoint :: Id -> M ()
-checkBreakpoint (Id b) = do
-  let closureName = binderUniqueName b
-  markClosure closureName
-
-  runIncomingDebugCommands
-
-  gets ssDebugState >>= \case
-    DbgStepByStep -> do
-      reportState
-      runDebugCommandsBlocking
-    DbgRunProgram -> do
-      bkSet <- gets ssBreakpoints
-      when (Set.member closureName bkSet) $ do
-        reportState
-        modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
-        runDebugCommandsBlocking
-
-reportState = do
-  tid <- gets ssCurrentThreadId
-  currentClosureName <- gets ssCurrentClosure
-  reportThread tid
-  liftIO $ do
-    putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName
-
 builtinStgEval :: HasCallStack => Atom -> M [Atom]
 builtinStgEval a@HeapPtr{} = do
   o <- readHeap a
@@ -207,7 +134,7 @@ builtinStgEval a@HeapPtr{} = do
       | otherwise
       -> do
         modify' $ \s -> s {ssCurrentClosure = hoName}
-        checkBreakpoint hoName
+        Debugger.checkBreakpoint hoName
 
         let StgRhsClosure uf params e = hoCloBody
             HeapPtr l = a

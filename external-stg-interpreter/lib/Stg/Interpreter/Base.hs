@@ -196,6 +196,8 @@ instance Ord NextDebugCommand where
 
 data DebugCommand
   = CmdListClosures
+  | CmdClearClosureList
+  | CmdCurrentClosure
   | CmdAddBreakpoint    Name
   | CmdRemoveBreakpoint Name
   | CmdStep
@@ -203,7 +205,8 @@ data DebugCommand
   deriving (Show)
 
 data DebugOutput
-  = DbgOutClosureList   ![Name]
+  = DbgOutCurrentClosure  !Name
+  | DbgOutClosureList     ![Name]
   deriving (Show)
 
 data DebugState

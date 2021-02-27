@@ -73,7 +73,8 @@ printHelp = do
 
 printDebugOutput dbgOutO = do
   Unagi.readChan dbgOutO >>= \case
-    DbgOutClosureList closureNames -> mapM_ BS8.putStrLn closureNames
+    DbgOutClosureList closureNames  -> mapM_ BS8.putStrLn closureNames
+    DbgOutCurrentClosure name       -> BS8.putStrLn name
   printDebugOutput dbgOutO
 
 debugger dbgCmdI = do
@@ -81,13 +82,13 @@ debugger dbgCmdI = do
   case line of
     '+':name    -> Unagi.writeChan dbgCmdI $ CmdAddBreakpoint $ BS8.pack name
     '-':name    -> Unagi.writeChan dbgCmdI $ CmdRemoveBreakpoint $ BS8.pack name
-    "list"      -> do
-      putStrLn "sent CmdListClosures"
-      Unagi.writeChan dbgCmdI $ CmdListClosures
+    "list"      -> Unagi.writeChan dbgCmdI $ CmdListClosures
+    "clear"     -> Unagi.writeChan dbgCmdI $ CmdClearClosureList
     "step"      -> Unagi.writeChan dbgCmdI $ CmdStep
     "s"         -> Unagi.writeChan dbgCmdI $ CmdStep
     "continue"  -> Unagi.writeChan dbgCmdI $ CmdContinue
     "c"         -> Unagi.writeChan dbgCmdI $ CmdContinue
+    "k"         -> Unagi.writeChan dbgCmdI $ CmdCurrentClosure
     "quit"      -> exitSuccess
     "" -> pure ()
     _ -> putStrLn ("unknown command: " ++ line) >> printHelp

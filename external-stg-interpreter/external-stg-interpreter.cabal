@@ -23,6 +23,7 @@ library
     Stg.Interpreter.Debug
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
+    Stg.Interpreter.Debugger
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array
