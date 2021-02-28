@@ -3,8 +3,6 @@ module Stg.Interpreter.Debugger where
 
 import Control.Monad.State
 import qualified Data.Set as Set
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 
 import Stg.Interpreter.Base
@@ -109,54 +107,3 @@ reportState = do
   reportThread tid
   liftIO $ do
     putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName
-
-{-
-
-HASKELL DEBUGGER IDEAS:
-
-  breakpoints:
-  - from-to range time-travel debug
-  - module level breakpoint
-  - closure level breakpoint
-  - stop when the marked/tracked closure is forced
-
-  statistics:
-  - track data/heap object liftetime,
-    export it to disk for later processing,
-    i.e. min/max/average of data lifetime
-
-  - track data/heap object origin
-    (code, thread id, closure heap object id),
-    export to database
-
-  - track closures forcing points,
-    export to database
-
-  triggers:
-  - turn statistics on/off
-
-  stg repl:
-  - run closures
-    i.e. pass runtime value to user written fuction like pretty printer
-    HINT: use the RTS 'eval on new thread' API
-
-  granularity:
-  - closure
-  - module
-  - package
-
-data type pretty printer use case:
-  load program or module and give access to the inspected program heap
-  i.e. pass heap objects to a function form the loaded module
-
-register a selected pretty printer function for a given haskell data type name
-  the debugger would use that function automatically to pretty print the inspected value
-
-function lookup:
-  regexp, intelli sense
-  print fnctions haskell and stg type signature
-
-statistics of builtin primitive objects:
-  arrays
-  byte arrays, pinned, aligned
--}
