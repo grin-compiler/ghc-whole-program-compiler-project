@@ -56,7 +56,7 @@ library
     Stg.Interpreter.PrimOp.Word
 
   hs-source-dirs:      lib
-  ghc-options:         -Wall -fobject-code
+  ghc-options:         -Wall -fobject-code -O2
   build-depends:       base,
                        time,
                        unix,

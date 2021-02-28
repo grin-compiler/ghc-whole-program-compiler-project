@@ -186,7 +186,7 @@ newtype DebuggerChan = DebuggerChan {getDebuggerChan :: (OutChan DebugCommand, I
 instance Show DebuggerChan where
   show _ = "DebuggerChan"
 
-newtype NextDebugCommand = NextDebugCommand {getNextDebugCommand :: (Element DebugCommand, IO DebugCommand)}
+newtype NextDebugCommand = NextDebugCommand (Element DebugCommand, IO DebugCommand)
 instance Show NextDebugCommand where
   show _ = "NextDebugCommand"
 instance Eq NextDebugCommand where
@@ -218,8 +218,7 @@ data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
-  , ssEvalStack :: [Id]
-  , ssNextAddr  :: {-# UNPACK #-} !Int
+  , ssNextAddr            :: {-# UNPACK #-} !Int
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
@@ -276,7 +275,6 @@ emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugComman
 emptyStgState stateStore dl dbgChan nextDbgCmd = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
-  , ssEvalStack           = []
   , ssNextAddr            = 0
 
   , ssCStringConstants    = mempty
