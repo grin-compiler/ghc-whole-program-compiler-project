@@ -473,7 +473,6 @@ evalExpr localEnv = \case
 
   StgOpApp (StgPrimOp op) l t tc -> do
     args <- mapM (evalArg localEnv) l
-    evalStack <- gets ssEvalStack
     tid <- gets ssCurrentThreadId
     --liftIO $ putStrLn $ show tid ++ "  " ++ show op ++ " " ++ show args ++ " = ..."
     result <- evalPrimOp op args t tc
@@ -484,7 +483,6 @@ evalExpr localEnv = \case
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
     args <- mapM (evalArg localEnv) l
     result <- evalFCallOp evalOnNewThread foreignCall args t tc
-    evalStack <- gets ssEvalStack
     --liftIO $ putStrLn $ show (head evalStack) ++ " " ++ show foreignCall ++ " " ++ show args ++ " = " ++ show result
     --liftIO $ putStrLn $ show foreignCall ++ " " ++ show args ++ " = " ++ show result
     markFFI foreignCall

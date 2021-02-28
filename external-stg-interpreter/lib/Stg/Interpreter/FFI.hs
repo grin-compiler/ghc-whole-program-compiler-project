@@ -166,7 +166,6 @@ evalForeignCall funPtr cArgs retType = case retType of
 {-# NOINLINE evalFCallOp #-}
 evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
-    --evalStack <- gets ssEvalStack
     --liftIO $ putStrLn $ "  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
 

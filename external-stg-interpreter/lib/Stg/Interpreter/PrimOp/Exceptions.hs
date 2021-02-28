@@ -28,7 +28,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- raise# :: b -> o
   ( "raise#", [ex]) -> do
     -- for debug only
-    evalStack <- gets ssEvalStack
     --liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
 
     raiseEx ex -- implementation
@@ -51,7 +50,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- raiseIO# :: a -> State# RealWorld -> (# State# RealWorld, b #)
   ( "raiseIO#", [ex, s]) -> do
     -- for debug only
-    evalStack <- gets ssEvalStack
     --liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
 
     raiseEx ex -- implementation
