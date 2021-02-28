@@ -65,11 +65,13 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
 printHelp = do
   putStrLn "commands:"
   putStrLn " quit                     - exit debugger"
-  putStrLn " list                     - list closures"
+  putStrLn " list                     - list visited closures"
+  putStrLn " clear                    - clear visited closure list"
   putStrLn " +QUALIFIED_CLOSURE_NAME  - add breakpoint"
   putStrLn " -QUALIFIED_CLOSURE_NAME  - remove breakpoint"
-  putStrLn " step                     - step into the next closure"
-  putStrLn " continue                 - continue until the next breakpoint"
+  putStrLn " step 's'                 - step into the next closure"
+  putStrLn " continue 'c'             - continue until the next breakpoint"
+  putStrLn " k                        - current closure name"
 
 printDebugOutput dbgOutO = do
   Unagi.readChan dbgOutO >>= \case
