@@ -105,7 +105,35 @@ printDebugOutput dbgOutO = do
       reportThreadIO tid ts
       putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName
 
+    DbgOutHeapObject addr heapObj -> do
+      putStrLn $ "addr: " ++ show addr
+      printHeapObject heapObj
+
   printDebugOutput dbgOutO
+
+printHeapObject :: HeapObject -> IO ()
+printHeapObject = \case
+  Con{..} -> do
+    let DataCon{..} = hoCon
+    putStrLn $ BS8.unpack (getModuleName dcModule) ++ "." ++ BS8.unpack dcName ++ " " ++ show hoConArgs
+
+  Closure{..} -> do
+    putStrLn $ "closure: " ++ show hoName
+    putStrLn $ "args:    " ++ show hoCloArgs
+    putStrLn $ "missing: " ++ show hoCloMissing
+    putStrLn "closure local env:"
+    printEnv hoEnv
+
+  BlackHole ho -> do
+    putStrLn "BlackHole:"
+    printHeapObject ho
+    putStrLn ""
+
+  ApStack{} -> do
+    putStrLn "ApStack"
+
+  RaiseException ex -> do
+    putStrLn $ "RaiseException: " ++ show ex
 
 debugger dbgCmdI = do
   line <- getLine
@@ -124,5 +152,10 @@ debugger dbgCmdI = do
       Unagi.writeChan dbgCmdI $ CmdStep
     "quit"      -> exitSuccess
     "" -> pure ()
+
+    _ | ["peek", addr] <- words line
+      -> do
+        Unagi.writeChan dbgCmdI $ CmdPeekHeap $ read addr
+
     _ -> putStrLn ("unknown command: " ++ line) >> printHelp
   debugger dbgCmdI

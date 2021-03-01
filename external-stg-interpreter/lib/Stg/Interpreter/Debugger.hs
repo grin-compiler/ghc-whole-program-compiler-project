@@ -57,6 +57,10 @@ runDebugCommand cmd = do
     CmdContinue -> do
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgRunProgram}
 
+    CmdPeekHeap addr -> do
+      ho <- readHeap $ HeapPtr addr
+      liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
+
 isDebugExitCommand :: DebugCommand -> Bool
 isDebugExitCommand = \case
   CmdStep     -> True

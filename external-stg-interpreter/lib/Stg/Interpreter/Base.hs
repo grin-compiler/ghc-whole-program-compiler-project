@@ -202,12 +202,14 @@ data DebugCommand
   | CmdRemoveBreakpoint Name
   | CmdStep
   | CmdContinue
+  | CmdPeekHeap         Addr
   deriving (Show)
 
 data DebugOutput
   = DbgOutCurrentClosure  !Name !Env
   | DbgOutClosureList     ![Name]
   | DbgOutThreadReport    !Int !ThreadState !Name
+  | DbgOutHeapObject      !Addr !HeapObject -- address, heap object
   deriving (Show)
 
 data DebugState
