@@ -166,6 +166,11 @@ data STyCon
   }
   deriving (Eq, Ord, Generic, Show)
 
+newtype CutLoop a = CutLoop {cutLoop :: a}
+instance Eq (CutLoop a) where _ == _ = True
+instance Ord (CutLoop a) where compare _ _ = EQ
+instance Show (CutLoop a) where show _ = "CutLoop"
+
 -- user friendly data con
 data DataCon
   = DataCon
@@ -174,7 +179,7 @@ data DataCon
   , dcUnitId :: !UnitId
   , dcModule :: !ModuleName
   , dcRep    :: !DataConRep
-  , dcTyCon  :: !TyCon
+  , dcTyCon  :: CutLoop TyCon
   , dcWorker :: !Binder
   , dcDefLoc :: !SrcSpan
   -- optimization
