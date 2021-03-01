@@ -3,15 +3,20 @@ import System.IO
 import System.Exit
 import System.Environment (getArgs)
 import Control.Concurrent
+import Control.Monad
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.List as List
+import Text.Printf
 
 import Options.Applicative
 import Data.Semigroup ((<>))
 
 import Stg.Interpreter.Base
 import Stg.Interpreter
+import Stg.Syntax
 
 data StgIOpts
   = StgIOpts
@@ -45,7 +50,7 @@ main = do
 
   case runDebugger of
     True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO
-    False -> runProgram   switchCWD appPath appArgs dbgChan
+    False -> runProgram   switchCWD appPath appArgs dbgChan DbgRunProgram
 
 debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
 
@@ -56,7 +61,8 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
     printDebugOutput dbgOutO
 
   forkIO $ do
-    runProgram switchCWD appPath appArgs dbgChan
+    putStrLn $ "loading " ++ appPath
+    runProgram switchCWD appPath appArgs dbgChan DbgStepByStep
     putStrLn "program finshed"
     exitSuccess
 
@@ -73,10 +79,32 @@ printHelp = do
   putStrLn " continue 'c'             - continue until the next breakpoint"
   putStrLn " k                        - current closure name"
 
+printEnv :: Env -> IO ()
+printEnv env = do
+  let unBinderId (BinderId u) = u
+      l = maximum . map (\(Id Binder{..}) -> sum [BS8.length $ getModuleName binderModule, 2, BS8.length binderName, 1, length $ show $ unBinderId binderId]) $ Map.keys env
+
+      showItem (n@(Id Binder{..}), v) = printf ("  %-" ++ show l ++ "s  =  %s") (mod ++ "  " ++ name) (show v)
+        where
+          BinderId u  = binderId
+          name        = BS8.unpack binderName ++ ('_' : show u)
+          mod         = BS8.unpack $ getModuleName binderModule
+      str = List.sort $ map showItem $ Map.toList env
+  putStrLn $ unlines str
+
 printDebugOutput dbgOutO = do
   Unagi.readChan dbgOutO >>= \case
-    DbgOutClosureList closureNames  -> mapM_ BS8.putStrLn closureNames
-    DbgOutCurrentClosure name       -> BS8.putStrLn name
+    DbgOutClosureList closureNames -> do
+      mapM_ BS8.putStrLn closureNames
+
+    DbgOutCurrentClosure name env -> do
+      BS8.putStrLn name
+      printEnv env
+
+    DbgOutThreadReport tid ts currentClosureName -> do
+      reportThreadIO tid ts
+      putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName
+
   printDebugOutput dbgOutO
 
 debugger dbgCmdI = do
@@ -91,6 +119,9 @@ debugger dbgCmdI = do
     "continue"  -> Unagi.writeChan dbgCmdI $ CmdContinue
     "c"         -> Unagi.writeChan dbgCmdI $ CmdContinue
     "k"         -> Unagi.writeChan dbgCmdI $ CmdCurrentClosure
+    "e"         -> do
+      Unagi.writeChan dbgCmdI $ CmdCurrentClosure
+      Unagi.writeChan dbgCmdI $ CmdStep
     "quit"      -> exitSuccess
     "" -> pure ()
     _ -> putStrLn ("unknown command: " ++ line) >> printHelp

@@ -205,8 +205,9 @@ data DebugCommand
   deriving (Show)
 
 data DebugOutput
-  = DbgOutCurrentClosure  !Name
+  = DbgOutCurrentClosure  !Name !Env
   | DbgOutClosureList     ![Name]
+  | DbgOutThreadReport    !Int !ThreadState !Name
   deriving (Show)
 
 data DebugState
@@ -254,6 +255,7 @@ data StgState
   , ssRtsSupport          :: Rts
 
   -- debug
+  , ssCurrentClosureEnv   :: Env
   , ssCurrentClosure      :: Id
   , ssExecutedClosures    :: !(Set Int)
   , ssExecutedPrimOps     :: !(Set Name)
@@ -271,8 +273,8 @@ data StgState
   }
   deriving (Show)
 
-emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugCommand -> StgState
-emptyStgState stateStore dl dbgChan nextDbgCmd = StgState
+emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugCommand -> DebugState -> StgState
+emptyStgState stateStore dl dbgChan nextDbgCmd dbgState = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
   , ssNextAddr            = 0
@@ -306,6 +308,7 @@ emptyStgState stateStore dl dbgChan nextDbgCmd = StgState
   , ssRtsSupport          = error "uninitialized ssRtsSupport"
 
   -- debug
+  , ssCurrentClosureEnv   = mempty
   , ssCurrentClosure      = error "uninitalized ssCurrentClosure"
   , ssExecutedClosures    = Set.empty
   , ssExecutedPrimOps     = Set.empty
@@ -319,7 +322,7 @@ emptyStgState stateStore dl dbgChan nextDbgCmd = StgState
 
   , ssEvaluatedClosures   = Set.empty
   , ssBreakpoints         = Set.empty
-  , ssDebugState          = DbgRunProgram
+  , ssDebugState          = dbgState
   }
 
 data Rts
@@ -839,7 +842,10 @@ reportThreads = do
 reportThread :: Int -> M ()
 reportThread tid = do
   endTS <- getThreadState tid
-  liftIO $ do
+  liftIO $ reportThreadIO tid endTS
+
+reportThreadIO :: Int -> ThreadState -> IO ()
+reportThreadIO tid endTS = do
     putStrLn ""
     putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
     putStrLn "stack:"

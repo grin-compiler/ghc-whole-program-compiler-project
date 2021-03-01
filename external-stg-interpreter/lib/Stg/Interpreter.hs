@@ -133,13 +133,15 @@ builtinStgEval a@HeapPtr{} = do
 
       | otherwise
       -> do
-        modify' $ \s -> s {ssCurrentClosure = hoName}
-        Debugger.checkBreakpoint hoName
 
         let StgRhsClosure uf params e = hoCloBody
             HeapPtr l = a
             extendedEnv = addManyBindersToEnv params hoCloArgs hoEnv
+
         markExecuted l
+        modify' $ \s -> s {ssCurrentClosure = hoName, ssCurrentClosureEnv = extendedEnv}
+        Debugger.checkBreakpoint hoName
+
         -- TODO: env or free var handling
         case uf of
           ReEntrant -> do
@@ -606,8 +608,8 @@ builtinStackMachineEval thunk = do
   builtinStackMachineApply thunk []
 -}
 
-runProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> IO ()
-runProgram switchCWD fullpak_name progArgs dbgChan = do
+runProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> IO ()
+runProgram switchCWD fullpak_name progArgs dbgChan dbgState = do
 
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
@@ -652,7 +654,7 @@ runProgram switchCWD fullpak_name progArgs dbgChan = do
   stateStore <- newEmptyMVar
   dl <- dlopen "./libHSbase-4.14.0.0.cbits.so" [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
   flip catch (\e -> do {dlclose dl; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState (PrintableMVar stateStore) dl dbgChan nextDbgCmd)
+    s@StgState{..} <- execStateT run (emptyStgState (PrintableMVar stateStore) dl dbgChan nextDbgCmd dbgState)
     when switchCWD $ setCurrentDirectory currentDir
     dlclose dl
 

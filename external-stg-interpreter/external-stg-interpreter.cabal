@@ -83,6 +83,7 @@ executable ext-stg-interpreter
                        bytestring,
                        unagi-chan,
                        optparse-applicative,
+                       external-stg,
                        external-stg-interpreter
 
   ghc-options: -rtsopts -threaded

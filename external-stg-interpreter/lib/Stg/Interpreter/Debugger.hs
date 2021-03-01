@@ -36,7 +36,8 @@ runDebugCommand cmd = do
   case cmd of
     CmdCurrentClosure -> do
       Id currentClosure <- gets ssCurrentClosure
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure $ binderUniqueName currentClosure
+      closureEnv <- gets ssCurrentClosureEnv
+      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure (binderUniqueName currentClosure) closureEnv
 
     CmdClearClosureList -> do
       modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = Set.empty}
@@ -102,8 +103,8 @@ checkBreakpoint (Id b) = do
 
 reportState :: M ()
 reportState = do
+  (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
   tid <- gets ssCurrentThreadId
-  currentClosureName <- gets ssCurrentClosure
-  reportThread tid
-  liftIO $ do
-    putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName
+  ts <- getThreadState tid
+  Id currentClosure <- gets ssCurrentClosure
+  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts (binderUniqueName currentClosure)
