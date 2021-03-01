@@ -145,22 +145,18 @@ builtinStgEval a@HeapPtr{} = do
         -- TODO: env or free var handling
         case uf of
           ReEntrant -> do
-            --liftIO $ putStrLn " * eval - ReEntrant"
             -- closure may be entered multiple times, but should not be updated or blackholed.
             evalExpr extendedEnv e
           Updatable -> do
-            --liftIO $ putStrLn " * eval - Updatable"
             -- closure should be updated after evaluation (and may be blackholed during evaluation).
             stackPush (Update l)
             store l (BlackHole o)
             evalExpr extendedEnv e
           SingleEntry -> do
-            --liftIO $ putStrLn " * eval - SingleEntry"
             -- closure will only be entered once, and so need not be updated but may safely be blackholed.
             store l (BlackHole o)
             evalExpr extendedEnv e
     _ -> stgErrorM $ "expected heap object: " ++ show o
---builtinStgEval x = pure [x] -- FIXME: this is a debug hack!! remove it!!!!!
 builtinStgEval a = stgErrorM $ "expected a thunk, got: " ++ show a
 
 builtinStgApply :: HasCallStack => Atom -> [Atom] -> M [Atom]
@@ -289,7 +285,6 @@ evalOnThread isMainThread setupAction = do
   result0 <- setupAction
   let loop resultIn = do
         resultOut <- evalStackMachine resultIn
-        --reportThreads
         ThreadState{..} <- getThreadState tid
         case isThreadLive tsStatus of
           True  -> loop resultOut -- HINT: the new scheduling is ready
@@ -301,11 +296,8 @@ evalOnThread isMainThread setupAction = do
 evalStackMachine :: [Atom] -> M [Atom]
 evalStackMachine result = do
   tid <- gets ssCurrentThreadId
-  --liftIO $ putStrLn "."
   stackPop >>= \case
-    Nothing -> do
-      --liftIO $ putStrLn $ "evalStackMachine - empty stack, tid: " ++ show tid
-      pure result
+    Nothing         -> pure result
     Just stackCont  -> evalStackContinuation result stackCont >>= evalStackMachine
 
 evalStackContinuation :: [Atom] -> StackContinuation -> M [Atom]
@@ -390,12 +382,10 @@ evalExpr localEnv = \case
       pure [HeapPtr loc]
 
   StgLet b e -> do
-    --liftIO $ putStrLn " * StgLet"
     extendedEnv <- declareBinding localEnv b
     evalExpr extendedEnv e
 
   StgLetNoEscape b e -> do -- TODO: do not allocate closure on heap, instead put into env (stack) allocated closure ; model stack allocated heap objects
-    --liftIO $ putStrLn " * StgLetNoEscape"
     extendedEnv <- declareBinding localEnv b
     evalExpr extendedEnv e
 
@@ -403,7 +393,6 @@ evalExpr localEnv = \case
   StgApp i [] _t _
     | JoinId 0 <- binderDetails i
     -> do
-      --liftIO $ putStrLn " * StgApp var (join id)"
       -- HINT: join id-s are always closures, needs eval
       -- NOTE: join id's type tells the closure return value representation
       v <- lookupEnv localEnv i
@@ -416,22 +405,12 @@ evalExpr localEnv = \case
   StgApp i [] _t _ -> case binderType i of
 
     SingleValue LiftedRep -> do
-      --liftIO $ putStrLn $ " * StgApp var (non join id): " ++ show (binderType i)
       -- HINT: must be HeapPtr ; read heap ; check if Con or Closure ; eval if Closure ; return HeapPtr if Con
       v <- lookupEnv localEnv i
-      --liftIO $ putStrLn $ " * 1"
-      --liftIO $ putStrLn $ "force: " ++ show (Id i) ++ " " ++ show v
-      result <- builtinStgEval v
-      --liftIO $ putStrLn $ " * 2"
-      --pResult <- peekResult result
-      --liftIO $ putStrLn $ "force-result: " ++ show (Id i) ++ " = " ++ show result ++ " " ++ pResult
-      pure result
+      builtinStgEval v
 
     SingleValue _ -> do
-      --liftIO $ putStrLn $ " * StgApp var (non join id): " ++ show (binderType i)
-      --liftIO $ putStrLn $ " * 3"
       v <- lookupEnv localEnv i
-      --liftIO $ putStrLn $ " * 4"
       pure [v]
 
     UnboxedTuple []
@@ -448,7 +427,6 @@ evalExpr localEnv = \case
   StgApp i l _t _
     | JoinId _ <- binderDetails i
     -> do
-      --liftIO $ putStrLn " * StgApp fun app join id"
       args <- mapM (evalArg localEnv) l
       v <- lookupEnv localEnv i
       builtinStgApply v args
@@ -456,49 +434,36 @@ evalExpr localEnv = \case
   {- non-join id -}
   StgApp i l _t _ -> case binderType i of
     SingleValue LiftedRep -> do
-      --liftIO $ putStrLn " * StgApp fun app non-join id"
       args <- mapM (evalArg localEnv) l
       v <- lookupEnv localEnv i
-      --liftIO $ putStrLn $ "call: " ++ show (Id i) ++ " " ++ show args 
-      result <- builtinStgApply v args
-      --pResult <- peekResult result
-      --liftIO $ putStrLn $ "call-result: " ++ show (Id i) ++ " " ++ show args ++ " = " ++ show result ++ " " ++ pResult
-      pure result
+      builtinStgApply v args
 
     r -> stgErrorM $ "unsupported app rep: " ++ show r -- unboxed: invalid
 
   StgCase e scrutineeResult altType alts -> do
-    --liftIO $ putStrLn " * StgCase"
     curClosure <- gets ssCurrentClosure
     stackPush (CaseOf curClosure localEnv scrutineeResult altType alts)
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
+    markPrimOp op
     args <- mapM (evalArg localEnv) l
     tid <- gets ssCurrentThreadId
-    --liftIO $ putStrLn $ show tid ++ "  " ++ show op ++ " " ++ show args ++ " = ..."
-    result <- evalPrimOp op args t tc
-    --liftIO $ putStrLn $ show (head evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = " ++ show result
-    markPrimOp op
-    pure result
+    evalPrimOp op args t tc
 
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
-    args <- mapM (evalArg localEnv) l
-    result <- evalFCallOp evalOnNewThread foreignCall args t tc
-    --liftIO $ putStrLn $ show (head evalStack) ++ " " ++ show foreignCall ++ " " ++ show args ++ " = " ++ show result
-    --liftIO $ putStrLn $ show foreignCall ++ " " ++ show args ++ " = " ++ show result
     markFFI foreignCall
-    pure result
+    args <- mapM (evalArg localEnv) l
+    evalFCallOp evalOnNewThread foreignCall args t tc
 {-
   StgOpApp (StgPrimCallOp (PrimCall "stg_getThreadAllocationCounterzh" _)) _args t _tc -> do
     i <- gets ssNextAddr
     pure [IntAtom (-i)]
 -}
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
-    args <- mapM (evalArg localEnv) l
-    result <- evalPrimCallOp primCall args t tc
     markPrimCall primCall
-    pure result
+    args <- mapM (evalArg localEnv) l
+    evalPrimCallOp primCall args t tc
 
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
@@ -594,19 +559,6 @@ declareTopBindings mods = do
 
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs mempty b addr rhs
-{-
-builtinStackMachineApply :: Atom -> [Atom] -> M [Atom]
-builtinStackMachineApply fun args = do
-  --liftIO $ putStrLn $ "builtinStackMachineApply, fun: " ++ show fun ++ ", args: " ++ show args
-  stackPush $ Apply args
-  evalStackMachine [fun]
--}
-{-
-builtinStackMachineEval :: Atom -> M [Atom]
-builtinStackMachineEval thunk = do
-  --liftIO $ putStrLn $ "builtinStackMachineEval: " ++ show thunk
-  builtinStackMachineApply thunk []
--}
 
 runProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> IO ()
 runProgram switchCWD fullpak_name progArgs dbgChan dbgState = do
@@ -627,7 +579,6 @@ runProgram switchCWD fullpak_name progArgs dbgChan dbgState = do
         declareTopBindings mods
         initRtsSupport progName progArgs mods
         env <- gets ssStaticGlobalEnv
-        --liftIO $ putStrLn $ "top Id count: " ++ show (Map.size env)
         let rootMain = unId $ head $ [i | i <- Map.keys env, show i == "main_:Main.main"]
         limit <- gets ssNextAddr
         modify' $ \s@StgState{..} -> s {ssAddressAfterInit = limit}
@@ -669,7 +620,6 @@ runProgram switchCWD fullpak_name progArgs dbgChan dbgState = do
 
 flushStdHandles :: M ()
 flushStdHandles = do
-  --liftIO $ putStrLn "\n *** flushStdHandles\n"
   Rts{..} <- gets ssRtsSupport
   evalOnNewThread $ do
     stackPush $ Apply [] -- HINT: force IO monad result to WHNF

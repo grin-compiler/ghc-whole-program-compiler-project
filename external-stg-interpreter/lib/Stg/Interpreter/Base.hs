@@ -406,7 +406,6 @@ stackPop = do
 freshHeapAddress :: HasCallStack => M Addr
 freshHeapAddress = do
   limit <- gets ssNextAddr
-  --liftIO $ print limit
   state $ \s@StgState{..} -> (ssNextAddr, s {ssNextAddr = succ ssNextAddr})
 
 allocAndStore :: HasCallStack => HeapObject -> M Addr
