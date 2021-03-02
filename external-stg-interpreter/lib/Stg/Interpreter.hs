@@ -603,12 +603,17 @@ runProgram switchCWD fullpak_name progArgs dbgChan dbgState = do
   let (dbgCmdO, _) = getDebuggerChan dbgChan
   nextDbgCmd <- NextDebugCommand <$> Unagi.tryReadChan dbgCmdO
 
+  originDbH <- openFile "originDB.bindb" WriteMode
+
   stateStore <- newEmptyMVar
   dl <- dlopen "./libHSbase-4.14.0.0.cbits.so" [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
-  flip catch (\e -> do {dlclose dl; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState (PrintableMVar stateStore) dl dbgChan nextDbgCmd dbgState)
+  let freeResources = do
+        dlclose dl
+        hClose originDbH
+  flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
+    s@StgState{..} <- execStateT run (emptyStgState (PrintableMVar stateStore) dl dbgChan nextDbgCmd dbgState originDbH)
     when switchCWD $ setCurrentDirectory currentDir
-    dlclose dl
+    freeResources
 
     --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
     --print ssNextAddr

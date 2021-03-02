@@ -102,12 +102,12 @@ printDebugOutput dbgOutO = do
       putStrLn $ "addr: " ++ show addr
       printEnv env
 
-    DbgOutThreadReport tid ts currentClosureName origin currentClosureAddr -> do
+    DbgOutThreadReport tid ts currentClosureName currentClosureAddr -> do
       reportThreadIO tid ts
-      putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName ++ ", addr: " ++ show currentClosureAddr ++ ", origin: " ++ show origin
+      putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName ++ ", addr: " ++ show currentClosureAddr
 
-    DbgOutHeapObject origin addr heapObj -> do
-      putStrLn $ "addr: " ++ show addr ++ " origin: " ++ show origin
+    DbgOutHeapObject addr heapObj -> do
+      putStrLn $ "addr: " ++ show addr
       printHeapObject heapObj
 
   printDebugOutput dbgOutO

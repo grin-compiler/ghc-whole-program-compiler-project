@@ -14,6 +14,8 @@ import qualified Data.IntMap as IntMap
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Internal as BS
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Binary as Binary
 import Data.Vector (Vector)
 import qualified Data.Primitive.ByteArray as BA
 import Control.Monad.Primitive
@@ -22,6 +24,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent.Chan.Unagi.Bounded
 import Foreign.ForeignPtr.Unsafe
 import Data.Time.Clock
+import System.IO
 
 import GHC.Stack
 import Text.Printf
@@ -208,8 +211,8 @@ data DebugCommand
 data DebugOutput
   = DbgOutCurrentClosure  !Name !Addr !Env
   | DbgOutClosureList     ![Name]
-  | DbgOutThreadReport    !Int !ThreadState !Name !Addr !Addr -- origin, address
-  | DbgOutHeapObject      !Addr !Addr !HeapObject -- origin, address, heap object
+  | DbgOutThreadReport    !Int !ThreadState !Name !Addr
+  | DbgOutHeapObject      !Addr !HeapObject
   deriving (Show)
 
 data DebugState
@@ -260,25 +263,29 @@ data StgState
   , ssCurrentClosureEnv   :: Env
   , ssCurrentClosure      :: Id
   , ssCurrentClosureAddr  :: Int
-  , ssHeapObjectOrigin    :: !(IntMap Int)
   , ssExecutedClosures    :: !(Set Int)
   , ssExecutedPrimOps     :: !(Set Name)
   , ssExecutedFFI         :: !(Set ForeignCall)
   , ssExecutedPrimCalls   :: !(Set PrimCall)
   , ssAddressAfterInit    :: !Int
+  , ssOriginDbHandle      :: Handle
 
   -- debugger API
-  , ssDebuggerChan        :: !DebuggerChan
-  , ssNextDebugCommand    :: !NextDebugCommand
+  , ssDebuggerChan        :: DebuggerChan
+  , ssNextDebugCommand    :: NextDebugCommand
 
   , ssEvaluatedClosures   :: !(Set Name)
   , ssBreakpoints         :: !(Set Name)
-  , ssDebugState          :: !DebugState
+  , ssDebugState          :: DebugState
   }
   deriving (Show)
 
-emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugCommand -> DebugState -> StgState
-emptyStgState stateStore dl dbgChan nextDbgCmd dbgState = StgState
+-- for the primop tests
+emptyUndefinedStgState :: StgState
+emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined undefined undefined
+
+emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugCommand -> DebugState -> Handle -> StgState
+emptyStgState stateStore dl dbgChan nextDbgCmd dbgState originDbH = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
   , ssNextAddr            = 0
@@ -315,12 +322,12 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState = StgState
   , ssCurrentClosureEnv   = mempty
   , ssCurrentClosure      = error "uninitalized ssCurrentClosure"
   , ssCurrentClosureAddr  = -1
-  , ssHeapObjectOrigin    = mempty
   , ssExecutedClosures    = Set.empty
   , ssExecutedPrimOps     = Set.empty
   , ssExecutedFFI         = Set.empty
   , ssExecutedPrimCalls   = Set.empty
   , ssAddressAfterInit    = 0
+  , ssOriginDbHandle      = originDbH
 
   -- debugger api
   , ssDebuggerChan        = dbgChan
@@ -422,11 +429,10 @@ allocAndStore o = do
 
 store :: HasCallStack => Addr -> HeapObject -> M ()
 store a o = do
-  modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap
-                                 , ssHeapObjectOrigin = IntMap.insert a ssCurrentClosureAddr ssHeapObjectOrigin
-                                 }
-  --origin <- gets ssCurrentClosureAddr
-  --liftIO $ appendFile "origin_db.txt" $ show a ++ " " ++ show origin ++ "\n"
+  modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
+  origin <- gets ssCurrentClosureAddr
+  h <- gets ssOriginDbHandle
+  liftIO $ BL.hPut h $ Binary.encode (a, origin)
 
 {-
   conclusion:
@@ -875,6 +881,3 @@ reportThreadIO tid endTS = do
 showStackCont = \case
   CaseOf clAddr clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", addr: " ++ show clAddr ++ ", result var: " ++ show (Id b)
   c -> show c
-
-getHeapObjectOrigin :: Addr -> M Addr
-getHeapObjectOrigin addr = (IntMap.! addr) <$> gets ssHeapObjectOrigin

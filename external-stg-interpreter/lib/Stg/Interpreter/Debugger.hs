@@ -60,8 +60,7 @@ runDebugCommand cmd = do
 
     CmdPeekHeap addr -> do
       ho <- readHeap $ HeapPtr addr
-      origin <- getHeapObjectOrigin addr
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject origin addr ho
+      liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
 
 isDebugExitCommand :: DebugCommand -> Bool
 isDebugExitCommand = \case
@@ -114,5 +113,4 @@ reportState = do
   ts <- getThreadState tid
   Id currentClosure <- gets ssCurrentClosure
   currentClosureAddr <- gets ssCurrentClosureAddr
-  origin <- getHeapObjectOrigin currentClosureAddr
-  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts (binderUniqueName currentClosure) origin currentClosureAddr
+  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts (binderUniqueName currentClosure) currentClosureAddr
