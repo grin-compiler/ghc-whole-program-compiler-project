@@ -26,7 +26,7 @@ evalOp op args = do
       dummyTyCon  = Nothing
       dummyFun    = \_ _ _ _ -> pure []
       value = evalPrimOp dummyFun op args dummyType dummyTyCon
-  evalStateT value (emptyStgState undefined undefined)
+  evalStateT value emptyUndefinedStgState
 
 unboxPtr :: Ptr Word8 -> Addr#
 unboxPtr (Ptr x) = x
