@@ -17,9 +17,17 @@ READ:
   - StgStdThunks.cmm
 
 Q: only case forces heap objects?? what about apply? it must progress PAPS and thunks
+A: App can force also
+
 Q: what is the semantic of StgApp?
+A: (zero arg = StgVar)
+   forces saturated closures, stores args otherwise
+
 Q: are all thunks created at compile time, can a thunk be created at runtime?
+A: StgLet is the only source of thunks
+
 Q: can any heap object turn into a thunk?
+A: no, apply always forces if the closure gets saturated
 
 
 TODO:
@@ -27,23 +35,6 @@ TODO:
   - compile dynlib version of package .cbits
 
 IDEA:
-  GC implementation in souffle datalog:
-    intmap heap: no copying, stable/constant heap locations
-    interpreter incrementally emit reachablity datalog facts
-    GC process:
-      - collect roots from stack
-      - calculate transitive closure with souffle
-      - delete unreachable heap values and their datalog facts
-
-  GC optimized implementation:
-    IntMap for old generations        - sparse locations
-    Vector for the newers generation  - dense locations
-    newGenStartLocation               - all locations above this index belongs to the new generation
-    updates are collected for the old generation
-    at GC facts are incrementally generated:
-      - new gen facts
-      - old gen update facts
-
   Implementation method:
     first:  pure and simple haskell
     then:   gradually optimize if necessary
@@ -55,6 +46,8 @@ ffi libs:
   https://wiki.haskell.org/Library/libffi
 
 Q: what is coercionToken# ?
+A: it has VoidRep, it is compiled from coercions. disappears at runtime,
+   needed to model arity correctly and prevent early closure saturation
 
 use cases:
   use the interpreter as:

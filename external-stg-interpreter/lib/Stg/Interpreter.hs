@@ -24,7 +24,7 @@ import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Internal as BS
 import System.Posix.DynamicLinker
 
-import System.FilePath (takeExtension, takeBaseName, dropExtension, takeDirectory)
+import System.FilePath
 import System.IO
 import System.Directory
 
@@ -561,8 +561,8 @@ declareTopBindings mods = do
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs mempty b addr rhs
 
-runProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> IO ()
-runProgram switchCWD fullpak_name progArgs dbgChan dbgState = do
+runProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
+runProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
 
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
@@ -603,15 +603,22 @@ runProgram switchCWD fullpak_name progArgs dbgChan dbgState = do
   let (dbgCmdO, _) = getDebuggerChan dbgChan
   nextDbgCmd <- NextDebugCommand <$> Unagi.tryReadChan dbgCmdO
 
-  originDbH <- openFile "originDB.bindb" WriteMode
+  tracingState <- case tracing of
+    False -> pure NoTracing
+    True  -> do
+      let tracePath = ".extstg-trace" </> takeFileName progName
+      createDirectoryIfMissing True tracePath
+      DoTracing <$> openFile (tracePath </> "originDB.tsv") WriteMode
 
   stateStore <- newEmptyMVar
   dl <- dlopen "./libHSbase-4.14.0.0.cbits.so" [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
   let freeResources = do
         dlclose dl
-        hClose originDbH
+        case tracingState of
+          DoTracing h -> hClose h
+          _ -> pure ()
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState (PrintableMVar stateStore) dl dbgChan nextDbgCmd dbgState originDbH)
+    s@StgState{..} <- execStateT run (emptyStgState (PrintableMVar stateStore) dl dbgChan nextDbgCmd dbgState tracingState)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 

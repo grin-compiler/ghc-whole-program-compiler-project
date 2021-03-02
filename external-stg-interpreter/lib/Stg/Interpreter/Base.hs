@@ -219,6 +219,11 @@ data DebugState
   | DbgStepByStep
   deriving (Show)
 
+data TracingState
+  = NoTracing
+  | DoTracing Handle
+  deriving (Show)
+
 data StgState
   = StgState
   { ssHeap                :: !Heap
@@ -267,7 +272,6 @@ data StgState
   , ssExecutedFFI         :: !(Set ForeignCall)
   , ssExecutedPrimCalls   :: !(Set PrimCall)
   , ssAddressAfterInit    :: !Int
-  , ssOriginDbHandle      :: Handle
 
   -- debugger API
   , ssDebuggerChan        :: DebuggerChan
@@ -276,15 +280,18 @@ data StgState
   , ssEvaluatedClosures   :: !(Set Name)
   , ssBreakpoints         :: !(Set Name)
   , ssDebugState          :: DebugState
+
+  -- tracing
+  , ssTracingState        :: TracingState
   }
   deriving (Show)
 
 -- for the primop tests
 emptyUndefinedStgState :: StgState
-emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined undefined undefined
+emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined DbgRunProgram NoTracing
 
-emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugCommand -> DebugState -> Handle -> StgState
-emptyStgState stateStore dl dbgChan nextDbgCmd dbgState originDbH = StgState
+emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugCommand -> DebugState -> TracingState -> StgState
+emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
   , ssNextAddr            = 0
@@ -326,7 +333,6 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState originDbH = StgState
   , ssExecutedFFI         = Set.empty
   , ssExecutedPrimCalls   = Set.empty
   , ssAddressAfterInit    = 0
-  , ssOriginDbHandle      = originDbH
 
   -- debugger api
   , ssDebuggerChan        = dbgChan
@@ -335,6 +341,9 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState originDbH = StgState
   , ssEvaluatedClosures   = Set.empty
   , ssBreakpoints         = Set.empty
   , ssDebugState          = dbgState
+
+  -- tracing
+  , ssTracingState        = tracingState
   }
 
 data Rts
@@ -429,9 +438,11 @@ allocAndStore o = do
 store :: HasCallStack => Addr -> HeapObject -> M ()
 store a o = do
   modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
-  origin <- gets ssCurrentClosureAddr
-  h <- gets ssOriginDbHandle
-  liftIO $ hPutStrLn h $ show a ++ "\t" ++ show origin
+  gets ssTracingState >>= \case
+    NoTracing   -> pure ()
+    DoTracing h -> do
+      origin <- gets ssCurrentClosureAddr
+      liftIO $ hPutStrLn h $ show a ++ "\t" ++ show origin
 
 {-
   conclusion:
