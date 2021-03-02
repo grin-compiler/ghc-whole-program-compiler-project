@@ -15,7 +15,6 @@ import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Internal as BS
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.Binary as Binary
 import Data.Vector (Vector)
 import qualified Data.Primitive.ByteArray as BA
 import Control.Monad.Primitive
@@ -432,7 +431,7 @@ store a o = do
   modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
   origin <- gets ssCurrentClosureAddr
   h <- gets ssOriginDbHandle
-  liftIO $ BL.hPut h $ Binary.encode (a, origin)
+  liftIO $ hPutStrLn h $ show a ++ "\t" ++ show origin
 
 {-
   conclusion:

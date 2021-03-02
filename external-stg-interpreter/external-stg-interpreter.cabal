@@ -65,7 +65,6 @@ library
                        libffi,
                        text,
                        bytestring,
-                       binary,
                        containers,
                        primitive,
                        vector,
