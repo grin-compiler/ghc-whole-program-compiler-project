@@ -154,7 +154,7 @@ data HeapObject
   deriving (Show, Eq, Ord)
 
 data StackContinuation
-  = CaseOf  !Id !Env !Binder !AltType ![Alt]  -- closure name (debug) ; pattern match on the result ; carries the closure's local environment
+  = CaseOf  !Int !Id !Env !Binder !AltType ![Alt]  -- closure addr & name (debug) ; pattern match on the result ; carries the closure's local environment
   | Update  !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
   | Apply   ![Atom]                       -- apply args on the result heap object
   | Catch   !Atom !Bool !Bool             -- catch frame ; exception handler, block async exceptions, interruptible
@@ -206,10 +206,10 @@ data DebugCommand
   deriving (Show)
 
 data DebugOutput
-  = DbgOutCurrentClosure  !Name !Env
+  = DbgOutCurrentClosure  !Name !Addr !Env
   | DbgOutClosureList     ![Name]
-  | DbgOutThreadReport    !Int !ThreadState !Name
-  | DbgOutHeapObject      !Addr !HeapObject -- address, heap object
+  | DbgOutThreadReport    !Int !ThreadState !Name !Addr !Addr -- origin, address
+  | DbgOutHeapObject      !Addr !Addr !HeapObject -- origin, address, heap object
   deriving (Show)
 
 data DebugState
@@ -259,6 +259,8 @@ data StgState
   -- debug
   , ssCurrentClosureEnv   :: Env
   , ssCurrentClosure      :: Id
+  , ssCurrentClosureAddr  :: Int
+  , ssHeapObjectOrigin    :: !(IntMap Int)
   , ssExecutedClosures    :: !(Set Int)
   , ssExecutedPrimOps     :: !(Set Name)
   , ssExecutedFFI         :: !(Set ForeignCall)
@@ -312,6 +314,8 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState = StgState
   -- debug
   , ssCurrentClosureEnv   = mempty
   , ssCurrentClosure      = error "uninitalized ssCurrentClosure"
+  , ssCurrentClosureAddr  = -1
+  , ssHeapObjectOrigin    = mempty
   , ssExecutedClosures    = Set.empty
   , ssExecutedPrimOps     = Set.empty
   , ssExecutedFFI         = Set.empty
@@ -417,7 +421,22 @@ allocAndStore o = do
   pure a
 
 store :: HasCallStack => Addr -> HeapObject -> M ()
-store a o = modify' $ \s -> s {ssHeap = IntMap.insert a o (ssHeap s)}
+store a o = do
+  modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap
+                                 , ssHeapObjectOrigin = IntMap.insert a ssCurrentClosureAddr ssHeapObjectOrigin
+                                 }
+  --origin <- gets ssCurrentClosureAddr
+  --liftIO $ appendFile "origin_db.txt" $ show a ++ " " ++ show origin ++ "\n"
+
+{-
+  conclusion:
+    write origins to file to save memory
+    use binary format to save space
+
+  TODO: implement GC
+          - simple (full heap traversal)
+          - generational
+-}
 
 stgErrorM :: String -> M a
 stgErrorM msg = do
@@ -854,5 +873,8 @@ reportThreadIO tid endTS = do
     putStrLn ""
 
 showStackCont = \case
-  CaseOf clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", result var: " ++ show (Id b)
+  CaseOf clAddr clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", addr: " ++ show clAddr ++ ", result var: " ++ show (Id b)
   c -> show c
+
+getHeapObjectOrigin :: Addr -> M Addr
+getHeapObjectOrigin addr = (IntMap.! addr) <$> gets ssHeapObjectOrigin

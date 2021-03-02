@@ -36,8 +36,9 @@ runDebugCommand cmd = do
   case cmd of
     CmdCurrentClosure -> do
       Id currentClosure <- gets ssCurrentClosure
+      currentClosureAddr <- gets ssCurrentClosureAddr
       closureEnv <- gets ssCurrentClosureEnv
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure (binderUniqueName currentClosure) closureEnv
+      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure (binderUniqueName currentClosure) currentClosureAddr closureEnv
 
     CmdClearClosureList -> do
       modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = Set.empty}
@@ -59,7 +60,8 @@ runDebugCommand cmd = do
 
     CmdPeekHeap addr -> do
       ho <- readHeap $ HeapPtr addr
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
+      origin <- getHeapObjectOrigin addr
+      liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject origin addr ho
 
 isDebugExitCommand :: DebugCommand -> Bool
 isDebugExitCommand = \case
@@ -111,4 +113,6 @@ reportState = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
   Id currentClosure <- gets ssCurrentClosure
-  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts (binderUniqueName currentClosure)
+  currentClosureAddr <- gets ssCurrentClosureAddr
+  origin <- getHeapObjectOrigin currentClosureAddr
+  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts (binderUniqueName currentClosure) origin currentClosureAddr

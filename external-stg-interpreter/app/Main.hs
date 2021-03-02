@@ -97,16 +97,17 @@ printDebugOutput dbgOutO = do
     DbgOutClosureList closureNames -> do
       mapM_ BS8.putStrLn closureNames
 
-    DbgOutCurrentClosure name env -> do
+    DbgOutCurrentClosure name addr env -> do
       BS8.putStrLn name
+      putStrLn $ "addr: " ++ show addr
       printEnv env
 
-    DbgOutThreadReport tid ts currentClosureName -> do
+    DbgOutThreadReport tid ts currentClosureName origin currentClosureAddr -> do
       reportThreadIO tid ts
-      putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName
+      putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName ++ ", addr: " ++ show currentClosureAddr ++ ", origin: " ++ show origin
 
-    DbgOutHeapObject addr heapObj -> do
-      putStrLn $ "addr: " ++ show addr
+    DbgOutHeapObject origin addr heapObj -> do
+      putStrLn $ "addr: " ++ show addr ++ " origin: " ++ show origin
       printHeapObject heapObj
 
   printDebugOutput dbgOutO

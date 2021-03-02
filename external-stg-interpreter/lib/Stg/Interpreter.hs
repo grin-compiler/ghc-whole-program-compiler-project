@@ -139,7 +139,7 @@ builtinStgEval a@HeapPtr{} = do
             extendedEnv = addManyBindersToEnv params hoCloArgs hoEnv
 
         markExecuted l
-        modify' $ \s -> s {ssCurrentClosure = hoName, ssCurrentClosureEnv = extendedEnv}
+        modify' $ \s -> s {ssCurrentClosure = hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
         Debugger.checkBreakpoint hoName
 
         -- TODO: env or free var handling
@@ -314,8 +314,8 @@ evalStackContinuation result = \case
       pure result
 
   -- HINT: STG IR uses 'case' expressions to chain instructions with strict evaluation
-  CaseOf curClosure localEnv resultBinder altType alts -> do
-    modify' $ \s -> s {ssCurrentClosure = curClosure}
+  CaseOf curClosureAddr curClosure localEnv resultBinder altType alts -> do
+    modify' $ \s -> s {ssCurrentClosure = curClosure, ssCurrentClosureAddr = curClosureAddr}
     assertWHNF result altType resultBinder
     case altType of
       AlgAlt tc -> do
@@ -442,7 +442,8 @@ evalExpr localEnv = \case
 
   StgCase e scrutineeResult altType alts -> do
     curClosure <- gets ssCurrentClosure
-    stackPush (CaseOf curClosure localEnv scrutineeResult altType alts)
+    curClosureAddr <- gets ssCurrentClosureAddr
+    stackPush (CaseOf curClosureAddr curClosure localEnv scrutineeResult altType alts)
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
