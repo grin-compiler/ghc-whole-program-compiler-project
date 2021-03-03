@@ -166,10 +166,10 @@ data STyCon
   }
   deriving (Eq, Ord, Generic, Show)
 
-newtype CutLoop a = CutLoop {cutLoop :: a}
-instance Eq (CutLoop a) where _ == _ = True
-instance Ord (CutLoop a) where compare _ _ = EQ
-instance Show (CutLoop a) where show _ = "CutLoop"
+newtype CutTyCon = CutTyCon {uncutTyCon :: TyCon }
+instance Eq CutTyCon where _ == _ = True
+instance Ord CutTyCon where compare _ _ = EQ
+instance Show CutTyCon where show (CutTyCon tc) = "CutTyCon " ++ (BS8.unpack $ tcUniqueName tc)
 
 -- user friendly data con
 data DataCon
@@ -179,7 +179,7 @@ data DataCon
   , dcUnitId :: !UnitId
   , dcModule :: !ModuleName
   , dcRep    :: !DataConRep
-  , dcTyCon  :: CutLoop TyCon
+  , dcTyCon  :: !CutTyCon
   , dcWorker :: !Binder
   , dcDefLoc :: !SrcSpan
   -- optimization

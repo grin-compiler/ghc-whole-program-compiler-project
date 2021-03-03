@@ -14,7 +14,7 @@ dataToTagOp [whnf@HeapPtr{}] = do
   -- NOTE: the GHC dataToTag# primop works for any Data Con regardless its arity
   (Con dataCon _) <- readHeapCon whnf
 
-  case findIndex (\d -> dcId d == dcId dataCon) (tcDataCons (cutLoop $ dcTyCon dataCon)) of
+  case findIndex (\d -> dcId d == dcId dataCon) (tcDataCons (uncutTyCon $ dcTyCon dataCon)) of
     Nothing -> stgErrorM $ "Data constructor tag is not found for " ++ show (dcUniqueName dataCon)
     Just i  -> pure [IntV i]
 dataToTagOp result = stgErrorM $ "dataToTagOp expected [HeapPtr], got: " ++ show result
