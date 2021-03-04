@@ -1,0 +1,21 @@
+
+// input model
+
+.decl Reference(from : number, to : number)
+.input Reference
+
+.decl GCRoot(val : number)
+.input GCRoot
+
+// output
+
+.decl Live(val : number)
+.output Live
+
+// traversal
+
+Live(ref) :- GCRoot(ref).
+
+Live(to) :-
+  Live(from),
+  Reference(from, to).
