@@ -258,12 +258,6 @@ data ThreadStatus
   | ThreadDied      -- RTS name: ThreadKilled
 -}
 
-isThreadLive :: ThreadStatus -> Bool
-isThreadLive = \case
-  ThreadFinished  -> False
-  ThreadDied      -> False
-  _ -> True
-
 killAllThreads :: M ()
 killAllThreads = do
   pure () -- TODO

@@ -790,6 +790,13 @@ data ThreadStatus
   | ThreadFinished  -- RTS name: ThreadComplete
   | ThreadDied      -- RTS name: ThreadKilled
   deriving (Eq, Ord, Show)
+
+isThreadLive :: ThreadStatus -> Bool
+isThreadLive = \case
+  ThreadFinished  -> False
+  ThreadDied      -> False
+  _ -> True
+
 {-
 threadStatus :: ThreadId -> IO ThreadStatus
 threadStatus (ThreadId t) = IO $ \s ->
