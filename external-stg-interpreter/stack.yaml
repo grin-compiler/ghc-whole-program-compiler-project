@@ -5,5 +5,6 @@ packages:
   - 'external-stg'
 
 extra-deps:
+  - souffle-haskell-2.1.0
   - primitive-0.7.1.0
   - zip-1.7.0

@@ -24,6 +24,9 @@ library
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
     Stg.Interpreter.Debugger
+    Stg.Interpreter.GC
+    Stg.Interpreter.GC.GCRef
+    Stg.Interpreter.GC.LiveDataAnalysis
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array
@@ -71,8 +74,17 @@ library
                        mtl,
                        inline-c,
                        unagi-chan,
+                       souffle-haskell,
                        external-stg
   default-language:    Haskell2010
+
+  include-dirs:         cbits
+
+  extra-libraries:      gomp
+
+  cxx-sources:          cbits/ext-stg-gc.cpp
+  cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
+  ld-options:           "-Wl,--undefined=__factory_Sf_ext_stg_gc_instance"
 
 executable ext-stg-interpreter
   default-language:    Haskell2010
