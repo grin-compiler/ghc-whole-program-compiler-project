@@ -6,8 +6,8 @@ import Data.Int
 import Data.Bits
 import GHC.Generics
 import Control.Monad.State
-import Data.Set (Set)
-import qualified Data.Set as Set
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
@@ -33,7 +33,7 @@ data Live = Live Int32
 
 instance Souffle.Program ExtStgGC where
   type ProgramFacts ExtStgGC = [GCRoot, Reference, Live]
-  programName = const "ext-stg-gc"
+  programName = const "ext_stg_gc"
 
 instance Souffle.Fact GCRoot where
   type FactDirection GCRoot = 'Souffle.Input
@@ -55,13 +55,13 @@ instance Souffle.Marshal Live
 -- analysis api
 ---------------------------
 
-runLiveDataAnalysis :: StgState -> IO LiveData
-runLiveDataAnalysis stgState = Souffle.runSouffle ExtStgGC $ \maybeProgram -> do  -- Initializes the Souffle program.
+runLiveDataAnalysis :: [Atom] -> StgState -> IO LiveData
+runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybeProgram -> do  -- Initializes the Souffle program.
   case maybeProgram of
     Nothing -> liftIO $ fail "Failed to load ext-stg-gc datalog program."
     Just prog -> do
       -- populate input facts
-      addGCRootFacts prog stgState
+      addGCRootFacts prog stgState extraGCRoots
       addReferenceFacts prog stgState
       -- run analysis
       Souffle.setNumThreads prog 4
@@ -73,12 +73,18 @@ runLiveDataAnalysis stgState = Souffle.runSouffle ExtStgGC $ \maybeProgram -> do
 -- handle input facts
 ---------------------------
 
-addGCRootFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
-addGCRootFacts prog StgState{..} = do
+addGCRootFacts :: Souffle.Handle ExtStgGC -> StgState -> [Atom] -> SouffleM ()
+addGCRootFacts prog StgState{..} extraGCRoots = do
   let addGCRoot :: Atom -> SouffleM ()
       addGCRoot a = visitAtom a $ \i -> Souffle.addFact prog $ GCRoot i
 
   -- HINT: the following can be GC roots
+
+  -- utility
+  visitGCRef addGCRoot extraGCRoots
+
+  -- current closure
+  addGCRoot $ HeapPtr ssCurrentClosureAddr
 
   -- stable pointer values
   visitGCRef addGCRoot ssStablePointers
@@ -123,32 +129,34 @@ addReferenceFacts prog StgState{..} = do
 
 data LiveData
   = LiveData
-  { liveHeap                :: !(Set Int)
-  , liveWeakPointers        :: !(Set Int)
-  , liveMVars               :: !(Set Int)
-  , liveMutVars             :: !(Set Int)
-  , liveArrays              :: !(Set Int)
-  , liveMutableArrays       :: !(Set Int)
-  , liveSmallArrays         :: !(Set Int)
-  , liveSmallMutableArrays  :: !(Set Int)
-  , liveArrayArrays         :: !(Set Int)
-  , liveMutableArrayArrays  :: !(Set Int)
-  , liveStableNames         :: !(Set Int)
+  { liveHeap                :: !IntSet
+  , liveWeakPointers        :: !IntSet
+  , liveMVars               :: !IntSet
+  , liveMutVars             :: !IntSet
+  , liveArrays              :: !IntSet
+  , liveMutableArrays       :: !IntSet
+  , liveSmallArrays         :: !IntSet
+  , liveSmallMutableArrays  :: !IntSet
+  , liveArrayArrays         :: !IntSet
+  , liveMutableArrayArrays  :: !IntSet
+  , liveMutableByteArrays   :: !IntSet
+  , liveStableNames         :: !IntSet
   }
 
 emptyLiveData :: LiveData
 emptyLiveData = LiveData
-  { liveHeap                = Set.empty
-  , liveWeakPointers        = Set.empty
-  , liveMVars               = Set.empty
-  , liveMutVars             = Set.empty
-  , liveArrays              = Set.empty
-  , liveMutableArrays       = Set.empty
-  , liveSmallArrays         = Set.empty
-  , liveSmallMutableArrays  = Set.empty
-  , liveArrayArrays         = Set.empty
-  , liveMutableArrayArrays  = Set.empty
-  , liveStableNames         = Set.empty
+  { liveHeap                = IntSet.empty
+  , liveWeakPointers        = IntSet.empty
+  , liveMVars               = IntSet.empty
+  , liveMutVars             = IntSet.empty
+  , liveArrays              = IntSet.empty
+  , liveMutableArrays       = IntSet.empty
+  , liveSmallArrays         = IntSet.empty
+  , liveSmallMutableArrays  = IntSet.empty
+  , liveArrayArrays         = IntSet.empty
+  , liveMutableArrayArrays  = IntSet.empty
+  , liveMutableByteArrays   = IntSet.empty
+  , liveStableNames         = IntSet.empty
   }
 
 readbackLiveData :: Souffle.Handle ExtStgGC -> SouffleM LiveData
@@ -162,14 +170,15 @@ addLive ld@LiveData{..} (Live l) = do
   let namespace = toEnum $ fromIntegral (l .&. 0xf)
       idx       = shiftR (fromIntegral l) 4
   pure $ case namespace of
-    NS_Array              -> ld {liveArrays             = Set.insert idx liveArrays}
-    NS_ArrayArray         -> ld {liveArrayArrays        = Set.insert idx liveArrayArrays}
-    NS_HeapPtr            -> ld {liveHeap               = Set.insert idx liveHeap}
-    NS_MutableArray       -> ld {liveMutableArrays      = Set.insert idx liveMutableArrays}
-    NS_MutableArrayArray  -> ld {liveMutableArrayArrays = Set.insert idx liveMutableArrayArrays}
-    NS_MutVar             -> ld {liveMutVars            = Set.insert idx liveMutVars}
-    NS_MVar               -> ld {liveMVars              = Set.insert idx liveMVars}
-    NS_SmallArray         -> ld {liveSmallArrays        = Set.insert idx liveSmallArrays}
-    NS_SmallMutableArray  -> ld {liveSmallMutableArrays = Set.insert idx liveSmallMutableArrays}
-    NS_StableName         -> ld {liveStableNames        = Set.insert idx liveStableNames}
-    NS_WeakPointer        -> ld {liveWeakPointers       = Set.insert idx liveWeakPointers}
+    NS_Array              -> ld {liveArrays             = IntSet.insert idx liveArrays}
+    NS_ArrayArray         -> ld {liveArrayArrays        = IntSet.insert idx liveArrayArrays}
+    NS_HeapPtr            -> ld {liveHeap               = IntSet.insert idx liveHeap}
+    NS_MutableArray       -> ld {liveMutableArrays      = IntSet.insert idx liveMutableArrays}
+    NS_MutableArrayArray  -> ld {liveMutableArrayArrays = IntSet.insert idx liveMutableArrayArrays}
+    NS_MutableByteArray   -> ld {liveMutableByteArrays  = IntSet.insert idx liveMutableByteArrays}
+    NS_MutVar             -> ld {liveMutVars            = IntSet.insert idx liveMutVars}
+    NS_MVar               -> ld {liveMVars              = IntSet.insert idx liveMVars}
+    NS_SmallArray         -> ld {liveSmallArrays        = IntSet.insert idx liveSmallArrays}
+    NS_SmallMutableArray  -> ld {liveSmallMutableArrays = IntSet.insert idx liveSmallMutableArrays}
+    NS_StableName         -> ld {liveStableNames        = IntSet.insert idx liveStableNames}
+    NS_WeakPointer        -> ld {liveWeakPointers       = IntSet.insert idx liveWeakPointers}
