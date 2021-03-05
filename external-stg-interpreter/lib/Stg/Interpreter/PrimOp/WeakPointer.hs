@@ -12,15 +12,15 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 newWeakPointer :: Atom -> Atom -> Maybe Atom -> M Int
 newWeakPointer key value finalizer = do
   weakPointers <- gets ssWeakPointers
-  let next  = IntMap.size weakPointers
-      desc  = WeakPtrDescriptor
+  next <- gets ssNextWeakPointer
+  let desc = WeakPtrDescriptor
         { wpdKey          = key
         , wpdVale         = Just value
         , wpdFinalizer    = finalizer
         , wpdCFinalizers  = []
         }
 
-  modify' $ \s -> s {ssWeakPointers = IntMap.insert next desc weakPointers}
+  modify' $ \s -> s {ssWeakPointers = IntMap.insert next desc weakPointers, ssNextWeakPointer = succ next}
   pure next
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]

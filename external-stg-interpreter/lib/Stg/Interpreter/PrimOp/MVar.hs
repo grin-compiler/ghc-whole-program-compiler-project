@@ -86,9 +86,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "newMVar#", [_s]) -> do
     reportOp op args
     state (\s@StgState{..} ->
-      let next  = IntMap.size ssMVars
+      let next  = ssNextMVar
           value = MVarDescriptor {mvdValue = Nothing, mvdQueue = []}
-      in ([MVar next], s {ssMVars = IntMap.insert next value ssMVars}))
+      in ([MVar next], s {ssMVars = IntMap.insert next value ssMVars, ssNextMVar = succ next}))
 
   -- takeMVar# :: MVar# s a -> State# s -> (# State# s, a #)
   ( "takeMVar#", [MVar m, _s]) -> do

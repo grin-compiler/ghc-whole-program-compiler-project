@@ -29,10 +29,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- newArrayArray# :: Int# -> State# s -> (# State# s, MutableArrayArray# s #)
   ( "newArrayArray#", [IntV i, _s]) -> do
     mutableArrayArrays <- gets ssMutableArrayArrays
-    let next   = IntMap.size mutableArrayArrays
-        result = MutableArrayArray $ ArrayMutArrIdx next
+    next <- gets ssNextMutableArrayArray
+    let result = MutableArrayArray $ ArrayMutArrIdx next
         v      = V.replicate (fromIntegral i) result -- wow
-    modify' $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays}
+    modify' $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays, ssNextMutableArrayArray = succ next}
     pure [result]
 
   -- sameMutableArrayArray# :: MutableArrayArray# s -> MutableArrayArray# s -> Int#

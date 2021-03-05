@@ -19,8 +19,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- makeStablePtr# :: a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
   ( "makeStablePtr#", [a, _s]) -> do
     stablePtrs <- gets ssStablePointers
-    let next = IntMap.size stablePtrs
-    modify' $ \s -> s {ssStablePointers = IntMap.insert next a stablePtrs}
+    next <- gets ssNextStablePointer
+    modify' $ \s -> s {ssStablePointers = IntMap.insert next a stablePtrs, ssNextStablePointer = succ next}
     pure [PtrAtom (StablePtr next) . intPtrToPtr $ IntPtr next]
 
   -- deRefStablePtr# :: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
@@ -40,8 +40,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     case Map.lookup a snMap of
       Just snId -> pure [StableName snId]
       Nothing -> do
-        let snId = Map.size snMap
-        modify' $ \s -> s {ssStableNameMap = Map.insert a snId snMap}
+        snId <- gets ssNextStableName
+        modify' $ \s -> s {ssStableNameMap = Map.insert a snId snMap, ssNextStableName = succ snId}
         pure [StableName snId]
 
   -- eqStableName# :: StableName# a -> StableName# b -> Int#

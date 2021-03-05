@@ -17,8 +17,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- newMutVar# :: a -> State# s -> (# State# s, MutVar# s a #)
   ( "newMutVar#", [a, _s]) -> do
     mutVars <- gets ssMutVars
-    let next = IntMap.size mutVars
-    modify' $ \s -> s {ssMutVars = IntMap.insert next a mutVars}
+    next <- gets ssNextMutVar
+    modify' $ \s -> s {ssMutVars = IntMap.insert next a mutVars, ssNextMutVar = succ next}
     pure [MutVar next]
 
   -- readMutVar# :: MutVar# s a -> State# s -> (# State# s, a #)

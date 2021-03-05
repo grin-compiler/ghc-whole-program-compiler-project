@@ -43,15 +43,15 @@ newByteArray size alignment pinned = do
   liftIO $ BA.fillByteArray ba 0 size 0
 
   byteArrays <- gets ssMutableByteArrays
-  let next  = IntMap.size byteArrays
-      desc  = ByteArrayDescriptor
+  next <- gets ssNextMutableByteArray
+  let desc = ByteArrayDescriptor
         { baaMutableByteArray = ba
         , baaByteArray        = Nothing
         , baaPinned           = pinned
         , baaAlignment        = alignment
         }
 
-  modify' $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays}
+  modify' $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays, ssNextMutableByteArray = succ next}
 
   pure $ ByteArrayIdx
     { baId        = next

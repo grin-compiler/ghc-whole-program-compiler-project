@@ -229,6 +229,7 @@ data StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
   , ssNextAddr            :: {-# UNPACK #-} !Int
+  , ssLastGCAddr          :: !Int
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
@@ -236,6 +237,7 @@ data StgState
 
   -- threading
   , ssThreads             :: IntMap ThreadState
+  , ssNextThreadId        :: !Int
 
   -- thread scheduler related
   , ssCurrentThreadId     :: Int
@@ -255,6 +257,19 @@ data StgState
   , ssSmallMutableArrays  :: IntMap (Vector Atom)
   , ssArrayArrays         :: IntMap (Vector Atom)
   , ssMutableArrayArrays  :: IntMap (Vector Atom)
+
+  , ssNextStableName        :: !Int
+  , ssNextWeakPointer       :: !Int
+  , ssNextStablePointer     :: !Int
+  , ssNextMutableByteArray  :: !Int
+  , ssNextMVar              :: !Int
+  , ssNextMutVar            :: !Int
+  , ssNextArray             :: !Int
+  , ssNextMutableArray      :: !Int
+  , ssNextSmallArray        :: !Int
+  , ssNextSmallMutableArray :: !Int
+  , ssNextArrayArray        :: !Int
+  , ssNextMutableArrayArray :: !Int
 
   -- FFI related
   , ssCBitsMap            :: DL
@@ -295,11 +310,13 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
   , ssNextAddr            = 0
+  , ssLastGCAddr          = 0
 
   , ssCStringConstants    = mempty
 
   -- threading
   , ssThreads             = mempty
+  , ssNextThreadId        = 0
   , ssCurrentThreadId     = error "uninitialized ssCurrentThreadId"
   , ssScheduledThreadIds  = []
 
@@ -317,6 +334,19 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState = StgState
   , ssSmallMutableArrays  = mempty
   , ssArrayArrays         = mempty
   , ssMutableArrayArrays  = mempty
+
+  , ssNextStableName        = 0
+  , ssNextWeakPointer       = 0
+  , ssNextStablePointer     = 0
+  , ssNextMutableByteArray  = 0
+  , ssNextMVar              = 0
+  , ssNextMutVar            = 0
+  , ssNextArray             = 0
+  , ssNextMutableArray      = 0
+  , ssNextSmallArray        = 0
+  , ssNextSmallMutableArray = 0
+  , ssNextArrayArray        = 0
+  , ssNextMutableArrayArray = 0
 
   -- FFI related
   , ssCBitsMap            = dl
@@ -692,8 +722,8 @@ createThread = do
         , tsLabel             = Nothing
         }
   threads <- gets ssThreads
-  let threadId  = IntMap.size threads
-  modify' $ \s -> s {ssThreads = IntMap.insert threadId ts threads}
+  threadId <- gets ssNextThreadId
+  modify' $ \s -> s {ssThreads = IntMap.insert threadId ts threads, ssNextThreadId = succ threadId}
   pure (threadId, ts)
 
 updateThreadState :: Int -> ThreadState -> M ()
