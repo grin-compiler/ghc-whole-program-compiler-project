@@ -38,6 +38,7 @@ import Stg.Interpreter.Rts
 import Stg.Interpreter.Debug
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
 import qualified Stg.Interpreter.Debugger as Debugger
+import qualified Stg.Interpreter.GC as GC
 
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
 import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
@@ -120,6 +121,14 @@ evalArg localEnv = \case
     }
 -}
 
+checkGC :: [Atom] -> M ()
+checkGC extraGCRoots = do
+  nextAddr <- gets ssNextAddr
+  lastGCAddr <- gets ssLastGCAddr
+  when (nextAddr - lastGCAddr > 300000) $ do
+    modify' $ \s -> s {ssLastGCAddr = nextAddr}
+    GC.runGC extraGCRoots
+
 builtinStgEval :: HasCallStack => Atom -> M [Atom]
 builtinStgEval a@HeapPtr{} = do
   o <- readHeap a
@@ -141,6 +150,7 @@ builtinStgEval a@HeapPtr{} = do
         markExecuted l
         modify' $ \s -> s {ssCurrentClosure = hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
         Debugger.checkBreakpoint hoName
+        checkGC [a]
 
         -- TODO: env or free var handling
         case uf of
@@ -319,8 +329,8 @@ evalStackContinuation result = \case
             extendedEnv = addBinderToEnv resultBinder v localEnv
         con <- readHeapCon v
         case alts of
-          d@(Alt AltDefault _ _) : al -> matchFirstCon extendedEnv con $ al ++ [d]
-          _ -> matchFirstCon extendedEnv con alts
+          d@(Alt AltDefault _ _) : al -> matchFirstCon (Id resultBinder) extendedEnv con $ al ++ [d]
+          _ -> matchFirstCon (Id resultBinder) extendedEnv con alts
 
       PrimAlt r -> do
         let lit = case result of
@@ -487,10 +497,10 @@ convertAltLit = \case
   LitNumber LitNumWord64 n  -> WordAtom $ fromIntegral n
   l -> Literal l
 
-
-matchFirstCon :: HasCallStack => Env -> HeapObject -> [Alt] -> M [Atom]
-matchFirstCon localEnv (Con dc args) alts = case head $ [a | a@Alt{..} <- alts, matchCon dc altCon] ++ error "no matching alts" of
-  Alt{..} -> do
+matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
+matchFirstCon resultId localEnv (Con dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
+  []  -> stgErrorM $ "no matching alts for: " ++ show resultId
+  Alt{..} : _ -> do
     let extendedEnv = addManyBindersToEnv altBinders args localEnv
     evalExpr extendedEnv altRHS
 
