@@ -44,6 +44,9 @@ instance VisitGCRef ThreadState where
 instance VisitGCRef WeakPtrDescriptor where
   -- NOTE: the value is not tracked by the GC
   visitGCRef action WeakPtrDescriptor{..} = do
+    ----------- temporarly track the value -- FIXME
+    visitGCRef action wpdVale
+    -----------
     action wpdKey
     visitGCRef action wpdFinalizer
     forM_ wpdCFinalizers $ \(a1, ma2, a3) -> do
@@ -63,6 +66,7 @@ data RefNamespace
   | NS_HeapPtr
   | NS_MutableArray
   | NS_MutableArrayArray
+  | NS_MutableByteArray
   | NS_MutVar
   | NS_MVar
   | NS_SmallArray
@@ -85,6 +89,8 @@ visitAtom atom action = case atom of
   SmallMutableArray i -> action $ smallArrIdxToRef i
   ArrayArray i        -> action $ arrayArrIdxToRef i
   MutableArrayArray i -> action $ arrayArrIdxToRef i
+  ByteArray i         -> action $ encodeRef (baId i) NS_MutableByteArray
+  MutableByteArray i  -> action $ encodeRef (baId i) NS_MutableByteArray
   WeakPointer i       -> action $ encodeRef i NS_WeakPointer
   StableName i        -> action $ encodeRef i NS_StableName
   _                   -> pure ()
