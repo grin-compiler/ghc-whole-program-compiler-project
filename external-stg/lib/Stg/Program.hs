@@ -11,6 +11,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Aeson as Aeson
 
 import System.Directory
 import System.FilePath
@@ -19,6 +20,8 @@ import Codec.Archive.Zip
 
 import Stg.Syntax
 import Stg.IO
+import Stg.JSON ()
+import Stg.Reconstruct (reconModule)
 import qualified Stg.GHC.Symbols as GHCSymbols
 
 moduleToModpak :: String -> String -> FilePath
@@ -187,6 +190,14 @@ getGhcStgAppModules ghcstgappPath = do
   appModpaks <- collectProgramModules' False (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
   forM appModpaks $ \modpakName -> do
     readModpakL modpakName modpakStgbinPath decodeStgbin
+
+-- .json
+getJSONModules :: FilePath -> IO [Module]
+getJSONModules filePath = do
+  res <- Aeson.eitherDecodeFileStrict' filePath
+  case res of
+    Left  err     -> error err
+    Right smodule -> pure [reconModule smodule]
 
 -- .stglib utility
 findStglibForHSLib :: [String] -> String -> [FilePath] -> String -> IO FilePath

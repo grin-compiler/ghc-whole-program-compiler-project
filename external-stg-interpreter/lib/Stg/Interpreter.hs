@@ -30,6 +30,7 @@ import System.Directory
 
 import Stg.Syntax
 import Stg.Program
+import Stg.JSON
 
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimCall
@@ -562,6 +563,7 @@ runProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
 
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
+    ".json"                             -> getJSONModules fullpak_name
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
 

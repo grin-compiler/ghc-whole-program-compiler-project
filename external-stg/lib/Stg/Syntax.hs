@@ -135,11 +135,11 @@ data Type
 
 newtype TyConId
   = TyConId Unique
-  deriving (Eq, Ord, Binary, Show)
+  deriving (Eq, Ord, Binary, Generic, Show)
 
 newtype DataConId
   = DataConId Unique
-  deriving (Eq, Ord, Binary, Show)
+  deriving (Eq, Ord, Binary, Generic, Show)
 
 -- raw data con
 data DataConRep
@@ -223,15 +223,15 @@ data IdDetails
 
 newtype UnitId
   = UnitId { getUnitId :: Name }
-  deriving (Eq, Ord, Binary, Show)
+  deriving (Eq, Ord, Binary, Generic, Show)
 
 newtype ModuleName
   = ModuleName { getModuleName :: Name }
-  deriving (Eq, Ord, Binary, Show)
+  deriving (Eq, Ord, Binary, Generic, Show)
 
 newtype BinderId
   = BinderId Unique
-  deriving (Eq, Ord, Binary, Show)
+  deriving (Eq, Ord, Binary, Generic, Show)
 
 data SBinder
   = SBinder
