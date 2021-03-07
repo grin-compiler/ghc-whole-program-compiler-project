@@ -248,25 +248,37 @@ RecordTable recordTable;
 Own<t_btree_i__0__1> rel_1_delta_Live = mk<t_btree_i__0__1>();
 // -- Table: @new_Live
 Own<t_btree_i__0__1> rel_2_new_Live = mk<t_btree_i__0__1>();
+// -- Table: All
+Own<t_btree_i__0__1> rel_3_All = mk<t_btree_i__0__1>();
+souffle::RelationWrapper<0,t_btree_i__0__1,Tuple<RamDomain,1>,1,0> wrapper_rel_3_All;
+// -- Table: Dead
+Own<t_btree_i__0__1> rel_4_Dead = mk<t_btree_i__0__1>();
+souffle::RelationWrapper<1,t_btree_i__0__1,Tuple<RamDomain,1>,1,0> wrapper_rel_4_Dead;
 // -- Table: GCRoot
-Own<t_btree_i__0__1> rel_3_GCRoot = mk<t_btree_i__0__1>();
-souffle::RelationWrapper<0,t_btree_i__0__1,Tuple<RamDomain,1>,1,0> wrapper_rel_3_GCRoot;
+Own<t_btree_i__0__1> rel_5_GCRoot = mk<t_btree_i__0__1>();
+souffle::RelationWrapper<2,t_btree_i__0__1,Tuple<RamDomain,1>,1,0> wrapper_rel_5_GCRoot;
 // -- Table: Live
-Own<t_btree_i__0__1> rel_4_Live = mk<t_btree_i__0__1>();
-souffle::RelationWrapper<1,t_btree_i__0__1,Tuple<RamDomain,1>,1,0> wrapper_rel_4_Live;
+Own<t_btree_i__0__1> rel_6_Live = mk<t_btree_i__0__1>();
+souffle::RelationWrapper<3,t_btree_i__0__1,Tuple<RamDomain,1>,1,0> wrapper_rel_6_Live;
 // -- Table: Reference
-Own<t_btree_ii__0_1__11__10> rel_5_Reference = mk<t_btree_ii__0_1__11__10>();
-souffle::RelationWrapper<2,t_btree_ii__0_1__11__10,Tuple<RamDomain,2>,2,0> wrapper_rel_5_Reference;
+Own<t_btree_ii__0_1__11__10> rel_7_Reference = mk<t_btree_ii__0_1__11__10>();
+souffle::RelationWrapper<4,t_btree_ii__0_1__11__10,Tuple<RamDomain,2>,2,0> wrapper_rel_7_Reference;
 public:
 Sf_ext_stg_gc() : 
-wrapper_rel_3_GCRoot(*rel_3_GCRoot,symTable,"GCRoot",std::array<const char *,1>{{"i:number"}},std::array<const char *,1>{{"val"}}),
+wrapper_rel_3_All(*rel_3_All,symTable,"All",std::array<const char *,1>{{"i:number"}},std::array<const char *,1>{{"val"}}),
 
-wrapper_rel_4_Live(*rel_4_Live,symTable,"Live",std::array<const char *,1>{{"i:number"}},std::array<const char *,1>{{"val"}}),
+wrapper_rel_4_Dead(*rel_4_Dead,symTable,"Dead",std::array<const char *,1>{{"i:number"}},std::array<const char *,1>{{"val"}}),
 
-wrapper_rel_5_Reference(*rel_5_Reference,symTable,"Reference",std::array<const char *,2>{{"i:number","i:number"}},std::array<const char *,2>{{"from","to"}}){
-addRelation("GCRoot",&wrapper_rel_3_GCRoot,true,false);
-addRelation("Live",&wrapper_rel_4_Live,false,true);
-addRelation("Reference",&wrapper_rel_5_Reference,true,false);
+wrapper_rel_5_GCRoot(*rel_5_GCRoot,symTable,"GCRoot",std::array<const char *,1>{{"i:number"}},std::array<const char *,1>{{"val"}}),
+
+wrapper_rel_6_Live(*rel_6_Live,symTable,"Live",std::array<const char *,1>{{"i:number"}},std::array<const char *,1>{{"val"}}),
+
+wrapper_rel_7_Reference(*rel_7_Reference,symTable,"Reference",std::array<const char *,2>{{"i:number","i:number"}},std::array<const char *,2>{{"from","to"}}){
+addRelation("All",&wrapper_rel_3_All,false,false);
+addRelation("Dead",&wrapper_rel_4_Dead,false,true);
+addRelation("GCRoot",&wrapper_rel_5_GCRoot,true,false);
+addRelation("Live",&wrapper_rel_6_Live,false,true);
+addRelation("Reference",&wrapper_rel_7_Reference,true,false);
 }
 ~Sf_ext_stg_gc() {
 }
@@ -299,6 +311,14 @@ subroutine_1(args, ret);
  std::vector<RamDomain> args, ret;
 subroutine_2(args, ret);
 }
+{
+ std::vector<RamDomain> args, ret;
+subroutine_3(args, ret);
+}
+{
+ std::vector<RamDomain> args, ret;
+subroutine_4(args, ret);
+}
 
 // -- relation hint statistics --
 SignalHandler::instance()->reset();
@@ -310,20 +330,24 @@ void runAll(std::string inputDirectoryArg = "", std::string outputDirectoryArg =
 }
 public:
 void printAll(std::string outputDirectoryArg = "") override {
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"name","Dead"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}"}});
+if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
+IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_4_Dead);
+} catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"name","Live"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}"}});
 if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
-IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_4_Live);
+IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_6_Live);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
 public:
 void loadAll(std::string inputDirectoryArg = "") override {
 try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"fact-dir","."},{"name","Reference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"i:number\", \"i:number\"]}}"}});
 if (!inputDirectoryArg.empty()) {directiveMap["fact-dir"] = inputDirectoryArg;}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_5_Reference);
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_7_Reference);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"fact-dir","."},{"name","GCRoot"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}"}});
 if (!inputDirectoryArg.empty()) {directiveMap["fact-dir"] = inputDirectoryArg;}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_3_GCRoot);
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_5_GCRoot);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
 public:
@@ -332,22 +356,28 @@ try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "Reference";
 rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"i:number\", \"i:number\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_5_Reference);
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_7_Reference);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "GCRoot";
 rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_3_GCRoot);
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_5_GCRoot);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
 public:
 void dumpOutputs() override {
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
+rwOperation["name"] = "Dead";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}";
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_4_Dead);
+} catch (std::exception& e) {std::cerr << e.what();exit(1);}
+try {std::map<std::string, std::string> rwOperation;
+rwOperation["IO"] = "stdout";
 rwOperation["name"] = "Live";
 rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_4_Live);
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_6_Live);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
 public:
@@ -364,6 +394,12 @@ return;}
 if (name == "stratum_2") {
 subroutine_2(args, ret);
 return;}
+if (name == "stratum_3") {
+subroutine_3(args, ret);
+return;}
+if (name == "stratum_4") {
+subroutine_4(args, ret);
+return;}
 fatal("unknown subroutine");
 }
 #ifdef _MSC_VER
@@ -373,7 +409,7 @@ void subroutine_0(const std::vector<RamDomain>& args, std::vector<RamDomain>& re
 if (performIO) {
 try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"fact-dir","."},{"name","Reference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"i:number\", \"i:number\"]}}"}});
 if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_5_Reference);
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_7_Reference);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
 }
@@ -387,7 +423,7 @@ void subroutine_1(const std::vector<RamDomain>& args, std::vector<RamDomain>& re
 if (performIO) {
 try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"fact-dir","."},{"name","GCRoot"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}"}});
 if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_3_GCRoot);
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_5_GCRoot);
 } catch (std::exception& e) {std::cerr << "Error loading data: " << e.what() << '\n';}
 }
 }
@@ -401,20 +437,20 @@ void subroutine_2(const std::vector<RamDomain>& args, std::vector<RamDomain>& re
 SignalHandler::instance()->setMsg(R"_(Live(ref) :- 
    GCRoot(ref).
 in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [17:1-17:26])_");
-if(!(rel_3_GCRoot->empty())) {
+if(!(rel_5_GCRoot->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_3_GCRoot_op_ctxt,rel_3_GCRoot->createContext());
-CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
-for(const auto& env0 : *rel_3_GCRoot) {
+CREATE_OP_CONTEXT(rel_5_GCRoot_op_ctxt,rel_5_GCRoot->createContext());
+CREATE_OP_CONTEXT(rel_6_Live_op_ctxt,rel_6_Live->createContext());
+for(const auto& env0 : *rel_5_GCRoot) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
-rel_4_Live->insert(tuple,READ_OP_CONTEXT(rel_4_Live_op_ctxt));
+rel_6_Live->insert(tuple,READ_OP_CONTEXT(rel_6_Live_op_ctxt));
 }
 }
 ();}
 [&](){
+CREATE_OP_CONTEXT(rel_6_Live_op_ctxt,rel_6_Live->createContext());
 CREATE_OP_CONTEXT(rel_1_delta_Live_op_ctxt,rel_1_delta_Live->createContext());
-CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
-for(const auto& env0 : *rel_4_Live) {
+for(const auto& env0 : *rel_6_Live) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
 rel_1_delta_Live->insert(tuple,READ_OP_CONTEXT(rel_1_delta_Live_op_ctxt));
 }
@@ -425,30 +461,37 @@ SignalHandler::instance()->setMsg(R"_(Live(to) :-
    Live(from),
    Reference(from,to).
 in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [19:1-21:23])_");
-if(!(rel_1_delta_Live->empty()) && !(rel_5_Reference->empty())) {
+if(!(rel_1_delta_Live->empty()) && !(rel_7_Reference->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_5_Reference_op_ctxt,rel_5_Reference->createContext());
+auto part = rel_1_delta_Live->partition();
+PARALLEL_START
+CREATE_OP_CONTEXT(rel_6_Live_op_ctxt,rel_6_Live->createContext());
+CREATE_OP_CONTEXT(rel_7_Reference_op_ctxt,rel_7_Reference->createContext());
 CREATE_OP_CONTEXT(rel_1_delta_Live_op_ctxt,rel_1_delta_Live->createContext());
-CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
 CREATE_OP_CONTEXT(rel_2_new_Live_op_ctxt,rel_2_new_Live->createContext());
-for(const auto& env0 : *rel_1_delta_Live) {
-auto range = rel_5_Reference->lowerUpperRange_10(Tuple<RamDomain,2>{{ramBitCast(env0[0]), ramBitCast<RamDomain>(MIN_RAM_SIGNED)}},Tuple<RamDomain,2>{{ramBitCast(env0[0]), ramBitCast<RamDomain>(MAX_RAM_SIGNED)}},READ_OP_CONTEXT(rel_5_Reference_op_ctxt));
+pfor(auto it = part.begin(); it<part.end();++it){
+try{
+for(const auto& env0 : *it) {
+auto range = rel_7_Reference->lowerUpperRange_10(Tuple<RamDomain,2>{{ramBitCast(env0[0]), ramBitCast<RamDomain>(MIN_RAM_SIGNED)}},Tuple<RamDomain,2>{{ramBitCast(env0[0]), ramBitCast<RamDomain>(MAX_RAM_SIGNED)}},READ_OP_CONTEXT(rel_7_Reference_op_ctxt));
 for(const auto& env1 : range) {
-if( !(rel_4_Live->contains(Tuple<RamDomain,1>{{ramBitCast(env1[1])}},READ_OP_CONTEXT(rel_4_Live_op_ctxt)))) {
+if( !(rel_6_Live->contains(Tuple<RamDomain,1>{{ramBitCast(env1[1])}},READ_OP_CONTEXT(rel_6_Live_op_ctxt)))) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env1[1])}};
 rel_2_new_Live->insert(tuple,READ_OP_CONTEXT(rel_2_new_Live_op_ctxt));
 }
 }
 }
+} catch(std::exception &e) { SignalHandler::instance()->error(e.what());}
+}
+PARALLEL_END
 }
 ();}
 if(rel_2_new_Live->empty()) break;
 [&](){
-CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
+CREATE_OP_CONTEXT(rel_6_Live_op_ctxt,rel_6_Live->createContext());
 CREATE_OP_CONTEXT(rel_2_new_Live_op_ctxt,rel_2_new_Live->createContext());
 for(const auto& env0 : *rel_2_new_Live) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
-rel_4_Live->insert(tuple,READ_OP_CONTEXT(rel_4_Live_op_ctxt));
+rel_6_Live->insert(tuple,READ_OP_CONTEXT(rel_6_Live_op_ctxt));
 }
 }
 ();std::swap(rel_1_delta_Live, rel_2_new_Live);
@@ -461,12 +504,98 @@ rel_2_new_Live->purge();
 if (performIO) {
 try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"name","Live"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}"}});
 if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
-IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_4_Live);
+IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_6_Live);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
-if (performIO) rel_4_Live->purge();
-if (performIO) rel_5_Reference->purge();
-if (performIO) rel_3_GCRoot->purge();
+}
+#ifdef _MSC_VER
+#pragma warning(default: 4100)
+#endif // _MSC_VER
+#ifdef _MSC_VER
+#pragma warning(disable: 4100)
+#endif // _MSC_VER
+void subroutine_3(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
+SignalHandler::instance()->setMsg(R"_(All(from) :- 
+   Reference(from,_).
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [25:1-27:23])_");
+if(!(rel_7_Reference->empty())) {
+[&](){
+CREATE_OP_CONTEXT(rel_7_Reference_op_ctxt,rel_7_Reference->createContext());
+CREATE_OP_CONTEXT(rel_3_All_op_ctxt,rel_3_All->createContext());
+for(const auto& env0 : *rel_7_Reference) {
+Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
+rel_3_All->insert(tuple,READ_OP_CONTEXT(rel_3_All_op_ctxt));
+}
+}
+();}
+SignalHandler::instance()->setMsg(R"_(All(to) :- 
+   Reference(_,to).
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [25:1-27:23])_");
+if(!(rel_7_Reference->empty())) {
+[&](){
+CREATE_OP_CONTEXT(rel_7_Reference_op_ctxt,rel_7_Reference->createContext());
+CREATE_OP_CONTEXT(rel_3_All_op_ctxt,rel_3_All->createContext());
+for(const auto& env0 : *rel_7_Reference) {
+Tuple<RamDomain,1> tuple{{ramBitCast(env0[1])}};
+rel_3_All->insert(tuple,READ_OP_CONTEXT(rel_3_All_op_ctxt));
+}
+}
+();}
+SignalHandler::instance()->setMsg(R"_(All(val) :- 
+   GCRoot(val).
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [29:1-30:15])_");
+if(!(rel_5_GCRoot->empty())) {
+[&](){
+CREATE_OP_CONTEXT(rel_5_GCRoot_op_ctxt,rel_5_GCRoot->createContext());
+CREATE_OP_CONTEXT(rel_3_All_op_ctxt,rel_3_All->createContext());
+for(const auto& env0 : *rel_5_GCRoot) {
+Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
+rel_3_All->insert(tuple,READ_OP_CONTEXT(rel_3_All_op_ctxt));
+}
+}
+();}
+if (performIO) rel_7_Reference->purge();
+if (performIO) rel_5_GCRoot->purge();
+}
+#ifdef _MSC_VER
+#pragma warning(default: 4100)
+#endif // _MSC_VER
+#ifdef _MSC_VER
+#pragma warning(disable: 4100)
+#endif // _MSC_VER
+void subroutine_4(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
+SignalHandler::instance()->setMsg(R"_(Dead(val) :- 
+   All(val),
+   !Live(val).
+in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [35:1-37:14])_");
+if(!(rel_3_All->empty())) {
+[&](){
+auto part = rel_3_All->partition();
+PARALLEL_START
+CREATE_OP_CONTEXT(rel_4_Dead_op_ctxt,rel_4_Dead->createContext());
+CREATE_OP_CONTEXT(rel_6_Live_op_ctxt,rel_6_Live->createContext());
+CREATE_OP_CONTEXT(rel_3_All_op_ctxt,rel_3_All->createContext());
+pfor(auto it = part.begin(); it<part.end();++it){
+try{
+for(const auto& env0 : *it) {
+if( !(rel_6_Live->contains(Tuple<RamDomain,1>{{ramBitCast(env0[0])}},READ_OP_CONTEXT(rel_6_Live_op_ctxt)))) {
+Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
+rel_4_Dead->insert(tuple,READ_OP_CONTEXT(rel_4_Dead_op_ctxt));
+}
+}
+} catch(std::exception &e) { SignalHandler::instance()->error(e.what());}
+}
+PARALLEL_END
+}
+();}
+if (performIO) {
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"name","Dead"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}"}});
+if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
+IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_4_Dead);
+} catch (std::exception& e) {std::cerr << e.what();exit(1);}
+}
+if (performIO) rel_6_Live->purge();
+if (performIO) rel_3_All->purge();
 }
 #ifdef _MSC_VER
 #pragma warning(default: 4100)
@@ -497,7 +626,7 @@ R"()",
 R"()",
 false,
 R"()",
-1);
+4);
 if (!opt.parse(argc,argv)) return 1;
 souffle::Sf_ext_stg_gc obj;
 #if defined(_OPENMP) 
