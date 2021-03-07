@@ -9,6 +9,8 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.ByteString.Char8 (ByteString)
@@ -229,7 +231,12 @@ data StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
   , ssNextAddr            :: {-# UNPACK #-} !Int
+
+  -- GC
   , ssLastGCAddr          :: !Int
+  , ssGCInput             :: PrintableMVar ([Atom], StgState)
+  , ssGCOutput            :: PrintableMVar DeadData
+  , ssGCIsRunning         :: Bool
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
@@ -303,14 +310,27 @@ data StgState
 
 -- for the primop tests
 emptyUndefinedStgState :: StgState
-emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined DbgRunProgram NoTracing
+emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined DbgRunProgram NoTracing undefined undefined
 
-emptyStgState :: PrintableMVar StgState -> DL -> DebuggerChan -> NextDebugCommand -> DebugState -> TracingState -> StgState
-emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState = StgState
+emptyStgState :: PrintableMVar StgState
+              -> DL
+              -> DebuggerChan
+              -> NextDebugCommand
+              -> DebugState
+              -> TracingState
+              -> PrintableMVar ([Atom], StgState)
+              -> PrintableMVar DeadData
+              -> StgState
+emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
   , ssNextAddr            = 0
+
+  -- GC
   , ssLastGCAddr          = 0
+  , ssGCInput             = gcIn
+  , ssGCOutput            = gcOut
+  , ssGCIsRunning         = False
 
   , ssCStringConstants    = mempty
 
@@ -928,3 +948,38 @@ reportThreadIO tid endTS = do
 showStackCont = \case
   CaseOf clAddr clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", addr: " ++ show clAddr ++ ", result var: " ++ show (Id b)
   c -> show c
+
+-------------------------
+-- GC
+
+data DeadData
+  = DeadData
+  { deadHeap                :: !IntSet
+  , deadWeakPointers        :: !IntSet
+  , deadMVars               :: !IntSet
+  , deadMutVars             :: !IntSet
+  , deadArrays              :: !IntSet
+  , deadMutableArrays       :: !IntSet
+  , deadSmallArrays         :: !IntSet
+  , deadSmallMutableArrays  :: !IntSet
+  , deadArrayArrays         :: !IntSet
+  , deadMutableArrayArrays  :: !IntSet
+  , deadMutableByteArrays   :: !IntSet
+  , deadStableNames         :: !IntSet
+  }
+
+emptyDeadData :: DeadData
+emptyDeadData = DeadData
+  { deadHeap                = IntSet.empty
+  , deadWeakPointers        = IntSet.empty
+  , deadMVars               = IntSet.empty
+  , deadMutVars             = IntSet.empty
+  , deadArrays              = IntSet.empty
+  , deadMutableArrays       = IntSet.empty
+  , deadSmallArrays         = IntSet.empty
+  , deadSmallMutableArrays  = IntSet.empty
+  , deadArrayArrays         = IntSet.empty
+  , deadMutableArrayArrays  = IntSet.empty
+  , deadMutableByteArrays   = IntSet.empty
+  , deadStableNames         = IntSet.empty
+  }

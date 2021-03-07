@@ -6,7 +6,6 @@ import Data.Int
 import Data.Bits
 import GHC.Generics
 import Control.Monad.State
-import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
@@ -28,11 +27,11 @@ data GCRoot = GCRoot Int32
 data Reference = Reference Int32 Int32
   deriving (Eq, Show, Generic)
 
-data Live = Live Int32
+data Dead = Dead Int32
   deriving (Eq, Show, Generic)
 
 instance Souffle.Program ExtStgGC where
-  type ProgramFacts ExtStgGC = [GCRoot, Reference, Live]
+  type ProgramFacts ExtStgGC = [GCRoot, Reference, Dead]
   programName = const "ext_stg_gc"
 
 instance Souffle.Fact GCRoot where
@@ -43,19 +42,19 @@ instance Souffle.Fact Reference where
   type FactDirection Reference = 'Souffle.Input
   factName = const "Reference"
 
-instance Souffle.Fact Live where
-  type FactDirection Live = 'Souffle.Output
-  factName = const "Live"
+instance Souffle.Fact Dead where
+  type FactDirection Dead = 'Souffle.Output
+  factName = const "Dead"
 
 instance Souffle.Marshal GCRoot
 instance Souffle.Marshal Reference
-instance Souffle.Marshal Live
+instance Souffle.Marshal Dead
 
 ---------------------------
 -- analysis api
 ---------------------------
 
-runLiveDataAnalysis :: [Atom] -> StgState -> IO LiveData
+runLiveDataAnalysis :: [Atom] -> StgState -> IO DeadData
 runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybeProgram -> do  -- Initializes the Souffle program.
   case maybeProgram of
     Nothing -> liftIO $ fail "Failed to load ext-stg-gc datalog program."
@@ -64,10 +63,10 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
       addGCRootFacts prog stgState extraGCRoots
       addReferenceFacts prog stgState
       -- run analysis
-      Souffle.setNumThreads prog 4
+      Souffle.setNumThreads prog 2
       Souffle.run prog
       -- read back result
-      readbackLiveData prog
+      readbackDeadData prog
 
 ---------------------------
 -- handle input facts
@@ -127,58 +126,26 @@ addReferenceFacts prog StgState{..} = do
 -- handle output facts
 ---------------------------
 
-data LiveData
-  = LiveData
-  { liveHeap                :: !IntSet
-  , liveWeakPointers        :: !IntSet
-  , liveMVars               :: !IntSet
-  , liveMutVars             :: !IntSet
-  , liveArrays              :: !IntSet
-  , liveMutableArrays       :: !IntSet
-  , liveSmallArrays         :: !IntSet
-  , liveSmallMutableArrays  :: !IntSet
-  , liveArrayArrays         :: !IntSet
-  , liveMutableArrayArrays  :: !IntSet
-  , liveMutableByteArrays   :: !IntSet
-  , liveStableNames         :: !IntSet
-  }
+readbackDeadData :: Souffle.Handle ExtStgGC -> SouffleM DeadData
+readbackDeadData prog = do
+  dead :: [Dead] <- Souffle.getFacts prog
+  foldM addDead emptyDeadData dead
 
-emptyLiveData :: LiveData
-emptyLiveData = LiveData
-  { liveHeap                = IntSet.empty
-  , liveWeakPointers        = IntSet.empty
-  , liveMVars               = IntSet.empty
-  , liveMutVars             = IntSet.empty
-  , liveArrays              = IntSet.empty
-  , liveMutableArrays       = IntSet.empty
-  , liveSmallArrays         = IntSet.empty
-  , liveSmallMutableArrays  = IntSet.empty
-  , liveArrayArrays         = IntSet.empty
-  , liveMutableArrayArrays  = IntSet.empty
-  , liveMutableByteArrays   = IntSet.empty
-  , liveStableNames         = IntSet.empty
-  }
-
-readbackLiveData :: Souffle.Handle ExtStgGC -> SouffleM LiveData
-readbackLiveData prog = do
-  live :: [Live] <- Souffle.getFacts prog
-  foldM addLive emptyLiveData live
-
-addLive :: LiveData -> Live -> SouffleM LiveData
-addLive ld@LiveData{..} (Live l) = do
+addDead :: DeadData -> Dead -> SouffleM DeadData
+addDead dd@DeadData{..} (Dead l) = do
   -- HINT: decode datalog value
   let namespace = toEnum $ fromIntegral (l .&. 0xf)
       idx       = shiftR (fromIntegral l) 4
   pure $ case namespace of
-    NS_Array              -> ld {liveArrays             = IntSet.insert idx liveArrays}
-    NS_ArrayArray         -> ld {liveArrayArrays        = IntSet.insert idx liveArrayArrays}
-    NS_HeapPtr            -> ld {liveHeap               = IntSet.insert idx liveHeap}
-    NS_MutableArray       -> ld {liveMutableArrays      = IntSet.insert idx liveMutableArrays}
-    NS_MutableArrayArray  -> ld {liveMutableArrayArrays = IntSet.insert idx liveMutableArrayArrays}
-    NS_MutableByteArray   -> ld {liveMutableByteArrays  = IntSet.insert idx liveMutableByteArrays}
-    NS_MutVar             -> ld {liveMutVars            = IntSet.insert idx liveMutVars}
-    NS_MVar               -> ld {liveMVars              = IntSet.insert idx liveMVars}
-    NS_SmallArray         -> ld {liveSmallArrays        = IntSet.insert idx liveSmallArrays}
-    NS_SmallMutableArray  -> ld {liveSmallMutableArrays = IntSet.insert idx liveSmallMutableArrays}
-    NS_StableName         -> ld {liveStableNames        = IntSet.insert idx liveStableNames}
-    NS_WeakPointer        -> ld {liveWeakPointers       = IntSet.insert idx liveWeakPointers}
+    NS_Array              -> dd {deadArrays             = IntSet.insert idx deadArrays}
+    NS_ArrayArray         -> dd {deadArrayArrays        = IntSet.insert idx deadArrayArrays}
+    NS_HeapPtr            -> dd {deadHeap               = IntSet.insert idx deadHeap}
+    NS_MutableArray       -> dd {deadMutableArrays      = IntSet.insert idx deadMutableArrays}
+    NS_MutableArrayArray  -> dd {deadMutableArrayArrays = IntSet.insert idx deadMutableArrayArrays}
+    NS_MutableByteArray   -> dd {deadMutableByteArrays  = IntSet.insert idx deadMutableByteArrays}
+    NS_MutVar             -> dd {deadMutVars            = IntSet.insert idx deadMutVars}
+    NS_MVar               -> dd {deadMVars              = IntSet.insert idx deadMVars}
+    NS_SmallArray         -> dd {deadSmallArrays        = IntSet.insert idx deadSmallArrays}
+    NS_SmallMutableArray  -> dd {deadSmallMutableArrays = IntSet.insert idx deadSmallMutableArrays}
+    NS_StableName         -> dd {deadStableNames        = IntSet.insert idx deadStableNames}
+    NS_WeakPointer        -> dd {deadWeakPointers       = IntSet.insert idx deadWeakPointers}

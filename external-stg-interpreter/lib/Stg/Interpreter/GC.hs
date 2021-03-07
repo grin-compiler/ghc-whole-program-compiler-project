@@ -8,55 +8,121 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
 
+import Control.Concurrent
+
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.LiveDataAnalysis
 
+checkGC :: [Atom] -> M ()
+checkGC extraGCRoots = do
+  tryPrune
+  nextAddr <- gets ssNextAddr
+  lastGCAddr <- gets ssLastGCAddr
+  gcIsRunning <- gets ssGCIsRunning
+  when (not gcIsRunning && nextAddr - lastGCAddr > 300000) $ do
+    modify' $ \s -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True}
+    runGC extraGCRoots
+    {-
+      TODO:
+        done - send the current state for live data analysis (async channel) if the GC condition triggers
+        done - check if any liveness result has arrived, if so then prune the current state
+      DESIGN:
+        use MVars for communication
+    -}
+
+
 runGC :: [Atom] -> M ()
-runGC extraGCRoots = do
-  liftIO $ putStrLn " * runGC"
+runGC = runGCAsync
+
+-- async GC
+
+analysisLoop :: MVar ([Atom], StgState) -> MVar DeadData -> IO ()
+analysisLoop gcIn gcOut = do
+  (extraGCRoots, stgState) <- takeMVar gcIn
+  deadData <- runLiveDataAnalysis extraGCRoots stgState
+  putMVar gcOut deadData
+  --reportRemovedData stgState deadData
+  analysisLoop gcIn gcOut
+
+init :: IO (ThreadId, MVar ([Atom], StgState), MVar DeadData)
+init = do
+  gcIn <- newEmptyMVar
+  gcOut <- newEmptyMVar
+  gcTid <- forkIO $ analysisLoop gcIn gcOut
+  pure (gcTid, gcIn, gcOut)
+
+tryPrune :: M ()
+tryPrune = do
+  PrintableMVar gcOut <- gets ssGCOutput
+  liftIO (tryTakeMVar gcOut) >>= \case
+    Nothing -> pure ()
+    Just deadData -> do
+      stgState <- get
+      -- remove dead data from stg state
+      --liftIO $ putStrLn " * done GC"
+      put $ (pruneStgState stgState deadData) {ssGCIsRunning = False}
+
+runGCAsync :: [Atom] -> M ()
+runGCAsync extraGCRoots = do
   stgState <- get
-  liveData <- liftIO $ runLiveDataAnalysis extraGCRoots stgState
+  PrintableMVar gcIn <- gets ssGCInput
+  liftIO $ do
+    --putStrLn " * start GC"
+    putMVar gcIn (extraGCRoots, stgState)
 
-  liftIO $ reportRemovedData stgState liveData
+-- synchronous GC
 
-  -- remove dead data from stg state
-  put $ pruneStgState stgState liveData
-  pure ()
+runGCSync :: [Atom] -> M ()
+runGCSync extraGCRoots = do
+  stgState <- get
+  deadData <- liftIO $ runLiveDataAnalysis extraGCRoots stgState
+  put $ pruneStgState stgState deadData
+  liftIO $ reportRemovedData stgState deadData
 
-pruneStgState :: StgState -> LiveData -> StgState
-pruneStgState stgState@StgState{..} LiveData{..} = stgState
-  { ssHeap                = IntMap.restrictKeys ssHeap                liveHeap
+-- utils
+
+pruneStgState :: StgState -> DeadData -> StgState
+pruneStgState stgState@StgState{..} DeadData{..} = stgState
+  { ssHeap                = IntMap.withoutKeys ssHeap                deadHeap
 {-
   -- TODO: run weak pointer finalizers
-  , ssWeakPointers        = IntMap.restrictKeys ssWeakPointers        liveWeakPointers
+  , ssWeakPointers        = IntMap.withoutKeys ssWeakPointers        deadWeakPointers
 -}
-  , ssMVars               = IntMap.restrictKeys ssMVars               liveMVars
-  , ssMutVars             = IntMap.restrictKeys ssMutVars             liveMutVars
-  , ssArrays              = IntMap.restrictKeys ssArrays              liveArrays
-  , ssMutableArrays       = IntMap.restrictKeys ssMutableArrays       liveMutableArrays
-  , ssSmallArrays         = IntMap.restrictKeys ssSmallArrays         liveSmallArrays
-  , ssSmallMutableArrays  = IntMap.restrictKeys ssSmallMutableArrays  liveSmallMutableArrays
-  , ssArrayArrays         = IntMap.restrictKeys ssArrayArrays         liveArrayArrays
-  , ssMutableArrayArrays  = IntMap.restrictKeys ssMutableArrayArrays  liveMutableArrayArrays
-  , ssMutableByteArrays   = IntMap.restrictKeys ssMutableByteArrays   liveMutableByteArrays
-  , ssStableNameMap       = Map.filter (`IntSet.member` liveStableNames) ssStableNameMap
+  , ssMVars               = IntMap.withoutKeys ssMVars               deadMVars
+  , ssMutVars             = IntMap.withoutKeys ssMutVars             deadMutVars
+  , ssArrays              = IntMap.withoutKeys ssArrays              deadArrays
+  , ssMutableArrays       = IntMap.withoutKeys ssMutableArrays       deadMutableArrays
+  , ssSmallArrays         = IntMap.withoutKeys ssSmallArrays         deadSmallArrays
+  , ssSmallMutableArrays  = IntMap.withoutKeys ssSmallMutableArrays  deadSmallMutableArrays
+  , ssArrayArrays         = IntMap.withoutKeys ssArrayArrays         deadArrayArrays
+  , ssMutableArrayArrays  = IntMap.withoutKeys ssMutableArrayArrays  deadMutableArrayArrays
+  , ssMutableByteArrays   = IntMap.withoutKeys ssMutableByteArrays   deadMutableByteArrays
+  , ssStableNameMap       = Map.filter (`IntSet.notMember` deadStableNames) ssStableNameMap
   }
 
-reportRemovedData :: StgState -> LiveData -> IO ()
-reportRemovedData StgState{..} LiveData{..} = do
-  let report msg m s  = printf "  %s old: %-10d  new: %-10d  diff: %-10d\n" msg (IntMap.size m) (IntSet.size s) (IntMap.size m - IntSet.size s)
-  let report' msg m s = printf "  %s old: %-10d  new: %-10d  diff: %-10d\n" msg (Map.size m) (IntSet.size s) (Map.size m - IntSet.size s)
+reportRemovedData :: StgState -> DeadData -> IO ()
+reportRemovedData StgState{..} DeadData{..} = do
+  let report_ sizeFun msg m s = do
+        let old   = sizeFun m
+            new   = old - diff
+            diff  = IntSet.size s
+            ratio = if old == 0 then 0 else 100 * fromIntegral diff / fromIntegral old :: Float
+        printf "  %s old: %-10d  new: %-10d  diff: %-10d  dead: %5.2f%%\n" msg old new diff ratio
+
+      reportI = report_ IntMap.size
+      reportM = report_ Map.size
+
   putStrLn "freed after GC:"
 
-  report  "ssHeap               " ssHeap liveHeap
-  report  "ssWeakPointers       " ssWeakPointers liveWeakPointers
-  report  "ssMVars              " ssMVars liveMVars
-  report  "ssMutVars            " ssMutVars liveMutVars
-  report  "ssArrays             " ssArrays liveArrays
-  report  "ssMutableArrays      " ssMutableArrays liveMutableArrays
-  report  "ssSmallArrays        " ssSmallArrays liveSmallArrays
-  report  "ssSmallMutableArrays " ssSmallMutableArrays liveSmallMutableArrays
-  report  "ssArrayArrays        " ssArrayArrays liveArrayArrays
-  report  "ssMutableArrayArrays " ssMutableArrayArrays liveMutableArrayArrays
-  report  "ssMutableByteArrays  " ssMutableByteArrays liveMutableByteArrays
-  report' "ssStableNameMap      " ssStableNameMap liveStableNames
+  reportI "ssHeap               " ssHeap deadHeap
+  reportI "ssWeakPointers       " ssWeakPointers deadWeakPointers
+  reportI "ssMVars              " ssMVars deadMVars
+  reportI "ssMutVars            " ssMutVars deadMutVars
+  reportI "ssArrays             " ssArrays deadArrays
+  reportI "ssMutableArrays      " ssMutableArrays deadMutableArrays
+  reportI "ssSmallArrays        " ssSmallArrays deadSmallArrays
+  reportI "ssSmallMutableArrays " ssSmallMutableArrays deadSmallMutableArrays
+  reportI "ssArrayArrays        " ssArrayArrays deadArrayArrays
+  reportI "ssMutableArrayArrays " ssMutableArrayArrays deadMutableArrayArrays
+  reportI "ssMutableByteArrays  " ssMutableByteArrays deadMutableByteArrays
+  reportM "ssStableNameMap      " ssStableNameMap deadStableNames

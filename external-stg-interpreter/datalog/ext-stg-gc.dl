@@ -19,3 +19,19 @@ Live(ref) :- GCRoot(ref).
 Live(to) :-
   Live(from),
   Reference(from, to).
+
+.decl All(val : number)
+
+All(from),
+All(to) :-
+  Reference(from, to).
+
+All(val) :-
+  GCRoot(val).
+
+.decl Dead(val : number)
+.output Dead
+
+Dead(val) :-
+  All(val),
+  !Live(val).

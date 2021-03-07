@@ -121,14 +121,6 @@ evalArg localEnv = \case
     }
 -}
 
-checkGC :: [Atom] -> M ()
-checkGC extraGCRoots = do
-  nextAddr <- gets ssNextAddr
-  lastGCAddr <- gets ssLastGCAddr
-  when (nextAddr - lastGCAddr > 300000) $ do
-    modify' $ \s -> s {ssLastGCAddr = nextAddr}
-    GC.runGC extraGCRoots
-
 builtinStgEval :: HasCallStack => Atom -> M [Atom]
 builtinStgEval a@HeapPtr{} = do
   o <- readHeap a
@@ -150,7 +142,7 @@ builtinStgEval a@HeapPtr{} = do
         markExecuted l
         modify' $ \s -> s {ssCurrentClosure = hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
         Debugger.checkBreakpoint hoName
-        checkGC [a]
+        GC.checkGC [a]
 
         -- TODO: env or free var handling
         case uf of
@@ -614,15 +606,19 @@ runProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
       createDirectoryIfMissing True tracePath
       DoTracing <$> openFile (tracePath </> "originDB.tsv") WriteMode
 
-  stateStore <- newEmptyMVar
+  stateStore <- PrintableMVar <$> newEmptyMVar
+  (gcThreadId, gcIn', gcOut') <- GC.init
+  let gcIn  = PrintableMVar gcIn'
+      gcOut = PrintableMVar gcOut'
   dl <- dlopen "./libHSbase-4.14.0.0.cbits.so" [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
   let freeResources = do
         dlclose dl
+        killThread gcThreadId
         case tracingState of
           DoTracing h -> hClose h
           _ -> pure ()
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState (PrintableMVar stateStore) dl dbgChan nextDbgCmd dbgState tracingState)
+    s@StgState{..} <- execStateT run (emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
