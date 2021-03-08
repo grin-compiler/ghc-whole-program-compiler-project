@@ -35,3 +35,12 @@ All(val) :-
 Dead(val) :-
   All(val),
   !Live(val).
+
+// the inverse of the reference relation, but only for live values
+.decl LiveReferredBy(to : number, from : number)
+.output LiveReferredBy
+
+LiveReferredBy(to, from) :-
+  Live(to),
+  Live(from),
+  Reference(from, to).
