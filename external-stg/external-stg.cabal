@@ -21,6 +21,7 @@ library
     Stg.IO
     Stg.GHC.Symbols
     Stg.JSON
+    Stg.Analysis.LiveVariable
   hs-source-dirs:      lib
   ghc-options:         -Wall
   cpp-options:         -DEXTERNAL_STG_PACKAGE
