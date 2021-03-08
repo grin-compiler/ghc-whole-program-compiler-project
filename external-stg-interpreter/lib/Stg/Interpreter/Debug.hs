@@ -15,7 +15,7 @@ import Stg.Interpreter.Base
 showCons :: Int -> M ()
 showCons addr = do
   h <- gets ssHeap
-  liftIO $ mapM_ print [(i, dcUniqueName dc, args) | x@(i, c@(Con dc args)) <- IntMap.toAscList h, i >= addr]
+  liftIO $ mapM_ print [(i, dcUniqueName dc, args) | x@(i, c@(Con _ dc args)) <- IntMap.toAscList h, i >= addr]
 
 {-
   | Closure
@@ -93,7 +93,7 @@ showMarked = do
 
 showDebug :: EvalOnNewThread -> M ()
 showDebug evalOnNewThread = do
-  limit <- gets ssAddressAfterInit
+  limit <- gets ssHeapStartAddress
   liftIO $ putStrLn "\n-------------------------------------------\n"
   liftIO $ putStrLn "Used primops and foreign functions:"
   liftIO $ putStrLn "\n-------------------------------------------\n"
