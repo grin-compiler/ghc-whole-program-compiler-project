@@ -90,8 +90,8 @@ writeDfeFacts prefixPath Module{..} = do
 
       visitRhs :: Name -> Rhs -> IO ()
       visitRhs fun = \case
-        StgRhsClosure _ args expr -> mapM_ (addFunRef fun) args >> visitExpr fun expr
-        StgRhsCon con args        -> addDataConRef fun con >> mapM_ (visitArg fun) args
+        StgRhsClosure _ _ args expr -> mapM_ (addFunRef fun) args >> visitExpr fun expr
+        StgRhsCon con args          -> addDataConRef fun con >> mapM_ (visitArg fun) args
 
       visitArg :: Name -> Arg -> IO ()
       visitArg fun = \case

@@ -424,8 +424,8 @@ cvtUpdateFlag = \case
 
 cvtRhs :: Ext.Rhs -> M StgRhs
 cvtRhs = \case
-  Ext.StgRhsClosure u args exp  -> StgRhsClosure noExtFieldSilent dontCareCCS (cvtUpdateFlag u) <$> mapM cvtIdDef args <*> cvtExpr exp
-  Ext.StgRhsCon dc args         -> StgRhsCon dontCareCCS <$> cvtDataCon dc <*> cvtArgs args
+  Ext.StgRhsClosure _ u args exp  -> StgRhsClosure noExtFieldSilent dontCareCCS (cvtUpdateFlag u) <$> mapM cvtIdDef args <*> cvtExpr exp
+  Ext.StgRhsCon dc args           -> StgRhsCon dontCareCCS <$> cvtDataCon dc <*> cvtArgs args
 
 cvtBinding :: Ext.Binding -> M StgBinding
 cvtBinding = \case

@@ -521,7 +521,7 @@ cvtUpdateFlag = \case
 
 cvtRhs :: GHC.StgRhs -> M SRhs
 cvtRhs = \case
-  GHC.StgRhsClosure _ _ u bs e  -> StgRhsClosure (cvtUpdateFlag u) <$> mapM (cvtBinderIdClosureParamM "StgRhsClosure") bs <*> cvtExpr e
+  GHC.StgRhsClosure _ _ u bs e  -> StgRhsClosure [] (cvtUpdateFlag u) <$> mapM (cvtBinderIdClosureParamM "StgRhsClosure") bs <*> cvtExpr e
   GHC.StgRhsCon _ dc args       -> StgRhsCon <$> cvtDataCon dc <*> mapM cvtArg args
 
 -- bind and top-bind conversion
