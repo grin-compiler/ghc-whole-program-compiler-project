@@ -159,7 +159,7 @@ instance Pretty Expr where
 
 pprRhs :: Rhs -> Doc
 pprRhs = \case
-  StgRhsClosure u bs e -> text "\\closure" <+> hsep (map pprBinder bs) <+> text "->" <+> braces (line <> pprExpr e)
+  StgRhsClosure _ u bs e -> text "\\closure" <+> hsep (map pprBinder bs) <+> text "->" <+> braces (line <> pprExpr e)
   StgRhsCon d vs -> pretty d <+> (hsep $ map (pprArg) vs)
 
 pprBinding :: Binding -> Doc

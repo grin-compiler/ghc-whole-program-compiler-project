@@ -213,10 +213,11 @@ reconBinding bm = \case
 
 reconRhs :: BinderMap -> SRhs -> Rhs
 reconRhs bm = \case
-  StgRhsCon dc vs       -> StgRhsCon (getDataCon bm dc) $ map (reconArg bm) vs
-  StgRhsClosure u bs e  -> let bs'  = map (reconLocalBinder bm) bs
-                               bm'  = insertBinders bs' bm
-                           in StgRhsClosure u bs' (reconExpr bm' e)
+  StgRhsCon dc vs         -> StgRhsCon (getDataCon bm dc) $ map (reconArg bm) vs
+  StgRhsClosure fs u bs e -> let  fs' = map (getBinder bm) fs
+                                  bs' = map (reconLocalBinder bm) bs
+                                  bm' = insertBinders bs' bm
+                              in StgRhsClosure fs' u bs' (reconExpr bm' e)
 
 reconArg :: BinderMap -> SArg -> Arg
 reconArg bm = \case

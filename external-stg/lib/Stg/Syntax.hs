@@ -18,6 +18,21 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import Data.Binary
 
+-- utility
+
+newtype Id = Id {unId :: Binder}
+
+instance Eq Id where
+  (Id a) == (Id b) = binderUNameHash a == binderUNameHash b && binderUniqueName a == binderUniqueName b
+
+instance Ord Id where
+  compare (Id a) (Id b) = case compare (binderUNameHash a) (binderUNameHash b) of
+    EQ  -> compare (binderUniqueName a) (binderUniqueName b)
+    x   -> x
+
+instance Show Id where
+  show (Id a) = BS8.unpack $ binderUniqueName a
+
 -- idinfo
 
 type IdInfo = BS8.ByteString
@@ -389,6 +404,7 @@ data UpdateFlag = ReEntrant | Updatable | SingleEntry
 
 data Rhs' idBnd idOcc dcOcc tcOcc
   = StgRhsClosure
+        [idOcc]                   -- non-global free vars
         !UpdateFlag               -- ReEntrant | Updatable | SingleEntry
         [idBnd]                   -- arguments; if empty, then not a function;
                                   -- as above, order is important.
