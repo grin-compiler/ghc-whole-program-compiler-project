@@ -8,6 +8,8 @@ import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 import Stg.Interpreter.Base
 import Stg.Syntax
 
+import Stg.Interpreter.Debugger.Internal
+
 fetchNextDebugCommand :: M ()
 fetchNextDebugCommand = do
   (dbgCmd, _dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
@@ -62,6 +64,12 @@ runDebugCommand cmd = do
       ho <- readHeap $ HeapPtr addr
       liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
 
+    CmdStop -> do
+      modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+
+    CmdInternal cmd -> do
+      runInternalCommand cmd
+
 isDebugExitCommand :: DebugCommand -> Bool
 isDebugExitCommand = \case
   CmdStep     -> True
@@ -105,12 +113,3 @@ checkBreakpoint (Id b) = do
         reportState
         modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
         unless exit processCommandsUntilExit
-
-reportState :: M ()
-reportState = do
-  (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
-  tid <- gets ssCurrentThreadId
-  ts <- getThreadState tid
-  Id currentClosure <- gets ssCurrentClosure
-  currentClosureAddr <- gets ssCurrentClosureAddr
-  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts (binderUniqueName currentClosure) currentClosureAddr

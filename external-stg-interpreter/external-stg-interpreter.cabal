@@ -24,6 +24,7 @@ library
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
     Stg.Interpreter.Debugger
+    Stg.Interpreter.Debugger.Internal
     Stg.Interpreter.GC
     Stg.Interpreter.GC.GCRef
     Stg.Interpreter.GC.LiveDataAnalysis
@@ -94,6 +95,7 @@ executable ext-stg-interpreter
                        containers,
                        bytestring,
                        unagi-chan,
+                       unix,
                        optparse-applicative,
                        external-stg,
                        external-stg-interpreter
