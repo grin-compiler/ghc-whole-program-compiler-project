@@ -597,11 +597,11 @@ boxFFIAtom c a = case (c, a) of
 mkWiredInCon :: (Rts -> DataCon) -> [Atom] -> M Atom
 mkWiredInCon conFun args = do
   dc <- gets $ conFun . ssRtsSupport
-  HeapPtr <$> allocAndStore (Con dc args)
+  HeapPtr <$> allocAndStore (Con False dc args)
 
 unboxFFIAtom :: Char -> Atom -> M Atom
 unboxFFIAtom c heapObj = do
-  (Con dc args) <- readHeapCon heapObj
+  (Con _ dc args) <- readHeapCon heapObj
   case (c, args) of
     -- boxed Char
     ('c', [v])  -> pure v

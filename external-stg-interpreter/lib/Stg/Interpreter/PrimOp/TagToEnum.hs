@@ -12,7 +12,7 @@ pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 dataToTagOp :: [Atom] -> M [Atom]
 dataToTagOp [whnf@HeapPtr{}] = do
   -- NOTE: the GHC dataToTag# primop works for any Data Con regardless its arity
-  (Con dataCon _) <- readHeapCon whnf
+  (Con _ dataCon _) <- readHeapCon whnf
 
   case findIndex (\d -> dcId d == dcId dataCon) (tcDataCons (uncutTyCon $ dcTyCon dataCon)) of
     Nothing -> stgErrorM $ "Data constructor tag is not found for " ++ show (dcUniqueName dataCon)
@@ -48,7 +48,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "tagToEnum#", [IntV i]) -> do
     Just tyc <- pure tc
     let dc = tcDataCons tyc !! i
-    loc <- allocAndStore (Con dc [])
+    loc <- allocAndStore (Con False dc [])
     pure [HeapPtr loc]
 
   _ -> fallback op args t tc

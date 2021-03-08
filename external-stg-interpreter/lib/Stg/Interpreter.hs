@@ -31,6 +31,7 @@ import System.Directory
 import Stg.Syntax
 import Stg.Program
 import Stg.JSON
+import Stg.Analysis.LiveVariable
 
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimCall
@@ -136,7 +137,7 @@ builtinStgEval a@HeapPtr{} = do
       | otherwise
       -> do
 
-        let StgRhsClosure uf params e = hoCloBody
+        let StgRhsClosure _ uf params e = hoCloBody
             HeapPtr l = a
             extendedEnv = addManyBindersToEnv params hoCloArgs hoEnv
 
@@ -217,7 +218,7 @@ assertWHNF :: HasCallStack => [Atom] -> AltType -> Binder -> M ()
 assertWHNF [hp@HeapPtr{}] aty res = do
   o <- readHeap hp
   case o of
-    Con dc args -> pure ()
+    Con _ dc args -> pure ()
     Closure{..}
       | hoCloMissing == 0
       , aty /= MultiValAlt 1
@@ -375,15 +376,15 @@ evalExpr localEnv = \case
     | otherwise
     -> do
       args <- mapM (evalArg localEnv) l
-      loc <- allocAndStore (Con dc args)
+      loc <- allocAndStore (Con False dc args)
       pure [HeapPtr loc]
 
   StgLet b e -> do
-    extendedEnv <- declareBinding localEnv b
+    extendedEnv <- declareBinding False localEnv b
     evalExpr extendedEnv e
 
   StgLetNoEscape b e -> do -- TODO: do not allocate closure on heap, instead put into env (stack) allocated closure ; model stack allocated heap objects
-    extendedEnv <- declareBinding localEnv b
+    extendedEnv <- declareBinding True localEnv b
     evalExpr extendedEnv e
 
   -- var (join id)
@@ -491,7 +492,7 @@ convertAltLit = \case
   l -> Literal l
 
 matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
-matchFirstCon resultId localEnv (Con dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
+matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
   []  -> stgErrorM $ "no matching alts for: " ++ show resultId
   Alt{..} : _ -> do
     let extendedEnv = addManyBindersToEnv altBinders args localEnv
@@ -503,11 +504,11 @@ matchCon a = \case
   AltLit{}      -> False
   AltDefault    -> True
 
-declareBinding :: HasCallStack => Env -> Binding -> M Env
-declareBinding localEnv = \case
+declareBinding :: HasCallStack => Bool -> Env -> Binding -> M Env
+declareBinding isLetNoEscape localEnv = \case
   StgNonRec b rhs -> do
     addr <- freshHeapAddress
-    storeRhs localEnv b addr rhs
+    storeRhs isLetNoEscape localEnv b addr rhs
     pure $ addBinderToEnv b (HeapPtr addr) localEnv
 
   StgRec l -> do
@@ -516,18 +517,19 @@ declareBinding localEnv = \case
       pure (addr, (b, (HeapPtr addr)))
     let extendedEnv = addZippedBindersToEnv newEnvItems localEnv
     forM_ (zip ls l) $ \(addr, (b, rhs)) -> do
-      storeRhs extendedEnv b addr rhs
+      storeRhs isLetNoEscape extendedEnv b addr rhs
     pure extendedEnv
 
-storeRhs :: HasCallStack => Env -> Binder -> Addr -> Rhs -> M ()
-storeRhs localEnv i addr = \case
+storeRhs :: HasCallStack => Bool -> Env -> Binder -> Addr -> Rhs -> M ()
+storeRhs isLetNoEscape localEnv i addr = \case
   StgRhsCon dc l -> do
     args <- mapM (evalArg localEnv) l
-    store addr (Con dc args)
+    store addr (Con isLetNoEscape dc args)
 
-  cl@(StgRhsClosure _ paramNames _) -> do
-    let prunedEnv = localEnv -- TODO: do pruning to keep only the live/later referred variables
-    store addr (Closure (Id i) cl prunedEnv [] (length paramNames))
+  cl@(StgRhsClosure freeVars _ paramNames _) -> do
+    let liveSet   = Set.fromList $ map Id freeVars
+        prunedEnv = Map.restrictKeys localEnv liveSet -- HINT: do pruning to keep only the live/later referred variables
+    store addr (Closure isLetNoEscape (Id i) cl prunedEnv [] (length paramNames))
 
 -----------------------
 
@@ -556,7 +558,7 @@ declareTopBindings mods = do
   modify' $ \s@StgState{..} -> s {ssStaticGlobalEnv = Map.fromList $ stringEnv ++ closureEnv}
 
   -- HINT: top level closures does not capture local variables
-  forM_ rhsList $ \(b, addr, rhs) -> storeRhs mempty b addr rhs
+  forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
 
 runProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
 runProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
@@ -567,7 +569,7 @@ runProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
 
-  let mods      = extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
+  let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension fullpak_name
 
   currentDir <- liftIO getCurrentDirectory
@@ -580,7 +582,7 @@ runProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
         env <- gets ssStaticGlobalEnv
         let rootMain = unId $ head $ [i | i <- Map.keys env, show i == "main_:Main.main"]
         limit <- gets ssNextAddr
-        modify' $ \s@StgState{..} -> s {ssAddressAfterInit = limit}
+        modify' $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
 
         -- TODO: check how it is done in the native RTS: call hs_main
         mainAtom <- lookupEnv mempty rootMain

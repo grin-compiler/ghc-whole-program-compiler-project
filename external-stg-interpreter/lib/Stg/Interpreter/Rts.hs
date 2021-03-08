@@ -224,7 +224,7 @@ extStgRtsSupportModule = reconModule $ Module
       (_,    rBnd)    = localLiftedVanillaId 103 "r"
 
       tuple2Proj0Bnd  = exportedLiftedVanillaId 104 "tuple2Proj0"
-      tuple2Proj0     = StgTopLifted $ StgNonRec tuple2Proj0Bnd $ StgRhsClosure Updatable [tBnd] $
+      tuple2Proj0     = StgTopLifted $ StgNonRec tuple2Proj0Bnd $ StgRhsClosure [] Updatable [tBnd] $
                           StgCase (StgApp tOcc [] (SingleValue LiftedRep) mempty) rBnd (AlgAlt tup2TCOcc)
                             [ Alt
                               { altCon      = AltDataCon tup2DCOcc
@@ -238,5 +238,5 @@ extStgRtsSupportModule = reconModule $ Module
       (pOcc, pBnd)    = localLiftedVanillaId 201 "p"
 
       applyFun1ArgBnd = exportedLiftedVanillaId 202 "applyFun1Arg"
-      applyFun1Arg    = StgTopLifted $ StgNonRec applyFun1ArgBnd $ StgRhsClosure Updatable [fBnd, pBnd] $
+      applyFun1Arg    = StgTopLifted $ StgNonRec applyFun1ArgBnd $ StgRhsClosure [] Updatable [fBnd, pBnd] $
                           StgApp fOcc [StgVarArg pOcc] (SingleValue LiftedRep) mempty

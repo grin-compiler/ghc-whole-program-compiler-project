@@ -32,19 +32,6 @@ import Text.Printf
 import Debug.Trace
 import Stg.Syntax
 
-newtype Id = Id {unId :: Binder}
-
-instance Eq Id where
-  (Id a) == (Id b) = binderUNameHash a == binderUNameHash b && binderUniqueName a == binderUniqueName b
-
-instance Ord Id where
-  compare (Id a) (Id b) = case compare (binderUNameHash a) (binderUNameHash b) of
-    EQ  -> compare (binderUniqueName a) (binderUniqueName b)
-    x   -> x
-
-instance Show Id where
-  show (Id a) = BS8.unpack $ binderUniqueName a
-
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
 
 data ArrIdx
@@ -139,11 +126,13 @@ type ReturnValue = [Atom]
 
 data HeapObject
   = Con
-    { hoCon         :: DataCon
+    { hoIsLNE       :: Bool
+    , hoCon         :: DataCon
     , hoConArgs     :: [Atom]
     }
   | Closure
-    { hoName        :: Id
+    { hoIsLNE       :: Bool
+    , hoName        :: Id
     , hoCloBody     :: StgRhsClosure
     , hoEnv         :: Env    -- local environment ; with live variables only, everything else is pruned
     , hoCloArgs     :: [Atom]
@@ -207,6 +196,8 @@ data DebugCommand
   | CmdStep
   | CmdContinue
   | CmdPeekHeap         Addr
+  | CmdStop
+  | CmdInternal         String -- HINT: non-reified commands for quick experimentation
   deriving (Show)
 
 data DebugOutput
@@ -293,7 +284,7 @@ data StgState
   , ssExecutedPrimOps     :: !(Set Name)
   , ssExecutedFFI         :: !(Set ForeignCall)
   , ssExecutedPrimCalls   :: !(Set PrimCall)
-  , ssAddressAfterInit    :: !Int
+  , ssHeapStartAddress    :: !Int
 
   -- debugger API
   , ssDebuggerChan        :: DebuggerChan
@@ -382,7 +373,7 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssExecutedPrimOps     = Set.empty
   , ssExecutedFFI         = Set.empty
   , ssExecutedPrimCalls   = Set.empty
-  , ssAddressAfterInit    = 0
+  , ssHeapStartAddress    = 0
 
   -- debugger api
   , ssDebuggerChan        = dbgChan
