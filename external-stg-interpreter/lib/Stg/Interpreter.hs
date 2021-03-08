@@ -560,20 +560,23 @@ declareTopBindings mods = do
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
 
-runProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-runProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
+loadAndRunProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
+loadAndRunProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
 
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
     ".json"                             -> getJSONModules fullpak_name
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
+  runProgram switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing
 
+runProgram :: HasCallStack => Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
+runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
   let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
-      progName  = dropExtension fullpak_name
+      progName  = dropExtension progFilePath
 
   currentDir <- liftIO getCurrentDirectory
-  stgappDir <- makeAbsolute $ takeDirectory fullpak_name
+  stgappDir <- makeAbsolute $ takeDirectory progFilePath
   --putStrLn $ "progName: " ++ show progName ++ " progArgs: " ++ show progArgs
   let run = do
         when switchCWD $ liftIO $ setCurrentDirectory stgappDir

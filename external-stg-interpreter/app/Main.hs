@@ -53,7 +53,7 @@ main = do
 
   case runDebugger of
     True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO
-    False -> runProgram   switchCWD appPath appArgs dbgChan DbgRunProgram doTracing
+    False -> loadAndRunProgram switchCWD appPath appArgs dbgChan DbgRunProgram doTracing
 
 debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
 
@@ -67,7 +67,7 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
     debugger dbgCmdI
 
   putStrLn $ "loading " ++ appPath
-  runProgram switchCWD appPath appArgs dbgChan DbgStepByStep True
+  loadAndRunProgram switchCWD appPath appArgs dbgChan DbgStepByStep True
   putStrLn "program finshed"
 
 
