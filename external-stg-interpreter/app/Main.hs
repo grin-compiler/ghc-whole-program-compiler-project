@@ -3,6 +3,7 @@ import System.IO
 import System.Exit
 import System.Environment (getArgs)
 import Control.Concurrent
+import System.Posix.Process
 import Control.Monad
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 import qualified Data.Set as Set
@@ -63,12 +64,12 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
     printDebugOutput dbgOutO
 
   forkIO $ do
-    putStrLn $ "loading " ++ appPath
-    runProgram switchCWD appPath appArgs dbgChan DbgStepByStep True
-    putStrLn "program finshed"
-    exitSuccess
+    debugger dbgCmdI
 
-  debugger dbgCmdI
+  putStrLn $ "loading " ++ appPath
+  runProgram switchCWD appPath appArgs dbgChan DbgStepByStep True
+  putStrLn "program finshed"
+
 
 printHelp = do
   putStrLn "commands:"
@@ -141,6 +142,7 @@ printHeapObject = \case
 debugger dbgCmdI = do
   line <- getLine
   case line of
+    "help"      -> printHelp
     '+':name    -> Unagi.writeChan dbgCmdI $ CmdAddBreakpoint $ BS8.pack name
     '-':name    -> Unagi.writeChan dbgCmdI $ CmdRemoveBreakpoint $ BS8.pack name
     "list"      -> Unagi.writeChan dbgCmdI $ CmdListClosures
@@ -153,12 +155,12 @@ debugger dbgCmdI = do
     "e"         -> do
       Unagi.writeChan dbgCmdI $ CmdCurrentClosure
       Unagi.writeChan dbgCmdI $ CmdStep
-    "quit"      -> exitSuccess
+    "quit"      -> exitImmediately ExitSuccess
+    "stop"      -> Unagi.writeChan dbgCmdI CmdStop
     "" -> pure ()
 
     _ | ["peek", addr] <- words line
       -> do
         Unagi.writeChan dbgCmdI $ CmdPeekHeap $ read addr
-
-    _ -> putStrLn ("unknown command: " ++ line) >> printHelp
+    _           -> Unagi.writeChan dbgCmdI $ CmdInternal line
   debugger dbgCmdI
