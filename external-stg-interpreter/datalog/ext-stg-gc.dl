@@ -3,9 +3,11 @@
 
 .decl Reference(from : number, to : number)
 .input Reference
+.output Reference
 
 .decl GCRoot(val : number)
 .input GCRoot
+.output GCRoot
 
 // output
 
@@ -41,6 +43,6 @@ Dead(val) :-
 .output LiveReferredBy
 
 LiveReferredBy(to, from) :-
-  Live(to),
+  Reference(from, to),
   Live(from),
-  Reference(from, to).
+  Live(to).

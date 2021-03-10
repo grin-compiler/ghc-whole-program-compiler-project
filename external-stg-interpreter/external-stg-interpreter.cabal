@@ -83,7 +83,7 @@ library
 
   extra-libraries:      gomp
 
-  cxx-sources:          cbits/ext-stg-gc.cpp
+  cxx-sources:          datalog/ext-stg-gc.cpp
   cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
   ld-options:           "-Wl,--undefined=__factory_Sf_ext_stg_gc_instance"
 
