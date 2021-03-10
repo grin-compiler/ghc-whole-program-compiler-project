@@ -9,6 +9,7 @@ import qualified Data.ByteString.Char8 as BS8
 import System.FilePath
 import Codec.Archive.Zip
 import Codec.Archive.Zip.Unix
+import Text.Printf
 
 import qualified Data.Map as Map
 import Data.Containers.ListUtils (nubOrd)
@@ -21,12 +22,21 @@ data Fullpak
   = Fullpak
   { ghcstgappPath :: FilePath
   , stgbinsOnly   :: Bool
+  , includeAll    :: Bool
   }
 
 fullpak :: Parser Fullpak
 fullpak = Fullpak
   <$> argument str (metavar "FILE" <> help "The .ghc_stgapp file that will be packed")
   <*> switch (short 's' <> long "stgbins-only" <> help "Packs the module.stgbin files only")
+  <*> switch (short 'a' <> long "include-all" <> help "Includes all progam and library modules (without dead module elimination)")
+
+getModuleList :: [StgModuleInfo] -> IO [FilePath]
+getModuleList modinfoList = do
+  putStrLn $ "all modules: " ++ show (length modinfoList)
+  forM modinfoList $ \StgModuleInfo{..} -> do
+    printf "%-60s %s\n" modPackageName modModuleName
+    pure modModpakPath
 
 main :: IO ()
 main = do
@@ -35,7 +45,10 @@ main = do
 
   -- mk .fullpak
   modinfoList <- getAppModuleMapping ghcstgappPath
-  appModpaks <- collectProgramModules (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
+  appModpaks <- if includeAll
+    then getModuleList modinfoList
+    else collectProgramModules (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
+
   let modpakMap       = Map.fromList [(modModpakPath m , m) | m <- modinfoList]
       fullpakModules  = [modpakMap Map.! m | m <- appModpaks]
 
