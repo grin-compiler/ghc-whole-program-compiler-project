@@ -6,6 +6,7 @@ import Control.Monad.State
 import qualified Data.List as List
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import qualified Data.ByteString.Char8 as BS8
 
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 
@@ -51,6 +52,13 @@ dbgCommands =
         let filterPattern pat resultList = [n | n <- resultList, List.isInfixOf pat n]
             matches = foldr filterPattern (map show $ Map.keys env) patterns
         liftIO $ putStrLn $ unlines matches
+    )
+
+  , ( ["?b"]
+    , "list breakpoints"
+    , \_ -> do
+        bks <- Map.toList <$> gets ssBreakpoints
+        liftIO $ putStrLn $ unlines [printf "%-40s  %d [fuel]" (BS8.unpack name) fuel | (name, fuel) <- bks]
     )
 
   ]
