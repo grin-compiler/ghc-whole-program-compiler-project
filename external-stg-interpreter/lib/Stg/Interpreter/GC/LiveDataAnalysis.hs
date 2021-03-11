@@ -10,6 +10,8 @@ import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import System.Directory
+import Foreign.Ptr
 
 import Language.Souffle.Compiled (SouffleM)
 import qualified Language.Souffle.Compiled as Souffle
@@ -65,6 +67,15 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
       -- run analysis
       Souffle.setNumThreads prog 2
       Souffle.run prog
+
+      let factPath = "./.gc-datalog-facts"
+      absFactPath <- liftIO $ makeAbsolute factPath
+      liftIO $ do
+        createDirectoryIfMissing True absFactPath
+        putStrLn $ "write gc facts to: " ++ absFactPath
+      Souffle.writeFiles prog absFactPath
+      liftIO $ putStrLn "Souffle.writeFiles done"
+
       -- read back result
       readbackDeadData prog
 
@@ -73,20 +84,25 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
 ---------------------------
 
 addGCRootFacts :: Souffle.Handle ExtStgGC -> StgState -> [Atom] -> SouffleM ()
-addGCRootFacts prog StgState{..} extraGCRoots = do
+addGCRootFacts prog StgState{..} localGCRoots = do
   let addGCRoot :: Atom -> SouffleM ()
       addGCRoot a = visitAtom a $ \i -> Souffle.addFact prog $ GCRoot i
 
   -- HINT: the following can be GC roots
+  {-
+    gc roots:
+      - stable pointer indices
+      - stack indices
+      - static env
+      - local
+      - current closure ; Q: is it an extra? A: yes, it belongs to the local roots
+  -}
 
-  -- utility
-  visitGCRef addGCRoot extraGCRoots
-
-  -- current closure
-  addGCRoot $ HeapPtr ssCurrentClosureAddr
+  -- local
+  visitGCRef addGCRoot localGCRoots
 
   -- stable pointer values
-  visitGCRef addGCRoot ssStablePointers
+  visitGCRef addGCRoot [PtrAtom (StablePtr idx) (intPtrToPtr $ IntPtr idx) | idx <- IntMap.keys ssStablePointers]
 
   -- static global env
   visitGCRef addGCRoot ssStaticGlobalEnv
@@ -117,6 +133,7 @@ addReferenceFacts prog StgState{..} = do
   addRefs ssSmallMutableArrays  NS_SmallMutableArray
   addRefs ssArrayArrays         NS_ArrayArray
   addRefs ssMutableArrayArrays  NS_MutableArrayArray
+  addRefs ssStablePointers      NS_StablePointer
 
   -- stable name references
   let stableNames = Map.toList ssStableNameMap
@@ -129,10 +146,10 @@ addReferenceFacts prog StgState{..} = do
 readbackDeadData :: Souffle.Handle ExtStgGC -> SouffleM DeadData
 readbackDeadData prog = do
   dead :: [Dead] <- Souffle.getFacts prog
-  foldM addDead emptyDeadData dead
+  foldM collectDead emptyDeadData dead
 
-addDead :: DeadData -> Dead -> SouffleM DeadData
-addDead dd@DeadData{..} (Dead l) = do
+collectDead :: DeadData -> Dead -> SouffleM DeadData
+collectDead dd@DeadData{..} (Dead l) = do
   -- HINT: decode datalog value
   let namespace = toEnum $ fromIntegral (l .&. 0xf)
       idx       = shiftR (fromIntegral l) 4
@@ -149,3 +166,4 @@ addDead dd@DeadData{..} (Dead l) = do
     NS_SmallMutableArray  -> dd {deadSmallMutableArrays = IntSet.insert idx deadSmallMutableArrays}
     NS_StableName         -> dd {deadStableNames        = IntSet.insert idx deadStableNames}
     NS_WeakPointer        -> dd {deadWeakPointers       = IntSet.insert idx deadWeakPointers}
+    _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx

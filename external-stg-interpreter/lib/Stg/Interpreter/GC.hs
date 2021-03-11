@@ -6,6 +6,7 @@ import Control.Monad.State
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 
 import Control.Concurrent
@@ -13,17 +14,18 @@ import Control.Concurrent
 import Stg.Syntax
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.LiveDataAnalysis
+import qualified Stg.Interpreter.PrimOp.WeakPointer as PrimWeakPointer
 
 checkGC :: [Atom] -> M ()
-checkGC extraGCRoots = do
+checkGC localGCRoots = do
   tryPrune
-  nextAddr <- gets ssNextAddr
+  nextAddr <- gets ssNextHeapAddr
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
   when (not gcIsRunning && nextAddr - lastGCAddr > 300000) $ do
     lifetimeAnalysis
     modify' $ \s -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True}
-    runGC extraGCRoots
+    runGC localGCRoots
     {-
       TODO:
         done - send the current state for live data analysis (async channel) if the GC condition triggers
@@ -34,15 +36,28 @@ checkGC extraGCRoots = do
 
 
 runGC :: [Atom] -> M ()
-runGC = runGCAsync
+runGC = runGCSync
+
+postGCReport :: M ()
+postGCReport = do
+  heap <- gets ssHeap
+  heapStart <- gets ssHeapStartAddress
+  let (staticHeap, dynHeap) = IntMap.split (heapStart - 1) heap
+      dynHeapSize = IntMap.size dynHeap
+      staticHeapSize = IntMap.size staticHeap
+  liftIO $ do
+    putStrLn $ "heap start:       " ++ show heapStart
+    putStrLn $ "static heap size: " ++ show (staticHeapSize + if IntMap.member (heapStart - 1) staticHeap then 1 else 0)
+    putStrLn $ "dyn heap size:    " ++ show dynHeapSize
 
 -- async GC
 
 analysisLoop :: MVar ([Atom], StgState) -> MVar DeadData -> IO ()
 analysisLoop gcIn gcOut = do
-  (extraGCRoots, stgState) <- takeMVar gcIn
-  deadData <- runLiveDataAnalysis extraGCRoots stgState
+  (localGCRoots, stgState) <- takeMVar gcIn
+  deadData <- runLiveDataAnalysis localGCRoots stgState
   reportRemovedData stgState deadData
+  reportAddressCounters stgState
   putMVar gcOut deadData
   analysisLoop gcIn gcOut
 
@@ -59,27 +74,39 @@ tryPrune = do
   liftIO (tryTakeMVar gcOut) >>= \case
     Nothing -> pure ()
     Just deadData -> do
+      finalizeDeadWeakPointers (deadWeakPointers deadData)
       stgState <- get
       -- remove dead data from stg state
       liftIO $ putStrLn " * done GC"
       put $ (pruneStgState stgState deadData) {ssGCIsRunning = False}
+      postGCReport
 
 runGCAsync :: [Atom] -> M ()
-runGCAsync extraGCRoots = do
+runGCAsync localGCRoots = do
   stgState <- get
   PrintableMVar gcIn <- gets ssGCInput
   liftIO $ do
     putStrLn " * start GC"
-    putMVar gcIn (extraGCRoots, stgState)
+    putMVar gcIn (localGCRoots, stgState)
 
 -- synchronous GC
 
 runGCSync :: [Atom] -> M ()
-runGCSync extraGCRoots = do
+runGCSync localGCRoots = do
   stgState <- get
-  deadData <- liftIO $ runLiveDataAnalysis extraGCRoots stgState
-  put $ pruneStgState stgState deadData
-  liftIO $ reportRemovedData stgState deadData
+  deadData <- liftIO $ runLiveDataAnalysis localGCRoots stgState
+  finalizeDeadWeakPointers (deadWeakPointers deadData)
+  put $ (pruneStgState stgState deadData) {ssGCIsRunning = False}
+  liftIO $ do
+    reportRemovedData stgState deadData
+    reportAddressCounters stgState
+  postGCReport
+
+-- weak pointer handling
+
+finalizeDeadWeakPointers :: IntSet -> M ()
+finalizeDeadWeakPointers deadWeaks = do
+  pure () -- TODO: check how the native GHC RTS calls weak pointer finalizers
 
 -- utils
 
@@ -102,6 +129,25 @@ pruneStgState stgState@StgState{..} DeadData{..} = stgState
   , ssStableNameMap       = Map.filter (`IntSet.notMember` deadStableNames) ssStableNameMap
 --  , ssThreads             = IntMap.filter (isThreadLive . tsStatus)  ssThreads
   }
+
+reportAddressCounters :: StgState -> IO ()
+reportAddressCounters StgState{..} = do
+  let reportI msg val = do
+        printf "  %s %d\n" msg val
+  putStrLn "resource address counters:"
+  reportI "ssNextHeapAddr          " ssNextHeapAddr
+  reportI "ssNextStableName        " ssNextStableName
+  reportI "ssNextWeakPointer       " ssNextWeakPointer
+  reportI "ssNextStablePointer     " ssNextStablePointer
+  reportI "ssNextMutableByteArray  " ssNextMutableByteArray
+  reportI "ssNextMVar              " ssNextMVar
+  reportI "ssNextMutVar            " ssNextMutVar
+  reportI "ssNextArray             " ssNextArray
+  reportI "ssNextMutableArray      " ssNextMutableArray
+  reportI "ssNextSmallArray        " ssNextSmallArray
+  reportI "ssNextSmallMutableArray " ssNextSmallMutableArray
+  reportI "ssNextArrayArray        " ssNextArrayArray
+  reportI "ssNextMutableArrayArray " ssNextMutableArrayArray
 
 reportRemovedData :: StgState -> DeadData -> IO ()
 reportRemovedData StgState{..} DeadData{..} = do
@@ -161,10 +207,14 @@ ppLNE = \case
 
 {-
   TODO:
+    skip - weak pointers finalizer
+    done - print resource address counters after each GC
+    done - switch to 5 bit datalog namespace int32 encoding ; Q: should we switch to 64 bit ints?
     - add stack namespace
-    - add extra root namespace
-    - add only the stack and extra to gcroot
-    - add stack and extra to reference relation
+    - add local root namespace
+    - add only the stack and local to gcroot
+    - add stack and local to reference relation
+    - NOT-NOW: change namespace encoding to non-uniform way: heap ptr 0. bit = 0 [OPTIMIZATION / FUTURE WORK]
   with the Retain relation we could see the retainer origin
 
   show:
@@ -176,8 +226,8 @@ ppLNE = \case
     - retainer  ; show retainer
     - origin    ; show value origin
     - info      ; show heap object + 'retainer' + 'origin'
-    - track-retainer  ; track back values to GCRoots and print retainer objects their origins ; transitive closure of 'info'
-    - track-origin    ; track back value origin to the oldest living object (show 'info' after each step)
+    - trace-retainer  ; trace back values to GCRoots and print retainer objects their origins ; transitive closure of 'info'
+    - trace-origin    ; trace back value origin to the oldest living object (show 'info' after each step)
     - report-state    ; report stack + current thread + next heap/array/etc. addresses
     - gc        ; run gc
     - lifetime age count   ; call lifetimeAnalysis with the age threshold and item count
