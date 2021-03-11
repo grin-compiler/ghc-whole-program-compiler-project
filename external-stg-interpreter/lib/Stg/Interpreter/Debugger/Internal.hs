@@ -3,7 +3,9 @@ module Stg.Interpreter.Debugger.Internal where
 
 import Text.Printf
 import Control.Monad.State
+import qualified Data.List as List
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 
@@ -41,6 +43,16 @@ dbgCommands =
         liftIO $ do
           putStrLn $ "heap start address: " ++ show heapStart
     )
+
+  , ( ["query", "??"]
+    , "queries a given list of NAME_PATTERNs in static global env as substring"
+    , \patterns -> do
+        env <- gets ssStaticGlobalEnv
+        let filterPattern pat resultList = [n | n <- resultList, List.isInfixOf pat n]
+            matches = foldr filterPattern (map show $ Map.keys env) patterns
+        liftIO $ putStrLn $ unlines matches
+    )
+
   ]
 
 flatCommands :: [(String, String, [String] -> M ())]
