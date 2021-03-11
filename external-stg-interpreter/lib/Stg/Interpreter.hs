@@ -144,7 +144,7 @@ builtinStgEval a@HeapPtr{} = do
         markExecuted l
         modify' $ \s -> s {ssCurrentClosure = hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
         Debugger.checkBreakpoint hoName
-        GC.checkGC [a]
+        GC.checkGC [a] -- HINT: add local env as GC root
 
         -- TODO: env or free var handling
         case uf of
@@ -456,7 +456,7 @@ evalExpr localEnv = \case
     evalFCallOp evalOnNewThread foreignCall args t tc
 {-
   StgOpApp (StgPrimCallOp (PrimCall "stg_getThreadAllocationCounterzh" _)) _args t _tc -> do
-    i <- gets ssNextAddr
+    i <- gets ssNextHeapAddr
     pure [IntAtom (-i)]
 -}
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
@@ -584,7 +584,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
         initRtsSupport progName progArgs mods
         env <- gets ssStaticGlobalEnv
         let rootMain = unId $ head $ [i | i <- Map.keys env, show i == "main_:Main.main"]
-        limit <- gets ssNextAddr
+        limit <- gets ssNextHeapAddr
         modify' $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
 
         -- TODO: check how it is done in the native RTS: call hs_main
@@ -630,7 +630,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
     freeResources
 
     --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
-    --print ssNextAddr
+    --print ssNextHeapAddr
     --print $ head $ Map.toList ssEnv
     -- TODO: handle :Main.main properly ; currenlty it is in conflict with Main.main
 

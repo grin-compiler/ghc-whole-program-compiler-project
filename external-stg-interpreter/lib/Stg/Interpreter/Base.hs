@@ -221,7 +221,7 @@ data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
-  , ssNextAddr            :: {-# UNPACK #-} !Int
+  , ssNextHeapAddr        :: {-# UNPACK #-} !Int
 
   -- GC
   , ssLastGCAddr          :: !Int
@@ -315,7 +315,7 @@ emptyStgState :: PrintableMVar StgState
 emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
-  , ssNextAddr            = 0
+  , ssNextHeapAddr        = 0
 
   -- GC
   , ssLastGCAddr          = 0
@@ -467,8 +467,8 @@ stackPop = do
 
 freshHeapAddress :: HasCallStack => M Addr
 freshHeapAddress = do
-  limit <- gets ssNextAddr
-  state $ \s@StgState{..} -> (ssNextAddr, s {ssNextAddr = succ ssNextAddr})
+  limit <- gets ssNextHeapAddr
+  state $ \s@StgState{..} -> (ssNextHeapAddr, s {ssNextHeapAddr = succ ssNextHeapAddr})
 
 allocAndStore :: HasCallStack => HeapObject -> M Addr
 allocAndStore o = do

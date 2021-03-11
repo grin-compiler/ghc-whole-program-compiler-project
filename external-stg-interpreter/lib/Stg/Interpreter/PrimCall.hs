@@ -24,7 +24,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
     "stg_getThreadAllocationCounterzh"
       | [Void] <- args
       -> do
-        i <- gets ssNextAddr
+        i <- gets ssNextHeapAddr
         pure [IntAtom (-i)]
 
   -- stg_doubleToWord64zh :: Double# -> Word#
