@@ -191,7 +191,7 @@ data DebugCommand
   = CmdListClosures
   | CmdClearClosureList
   | CmdCurrentClosure
-  | CmdAddBreakpoint    Name
+  | CmdAddBreakpoint    Name Int
   | CmdRemoveBreakpoint Name
   | CmdStep
   | CmdContinue
@@ -291,7 +291,7 @@ data StgState
   , ssNextDebugCommand    :: NextDebugCommand
 
   , ssEvaluatedClosures   :: !(Set Name)
-  , ssBreakpoints         :: !(Set Name)
+  , ssBreakpoints         :: !(Map Name Int)
   , ssDebugState          :: DebugState
 
   -- tracing
@@ -380,7 +380,7 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssNextDebugCommand    = nextDbgCmd
 
   , ssEvaluatedClosures   = Set.empty
-  , ssBreakpoints         = Set.empty
+  , ssBreakpoints         = mempty
   , ssDebugState          = dbgState
 
   -- tracing

@@ -11,6 +11,8 @@ import qualified Data.Map as Map
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.List as List
 import Text.Printf
+import Text.Read
+import Data.Maybe
 
 import Options.Applicative
 import Data.Semigroup ((<>))
@@ -135,8 +137,9 @@ printHelp = do
   putStrLn " quit                     - exit debugger and program"
   putStrLn " list                     - list visited closures"
   putStrLn " clear                    - clear visited closure list"
-  putStrLn " +QUALIFIED_CLOSURE_NAME  - add breakpoint"
-  putStrLn " -QUALIFIED_CLOSURE_NAME  - remove breakpoint"
+  putStrLn " +b QUALIFIED_CLOSURE_NAME  [FUEL]  - add breakpoint with optional FUEL counter that will be decreased until 0"
+  putStrLn "                                      the breakpoint will trigger at 0, the default FUEL value is 0"
+  putStrLn " -b QUALIFIED_CLOSURE_NAME          - remove breakpoint"
   putStrLn " step 's'                 - step into the next closure"
   putStrLn " continue 'c'             - continue until the next breakpoint"
   putStrLn " k                        - report current closure name"
@@ -151,26 +154,25 @@ printHelp = do
 debugger :: Unagi.InChan DebugCommand -> IO ()
 debugger dbgCmdI = do
   line <- getLine
-  case line of
-    "help"      -> printHelp
-    '+':name    -> Unagi.writeChan dbgCmdI $ CmdAddBreakpoint $ BS8.pack name
-    '-':name    -> Unagi.writeChan dbgCmdI $ CmdRemoveBreakpoint $ BS8.pack name
-    "list"      -> Unagi.writeChan dbgCmdI $ CmdListClosures
-    "clear"     -> Unagi.writeChan dbgCmdI $ CmdClearClosureList
-    "step"      -> Unagi.writeChan dbgCmdI $ CmdStep
-    "s"         -> Unagi.writeChan dbgCmdI $ CmdStep
-    "continue"  -> Unagi.writeChan dbgCmdI $ CmdContinue
-    "c"         -> Unagi.writeChan dbgCmdI $ CmdContinue
-    "k"         -> Unagi.writeChan dbgCmdI $ CmdCurrentClosure
-    "e"         -> do
+  case words line of
+    ["help"]      -> printHelp >> Unagi.writeChan dbgCmdI (CmdInternal "?")
+    ["+b", name]        -> Unagi.writeChan dbgCmdI $ CmdAddBreakpoint (BS8.pack name) 0
+    ["+b", name, fuel]  -> Unagi.writeChan dbgCmdI $ CmdAddBreakpoint (BS8.pack name) (fromMaybe 0 $ readMaybe fuel)
+    ["-b", name]  -> Unagi.writeChan dbgCmdI $ CmdRemoveBreakpoint $ BS8.pack name
+    ["list"]      -> Unagi.writeChan dbgCmdI $ CmdListClosures
+    ["clear"]     -> Unagi.writeChan dbgCmdI $ CmdClearClosureList
+    ["step"]      -> Unagi.writeChan dbgCmdI $ CmdStep
+    ["s"]         -> Unagi.writeChan dbgCmdI $ CmdStep
+    ["continue"]  -> Unagi.writeChan dbgCmdI $ CmdContinue
+    ["c"]         -> Unagi.writeChan dbgCmdI $ CmdContinue
+    ["k"]         -> Unagi.writeChan dbgCmdI $ CmdCurrentClosure
+    ["e"]         -> do
       Unagi.writeChan dbgCmdI $ CmdCurrentClosure
       Unagi.writeChan dbgCmdI $ CmdStep
-    "quit"      -> exitImmediately ExitSuccess
-    "stop"      -> Unagi.writeChan dbgCmdI CmdStop
-    "" -> pure ()
+    ["quit"]        -> exitImmediately ExitSuccess
+    ["stop"]        -> Unagi.writeChan dbgCmdI CmdStop
+    ["peek", addr]  -> Unagi.writeChan dbgCmdI $ CmdPeekHeap $ read addr
+    [] -> pure ()
 
-    _ | ["peek", addr] <- words line
-      -> do
-        Unagi.writeChan dbgCmdI $ CmdPeekHeap $ read addr
-    _           -> Unagi.writeChan dbgCmdI $ CmdInternal line
+    _ -> Unagi.writeChan dbgCmdI $ CmdInternal line
   debugger dbgCmdI

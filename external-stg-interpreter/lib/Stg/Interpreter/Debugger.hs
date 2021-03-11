@@ -3,6 +3,7 @@ module Stg.Interpreter.Debugger where
 
 import Control.Monad.State
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 
 import Stg.Interpreter.Base
@@ -49,11 +50,11 @@ runDebugCommand cmd = do
       closures <- gets ssEvaluatedClosures
       liftIO $ Unagi.writeChan dbgOut $ DbgOutClosureList $ Set.toList closures
 
-    CmdAddBreakpoint n -> do
-      modify' $ \s@StgState{..} -> s {ssBreakpoints = setInsert n ssBreakpoints}
+    CmdAddBreakpoint n i -> do
+      modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.insert n i ssBreakpoints}
 
     CmdRemoveBreakpoint n -> do
-      modify' $ \s@StgState{..} -> s {ssBreakpoints = Set.delete n ssBreakpoints}
+      modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.delete n ssBreakpoints}
 
     CmdStep -> pure ()
 
@@ -108,8 +109,16 @@ checkBreakpoint (Id b) = do
       reportState
       unless exit processCommandsUntilExit
     DbgRunProgram -> do
-      bkSet <- gets ssBreakpoints
-      when (Set.member closureName bkSet) $ do
-        reportState
-        modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
-        unless exit processCommandsUntilExit
+      bkMap <- gets ssBreakpoints
+      case Map.lookup closureName bkMap of
+        Nothing -> pure ()
+        Just i
+          | i > 0 -> do
+              -- HINT: the breakpoint can postpone triggering for the requested time
+              modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.adjust pred closureName ssBreakpoints}
+
+          | otherwise -> do
+              -- HINT: trigger brakpoint
+              reportState
+              modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+              unless exit processCommandsUntilExit
