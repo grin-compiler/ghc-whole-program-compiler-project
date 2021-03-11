@@ -23,7 +23,6 @@ checkGC localGCRoots = do
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
   when (not gcIsRunning && nextAddr - lastGCAddr > 300000) $ do
-    lifetimeAnalysis
     modify' $ \s -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True}
     runGC localGCRoots
     {-
@@ -179,6 +178,7 @@ reportRemovedData StgState{..} DeadData{..} = do
   let threads = IntMap.elems ssThreads
   printf "live threads: %-6d  all threads: %d\n" (length $ [ts | ts <- threads, isThreadLive (tsStatus ts)]) (length threads)
 
+{-
 lifetimeAnalysis :: M ()
 lifetimeAnalysis = do
   heap <- gets ssHeap
@@ -190,7 +190,7 @@ lifetimeAnalysis = do
   liftIO $ do
     printf "the first %d younger than %d (age) non-static heap objects:\n" n age
     forM_ some $ \(i, o) -> printf "%-8d %3s  %s\n" i (ppLNE o) (debugPrintHeapObject o)
-
+-}
 debugPrintHeapObject :: HeapObject -> String
 debugPrintHeapObject  = \case
   Con{..}           -> "Con: " ++ show (dcUniqueName hoCon) ++ " " ++ show hoConArgs
