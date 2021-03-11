@@ -41,6 +41,13 @@ yield result = do
 
   -- return threads current result
   nextTS <- getThreadState nextTid
+
+  -- TODO/IDEA/IMPROVEMENT:
+  --    store this value in the thread state, but only for the suspended states
+  --    the running threads should not store the old "current result" that would prevent garbage collection
+  -- HINT: clear value to allow garbage collection
+  updateThreadState nextTid nextTS {tsCurrentResult = []}
+
   pure $ tsCurrentResult nextTS
 
 getNextRunnableThread :: M Int
