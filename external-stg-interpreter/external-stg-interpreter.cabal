@@ -79,7 +79,7 @@ library
                        external-stg
   default-language:    Haskell2010
 
-  include-dirs:         cbits
+  include-dirs:         datalog
 
   extra-libraries:      gomp
 
