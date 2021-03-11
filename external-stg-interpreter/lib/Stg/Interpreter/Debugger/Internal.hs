@@ -33,6 +33,14 @@ dbgCommands =
     , "show debuggers' all internal commands"
     , \_ -> printHelp
     )
+
+  , ( ["report"]
+    , "report some internal data"
+    , \_ -> do
+        heapStart <- gets ssHeapStartAddress
+        liftIO $ do
+          putStrLn $ "heap start address: " ++ show heapStart
+    )
   ]
 
 flatCommands :: [(String, String, [String] -> M ())]
