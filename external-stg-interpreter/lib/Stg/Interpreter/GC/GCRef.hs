@@ -24,7 +24,7 @@ instance VisitGCRef HeapObject where
   visitGCRef action = \case
     Con{..}           -> visitGCRef action hoConArgs
     Closure{..}       -> visitGCRef action hoCloArgs >> visitGCRef action hoEnv
-    BlackHole o       -> visitGCRef action o
+    BlackHole o       -> pure ()
     ApStack{..}       -> visitGCRef action hoResult >> visitGCRef action hoStack
     RaiseException ex -> action ex
 
@@ -57,9 +57,8 @@ instance VisitGCRef WeakPtrDescriptor where
 instance VisitGCRef MVarDescriptor where
   visitGCRef action MVarDescriptor{..} = visitGCRef action mvdValue
 
--- datalog value encoding:
---  28 bit index value + 4 bit namespace tag
-
+-- datalog ref value encoding:
+--  28 bit index value + 4 bit namespace tag ; max 16 namespaces
 data RefNamespace
   = NS_Array
   | NS_ArrayArray
@@ -72,6 +71,7 @@ data RefNamespace
   | NS_SmallArray
   | NS_SmallMutableArray
   | NS_StableName
+  | NS_StablePointer
   | NS_WeakPointer
   deriving (Show, Enum)
 
@@ -93,6 +93,7 @@ visitAtom atom action = case atom of
   MutableByteArray i  -> action $ encodeRef (baId i) NS_MutableByteArray
   WeakPointer i       -> action $ encodeRef i NS_WeakPointer
   StableName i        -> action $ encodeRef i NS_StableName
+  PtrAtom (StablePtr i) _ -> action $ encodeRef i NS_StablePointer -- HINT: for debug purposes (track usage) keep this reference
   _                   -> pure ()
 
 arrIdxToRef :: ArrIdx -> Int32
