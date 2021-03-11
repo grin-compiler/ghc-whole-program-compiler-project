@@ -62,6 +62,7 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
 
   putStrLn "simple debugger"
   printHelp
+  Unagi.writeChan dbgCmdI (CmdInternal "?") -- HINT: print internal debug commands at start
 
   forkIO $ do
     printDebugOutput dbgOutO
