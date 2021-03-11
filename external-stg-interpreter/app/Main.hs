@@ -55,6 +55,7 @@ main = do
     True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO
     False -> loadAndRunProgram switchCWD appPath appArgs dbgChan DbgRunProgram doTracing
 
+debugProgram :: Bool -> [Char] -> [String] -> DebuggerChan -> Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> IO ()
 debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
 
   putStrLn "simple debugger"
@@ -70,18 +71,6 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO = do
   loadAndRunProgram switchCWD appPath appArgs dbgChan DbgStepByStep True
   putStrLn "program finshed"
 
-
-printHelp = do
-  putStrLn "commands:"
-  putStrLn " quit                     - exit debugger"
-  putStrLn " list                     - list visited closures"
-  putStrLn " clear                    - clear visited closure list"
-  putStrLn " +QUALIFIED_CLOSURE_NAME  - add breakpoint"
-  putStrLn " -QUALIFIED_CLOSURE_NAME  - remove breakpoint"
-  putStrLn " step 's'                 - step into the next closure"
-  putStrLn " continue 'c'             - continue until the next breakpoint"
-  putStrLn " k                        - current closure name"
-
 printEnv :: Env -> IO ()
 printEnv env = do
   let unBinderId (BinderId u) = u
@@ -95,6 +84,7 @@ printEnv env = do
       str = List.sort $ map showItem $ Map.toList env
   putStrLn $ unlines str
 
+printDebugOutput :: Unagi.OutChan DebugOutput -> IO ()
 printDebugOutput dbgOutO = do
   Unagi.readChan dbgOutO >>= \case
     DbgOutClosureList closureNames -> do
@@ -139,6 +129,26 @@ printHeapObject = \case
   RaiseException ex -> do
     putStrLn $ "RaiseException: " ++ show ex
 
+printHelp :: IO ()
+printHelp = do
+  putStrLn "commands:"
+  putStrLn " quit                     - exit debugger and program"
+  putStrLn " list                     - list visited closures"
+  putStrLn " clear                    - clear visited closure list"
+  putStrLn " +QUALIFIED_CLOSURE_NAME  - add breakpoint"
+  putStrLn " -QUALIFIED_CLOSURE_NAME  - remove breakpoint"
+  putStrLn " step 's'                 - step into the next closure"
+  putStrLn " continue 'c'             - continue until the next breakpoint"
+  putStrLn " k                        - report current closure name"
+  putStrLn " e                        - report current closure + step"
+  putStrLn " stop                     - stop program execution, ('continue' or 'step' will resume execution)"
+  putStrLn " peek HEAP_ADDR           - print heap object from the given address"
+  putStrLn " help                     - print reified debug commands"
+  putStrLn " ?                        - print internal debug commands"
+
+
+
+debugger :: Unagi.InChan DebugCommand -> IO ()
 debugger dbgCmdI = do
   line <- getLine
   case line of
