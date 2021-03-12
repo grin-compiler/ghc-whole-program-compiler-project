@@ -34,8 +34,8 @@ showRegion doHeapDump start end = do
     Nothing       -> pure ()
     Just (cur, l) -> do
       liftIO $ putStrLn $ "region data count: " ++ show (length l)
-      liftIO $ putStrLn $ "order:  NEW -> OLD"
-      forM_ l $ \(s, e) -> do
+      liftIO $ putStrLn $ "order:  OLD -> NEW"
+      forM_ (reverse l) $ \(s, e) -> do
         printDelimiter
         let sAddr = asNextHeapAddr s
             eAddr = asNextHeapAddr e
