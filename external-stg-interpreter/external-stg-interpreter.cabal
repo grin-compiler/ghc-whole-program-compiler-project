@@ -25,6 +25,8 @@ library
     Stg.Interpreter.ThreadScheduler
     Stg.Interpreter.Debugger
     Stg.Interpreter.Debugger.Internal
+    Stg.Interpreter.Debugger.Region
+    Stg.Interpreter.Debugger.UI
     Stg.Interpreter.GC
     Stg.Interpreter.GC.GCRef
     Stg.Interpreter.GC.LiveDataAnalysis
