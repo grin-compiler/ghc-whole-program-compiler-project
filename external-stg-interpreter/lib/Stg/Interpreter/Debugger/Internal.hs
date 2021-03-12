@@ -2,10 +2,12 @@
 module Stg.Interpreter.Debugger.Internal where
 
 import Text.Printf
+import Text.Read
 import Control.Monad.State
 import qualified Data.List as List
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import qualified Data.IntMap as IntMap
 import qualified Data.ByteString.Char8 as BS8
 
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
@@ -14,6 +16,7 @@ import Stg.Interpreter.Base
 import Stg.Syntax
 
 import qualified Stg.Interpreter.GC as GC
+import Stg.Interpreter.Debugger.Region
 
 reportState :: M ()
 reportState = do
@@ -61,6 +64,59 @@ dbgCommands =
         liftIO $ putStrLn $ unlines [printf "%-40s  %d [fuel]" (BS8.unpack name) fuel | (name, fuel) <- bks]
     )
 
+  , ( ["?r"]
+    , "[START] [END] list a given region or all regions if the arguments are omitted"
+    , \case
+      [] -> do
+        regions <- Map.keys <$> gets ssRegions
+        liftIO $ putStrLn $ unlines $ map show regions
+      [start]       -> showRegion False start start
+      [start, end]  -> showRegion False start end
+      _ -> pure ()
+    )
+
+  , ( ["?r-dump"]
+    , "[START] [END] dump all heap object from the given region"
+    , \case
+      [start]       -> showRegion True start start
+      [start, end]  -> showRegion True start end
+      _ -> pure ()
+    )
+
+  , ( ["+r"]
+    , "add region: +r START_CLOSURE_NAME [END_CLOSURE_NAME] ; if only the start is provided then it will be the end marker also"
+    , \case
+        [start]       -> addRegion start start
+        [start, end]  -> addRegion start end
+        _             -> pure ()
+    )
+
+  , ( ["-r"]
+    , "del region: -r START_CLOSURE_NAME [END_CLOSURE_NAME] ; if only the start is provided then it will be the end marker also"
+    , \case
+        [start]       -> delRegion start start
+        [start, end]  -> delRegion start end
+        _             -> pure ()
+    )
+
+  , ( ["peek-range"]
+    , "ADDR_START ADDR_END [COUNT] - list all heap objects in the given heap address region, optionally show only the first (COUNT) elements"
+    , \case
+      [start, end]
+        | Just s <- readMaybe start
+        , Just e <- readMaybe end
+        -> do
+            rHeap <- getRegionHeap s e
+            liftIO $ dumpHeapIO rHeap
+      [start, end, count]
+        | Just s <- readMaybe start
+        , Just e <- readMaybe end
+        , Just c <- readMaybe count
+        -> do
+            rHeap <- getRegionHeap s e
+            liftIO $ dumpHeapIO $ IntMap.fromList $ take c $ IntMap.toList rHeap
+      _ -> pure ()
+    )
   ]
 
 flatCommands :: [(String, String, [String] -> M ())]

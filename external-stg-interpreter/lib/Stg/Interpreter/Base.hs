@@ -221,7 +221,6 @@ data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
-  , ssNextHeapAddr        :: {-# UNPACK #-} !Int
 
   -- GC
   , ssLastGCAddr          :: !Int
@@ -235,7 +234,6 @@ data StgState
 
   -- threading
   , ssThreads             :: IntMap ThreadState
-  , ssNextThreadId        :: !Int
 
   -- thread scheduler related
   , ssCurrentThreadId     :: Int
@@ -256,6 +254,8 @@ data StgState
   , ssArrayArrays         :: IntMap (Vector Atom)
   , ssMutableArrayArrays  :: IntMap (Vector Atom)
 
+  , ssNextThreadId          :: !Int
+  , ssNextHeapAddr          :: {-# UNPACK #-} !Int
   , ssNextStableName        :: !Int
   , ssNextWeakPointer       :: !Int
   , ssNextStablePointer     :: !Int
@@ -294,6 +294,10 @@ data StgState
   , ssBreakpoints         :: !(Map Name Int)
   , ssDebugState          :: DebugState
 
+  -- region tracker
+  , ssMarkers             :: !(Map Name (Set Region))
+  , ssRegions             :: !(Map Region (Maybe AddressState, [(AddressState, AddressState)]) )
+
   -- tracing
   , ssTracingState        :: TracingState
   }
@@ -315,7 +319,6 @@ emptyStgState :: PrintableMVar StgState
 emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
-  , ssNextHeapAddr        = 0
 
   -- GC
   , ssLastGCAddr          = 0
@@ -327,7 +330,6 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
 
   -- threading
   , ssThreads             = mempty
-  , ssNextThreadId        = 0
   , ssCurrentThreadId     = error "uninitialized ssCurrentThreadId"
   , ssScheduledThreadIds  = []
 
@@ -346,6 +348,8 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssArrayArrays         = mempty
   , ssMutableArrayArrays  = mempty
 
+  , ssNextThreadId          = 0
+  , ssNextHeapAddr          = 0
   , ssNextStableName        = 0
   , ssNextWeakPointer       = 0
   , ssNextStablePointer     = 0
@@ -382,6 +386,10 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssEvaluatedClosures   = Set.empty
   , ssBreakpoints         = mempty
   , ssDebugState          = dbgState
+
+  -- region tracker
+  , ssMarkers             = mempty
+  , ssRegions             = mempty
 
   -- tracing
   , ssTracingState        = tracingState
@@ -974,3 +982,50 @@ emptyDeadData = DeadData
   , deadMutableByteArrays   = IntSet.empty
   , deadStableNames         = IntSet.empty
   }
+
+-- Debugger
+data AddressState
+  = AddressState
+  { asNextThreadId          :: !Int
+  , asNextHeapAddr          :: !Int
+  , asNextStableName        :: !Int
+  , asNextWeakPointer       :: !Int
+  , asNextStablePointer     :: !Int
+  , asNextMutableByteArray  :: !Int
+  , asNextMVar              :: !Int
+  , asNextMutVar            :: !Int
+  , asNextArray             :: !Int
+  , asNextMutableArray      :: !Int
+  , asNextSmallArray        :: !Int
+  , asNextSmallMutableArray :: !Int
+  , asNextArrayArray        :: !Int
+  , asNextMutableArrayArray :: !Int
+  }
+  deriving (Eq, Ord, Show)
+
+getAddressState :: M AddressState
+getAddressState = do
+  StgState{..} <- get
+  pure AddressState
+    { asNextThreadId          = ssNextThreadId
+    , asNextHeapAddr          = ssNextHeapAddr
+    , asNextStableName        = ssNextStableName
+    , asNextWeakPointer       = ssNextWeakPointer
+    , asNextStablePointer     = ssNextStablePointer
+    , asNextMutableByteArray  = ssNextMutableByteArray
+    , asNextMVar              = ssNextMVar
+    , asNextMutVar            = ssNextMutVar
+    , asNextArray             = ssNextArray
+    , asNextMutableArray      = ssNextMutableArray
+    , asNextSmallArray        = ssNextSmallArray
+    , asNextSmallMutableArray = ssNextSmallMutableArray
+    , asNextArrayArray        = ssNextArrayArray
+    , asNextMutableArrayArray = ssNextMutableArrayArray
+    }
+
+data Region
+  = Region
+  { regionStart :: Name
+  , regionEnd   :: Name
+  }
+  deriving (Eq, Ord, Show)

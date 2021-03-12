@@ -39,7 +39,8 @@ import Stg.Interpreter.FFI
 import Stg.Interpreter.Rts
 import Stg.Interpreter.Debug
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
-import qualified Stg.Interpreter.Debugger as Debugger
+import qualified Stg.Interpreter.Debugger        as Debugger
+import qualified Stg.Interpreter.Debugger.Region as Debugger
 import qualified Stg.Interpreter.GC as GC
 
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
@@ -144,6 +145,7 @@ builtinStgEval a@HeapPtr{} = do
         markExecuted l
         modify' $ \s -> s {ssCurrentClosure = hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
         Debugger.checkBreakpoint hoName
+        Debugger.checkRegion hoName
         GC.checkGC [a] -- HINT: add local env as GC root
 
         -- TODO: env or free var handling

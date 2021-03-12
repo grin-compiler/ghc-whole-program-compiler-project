@@ -4,6 +4,7 @@ module Stg.Interpreter.Debugger where
 import Control.Monad.State
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import qualified Data.IntMap as IntMap
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 
 import Stg.Interpreter.Base
@@ -62,8 +63,10 @@ runDebugCommand cmd = do
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgRunProgram}
 
     CmdPeekHeap addr -> do
-      ho <- readHeap $ HeapPtr addr
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
+      heap <- gets ssHeap
+      when (IntMap.member addr heap) $ do
+        ho <- readHeap $ HeapPtr addr
+        liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
 
     CmdStop -> do
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
