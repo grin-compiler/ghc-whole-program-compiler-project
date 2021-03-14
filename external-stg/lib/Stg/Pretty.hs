@@ -6,6 +6,7 @@
 module Stg.Pretty
   ( Pretty(..)
   , module Stg.Pretty
+  , plain
   ) where
 
 import Stg.Syntax

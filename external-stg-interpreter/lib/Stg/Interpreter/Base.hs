@@ -31,6 +31,8 @@ import GHC.Stack
 import Text.Printf
 import Debug.Trace
 import Stg.Syntax
+import Stg.Pretty
+import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
 
@@ -544,15 +546,24 @@ readHeap (HeapPtr l) = do
     Just o  -> pure o
 readHeap v = error $ "readHeap: could not read heap object: " ++ show v
 
+describeHeapObject :: HeapObject -> String
+describeHeapObject = \case
+  Con{} -> "Con"
+  Closure{..} -> "Closure: " ++ displayS (renderPretty 0.4 80 (pprRhs hoCloBody)) "" -- HERE
+  BlackHole{} -> "BlackHole"
+  ApStack{} -> "ApStack"
+  RaiseException{} -> "RaiseException"
+
+
 readHeapCon :: HasCallStack => Atom -> M HeapObject
 readHeapCon a = readHeap a >>= \o -> case o of
     Con{} -> pure o
-    _     -> stgErrorM $ "expected con but got: "-- ++ show o
+    _     -> stgErrorM $ "expected con but got: " ++ describeHeapObject o
 
 readHeapClosure :: HasCallStack => Atom -> M HeapObject
 readHeapClosure a = readHeap a >>= \o -> case o of
     Closure{} -> pure o
-    _ -> stgErrorM $ "expected closure but got: "-- ++ show o
+    _ -> stgErrorM $ "expected closure but got: " ++ describeHeapObject o
 
 -- primop related
 

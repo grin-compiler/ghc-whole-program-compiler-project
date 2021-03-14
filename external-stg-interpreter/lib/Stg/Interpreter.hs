@@ -69,6 +69,7 @@ import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
 import qualified Stg.Interpreter.PrimOp.TagToEnum     as PrimTagToEnum
 import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
 import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
+import qualified Stg.Interpreter.PrimOp.Idris         as PrimIdris
 
 {-
   Q: what is the operational semantic of StgApp
@@ -363,8 +364,11 @@ evalStackContinuation result = \case
 
   x -> error $ "unsupported continuation: " ++ show x ++ ", result: " ++ show result
 
+debugExpr :: Env -> Expr -> M ()
+debugExpr env expr = pure () -- lift $ print (env, expr)
+
 evalExpr :: HasCallStack => Env -> Expr -> M [Atom]
-evalExpr localEnv = \case
+evalExpr localEnv expr = debugExpr localEnv expr >> case expr of
   StgTick _ e       -> evalExpr localEnv e
   StgLit l          -> pure <$> evalLiteral l
   StgConApp dc l _
@@ -565,7 +569,10 @@ loadAndRunProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
 
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
-    ".json"                             -> getJSONModules fullpak_name
+    ".json"                             -> do
+      baseMods <- getFullpakModules "./data/ghc-rts-base.fullpak"
+      jsonMods <- getJSONModules fullpak_name
+      pure $ baseMods ++ jsonMods
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
   runProgram switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing
@@ -792,5 +799,6 @@ evalPrimOp =
   PrimTagToEnum.evalPrimOp $
   PrimUnsafe.evalPrimOp $
   PrimMiscEtc.evalPrimOp $
+  PrimIdris.evalPrimOp $
   unsupported where
     unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args

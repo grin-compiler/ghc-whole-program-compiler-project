@@ -58,6 +58,7 @@ library
     Stg.Interpreter.PrimOp.Word16
     Stg.Interpreter.PrimOp.Word8
     Stg.Interpreter.PrimOp.Word
+    Stg.Interpreter.PrimOp.Idris
 
   hs-source-dirs:      lib
   ghc-options:         -Wall -fobject-code -O2
@@ -76,6 +77,8 @@ library
                        inline-c,
                        unagi-chan,
                        souffle-haskell,
+                       ansi-wl-pprint,
+                       ghc-prim,
                        external-stg
   default-language:    Haskell2010
 

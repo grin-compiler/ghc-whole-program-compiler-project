@@ -46,7 +46,7 @@ data Unique
   deriving (Eq, Ord, Generic)
 
 instance Show Unique where
- show (Unique c n) = c : iToBase62 n
+ show (Unique c n) = c : show n -- iToBase62 n
 
 iToBase62 :: Int -> String
 iToBase62 n_ = go n_ "" where

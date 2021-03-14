@@ -22,6 +22,7 @@ import Stg.Syntax
 import Stg.IO
 import Stg.JSON ()
 import Stg.Reconstruct (reconModule)
+import Stg.Pretty
 import qualified Stg.GHC.Symbols as GHCSymbols
 
 moduleToModpak :: String -> String -> FilePath
