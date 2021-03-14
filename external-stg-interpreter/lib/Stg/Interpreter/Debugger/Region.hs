@@ -14,9 +14,13 @@ import Stg.Syntax
 
 import qualified Stg.Interpreter.GC as GC
 
+dumpHeapObject :: Int -> HeapObject -> IO ()
+dumpHeapObject i o = do
+  printf "%-8d %3s  %s\n" i (GC.ppLNE o) (GC.debugPrintHeapObject o)
+
 dumpHeapIO :: Heap -> IO ()
 dumpHeapIO h = do
-  forM_ (IntMap.toList h) $ \(i, o) -> printf "%-8d %3s  %s\n" i (GC.ppLNE o) (GC.debugPrintHeapObject o)
+  forM_ (IntMap.toList h) $ \(i, o) -> dumpHeapObject i o
 
 getRegionHeap :: Int -> Int -> M Heap
 getRegionHeap start end = do

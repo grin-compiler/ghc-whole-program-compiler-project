@@ -298,6 +298,11 @@ data StgState
   , ssMarkers             :: !(Map Name (Set Region))
   , ssRegions             :: !(Map Region (Maybe AddressState, [(AddressState, AddressState)]) )
 
+  -- retainer db
+  , ssReferenceMap        :: !(IntMap IntSet)
+  , ssRetainerMap         :: !(IntMap IntSet)
+  , ssGCRootSet           :: !IntSet
+
   -- tracing
   , ssTracingState        :: TracingState
   }
@@ -390,6 +395,11 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   -- region tracker
   , ssMarkers             = mempty
   , ssRegions             = mempty
+
+  -- retainer db
+  , ssReferenceMap        = mempty
+  , ssRetainerMap         = mempty
+  , ssGCRootSet           = IntSet.empty
 
   -- tracing
   , ssTracingState        = tracingState

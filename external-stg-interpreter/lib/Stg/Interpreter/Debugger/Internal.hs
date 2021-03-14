@@ -8,6 +8,7 @@ import qualified Data.List as List
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
+import qualified Data.IntSet as IntSet
 import qualified Data.ByteString.Char8 as BS8
 
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
@@ -16,6 +17,7 @@ import Stg.Interpreter.Base
 import Stg.Syntax
 
 import qualified Stg.Interpreter.GC as GC
+import qualified Stg.Interpreter.GC.GCRef as GC
 import Stg.Interpreter.Debugger.Region
 
 reportState :: M ()
@@ -26,6 +28,19 @@ reportState = do
   Id currentClosure <- gets ssCurrentClosure
   currentClosureAddr <- gets ssCurrentClosureAddr
   liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts (binderUniqueName currentClosure) currentClosureAddr
+
+showRetainer :: Int -> M ()
+showRetainer i = do
+  heap <- gets ssHeap
+  rMap <- gets ssRetainerMap
+  let dlRef = fromIntegral $ GC.encodeRef i GC.NS_HeapPtr
+  case IntMap.lookup dlRef rMap of
+    Nothing   -> liftIO $ putStrLn $ "no retainer for: " ++ show i ++ ", dl-ref: " ++ show dlRef
+    Just rSet -> do
+      forM_ (IntSet.toList rSet) $ \o -> case GC.decodeRef $ fromIntegral o of
+        (GC.NS_HeapPtr, r)
+          | Just ho <- IntMap.lookup r heap -> liftIO $ dumpHeapObject r ho
+        x -> liftIO $ print x
 
 dbgCommands :: [([String], String, [String] -> M ())]
 dbgCommands =
@@ -117,6 +132,16 @@ dbgCommands =
             liftIO $ dumpHeapIO $ IntMap.fromList $ take c $ IntMap.toList rHeap
       _ -> pure ()
     )
+
+  , ( ["retainer"]
+    , "ADDR - show the retainer objects (heap objects that refer to the quieried object"
+    , \case
+        [addrS]
+          | Just addr <- readMaybe addrS
+          -> showRetainer addr
+        _ -> pure ()
+    )
+
   ]
 
 flatCommands :: [(String, String, [String] -> M ())]

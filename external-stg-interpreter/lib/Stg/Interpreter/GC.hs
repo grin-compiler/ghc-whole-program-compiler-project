@@ -16,6 +16,8 @@ import Stg.Interpreter.Base
 import Stg.Interpreter.GC.LiveDataAnalysis
 import qualified Stg.Interpreter.PrimOp.WeakPointer as PrimWeakPointer
 
+import Stg.Interpreter.GC.RetainerAnalysis
+
 checkGC :: [Atom] -> M ()
 checkGC localGCRoots = do
   tryPrune
@@ -78,6 +80,7 @@ tryPrune = do
       -- remove dead data from stg state
       liftIO $ putStrLn " * done GC"
       put $ (pruneStgState stgState deadData) {ssGCIsRunning = False}
+      loadRetanerDb
       postGCReport
 
 runGCAsync :: [Atom] -> M ()
@@ -94,8 +97,9 @@ runGCSync :: [Atom] -> M ()
 runGCSync localGCRoots = do
   stgState <- get
   deadData <- liftIO $ runLiveDataAnalysis localGCRoots stgState
-  finalizeDeadWeakPointers (deadWeakPointers deadData)
   put $ (pruneStgState stgState deadData) {ssGCIsRunning = False}
+  finalizeDeadWeakPointers (deadWeakPointers deadData)
+  loadRetanerDb
   liftIO $ do
     reportRemovedData stgState deadData
     reportAddressCounters stgState

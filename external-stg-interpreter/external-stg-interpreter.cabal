@@ -30,6 +30,7 @@ library
     Stg.Interpreter.GC
     Stg.Interpreter.GC.GCRef
     Stg.Interpreter.GC.LiveDataAnalysis
+    Stg.Interpreter.GC.RetainerAnalysis
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array

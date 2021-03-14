@@ -78,6 +78,11 @@ data RefNamespace
 encodeRef :: Int -> RefNamespace -> Int32
 encodeRef i ns = shiftL (fromIntegral i) 4 .|. (fromIntegral $ fromEnum ns)
 
+decodeRef :: Int32 -> (RefNamespace, Int)
+decodeRef n = (namespace, idx)
+  where namespace = toEnum $ fromIntegral (n .&. 0xf)
+        idx       = shiftR (fromIntegral n) 4
+
 visitAtom :: Atom -> (Int32 -> SouffleM ()) -> SouffleM ()
 visitAtom atom action = case atom of
   HeapPtr i           -> action $ encodeRef i NS_HeapPtr
