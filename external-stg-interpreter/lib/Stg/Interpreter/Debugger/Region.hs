@@ -7,20 +7,36 @@ import qualified Data.List as List
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
+import qualified Data.IntSet as IntSet
 import qualified Data.ByteString.Char8 as BS8
+import System.Console.Pretty
 
 import Stg.Interpreter.Base
 import Stg.Syntax
 
 import qualified Stg.Interpreter.GC as GC
+import qualified Stg.Interpreter.GC.GCRef as GC
 
-dumpHeapObject :: Int -> HeapObject -> IO ()
-dumpHeapObject i o = do
-  printf "%-8d %3s  %s\n" i (GC.ppLNE o) (GC.debugPrintHeapObject o)
+dumpHeapObject :: Int -> HeapObject -> String
+dumpHeapObject i o = printf "%-8d %3s  %s" i (GC.ppLNE o) (GC.debugPrintHeapObject o)
 
-dumpHeapIO :: Heap -> IO ()
-dumpHeapIO h = do
-  forM_ (IntMap.toList h) $ \(i, o) -> dumpHeapObject i o
+dumpOriginM :: Int -> M String
+dumpOriginM i = do
+  origin <- gets ssOrigin
+  case IntMap.lookup i origin of
+    Nothing -> pure ""
+    Just (oId,oAddr) -> pure $ (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
+
+dumpHeapM :: Heap -> M ()
+dumpHeapM h = do
+  forM_ (IntMap.toList h) $ \(i, o) -> do
+    rootSet <- gets ssGCRootSet
+    let dlRef = fromIntegral $ GC.encodeRef i GC.NS_HeapPtr
+        markGCRoot s = if IntSet.member dlRef rootSet
+                          then color Yellow $ s ++ "  * GC-Root *"
+                          else s
+    originStr <- dumpOriginM i
+    liftIO $ putStrLn $ markGCRoot (dumpHeapObject i o) ++ originStr
 
 getRegionHeap :: Int -> Int -> M Heap
 getRegionHeap start end = do
@@ -45,10 +61,10 @@ showRegion doHeapDump start end = do
             eAddr = asNextHeapAddr e
         rHeap <- getRegionHeap sAddr eAddr
         liftIO $ printf "heap start: %-10d  end: %-10d  object count: %d\n" sAddr eAddr (IntMap.size rHeap)
-        when doHeapDump $ liftIO $ do
-          putStrLn ""
-          dumpHeapIO rHeap
-          putStrLn ""
+        when doHeapDump $ do
+          liftIO $ putStrLn ""
+          dumpHeapM rHeap
+          liftIO $ putStrLn ""
       printDelimiter
 
 addRegion :: String -> String -> M ()

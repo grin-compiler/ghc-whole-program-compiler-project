@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections #-}
 module Stg.Interpreter.Debugger.Internal where
 
 import Text.Printf
@@ -10,6 +10,8 @@ import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
 import qualified Data.ByteString.Char8 as BS8
+import Data.Tree
+import System.Console.Pretty
 
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 
@@ -19,6 +21,20 @@ import Stg.Syntax
 import qualified Stg.Interpreter.GC as GC
 import qualified Stg.Interpreter.GC.GCRef as GC
 import Stg.Interpreter.Debugger.Region
+import Stg.Interpreter.GC.RetainerAnalysis
+
+showOriginTrace :: Int -> M ()
+showOriginTrace i = do
+  origin <- gets ssOrigin
+  let go o s = unless (IntSet.member o s) $ do
+        let dlRef = fromIntegral $ GC.encodeRef o GC.NS_HeapPtr
+        str <- decodeAndShow dlRef
+        case IntMap.lookup o origin of
+          Just (oId, oAddr) -> do
+                            liftIO $ putStrLn $ str ++ "  " ++ show oId
+                            go oAddr (IntSet.insert o s)
+          _ -> liftIO $ putStrLn str
+  go i IntSet.empty
 
 reportState :: M ()
 reportState = do
@@ -33,14 +49,59 @@ showRetainer :: Int -> M ()
 showRetainer i = do
   heap <- gets ssHeap
   rMap <- gets ssRetainerMap
+  rootSet <- gets ssGCRootSet
+
   let dlRef = fromIntegral $ GC.encodeRef i GC.NS_HeapPtr
+  liftIO $ do
+    putStrLn $ "retianers of addr: " ++ show i ++ "   dl-ref: " ++ show dlRef ++ if IntSet.member dlRef rootSet then "  * GC-Root *" else ""
   case IntMap.lookup dlRef rMap of
-    Nothing   -> liftIO $ putStrLn $ "no retainer for: " ++ show i ++ ", dl-ref: " ++ show dlRef
+    Nothing   -> liftIO $ putStrLn $ "no retainer for: " ++ show i ++ "   dl-ref: " ++ show dlRef
     Just rSet -> do
       forM_ (IntSet.toList rSet) $ \o -> case GC.decodeRef $ fromIntegral o of
         (GC.NS_HeapPtr, r)
-          | Just ho <- IntMap.lookup r heap -> liftIO $ dumpHeapObject r ho
+          | Just ho <- IntMap.lookup r heap -> liftIO $ putStrLn $ dumpHeapObject r ho
         x -> liftIO $ print x
+
+getRetainers :: Int -> M [Int]
+getRetainers dlRef = do
+  rootSet <- gets ssGCRootSet
+  rMap <- gets ssRetainerMap
+  case IntMap.lookup dlRef rMap of
+    Just rSet
+      | IntSet.notMember dlRef rootSet
+      -> pure $ IntSet.toList rSet
+    _ -> pure []
+
+decodeAndShow :: Int -> M String
+decodeAndShow dlRef = do
+  heap <- gets ssHeap
+  origin <- gets ssOrigin
+  rootSet <- gets ssGCRootSet
+  let showOrigin = \case
+        Nothing -> ""
+        Just (oId,oAddr) -> (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
+      showHeapObj = \case
+        Nothing -> ""
+        Just ho -> " " ++ GC.debugPrintHeapObject ho
+      str = case GC.decodeRef $ fromIntegral dlRef of
+              x@(GC.NS_HeapPtr, r)  -> markGCRoot (show x ++ showHeapObj (IntMap.lookup r heap)) ++ showOrigin (IntMap.lookup r origin)
+              x                     -> markGCRoot (show x)
+      markGCRoot s = if IntSet.member dlRef rootSet
+                        then color Yellow $ s ++ "  * GC-Root *"
+                        else s
+  pure str
+
+getRetainerTree :: Int -> M (Tree String)
+getRetainerTree i = do
+  let dlRef = fromIntegral $ GC.encodeRef i GC.NS_HeapPtr
+      go x = (x,) <$> getRetainers x
+  tree <- unfoldTreeM go dlRef
+  mapM decodeAndShow tree
+
+showRetainerTree :: Int -> M ()
+showRetainerTree i = do
+  tree <- getRetainerTree i
+  liftIO $ putStrLn $ drawTree tree
 
 dbgCommands :: [([String], String, [String] -> M ())]
 dbgCommands =
@@ -49,6 +110,7 @@ dbgCommands =
     , \_ -> do
         curClosureAddr <- gets ssCurrentClosureAddr
         GC.runGCSync [HeapPtr curClosureAddr]
+        loadRetanerDb2
     )
   , ( ["?"]
     , "show debuggers' all internal commands"
@@ -122,23 +184,41 @@ dbgCommands =
         , Just e <- readMaybe end
         -> do
             rHeap <- getRegionHeap s e
-            liftIO $ dumpHeapIO rHeap
+            dumpHeapM rHeap
       [start, end, count]
         | Just s <- readMaybe start
         , Just e <- readMaybe end
         , Just c <- readMaybe count
         -> do
             rHeap <- getRegionHeap s e
-            liftIO $ dumpHeapIO $ IntMap.fromList $ take c $ IntMap.toList rHeap
+            dumpHeapM $ IntMap.fromList $ take c $ IntMap.toList rHeap
       _ -> pure ()
     )
 
-  , ( ["retainer"]
-    , "ADDR - show the retainer objects (heap objects that refer to the quieried object"
+  , ( ["retainer", "ret"]
+    , "ADDR - show the retainer objects (heap objects that refer to the queried object"
     , \case
         [addrS]
           | Just addr <- readMaybe addrS
           -> showRetainer addr
+        _ -> pure ()
+    )
+
+  , ( ["ret-tree", "rt"]
+    , "ADDR - show the retainer tree of an object"
+    , \case
+        [addrS]
+          | Just addr <- readMaybe addrS
+          -> showRetainerTree addr
+        _ -> pure ()
+    )
+
+  , ( ["trace-origin", "to"]
+    , "ADDR - traces back heap object origin until the first dead object"
+    , \case
+        [addrS]
+          | Just addr <- readMaybe addrS
+          -> showOriginTrace addr
         _ -> pure ()
     )
 

@@ -125,7 +125,7 @@ printHelp = do
   putStrLn " k                        - report current closure name"
   putStrLn " e                        - report current closure + step"
   putStrLn " stop                     - stop program execution, ('continue' or 'step' will resume execution)"
-  putStrLn " peek HEAP_ADDR           - print heap object from the given address"
+  putStrLn " peek HEAP_ADDR           - print heap object from the given address, short cmd alias: 'p'"
   putStrLn " help                     - print reified debug commands"
   putStrLn " ?                        - print internal debug commands"
 
@@ -155,6 +155,7 @@ parseDebugCommand line dbgCmdI = do
     ["quit"]        -> exitImmediately ExitSuccess
     ["stop"]        -> Unagi.writeChan dbgCmdI CmdStop
     ["peek", addr]  -> Unagi.writeChan dbgCmdI $ CmdPeekHeap $ read addr
+    ["p",    addr]  -> Unagi.writeChan dbgCmdI $ CmdPeekHeap $ read addr
     [] -> pure ()
 
     _ -> Unagi.writeChan dbgCmdI $ CmdInternal line
