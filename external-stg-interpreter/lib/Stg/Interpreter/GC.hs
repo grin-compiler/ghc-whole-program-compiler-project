@@ -53,16 +53,16 @@ postGCReport = do
 
 -- async GC
 
-analysisLoop :: MVar ([Atom], StgState) -> MVar DeadData -> IO ()
+analysisLoop :: MVar ([Atom], StgState) -> MVar RefSet -> IO ()
 analysisLoop gcIn gcOut = do
   (localGCRoots, stgState) <- takeMVar gcIn
-  deadData <- runLiveDataAnalysis localGCRoots stgState
-  reportRemovedData stgState deadData
+  rsData <- runLiveDataAnalysis localGCRoots stgState
+  reportRemovedData stgState rsData
   reportAddressCounters stgState
-  putMVar gcOut deadData
+  putMVar gcOut rsData
   analysisLoop gcIn gcOut
 
-init :: IO (ThreadId, MVar ([Atom], StgState), MVar DeadData)
+init :: IO (ThreadId, MVar ([Atom], StgState), MVar RefSet)
 init = do
   gcIn <- newEmptyMVar
   gcOut <- newEmptyMVar
@@ -74,12 +74,12 @@ tryPrune = do
   PrintableMVar gcOut <- gets ssGCOutput
   liftIO (tryTakeMVar gcOut) >>= \case
     Nothing -> pure ()
-    Just deadData -> do
-      finalizeDeadWeakPointers (deadWeakPointers deadData)
+    Just rsData -> do
+      finalizeDeadWeakPointers (rsWeakPointers rsData)
       stgState <- get
       -- remove dead data from stg state
       liftIO $ putStrLn " * done GC"
-      put $ (pruneStgState stgState deadData) {ssGCIsRunning = False}
+      put $ (pruneStgState stgState rsData) {ssGCIsRunning = False}
       loadRetanerDb
       postGCReport
 
@@ -96,40 +96,63 @@ runGCAsync localGCRoots = do
 runGCSync :: [Atom] -> M ()
 runGCSync localGCRoots = do
   stgState <- get
-  deadData <- liftIO $ runLiveDataAnalysis localGCRoots stgState
-  put $ (pruneStgState stgState deadData) {ssGCIsRunning = False}
-  finalizeDeadWeakPointers (deadWeakPointers deadData)
+  rsData <- liftIO $ runLiveDataAnalysis localGCRoots stgState
+  put $ (pruneStgState stgState rsData) {ssGCIsRunning = False}
+  finalizeDeadWeakPointers (rsWeakPointers rsData)
   loadRetanerDb
   liftIO $ do
-    reportRemovedData stgState deadData
+    reportRemovedData stgState rsData
     reportAddressCounters stgState
   postGCReport
 
 -- weak pointer handling
 
 finalizeDeadWeakPointers :: IntSet -> M ()
-finalizeDeadWeakPointers deadWeaks = do
+finalizeDeadWeakPointers rsWeaks = do
   pure () -- TODO: check how the native GHC RTS calls weak pointer finalizers
 
 -- utils
 
-pruneStgState :: StgState -> DeadData -> StgState
-pruneStgState stgState@StgState{..} DeadData{..} = stgState
-  { ssHeap                = IntMap.withoutKeys ssHeap                deadHeap
+pruneStgState :: StgState -> RefSet -> StgState
+pruneStgState = pruneStgStateLive
+
+pruneStgStateDead :: StgState -> RefSet -> StgState
+pruneStgStateDead stgState@StgState{..} RefSet{..} = stgState
+  { ssHeap                = IntMap.withoutKeys ssHeap                rsHeap
 {-
   -- TODO: run weak pointer finalizers
-  , ssWeakPointers        = IntMap.withoutKeys ssWeakPointers        deadWeakPointers
+  , ssWeakPointers        = IntMap.withoutKeys ssWeakPointers        rsWeakPointers
 -}
-  , ssMVars               = IntMap.withoutKeys ssMVars               deadMVars
-  , ssMutVars             = IntMap.withoutKeys ssMutVars             deadMutVars
-  , ssArrays              = IntMap.withoutKeys ssArrays              deadArrays
-  , ssMutableArrays       = IntMap.withoutKeys ssMutableArrays       deadMutableArrays
-  , ssSmallArrays         = IntMap.withoutKeys ssSmallArrays         deadSmallArrays
-  , ssSmallMutableArrays  = IntMap.withoutKeys ssSmallMutableArrays  deadSmallMutableArrays
-  , ssArrayArrays         = IntMap.withoutKeys ssArrayArrays         deadArrayArrays
-  , ssMutableArrayArrays  = IntMap.withoutKeys ssMutableArrayArrays  deadMutableArrayArrays
-  , ssMutableByteArrays   = IntMap.withoutKeys ssMutableByteArrays   deadMutableByteArrays
-  , ssStableNameMap       = Map.filter (`IntSet.notMember` deadStableNames) ssStableNameMap
+  , ssMVars               = IntMap.withoutKeys ssMVars               rsMVars
+  , ssMutVars             = IntMap.withoutKeys ssMutVars             rsMutVars
+  , ssArrays              = IntMap.withoutKeys ssArrays              rsArrays
+  , ssMutableArrays       = IntMap.withoutKeys ssMutableArrays       rsMutableArrays
+  , ssSmallArrays         = IntMap.withoutKeys ssSmallArrays         rsSmallArrays
+  , ssSmallMutableArrays  = IntMap.withoutKeys ssSmallMutableArrays  rsSmallMutableArrays
+  , ssArrayArrays         = IntMap.withoutKeys ssArrayArrays         rsArrayArrays
+  , ssMutableArrayArrays  = IntMap.withoutKeys ssMutableArrayArrays  rsMutableArrayArrays
+  , ssMutableByteArrays   = IntMap.withoutKeys ssMutableByteArrays   rsMutableByteArrays
+  , ssStableNameMap       = Map.filter (`IntSet.notMember` rsStableNames) ssStableNameMap
+--  , ssThreads             = IntMap.filter (isThreadLive . tsStatus)  ssThreads
+  }
+
+pruneStgStateLive :: StgState -> RefSet -> StgState
+pruneStgStateLive stgState@StgState{..} RefSet{..} = stgState
+  { ssHeap                = IntMap.restrictKeys ssHeap                rsHeap
+{-
+  -- TODO: run weak pointer finalizers
+  , ssWeakPointers        = IntMap.restrictKeys ssWeakPointers        rsWeakPointers
+-}
+  , ssMVars               = IntMap.restrictKeys ssMVars               rsMVars
+  , ssMutVars             = IntMap.restrictKeys ssMutVars             rsMutVars
+  , ssArrays              = IntMap.restrictKeys ssArrays              rsArrays
+  , ssMutableArrays       = IntMap.restrictKeys ssMutableArrays       rsMutableArrays
+  , ssSmallArrays         = IntMap.restrictKeys ssSmallArrays         rsSmallArrays
+  , ssSmallMutableArrays  = IntMap.restrictKeys ssSmallMutableArrays  rsSmallMutableArrays
+  , ssArrayArrays         = IntMap.restrictKeys ssArrayArrays         rsArrayArrays
+  , ssMutableArrayArrays  = IntMap.restrictKeys ssMutableArrayArrays  rsMutableArrayArrays
+  , ssMutableByteArrays   = IntMap.restrictKeys ssMutableByteArrays   rsMutableByteArrays
+  , ssStableNameMap       = Map.filter (`IntSet.member` rsStableNames) ssStableNameMap
 --  , ssThreads             = IntMap.filter (isThreadLive . tsStatus)  ssThreads
   }
 
@@ -152,8 +175,8 @@ reportAddressCounters StgState{..} = do
   reportI "ssNextArrayArray        " ssNextArrayArray
   reportI "ssNextMutableArrayArray " ssNextMutableArrayArray
 
-reportRemovedData :: StgState -> DeadData -> IO ()
-reportRemovedData StgState{..} DeadData{..} = do
+reportRemovedData :: StgState -> RefSet -> IO ()
+reportRemovedData StgState{..} RefSet{..} = do
   let report_ sizeFun msg m s = do
         let old   = sizeFun m
             new   = old - diff
@@ -166,18 +189,18 @@ reportRemovedData StgState{..} DeadData{..} = do
 
 
   putStrLn "freed after GC:"
-  reportI "ssHeap               " ssHeap deadHeap
-  reportI "ssWeakPointers       " ssWeakPointers deadWeakPointers
-  reportI "ssMVars              " ssMVars deadMVars
-  reportI "ssMutVars            " ssMutVars deadMutVars
-  reportI "ssArrays             " ssArrays deadArrays
-  reportI "ssMutableArrays      " ssMutableArrays deadMutableArrays
-  reportI "ssSmallArrays        " ssSmallArrays deadSmallArrays
-  reportI "ssSmallMutableArrays " ssSmallMutableArrays deadSmallMutableArrays
-  reportI "ssArrayArrays        " ssArrayArrays deadArrayArrays
-  reportI "ssMutableArrayArrays " ssMutableArrayArrays deadMutableArrayArrays
-  reportI "ssMutableByteArrays  " ssMutableByteArrays deadMutableByteArrays
-  reportM "ssStableNameMap      " ssStableNameMap deadStableNames
+  reportI "ssHeap               " ssHeap rsHeap
+  reportI "ssWeakPointers       " ssWeakPointers rsWeakPointers
+  reportI "ssMVars              " ssMVars rsMVars
+  reportI "ssMutVars            " ssMutVars rsMutVars
+  reportI "ssArrays             " ssArrays rsArrays
+  reportI "ssMutableArrays      " ssMutableArrays rsMutableArrays
+  reportI "ssSmallArrays        " ssSmallArrays rsSmallArrays
+  reportI "ssSmallMutableArrays " ssSmallMutableArrays rsSmallMutableArrays
+  reportI "ssArrayArrays        " ssArrayArrays rsArrayArrays
+  reportI "ssMutableArrayArrays " ssMutableArrayArrays rsMutableArrayArrays
+  reportI "ssMutableByteArrays  " ssMutableByteArrays rsMutableByteArrays
+  reportM "ssStableNameMap      " ssStableNameMap rsStableNames
 
   let threads = IntMap.elems ssThreads
   printf "live threads: %-6d  all threads: %d\n" (length $ [ts | ts <- threads, isThreadLive (tsStatus ts)]) (length threads)

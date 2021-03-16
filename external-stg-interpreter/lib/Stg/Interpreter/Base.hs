@@ -225,7 +225,7 @@ data StgState
   -- GC
   , ssLastGCAddr          :: !Int
   , ssGCInput             :: PrintableMVar ([Atom], StgState)
-  , ssGCOutput            :: PrintableMVar DeadData
+  , ssGCOutput            :: PrintableMVar RefSet
   , ssGCIsRunning         :: Bool
 
   -- string constants ; models the program memory's static constant region
@@ -305,6 +305,9 @@ data StgState
 
   -- tracing
   , ssTracingState        :: TracingState
+
+  -- origin db
+  , ssOrigin              :: !(IntMap (Id, Int))
   }
   deriving (Show)
 
@@ -319,7 +322,7 @@ emptyStgState :: PrintableMVar StgState
               -> DebugState
               -> TracingState
               -> PrintableMVar ([Atom], StgState)
-              -> PrintableMVar DeadData
+              -> PrintableMVar RefSet
               -> StgState
 emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
   { ssHeap                = mempty
@@ -403,6 +406,9 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
 
   -- tracing
   , ssTracingState        = tracingState
+
+  -- origin db
+  , ssOrigin              = mempty
   }
 
 data Rts
@@ -497,6 +503,12 @@ allocAndStore o = do
 store :: HasCallStack => Addr -> HeapObject -> M ()
 store a o = do
   modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
+
+  do
+    originAddr <- gets ssCurrentClosureAddr
+    originId <-gets ssCurrentClosure
+    modify' $ \s@StgState{..} -> s { ssOrigin = IntMap.insert a (originId, originAddr) ssOrigin }
+
   gets ssTracingState >>= \case
     NoTracing   -> pure ()
     DoTracing h -> do
@@ -961,36 +973,38 @@ showStackCont = \case
 -------------------------
 -- GC
 
-data DeadData
-  = DeadData
-  { deadHeap                :: !IntSet
-  , deadWeakPointers        :: !IntSet
-  , deadMVars               :: !IntSet
-  , deadMutVars             :: !IntSet
-  , deadArrays              :: !IntSet
-  , deadMutableArrays       :: !IntSet
-  , deadSmallArrays         :: !IntSet
-  , deadSmallMutableArrays  :: !IntSet
-  , deadArrayArrays         :: !IntSet
-  , deadMutableArrayArrays  :: !IntSet
-  , deadMutableByteArrays   :: !IntSet
-  , deadStableNames         :: !IntSet
+data RefSet
+  = RefSet
+  { rsHeap                :: !IntSet
+  , rsWeakPointers        :: !IntSet
+  , rsMVars               :: !IntSet
+  , rsMutVars             :: !IntSet
+  , rsArrays              :: !IntSet
+  , rsMutableArrays       :: !IntSet
+  , rsSmallArrays         :: !IntSet
+  , rsSmallMutableArrays  :: !IntSet
+  , rsArrayArrays         :: !IntSet
+  , rsMutableArrayArrays  :: !IntSet
+  , rsMutableByteArrays   :: !IntSet
+  , rsStableNames         :: !IntSet
+  , rsStablePointers      :: !IntSet
   }
 
-emptyDeadData :: DeadData
-emptyDeadData = DeadData
-  { deadHeap                = IntSet.empty
-  , deadWeakPointers        = IntSet.empty
-  , deadMVars               = IntSet.empty
-  , deadMutVars             = IntSet.empty
-  , deadArrays              = IntSet.empty
-  , deadMutableArrays       = IntSet.empty
-  , deadSmallArrays         = IntSet.empty
-  , deadSmallMutableArrays  = IntSet.empty
-  , deadArrayArrays         = IntSet.empty
-  , deadMutableArrayArrays  = IntSet.empty
-  , deadMutableByteArrays   = IntSet.empty
-  , deadStableNames         = IntSet.empty
+emptyRefSet :: RefSet
+emptyRefSet = RefSet
+  { rsHeap                = IntSet.empty
+  , rsWeakPointers        = IntSet.empty
+  , rsMVars               = IntSet.empty
+  , rsMutVars             = IntSet.empty
+  , rsArrays              = IntSet.empty
+  , rsMutableArrays       = IntSet.empty
+  , rsSmallArrays         = IntSet.empty
+  , rsSmallMutableArrays  = IntSet.empty
+  , rsArrayArrays         = IntSet.empty
+  , rsMutableArrayArrays  = IntSet.empty
+  , rsMutableByteArrays   = IntSet.empty
+  , rsStableNames         = IntSet.empty
+  , rsStablePointers      = IntSet.empty
   }
 
 -- Debugger

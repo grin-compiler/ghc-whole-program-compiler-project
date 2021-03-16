@@ -27,7 +27,10 @@ loadSet fname = do
   IntSet.fromList . map read . lines <$> readFile absFactPath
 
 loadRetanerDb :: M ()
-loadRetanerDb = do
+loadRetanerDb = pure ()
+
+loadRetanerDb2 :: M ()
+loadRetanerDb2 = do
   refMap <- liftIO $ loadMap "Reference.csv"
   retMap <- liftIO $ loadMap "LiveReferredBy.csv"
   gcRootSet <- liftIO $ loadSet "GCRoot.csv"
