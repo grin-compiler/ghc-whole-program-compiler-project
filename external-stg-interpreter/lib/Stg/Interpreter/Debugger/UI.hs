@@ -17,6 +17,15 @@ import Stg.Interpreter.Base
 import Stg.Interpreter
 import Stg.Syntax
 
+ppSrcSpan :: SrcSpan -> String
+ppSrcSpan = \case
+  UnhelpfulSpan s             -> BS8.unpack s
+  RealSrcSpan RealSrcSpan'{..} _
+    | srcSpanSLine == srcSpanELine
+    -> printf "%s:%d:%d-%d" (BS8.unpack srcSpanFile) srcSpanSLine srcSpanSCol srcSpanECol
+    | otherwise
+    -> printf "%s:%d:%d-%d:%d" (BS8.unpack srcSpanFile) srcSpanSLine srcSpanSCol srcSpanELine srcSpanECol
+
 debugProgram :: Bool -> [Char] -> [String] -> DebuggerChan -> Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> Maybe String -> IO ()
 debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript = do
   case dbgScript of
@@ -75,9 +84,10 @@ printDebugOutput = \case
     mapM_ BS8.putStrLn closureNames
 
   DbgOutCurrentClosure name addr env -> do
-    BS8.putStrLn name
-    putStrLn $ "addr: " ++ show addr
+    print name
+    putStrLn $ "addr:   " ++ show addr
     printEnv env
+    putStrLn $ "source location: " ++ (ppSrcSpan . binderDefLoc . unId $ name)
 
   DbgOutThreadReport tid ts currentClosureName currentClosureAddr -> do
     reportThreadIO tid ts
@@ -99,6 +109,7 @@ printHeapObject = \case
     putStrLn $ "missing: " ++ show hoCloMissing
     putStrLn "closure local env:"
     printEnv hoEnv
+    putStrLn $ "source location: " ++ (ppSrcSpan . binderDefLoc . unId $ hoName)
 
   BlackHole ho -> do
     putStrLn "BlackHole:"

@@ -39,10 +39,10 @@ runDebugCommand cmd = do
   (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
   case cmd of
     CmdCurrentClosure -> do
-      Id currentClosure <- gets ssCurrentClosure
+      currentClosure <- gets ssCurrentClosure
       currentClosureAddr <- gets ssCurrentClosureAddr
       closureEnv <- gets ssCurrentClosureEnv
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure (binderUniqueName currentClosure) currentClosureAddr closureEnv
+      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure currentClosure currentClosureAddr closureEnv
 
     CmdClearClosureList -> do
       modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = Set.empty}

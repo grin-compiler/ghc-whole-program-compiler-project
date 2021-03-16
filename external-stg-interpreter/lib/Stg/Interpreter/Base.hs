@@ -201,7 +201,7 @@ data DebugCommand
   deriving (Show)
 
 data DebugOutput
-  = DbgOutCurrentClosure  !Name !Addr !Env
+  = DbgOutCurrentClosure  !Id !Addr !Env
   | DbgOutClosureList     ![Name]
   | DbgOutThreadReport    !Int !ThreadState !Name !Addr
   | DbgOutHeapObject      !Addr !HeapObject
