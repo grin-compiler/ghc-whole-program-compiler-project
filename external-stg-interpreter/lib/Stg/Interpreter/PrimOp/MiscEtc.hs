@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.MiscEtc where
 
+import Control.Monad.State
+import Foreign.C
 import Foreign.Ptr
 
 import Stg.Syntax
@@ -19,12 +21,20 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- clearCCS# :: (State# s -> (# State# s, a #)) -> State# s -> (# State# s, a #)
 
   -- traceEvent# :: Addr# -> State# s -> State# s
-  ( "traceEvent#", [_, _]) -> pure [] -- TODO: this is a FAKE implementation
+  ( "traceEvent#", [PtrAtom _ p, _s]) -> do
+    msg <- liftIO $ peekCString $ castPtr p
+    addrState <- getAddressState
+    modify' $ \s@StgState{..} -> s {ssTraceEvents = (msg, addrState) : ssTraceEvents}
+    pure []
 
   -- traceBinaryEvent# :: Addr# -> Int# -> State# s -> State# s
 
   -- traceMarker# :: Addr# -> State# s -> State# s
-  ( "traceMarker#", [_, _]) -> pure [] -- TODO: this is a FAKE implementation
+  ( "traceMarker#", [PtrAtom _ p, _s]) -> do
+    msg <- liftIO $ peekCString $ castPtr p
+    addrState <- getAddressState
+    modify' $ \s@StgState{..} -> s {ssTraceMarkers = (msg, addrState) : ssTraceMarkers}
+    pure []
 
   -- setThreadAllocationCounter# :: INT64 -> State# RealWorld -> State# RealWorld
 

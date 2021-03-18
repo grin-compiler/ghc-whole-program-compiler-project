@@ -210,7 +210,7 @@ data DebugOutput
 data DebugState
   = DbgRunProgram
   | DbgStepByStep
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data TracingState
   = NoTracing
@@ -308,6 +308,10 @@ data StgState
 
   -- origin db
   , ssOrigin              :: !(IntMap (Id, Int))
+
+  -- tracing primops
+  , ssTraceEvents         :: ![(String, AddressState)]
+  , ssTraceMarkers        :: ![(String, AddressState)]
   }
   deriving (Show)
 
@@ -409,6 +413,10 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
 
   -- origin db
   , ssOrigin              = mempty
+
+  -- tracing primops
+  , ssTraceEvents         = []
+  , ssTraceMarkers        = []
   }
 
 data Rts
@@ -508,12 +516,13 @@ store a o = do
     originAddr <- gets ssCurrentClosureAddr
     originId <-gets ssCurrentClosure
     modify' $ \s@StgState{..} -> s { ssOrigin = IntMap.insert a (originId, originAddr) ssOrigin }
-
+  {-
   gets ssTracingState >>= \case
     NoTracing   -> pure ()
     DoTracing h -> do
       origin <- gets ssCurrentClosureAddr
       liftIO $ hPutStrLn h $ show a ++ "\t" ++ show origin
+  -}
 
 {-
   conclusion:
