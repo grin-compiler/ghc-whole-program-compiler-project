@@ -112,6 +112,11 @@ dbgCommands =
         GC.runGCSync [HeapPtr curClosureAddr]
         loadRetanerDb2
     )
+  , ( ["cleardb"]
+    , "clear retainer db"
+    , \_ -> clearRetanerDb
+    )
+
   , ( ["?"]
     , "show debuggers' all internal commands"
     , \_ -> printHelp

@@ -39,3 +39,11 @@ loadRetanerDb2 = do
     , ssRetainerMap   = retMap
     , ssGCRootSet     = gcRootSet
     }
+
+clearRetanerDb :: M ()
+clearRetanerDb = do
+  modify' $ \s -> s {
+      ssReferenceMap  = mempty
+    , ssRetainerMap   = mempty
+    , ssGCRootSet     = IntSet.empty
+    }
