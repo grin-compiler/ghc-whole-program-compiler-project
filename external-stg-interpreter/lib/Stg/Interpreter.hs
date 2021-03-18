@@ -605,6 +605,10 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
         --showDebug evalOnNewThread
         -- TODO: do everything that 'hs_exit_' does
 
+        -- HINT: start debugger REPL in debug mode
+        when (dbgState == DbgStepByStep) $ do
+          Debugger.processCommandsUntilExit
+
   let (dbgCmdO, _) = getDebuggerChan dbgChan
   nextDbgCmd <- NextDebugCommand <$> Unagi.tryReadChan dbgCmdO
 
