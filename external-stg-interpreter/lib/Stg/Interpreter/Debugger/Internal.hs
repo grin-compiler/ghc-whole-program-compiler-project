@@ -176,7 +176,7 @@ dbgCommands =
         _             -> pure ()
     )
 
-  , ( ["peek-range"]
+  , ( ["peek-range", "pr"]
     , "ADDR_START ADDR_END [COUNT] - list all heap objects in the given heap address region, optionally show only the first (COUNT) elements"
     , \case
       [start, end]
@@ -192,6 +192,18 @@ dbgCommands =
         -> do
             rHeap <- getRegionHeap s e
             dumpHeapM $ IntMap.fromList $ take c $ IntMap.toList rHeap
+      _ -> pure ()
+    )
+
+  , ( ["count-range", "cr"]
+    , "ADDR_START ADDR_END - count heap objects in the given heap address region"
+    , \case
+      [start, end]
+        | Just s <- readMaybe start
+        , Just e <- readMaybe end
+        -> do
+            rHeap <- getRegionHeap s e
+            liftIO $ putStrLn $ "object count: " ++ show (IntMap.size rHeap)
       _ -> pure ()
     )
 
@@ -222,7 +234,39 @@ dbgCommands =
         _ -> pure ()
     )
 
+  , ( ["?e"]
+    , "list all trace events and heap address state"
+    , \_-> do
+        events <- gets ssTraceEvents
+        forM_ (reverse events) $ \(msg, AddressState{..}) -> liftIO $ printf "%-10d  %s\n" asNextHeapAddr (show msg)
+    )
+
+  , ( ["?e-dump"]
+    , "list all trace events and the whole address state"
+    , \_-> do
+        events <- gets ssTraceEvents
+        forM_ (reverse events) $ \(msg, a) -> liftIO $ do
+          print msg
+          print a
+    )
+
+  , ( ["?m"]
+    , "list all trace markers and heap address state"
+    , \_-> do
+        markers <- gets ssTraceMarkers
+        forM_ (reverse markers) $ \(msg, AddressState{..}) -> liftIO $ printf "%-10d  %s\n" asNextHeapAddr (show msg)
+    )
+
+  , ( ["?m-dump"]
+    , "list all trace markers and the whole address state"
+    , \_-> do
+        markers <- gets ssTraceMarkers
+        forM_ (reverse markers) $ \(msg, a) -> liftIO $ do
+          print msg
+          print a
+    )
   ]
+
 
 flatCommands :: [(String, String, [String] -> M ())]
 flatCommands = [(cmd, desc, action) | (tokens, desc, action) <- dbgCommands, cmd <- tokens]
