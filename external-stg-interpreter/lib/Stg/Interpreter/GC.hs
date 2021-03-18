@@ -24,7 +24,7 @@ checkGC localGCRoots = do
   nextAddr <- gets ssNextHeapAddr
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
-  when (not gcIsRunning && nextAddr - lastGCAddr > 300000) $ do
+  when (not gcIsRunning && nextAddr - lastGCAddr > 3000000) $ do
     modify' $ \s -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True}
     runGC localGCRoots
     {-
@@ -139,6 +139,7 @@ pruneStgStateDead stgState@StgState{..} RefSet{..} = stgState
 pruneStgStateLive :: StgState -> RefSet -> StgState
 pruneStgStateLive stgState@StgState{..} RefSet{..} = stgState
   { ssHeap                = IntMap.restrictKeys ssHeap                rsHeap
+  , ssOrigin              = IntMap.restrictKeys ssOrigin              rsHeap
 {-
   -- TODO: run weak pointer finalizers
   , ssWeakPointers        = IntMap.restrictKeys ssWeakPointers        rsWeakPointers
@@ -221,7 +222,7 @@ lifetimeAnalysis = do
 debugPrintHeapObject :: HeapObject -> String
 debugPrintHeapObject  = \case
   Con{..}           -> "Con: " ++ show (dcUniqueName hoCon) ++ " " ++ show hoConArgs
-  Closure{..}       -> "Clo: " ++ show hoName ++ " args: " ++ show hoCloArgs ++ " missing: " ++ show hoCloMissing
+  Closure{..}       -> "Clo: " ++ show hoName ++ " args: " ++ show hoCloArgs ++ " env: " ++ show (Map.size hoEnv) ++ " missing: " ++ show hoCloMissing
   BlackHole o       -> "BlackHole - " ++ debugPrintHeapObject o
   ApStack{}         -> "ApStack"
   RaiseException ex -> "RaiseException: " ++ show ex

@@ -29,6 +29,7 @@ dumpOriginM i = do
 
 dumpHeapM :: Heap -> M ()
 dumpHeapM h = do
+  liftIO $ putStrLn $ "object count: " ++ show (IntMap.size h)
   forM_ (IntMap.toList h) $ \(i, o) -> do
     rootSet <- gets ssGCRootSet
     let dlRef = fromIntegral $ GC.encodeRef i GC.NS_HeapPtr
