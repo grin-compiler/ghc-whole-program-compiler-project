@@ -2,7 +2,7 @@
 module Stg.Interpreter.Debugger.Internal where
 
 import Text.Printf
-import Text.Read
+import qualified Text.Read as Text
 import Control.Monad.State
 import qualified Data.List as List
 import qualified Data.Set as Set
@@ -22,6 +22,7 @@ import qualified Stg.Interpreter.GC as GC
 import qualified Stg.Interpreter.GC.GCRef as GC
 import Stg.Interpreter.Debugger.Region
 import Stg.Interpreter.GC.RetainerAnalysis
+import Stg.Interpreter.Debugger.Datalog
 
 showOriginTrace :: Int -> M ()
 showOriginTrace i = do
@@ -41,9 +42,11 @@ reportState = do
   (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
-  Id currentClosure <- gets ssCurrentClosure
+  currentClosure <- gets ssCurrentClosure >>= \case
+    Nothing -> pure ""
+    Just (Id c) -> pure $ binderUniqueName c
   currentClosureAddr <- gets ssCurrentClosureAddr
-  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts (binderUniqueName currentClosure) currentClosureAddr
+  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts currentClosure currentClosureAddr
 
 showRetainer :: Int -> M ()
 showRetainer i = do
@@ -110,11 +113,15 @@ dbgCommands =
     , \_ -> do
         curClosureAddr <- gets ssCurrentClosureAddr
         GC.runGCSync [HeapPtr curClosureAddr]
-        loadRetanerDb2
     )
   , ( ["cleardb"]
     , "clear retainer db"
     , \_ -> clearRetanerDb
+    )
+
+  , ( ["loaddb"]
+    , "load retainer db"
+    , \_ -> loadRetanerDb2
     )
 
   , ( ["?"]
@@ -185,15 +192,15 @@ dbgCommands =
     , "ADDR_START ADDR_END [COUNT] - list all heap objects in the given heap address region, optionally show only the first (COUNT) elements"
     , \case
       [start, end]
-        | Just s <- readMaybe start
-        , Just e <- readMaybe end
+        | Just s <- Text.readMaybe start
+        , Just e <- Text.readMaybe end
         -> do
             rHeap <- getRegionHeap s e
             dumpHeapM rHeap
       [start, end, count]
-        | Just s <- readMaybe start
-        , Just e <- readMaybe end
-        , Just c <- readMaybe count
+        | Just s <- Text.readMaybe start
+        , Just e <- Text.readMaybe end
+        , Just c <- Text.readMaybe count
         -> do
             rHeap <- getRegionHeap s e
             dumpHeapM $ IntMap.fromList $ take c $ IntMap.toList rHeap
@@ -204,8 +211,8 @@ dbgCommands =
     , "ADDR_START ADDR_END - count heap objects in the given heap address region"
     , \case
       [start, end]
-        | Just s <- readMaybe start
-        , Just e <- readMaybe end
+        | Just s <- Text.readMaybe start
+        , Just e <- Text.readMaybe end
         -> do
             rHeap <- getRegionHeap s e
             liftIO $ putStrLn $ "object count: " ++ show (IntMap.size rHeap)
@@ -216,7 +223,7 @@ dbgCommands =
     , "ADDR - show the retainer objects (heap objects that refer to the queried object"
     , \case
         [addrS]
-          | Just addr <- readMaybe addrS
+          | Just addr <- Text.readMaybe addrS
           -> showRetainer addr
         _ -> pure ()
     )
@@ -225,7 +232,7 @@ dbgCommands =
     , "ADDR - show the retainer tree of an object"
     , \case
         [addrS]
-          | Just addr <- readMaybe addrS
+          | Just addr <- Text.readMaybe addrS
           -> showRetainerTree addr
         _ -> pure ()
     )
@@ -234,7 +241,7 @@ dbgCommands =
     , "ADDR - traces back heap object origin until the first dead object"
     , \case
         [addrS]
-          | Just addr <- readMaybe addrS
+          | Just addr <- Text.readMaybe addrS
           -> showOriginTrace addr
         _ -> pure ()
     )
@@ -269,6 +276,15 @@ dbgCommands =
         forM_ (reverse markers) $ \(msg, a) -> liftIO $ do
           print msg
           print a
+    )
+
+  , ( ["save-state"]
+    , "DIR_NAME - save stg state as datalog facts to the given directory"
+    , \case
+        [dirName] -> do
+          s <- get
+          liftIO $ exportStgState dirName s
+        _ -> pure ()
     )
   ]
 

@@ -15,7 +15,7 @@ newWeakPointer key value finalizer = do
   next <- gets ssNextWeakPointer
   let desc = WeakPtrDescriptor
         { wpdKey          = key
-        , wpdVale         = Just value
+        , wpdValue        = Just value
         , wpdFinalizer    = finalizer
         , wpdCFinalizers  = []
         }
@@ -41,12 +41,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
     wpd@WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
     let desc = wpd {wpdCFinalizers = (fun, if hasEnv == 0 then Nothing else Just envPtr, dataPtr) : wpdCFinalizers}
     modify' $ \s@StgState{..} -> s {ssWeakPointers = IntMap.insert wpId desc ssWeakPointers}
-    pure [IntV $ if wpdVale == Nothing then 0 else 1]
+    pure [IntV $ if wpdValue == Nothing then 0 else 1]
 
   -- deRefWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, a #)
   ( "deRefWeak#", [WeakPointer wpId, _w]) -> do
     WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
-    case wpdVale of
+    case wpdValue of
       Just v  -> pure [IntV 1, v]
       Nothing -> pure [IntV 0, LiftedUndefined]
 

@@ -83,11 +83,13 @@ printDebugOutput = \case
   DbgOutClosureList closureNames -> do
     mapM_ BS8.putStrLn closureNames
 
-  DbgOutCurrentClosure name addr env -> do
-    print name
+  DbgOutCurrentClosure nameM addr env -> do
+    print nameM
     putStrLn $ "addr:   " ++ show addr
     printEnv env
-    putStrLn $ "source location: " ++ (ppSrcSpan . binderDefLoc . unId $ name)
+    case nameM of
+      Nothing   -> pure ()
+      Just name -> putStrLn $ "source location: " ++ (ppSrcSpan . binderDefLoc . unId $ name)
 
   DbgOutThreadReport tid ts currentClosureName currentClosureAddr -> do
     reportThreadIO tid ts

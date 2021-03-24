@@ -143,7 +143,7 @@ builtinStgEval a@HeapPtr{} = do
             extendedEnv = addManyBindersToEnv params hoCloArgs hoEnv
 
         markExecuted l
-        modify' $ \s -> s {ssCurrentClosure = hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
+        modify' $ \s -> s {ssCurrentClosure = Just hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
         Debugger.checkBreakpoint hoName
         Debugger.checkRegion hoName
         GC.checkGC [a] -- HINT: add local env as GC root
@@ -315,7 +315,7 @@ evalStackContinuation result = \case
 
   -- HINT: STG IR uses 'case' expressions to chain instructions with strict evaluation
   CaseOf curClosureAddr curClosure localEnv resultBinder altType alts -> do
-    modify' $ \s -> s {ssCurrentClosure = curClosure, ssCurrentClosureAddr = curClosureAddr}
+    modify' $ \s -> s {ssCurrentClosure = Just curClosure, ssCurrentClosureAddr = curClosureAddr}
     assertWHNF result altType resultBinder
     case altType of
       AlgAlt tc -> do
@@ -441,7 +441,7 @@ evalExpr localEnv = \case
     r -> stgErrorM $ "unsupported app rep: " ++ show r -- unboxed: invalid
 
   StgCase e scrutineeResult altType alts -> do
-    curClosure <- gets ssCurrentClosure
+    Just curClosure <- gets ssCurrentClosure
     curClosureAddr <- gets ssCurrentClosureAddr
     stackPush (CaseOf curClosureAddr curClosure localEnv scrutineeResult altType alts)
     evalExpr localEnv e

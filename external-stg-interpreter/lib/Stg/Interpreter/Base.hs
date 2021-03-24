@@ -83,7 +83,7 @@ data PtrOrigin
 data WeakPtrDescriptor
   = WeakPtrDescriptor
   { wpdKey          :: Atom
-  , wpdVale         :: Maybe Atom -- live or dead
+  , wpdValue        :: Maybe Atom -- live or dead
   , wpdFinalizer    :: Maybe Atom -- closure
   , wpdCFinalizers  :: [(Atom, Maybe Atom, Atom)] -- fun, env ptr, data ptr
   }
@@ -201,7 +201,7 @@ data DebugCommand
   deriving (Show)
 
 data DebugOutput
-  = DbgOutCurrentClosure  !Id !Addr !Env
+  = DbgOutCurrentClosure  !(Maybe Id) !Addr !Env
   | DbgOutClosureList     ![Name]
   | DbgOutThreadReport    !Int !ThreadState !Name !Addr
   | DbgOutHeapObject      !Addr !HeapObject
@@ -278,7 +278,7 @@ data StgState
 
   -- debug
   , ssCurrentClosureEnv   :: Env
-  , ssCurrentClosure      :: Id
+  , ssCurrentClosure      :: Maybe Id
   , ssCurrentClosureAddr  :: Int
   , ssExecutedClosures    :: !(Set Int)
   , ssExecutedPrimOps     :: !(Set Name)
@@ -383,7 +383,7 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
 
   -- debug
   , ssCurrentClosureEnv   = mempty
-  , ssCurrentClosure      = error "uninitalized ssCurrentClosure"
+  , ssCurrentClosure      = Nothing
   , ssCurrentClosureAddr  = -1
   , ssExecutedClosures    = Set.empty
   , ssExecutedPrimOps     = Set.empty
@@ -514,8 +514,10 @@ store a o = do
 
   do
     originAddr <- gets ssCurrentClosureAddr
-    originId <-gets ssCurrentClosure
-    modify' $ \s@StgState{..} -> s { ssOrigin = IntMap.insert a (originId, originAddr) ssOrigin }
+    m <- gets ssCurrentClosure
+    case m of
+      Nothing       -> pure ()
+      Just originId -> modify' $ \s@StgState{..} -> s { ssOrigin = IntMap.insert a (originId, originAddr) ssOrigin }
   {-
   gets ssTracingState >>= \case
     NoTracing   -> pure ()
@@ -975,6 +977,7 @@ reportThreadIO tid endTS = do
     putStrLn $ unlines $ map show $ zip [0..] $ map showStackCont $ tsStack endTS
     putStrLn ""
 
+showStackCont :: StackContinuation -> String
 showStackCont = \case
   CaseOf clAddr clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", addr: " ++ show clAddr ++ ", result var: " ++ show (Id b)
   c -> show c
