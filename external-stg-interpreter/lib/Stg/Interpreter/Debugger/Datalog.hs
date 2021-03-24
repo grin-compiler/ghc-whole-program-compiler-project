@@ -91,37 +91,37 @@ emitAtomToRef a = do
   h <- getHandle "AtomToRef"
   let add s = liftIO $ hPutStrLn h $ (show a) ++ "\t" ++ s
   case a of
-    HeapPtr i               -> add $ printf "$R_HeapPtr\t" i
-    MVar i                  -> add $ printf "$R_MVar\t" i
-    MutVar i                -> add $ printf "$R_MutVar\t" i
+    HeapPtr i               -> add $ printf "$R_HeapPtr\t%d" i
+    MVar i                  -> add $ printf "$R_MVar\t%d" i
+    MutVar i                -> add $ printf "$R_MutVar\t%d" i
     Array i                 -> add $ arrIdxToRef i
     MutableArray i          -> add $ arrIdxToRef i
     SmallArray i            -> add $ smallArrIdxToRef i
     SmallMutableArray i     -> add $ smallArrIdxToRef i
     ArrayArray i            -> add $ arrayArrIdxToRef i
     MutableArrayArray i     -> add $ arrayArrIdxToRef i
-    ByteArray i             -> add $ printf "$R_MutableByteArray\t" (baId i)
-    MutableByteArray i      -> add $ printf "$R_MutableByteArray\t" (baId i)
-    WeakPointer i           -> add $ printf "$R_WeakPointer\t" i
-    StableName i            -> add $ printf "$R_StableName\t" i
-    PtrAtom (StablePtr i) _ -> add $ printf "$R_StablePointer\t" i
-    ThreadId i              -> add $ printf "$R_ThreadId\t" i
+    ByteArray i             -> add $ printf "$R_MutableByteArray\t%d" (baId i)
+    MutableByteArray i      -> add $ printf "$R_MutableByteArray\t%d" (baId i)
+    WeakPointer i           -> add $ printf "$R_WeakPointer\t%d" i
+    StableName i            -> add $ printf "$R_StableName\t%d" i
+    PtrAtom (StablePtr i) _ -> add $ printf "$R_StablePointer\t%d" i
+    ThreadId i              -> add $ printf "$R_ThreadId\t%d" i
     _                   -> pure ()
 
 arrIdxToRef :: ArrIdx -> String
 arrIdxToRef = \case
-  MutArrIdx i -> printf "$R_MutableArray\t" i
-  ArrIdx i    -> printf "$R_Array\t" i
+  MutArrIdx i -> printf "$R_MutableArray\t%d" i
+  ArrIdx i    -> printf "$R_Array\t%d" i
 
 smallArrIdxToRef :: SmallArrIdx -> String
 smallArrIdxToRef = \case
-  SmallMutArrIdx i  -> printf "$R_SmallMutableArray\t" i
-  SmallArrIdx i     -> printf "$R_SmallArray\t" i
+  SmallMutArrIdx i  -> printf "$R_SmallMutableArray\t%d" i
+  SmallArrIdx i     -> printf "$R_SmallArray\t%d" i
 
 arrayArrIdxToRef :: ArrayArrIdx -> String
 arrayArrIdxToRef = \case
-  ArrayMutArrIdx i  -> printf "$R_MutableArrayArray\t" i
-  ArrayArrIdx i     -> printf "$R_ArrayArray\t" i
+  ArrayMutArrIdx i  -> printf "$R_MutableArrayArray\t%d" i
+  ArrayArrIdx i     -> printf "$R_ArrayArray\t%d" i
 
 
 exportStgStateM :: StgState -> DL ()
