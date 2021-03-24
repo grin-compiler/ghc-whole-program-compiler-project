@@ -283,7 +283,9 @@ dbgCommands =
     , \case
         [dirName] -> do
           s <- get
-          liftIO $ exportStgState dirName s
+          liftIO $ do
+            exportStgState dirName s
+            putStrLn "done."
         _ -> pure ()
     )
   ]

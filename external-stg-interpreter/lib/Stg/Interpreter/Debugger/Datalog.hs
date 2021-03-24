@@ -125,7 +125,7 @@ arrayArrIdxToRef = \case
 
 
 exportStgStateM :: StgState -> DL ()
-exportStgStateM StgState{..} = do
+exportStgStateM stgState@StgState{..} = do
   -- array like resources
 
   exportArrayLike ssArrays              "Array"               "ArrayArg"
@@ -226,19 +226,26 @@ exportStgStateM StgState{..} = do
   addFact "CurrentClosureAddr" [I ssCurrentClosureAddr]
 
   -- trace events & markers
-  forM_ (zip [0..] ssTraceEvents) $ \(i, (n, a)) -> do
+  forM_ (zip [0..] $ reverse ssTraceEvents) $ \(i, (n, a)) -> do
     forM_ (genAddressState a) $ \(ns, value) -> do
       addFact "TraceEvent" [S n, I i, S ns, I value]
 
-  forM_ (zip [0..] ssTraceMarkers) $ \(i, (n, a)) -> do
+  forM_ (zip [0..] $ reverse ssTraceMarkers) $ \(i, (n, a)) -> do
     forM_ (genAddressState a) $ \(ns, value) -> do
       addFact "TraceMarker" [S n, I i, S ns, I value]
 
   -- regions
   forM_ (Map.toList ssRegions) $ \(Region start_name end_name, (_, l)) -> do
-    forM_ (zip [0..] l) $ \(idx, (s, e)) -> do
+    forM_ (zip [0..] (reverse l)) $ \(idx, (s, e)) -> do
       forM_ (zip (genAddressState s) (genAddressState e)) $ \((start_ns, start_value), (end_ns, end_value)) -> do
         addFact "Region" [N start_name, N end_name, I idx, S start_ns, I start_value, I end_value]
+
+  -- ssHeapStartAddress
+  addFact "HeapStartAddress" [I ssHeapStartAddress]
+
+  -- current address state
+  forM_ (genAddressState $ convertAddressState stgState) $ \(ns, value) -> do
+    addFact "CurrentAddressState" [S ns, I value]
 
 genAddressState :: AddressState -> [(String, Int)]
 genAddressState AddressState{..} =
@@ -291,6 +298,7 @@ allFactNames = nub
   , "ArrayArrayArg"
   , "AtomToRef"
   , "BinderInfo"
+  , "CurrentAddressState"
   , "CurrentClosureAddr"
   , "Heap_ApStack"
   , "Heap_ApStackResult"
@@ -301,6 +309,7 @@ allFactNames = nub
   , "Heap_Con"
   , "Heap_ConArg"
   , "Heap_RaiseException"
+  , "HeapStartAddress"
   , "MutableArray"
   , "MutableArrayArg"
   , "MutableArrayArray"

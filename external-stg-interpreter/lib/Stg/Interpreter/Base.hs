@@ -1039,25 +1039,45 @@ data AddressState
   }
   deriving (Eq, Ord, Show)
 
+emptyAddressState :: AddressState
+emptyAddressState = AddressState
+  { asNextThreadId          = 0
+  , asNextHeapAddr          = 0
+  , asNextStableName        = 0
+  , asNextWeakPointer       = 0
+  , asNextStablePointer     = 0
+  , asNextMutableByteArray  = 0
+  , asNextMVar              = 0
+  , asNextMutVar            = 0
+  , asNextArray             = 0
+  , asNextMutableArray      = 0
+  , asNextSmallArray        = 0
+  , asNextSmallMutableArray = 0
+  , asNextArrayArray        = 0
+  , asNextMutableArrayArray = 0
+  }
+
 getAddressState :: M AddressState
 getAddressState = do
-  StgState{..} <- get
-  pure AddressState
-    { asNextThreadId          = ssNextThreadId
-    , asNextHeapAddr          = ssNextHeapAddr
-    , asNextStableName        = ssNextStableName
-    , asNextWeakPointer       = ssNextWeakPointer
-    , asNextStablePointer     = ssNextStablePointer
-    , asNextMutableByteArray  = ssNextMutableByteArray
-    , asNextMVar              = ssNextMVar
-    , asNextMutVar            = ssNextMutVar
-    , asNextArray             = ssNextArray
-    , asNextMutableArray      = ssNextMutableArray
-    , asNextSmallArray        = ssNextSmallArray
-    , asNextSmallMutableArray = ssNextSmallMutableArray
-    , asNextArrayArray        = ssNextArrayArray
-    , asNextMutableArrayArray = ssNextMutableArrayArray
-    }
+  convertAddressState <$> get
+
+convertAddressState :: StgState -> AddressState
+convertAddressState StgState{..} = AddressState
+  { asNextThreadId          = ssNextThreadId
+  , asNextHeapAddr          = ssNextHeapAddr
+  , asNextStableName        = ssNextStableName
+  , asNextWeakPointer       = ssNextWeakPointer
+  , asNextStablePointer     = ssNextStablePointer
+  , asNextMutableByteArray  = ssNextMutableByteArray
+  , asNextMVar              = ssNextMVar
+  , asNextMutVar            = ssNextMutVar
+  , asNextArray             = ssNextArray
+  , asNextMutableArray      = ssNextMutableArray
+  , asNextSmallArray        = ssNextSmallArray
+  , asNextSmallMutableArray = ssNextSmallMutableArray
+  , asNextArrayArray        = ssNextArrayArray
+  , asNextMutableArrayArray = ssNextMutableArrayArray
+  }
 
 data Region
   = Region
