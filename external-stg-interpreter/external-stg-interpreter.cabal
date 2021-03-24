@@ -24,6 +24,7 @@ library
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
     Stg.Interpreter.Debugger
+    Stg.Interpreter.Debugger.Datalog
     Stg.Interpreter.Debugger.Internal
     Stg.Interpreter.Debugger.Region
     Stg.Interpreter.Debugger.UI
