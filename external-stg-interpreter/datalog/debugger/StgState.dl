@@ -123,3 +123,27 @@
 
 // origin
 .decl Origin(heap_addr : number, closure_name : Id, closure_addr : number)
+
+//misc
+.decl HeapStartAddress(first_heap_addr : number)
+.decl CurrentAddressState(r : RefNamespace, value : number)
+
+// input
+.input AtomToRef, BinderInfo, StaticGlobalEnv
+
+.input Array, ArrayArg, MutableArray, MutableArrayArg
+.input SmallArray, SmallArrayArg, SmallMutableArray, SmallMutableArrayArg
+.input ArrayArray, ArrayArrayArg, MutableArrayArray, MutableArrayArrayArg
+.input MutableByteArray, MutVar, StablePointer, StableName
+.input MVar, MVar_Value, MVar_Queue
+.input WeakPointer, WeakPointer_Value, WeakPointer_Finalizer, WeakPointer_CFinalizer, WeakPointer_CFinalizer_Env
+
+.input Heap_Con, Heap_ConArg, Heap_Closure, Heap_ClosureArg, Heap_ClosureEnv, Heap_BlackHole
+.input Heap_ApStack, Heap_ApStackResult, Heap_RaiseException
+
+.input Stack, StackDesc, Stack_Apply, Stack_ApplyArg, Stack_CaseOf, Stack_CaseOfEnv
+
+.input ThreadState, Thread_CurrentResult
+
+.input Origin, Region, TraceEvent, TraceMarker
+.input CurrentClosureAddr, HeapStartAddress, CurrentAddressState
