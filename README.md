@@ -3,8 +3,9 @@
 The project consists of **GHC-WPC** and the corresponding **External STG IR** and **tooling**.
 
 
-GHC-WPC is an extended GHC that exports the STG IR `(.o_stgbin)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
+GHC-WPC is an extended GHC that exports the STG IR `(.modpak)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
 
+<img height="350" src="https://user-images.githubusercontent.com/877489/114280753-0d311300-9a3b-11eb-8d50-facad35f0e9a.png"/>
 
 This repo uses GHC-WPC via stack, so no worries, stack will download it and do the setup automatically, but **only on x64 Debian9, Ubuntu 16.04-17.10**.
 If you use macOS or Windows you have to compile GHC-WPC manually. See the developer instructions below.  
@@ -13,6 +14,7 @@ However `external-stg` package compiles with vanilla GHC also.
 ## Readings
 - [Introducing GHC whole program compiler (GHC-WPC)](https://www.patreon.com/posts/introducing-ghc-38173710)
 - [GHC-WPC thread on ghc-devs mailing list](https://mail.haskell.org/pipermail/ghc-devs/2020-June/018994.html)
+- [External STG Interpreter](https://www.patreon.com/posts/external-stg-49857800)
 
 ## External STG tools (Ext-STG)
 - `gen-exe` main compiler driver, it produces executable from `.ghc_stgapp` files.
