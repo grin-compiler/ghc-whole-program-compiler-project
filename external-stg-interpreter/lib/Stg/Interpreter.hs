@@ -328,7 +328,7 @@ evalStackContinuation result = \case
           d@(Alt AltDefault _ _) : al -> matchFirstCon (Id resultBinder) extendedEnv con $ al ++ [d]
           _ -> matchFirstCon (Id resultBinder) extendedEnv con alts
 
-      PrimAlt r -> do
+      PrimAlt _r -> do
         let lit = case result of
               [l] -> l
               _   -> error $ "expected a single value: " ++ show result
