@@ -31,8 +31,8 @@ showOriginTrace i = do
         let dlRef = fromIntegral $ GC.encodeRef o GC.NS_HeapPtr
         str <- decodeAndShow dlRef
         case IntMap.lookup o origin of
-          Just (oId, oAddr) -> do
-                            liftIO $ putStrLn $ str ++ "  " ++ show oId
+          Just (oId, oAddr, oTid) -> do
+                            liftIO $ putStrLn $ str ++ "  " ++ show oId ++ " tid: " ++ show oTid
                             go oAddr (IntSet.insert o s)
           _ -> liftIO $ putStrLn str
   go i IntSet.empty
@@ -82,7 +82,7 @@ decodeAndShow dlRef = do
   rootSet <- gets ssGCRootSet
   let showOrigin = \case
         Nothing -> ""
-        Just (oId,oAddr) -> (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
+        Just (oId,oAddr,_) -> (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
       showHeapObj = \case
         Nothing -> ""
         Just ho -> " " ++ GC.debugPrintHeapObject ho

@@ -219,8 +219,8 @@ exportStgStateM stgState@StgState{..} = do
       addFact "Thread_CurrentResult" [I i, I idx, A a]
 
   -- origin
-  forM_ (IntMap.toList ssOrigin) $ \(i, (closureId, closureAddr)) -> do
-    addFact "Origin" [I i, ID closureId, I closureAddr]
+  forM_ (IntMap.toList ssOrigin) $ \(i, (closureId, closureAddr, tid)) -> do
+    addFact "Origin" [I i, ID closureId, I closureAddr, I tid]
 
   -- current closure (for GC)
   addFact "CurrentClosureAddr" [I ssCurrentClosureAddr]
@@ -246,6 +246,11 @@ exportStgStateM stgState@StgState{..} = do
   -- current address state
   forM_ (genAddressState $ convertAddressState stgState) $ \(ns, value) -> do
     addFact "CurrentAddressState" [S ns, I value]
+
+  -- GC marker
+  forM_ (zip [0..] $ reverse ssGCMarkers) $ \(i, a) -> do
+    forM_ (genAddressState a) $ \(ns, value) -> do
+      addFact "GCMarker" [I i, S ns, I value]
 
 genAddressState :: AddressState -> [(String, Int)]
 genAddressState AddressState{..} =
@@ -300,6 +305,7 @@ allFactNames = nub
   , "BinderInfo"
   , "CurrentAddressState"
   , "CurrentClosureAddr"
+  , "GCMarker"
   , "Heap_ApStack"
   , "Heap_ApStackResult"
   , "Heap_BlackHole"

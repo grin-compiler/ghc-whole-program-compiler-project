@@ -118,11 +118,14 @@
 .decl TraceEvent(name : symbol, idx : unsigned, ns : RefNamespace, value : number)
 .decl TraceMarker(name : symbol, idx : unsigned, ns : RefNamespace, value : number)
 
+// GC related
+.decl GCMarker(gc_index : unsigned, ns : RefNamespace, value : number)
+
 // needed for GC ??
 .decl CurrentClosureAddr(heap_addr : number)
 
 // origin
-.decl Origin(heap_addr : number, closure_name : Id, closure_addr : number)
+.decl Origin(heap_addr : number, closure_name : Id, closure_addr : number, thread_id : number)
 
 //misc
 .decl HeapStartAddress(first_heap_addr : number)
@@ -145,5 +148,5 @@
 
 .input ThreadState, Thread_CurrentResult
 
-.input Origin, Region, TraceEvent, TraceMarker
+.input Origin, Region, TraceEvent, TraceMarker, GCMarker
 .input CurrentClosureAddr, HeapStartAddress, CurrentAddressState

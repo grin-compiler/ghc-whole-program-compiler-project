@@ -25,7 +25,7 @@ dumpOriginM i = do
   origin <- gets ssOrigin
   case IntMap.lookup i origin of
     Nothing -> pure ""
-    Just (oId,oAddr) -> pure $ (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
+    Just (oId,oAddr,_) -> pure $ (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
 
 dumpHeapM :: Heap -> M ()
 dumpHeapM h = do

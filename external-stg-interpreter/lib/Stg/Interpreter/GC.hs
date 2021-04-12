@@ -25,7 +25,8 @@ checkGC localGCRoots = do
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
   when (not gcIsRunning && nextAddr - lastGCAddr > 3000000) $ do
-    modify' $ \s -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True}
+    a <- getAddressState
+    modify' $ \s@StgState{..} -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True, ssGCMarkers = a : ssGCMarkers}
     runGC localGCRoots
     {-
       TODO:

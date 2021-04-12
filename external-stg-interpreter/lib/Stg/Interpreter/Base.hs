@@ -162,11 +162,6 @@ data ScheduleReason
   | SR_ThreadYield
   deriving (Show, Eq, Ord)
 
-type Addr   = Int
-type Heap   = IntMap HeapObject
-type Env    = Map Id Atom   -- NOTE: must contain only the defined local variables
-type Stack  = [StackContinuation]
-
 {-
   Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
 -}
@@ -216,6 +211,11 @@ data TracingState
   = NoTracing
   | DoTracing Handle
   deriving (Show)
+
+type Addr   = Int
+type Heap   = IntMap HeapObject
+type Env    = Map Id Atom   -- NOTE: must contain only the defined local variables
+type Stack  = [StackContinuation]
 
 data StgState
   = StgState
@@ -307,7 +307,10 @@ data StgState
   , ssTracingState        :: TracingState
 
   -- origin db
-  , ssOrigin              :: !(IntMap (Id, Int))
+  , ssOrigin              :: !(IntMap (Id, Int, Int)) -- HINT: closure, closure address, thread id
+
+  -- GC marker
+  , ssGCMarkers           :: ![AddressState]
 
   -- tracing primops
   , ssTraceEvents         :: ![(String, AddressState)]
@@ -414,6 +417,9 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   -- origin db
   , ssOrigin              = mempty
 
+  -- GC marker
+  , ssGCMarkers           = []
+
   -- tracing primops
   , ssTraceEvents         = []
   , ssTraceMarkers        = []
@@ -513,11 +519,13 @@ store a o = do
   modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
 
   do
-    originAddr <- gets ssCurrentClosureAddr
     m <- gets ssCurrentClosure
     case m of
       Nothing       -> pure ()
-      Just originId -> modify' $ \s@StgState{..} -> s { ssOrigin = IntMap.insert a (originId, originAddr) ssOrigin }
+      Just originId -> do
+        originAddr <- gets ssCurrentClosureAddr
+        tid <- gets ssCurrentThreadId
+        modify' $ \s@StgState{..} -> s { ssOrigin = IntMap.insert a (originId, originAddr, tid) ssOrigin }
   {-
   gets ssTracingState >>= \case
     NoTracing   -> pure ()
