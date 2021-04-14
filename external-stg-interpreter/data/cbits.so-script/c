@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -x -e
+
+gcc -o libHSbase-4.14.0.0.cbits.so -shared \
+  -Wl,--whole-archive `ls ar/*.a` -Wl,--no-whole-archive \
+  `ls stub-*.dyn_o/*` \
+  `ls cbits-rts.dyn_o/*` \
+  -fPIC `ls c-src/*` \
+  -lm -lgmp -ltinfo \
+  -lGL -lX11 -lXi -lXrandr -lXxf86vm -lXcursor -lXinerama -lpthread
