@@ -89,4 +89,4 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
 
 ## TODO
 **Ext-STG IR**
-- export IdInfo
+- export IdInfo (without it `gen-exe` compiles -O0 executables)
