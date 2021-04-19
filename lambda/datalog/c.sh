@@ -2,4 +2,4 @@
 
 set -x -e
 
-souffle -o lambda-cfa main.dl
+souffle --legacy -c -j6 -o lambda-cfa main.dl
