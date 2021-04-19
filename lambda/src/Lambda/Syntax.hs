@@ -131,8 +131,8 @@ data Exp
   = Program
     { pExternals            :: [External]
     , pConstructors         :: [ConGroup]
-    , pPublicNames          :: [Name]
-    , pForeignExportedNames :: [Name]
+    , pPublicNames          :: [Name]         -- Q: what is this? GUESS: module exported names
+    , pForeignExportedNames :: [Name]         -- Q: what is this? GESSS: FFI exported names
     , pStaticData           :: [StaticData]
     , pDefinitions          :: [Def]
     }
