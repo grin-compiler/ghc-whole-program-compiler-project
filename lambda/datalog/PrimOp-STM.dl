@@ -1,0 +1,132 @@
+/*
+  HINT: is interpreted -/+
+
+  primop effectful
+    + "atomically#" :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+    - "retry#"      :: {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+    + "catchRetry#" :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+    + "catchSTM#"   :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+    + "newTVar#"    :: %a -> {"State#" %s} -> {"GHC.Prim.Unit#" {"TVar#" %s %a}}
+    + "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+    + "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+    + "writeTVar#"  :: {"TVar#" %s %a} -> %a -> {"State#" %s} -> {"GHC.Prim.(##)"}
+
+  primop pure
+    - "sameTVar#" :: {"TVar#" %s %a} -> {"TVar#" %s %a} -> T_Int64
+*/
+
+.decl TVar(ext_result:Variable, ty_node:Variable, item:Variable)
+.output TVar
+
+// "atomically#" :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+USED("PrimOp-STM-01")
+RaisedEx("Control.Exception.Base.nestedAtomically"), // hardwired closure for GHC RTS
+Called(r, op),
+CallPNode1("atomically#", r, v0, v1_state) :-
+  op = "atomically#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // pass argument to the wrapped function
+  CallArgument(r, 0, v0),
+  CallArgument(r, 1, v1_state).
+  // CHECKED
+
+// "catchRetry#"  :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a})
+//                -> ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a})
+//                -> {"State#" {RealWorld}}
+//                -> {"GHC.Prim.Unit#" %a}
+USED("PrimOp-STM-02")
+Called(r, op),
+CallPNode1("catchRetry#-wrapped", r, v0, v2_state),
+CallPNode1("catchRetry#-handler", r, v1, v2_state) :-
+  op = "catchRetry#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // pass argument to the wrapped function
+  // first function
+  CallArgument(r, 0, v0),
+  // second function
+  CallArgument(r, 1, v1),
+  // state
+  CallArgument(r, 2, v2_state).
+  // CHECKED
+
+// "catchSTM#"  :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a})
+//              -> (%b -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a})
+//              -> {"State#" {RealWorld}}
+//              -> {"GHC.Prim.Unit#" %a}
+// handle the wrapped function
+USED("PrimOp-STM-03")
+Called(r, op),
+CallPNode1("catchSTM#-wrapped", r, v0, v2_state) :-
+  op = "catchSTM#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // pass argument to the wrapped function
+  CallArgument(r, 0, v0),
+  CallArgument(r, 2, v2_state).
+  // TODO: check STM implementation, check what exception it can throw
+  // CHECKED
+
+// NOTE: the handler has its own rule, because it fires only when there are exceptions, while the wrapped function is always called
+// handle ex-handler
+USED("PrimOp-STM-04")
+Called(r, op),
+CallPNode2("catchSTM#-handler", r, v1, ex, v2_state) :-
+  op = "catchSTM#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // pass argument to the handler function
+  CallArgument(r, 1, v1),
+  CallArgument(r, 2, v2_state),
+  RaisedEx(ex).
+  // CHECKED
+
+// "newTVar#" :: %a -> {"State#" %s} -> {"GHC.Prim.Unit#" {"TVar#" %s %a}}
+// new tvar
+USED("PrimOp-STM-05")
+Called(r, op),
+TVar(r, ty_node, item) :-
+  op = "newTVar#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // initial item
+  CallArgument(r, 0, item),
+  // extract result node
+  RetTup1Node0(op, ty_node).
+  // CHECKED
+
+// "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+// "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+USED("PrimOp-STM-06")
+Called(r, op),
+TypeVarPointsTo(r, ty_node, item) :-
+  ( op = "readTVar#"
+  ; op = "readTVarIO#"
+  ),
+  REACHABLE(r)
+  Call(r, op, _),
+  // lookup tvar items
+  CallArgument(r, 0, arr),
+  ExternalOrigin(arr, ext_result, arr_node),
+  TVar(ext_result, arr_node, item),
+  // lookup result node
+  RetTup1Node0(op, ty_node).
+  // CHECKED
+
+// "writeTVar#"  :: {"TVar#" %s %a} -> %a -> {"State#" %s} -> {"GHC.Prim.(##)"}
+// extend tvar
+USED("PrimOp-STM-07")
+Called(r, op),
+TVar(ext_result, ty_node, item) :-
+  op = "writeTVar#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // item to write
+  CallArgument(r, 1, item),
+  // lookup tvar
+  CallArgument(r, 0, arr),
+  ExternalOrigin(arr, ext_result, ty_node),
+  // validation
+  TVar(ext_result, ty_node, _).
+  // CHECKED

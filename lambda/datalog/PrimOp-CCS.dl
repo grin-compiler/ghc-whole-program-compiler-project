@@ -1,0 +1,20 @@
+/*
+  HINT: is interpreted -/+
+
+  primop pure
+    - "getCCSOf#"      :: %a -> {"State#" %s} -> {"GHC.Prim.Unit#" T_Addr}
+    - "getCurrentCCS#" :: %a -> {"State#" %s} -> {"GHC.Prim.Unit#" T_Addr}
+    + "clearCCS#"      :: ({"State#" %s} -> {"GHC.Prim.Unit#" %a}) -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+*/
+
+// "clearCCS#" :: ({"State#" %s} -> {"GHC.Prim.Unit#" %a}) -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+USED("PrimOp-CCS-01")
+Called(r, op),
+CallPNode1("clearCCS#-wrapped", r, v0, v1_state) :-
+  op = "clearCCS#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // pass argument to the wrapped function
+  CallArgument(r, 0, v0),
+  CallArgument(r, 1, v1_state).
+  // CHECKED

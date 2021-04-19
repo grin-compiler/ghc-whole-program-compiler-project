@@ -1,0 +1,29 @@
+BUGFIX:
+done - make utility/reusable application relation as a helper for wrapper operations ; i.e. apply the last argument of a function or PNode or actually call the staurated PNode
+done - fix higher order primop's function call parameter passing ; pass all parameters
+done - calculate dead alernative ; based on tag, not node origin with the specific tag ; NOT THIS: all pattern binders are dead/missing
+- fix applychain bug in: basic04_opt.2.lambda
+    ds3.s15353.0 = after.s15339.0 $ ipv3.s15348.0 val.6518
+    problem: ipv3.s15348.0 is not applied as argument
+- calcualte only the reachable code
+- some primop forces evaluation of thunks?
+
+ADVANCEMENT:
+- remove dead alternatives
+- remove dead closures ; may require dummy code insertion
+
+IMPROVE PERFORMANCE:
+- add Strict(x) and Lazy(x) deriving from EvalMode
+- reintroduce Origin ; keep PNode and others at their birth place ; do not propagate them instead calculate Origin for each variable
+- minimize value propagation
+- minimize joins
+done - simplify array operations ; merge commmon rules
+- simplify CFA rules
+- more accurate exception tracking
+- track node tags ; calcualte dead alternatives
+- calcualate dead fields
+- test
+
+BIG:
+- context sensitive analysis?
+- unification based analysis?

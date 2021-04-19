@@ -1,0 +1,88 @@
+/*
+  HINT: is interpreted -/+
+
+  primop effectful
+    + "catch#"                 :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+    + "raise#"                 :: %b -> %o
+    + "raiseIO#"               :: %a -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %b}
+    + "maskAsyncExceptions#"   :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+    + "maskUninterruptible#"   :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+    + "unmaskAsyncExceptions#" :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+    - "getMaskingState#"       :: {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" T_Int64}
+*/
+
+/*
+  NOTES for higher order primop support:
+    the higher order primops execute function calls and also pass the arguments
+    this mean that they have to collect the arguments somewhere, maybe from an accompaning other primop provides it,
+    i.e. raise provides the arguments for catch
+
+*/
+// SECTION: higher order primop evaluator
+
+.decl RaisedEx(f:Variable)
+.output RaisedEx
+
+// "raise#"   :: %b -> %o
+// "raiseIO#" :: %a -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %b}
+// collect raised exceptions
+USED("PrimOp-Exception-01")
+Called(r, op),
+RaisedEx(ex) :-
+  REACHABLE(r)
+  ( op = "raise#"
+  ; op = "raiseIO#"
+  ),
+  Call(r, op, _),
+  CallArgument(r, 0, ex).
+  // CHECKED
+
+// "catch#" :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a})
+//          -> (%b -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a})
+//          -> {"State#" {RealWorld}}
+//          -> {"GHC.Prim.Unit#" %a}
+// handle the wrapped function
+USED("PrimOp-Exception-02")
+Called(r, op),
+CallPNode1("catch#-wrapped", r, v0, v2_state) :-
+  op = "catch#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // wrapped fun
+  CallArgument(r, 0, v0),
+  // state
+  CallArgument(r, 2, v2_state).
+  // CHECKED
+
+// NOTE: the handler has its own rule, because it fires only when there are exceptions, while the wrapped function is always called
+// handle ex-handler
+USED("PrimOp-Exception-03")
+Called(r, op),
+CallPNode2("catch#-handler", r, v1, ex, v2_state) :-
+  op = "catch#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // handler
+  CallArgument(r, 1, v1),
+  // state
+  CallArgument(r, 2, v2_state),
+  // exceptions
+  RaisedEx(ex).
+  // CHECKED
+
+// "maskAsyncExceptions#"   :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+// "maskUninterruptible#"   :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+// "unmaskAsyncExceptions#" :: ({"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" %a}
+USED("PrimOp-Exception-04")
+Called(r, op),
+CallPNode1("mask", r, v0, v1_state) :-
+  REACHABLE(r)
+  ( op = "maskAsyncExceptions#"
+  ; op = "maskUninterruptible#"
+  ; op = "unmaskAsyncExceptions#"
+  ),
+  Call(r, op, _),
+  // pass argument to the wrapped function
+  CallArgument(r, 0, v0),
+  CallArgument(r, 1, v1_state).
+  // CHECKED

@@ -1,0 +1,98 @@
+///// VALIDATION
+.decl Error(v:symbol, msg:symbol)
+.output Error
+
+// there is no lazy operation beside con and closure
+Error(v, "not closure or node") :-
+  EvalMode(v, "lazy"),
+  !(Node(v, _) ; IsClosure(v)).
+
+// there is no strict closure
+Error(v, "strict closure") :-
+  EvalMode(v, "strict"),
+  IsClosure(v).
+
+Error(v, "lazy app") :-
+  EvalMode(v, "lazy"),
+  Call(v,_,_).
+
+// SECTION: check for unknown names
+
+.decl DefName(n:symbol)
+
+DefName(n) :- // parameters
+  ( AltParameter(_, _, n)
+  ; FunctionParameter(_, _, n)
+  ; ClosureParameter(_, _, n)
+  ).
+
+DefName(n) :- // instructions
+  ( EvalMode(n, _)
+  ; Alt(_, n, _)
+  ).
+
+DefName(n) :- // top level functions
+  ( IsFunction(n)
+  ; ExternalFunction(n, _, _)
+  ).
+
+.decl UseName(n:symbol)
+
+UseName(n) :- // instructions
+  ( Move(_,n)
+  ; Call(_, n, _)
+  ; Case(_, n)
+  ; ReturnValue(_, n)
+  ).
+
+UseName(n) :- // arguments
+  ( (NodeArgument(r, _, n), NodeRole(r, "node")) // exclude literals
+  ; CallArgument(_, _, n)
+  ; ClosureVariable(_, _, n)
+  ).
+
+
+Error(n, "unknown name") :- UseName(n), !DefName(n).
+
+// SECTION: debug
+
+.decl MissingValue(v:Variable)
+.output MissingValue
+
+MissingValue(v) :-
+  HasInst(f, v),
+  !DeadCode(f),
+  !IsClosure(v), // if closure is always used fully saturated then it will not have a PNode nor an origin, because only nodes and external functions are value origins
+  !(NodeOrigin(v, _) ; ExternalOrigin(v, _, _) ; PNode(v, _, _, _)).
+
+MissingValue(v) :-
+  (FunctionParameter(f, _, v) ; AltParameter(f, _, v) ; ClosureParameter(f, _, v)),
+  !DeadCode(f),
+  !(NodeOrigin(v, _) ; ExternalOrigin(v, _, _); PNode(v, _, _, _)).
+
+// rule coverage
+.decl Used(rule_name:symbol)
+.output Used
+
+// SECTION: unmatching but reachable case expressions
+
+Error(case_result, "unmatching live case expression") :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  !MatchedAlt(case_result, _),
+  !MissingValue(scrut).
+
+Error(case_result, "live case expression with dead scrutinee") :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  !MatchedAlt(case_result, _),
+  MissingValue(scrut).
+
+// tagToEnum#
+Error(alt, "reachable but unhandled alt due to tagToEnum#") :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  ExternalOrigin(scrut, ext_result, _),
+  Call(ext_result, "tagToEnum#", _),
+  Alt(case_result, alt, _),
+  !MatchedAlt(_, alt).

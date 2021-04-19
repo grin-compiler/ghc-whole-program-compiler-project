@@ -1,0 +1,35 @@
+#define LOG_USED
+#define REACHABLE_ONLY
+
+#ifdef REACHABLE_ONLY
+# define REACHABLE(x) Reachable(x),
+#else
+# define REACHABLE(x)
+#endif
+
+#ifdef LOG_USED
+# define USED(x) Used(x),
+#else
+# define USED(x)
+#endif
+
+#include "AST.dl"
+#include "CBy.dl"
+#include "CFA.dl"
+#include "Check.dl"
+#include "LVA.dl"
+#include "PointsTo.dl"
+#include "PrimOp-Addr.dl"
+#include "PrimOp-Arrays.dl"
+#include "PrimOp-ByteArray.dl"
+#include "PrimOp-Bytecode.dl"
+#include "PrimOp-CCS.dl"
+#include "PrimOp-Compact.dl"
+#include "PrimOp-Concurrency.dl"
+#include "PrimOp-Exception.dl"
+#include "PrimOp-MutVar.dl"
+#include "PrimOp-MVar.dl"
+#include "PrimOp-Parallelism.dl"
+#include "PrimOp-STM.dl"
+#include "PrimOp-StablePtr.dl"
+#include "PrimOp-WeakPtr.dl"

@@ -1,0 +1,159 @@
+/*
+  Handles:
+    - genuine value origins
+    - pattern matching
+*/
+
+// origin: node or external
+.decl NodeOrigin(v:Variable, value:CodeName)
+.decl ExternalOrigin(v:Variable, ext_result:Variable, ty_var:Variable)
+
+.output NodeOrigin
+.output ExternalOrigin
+
+/*
+  SECTION: calling a constructor
+    handle stg style constructor calling:
+      let   con = [tag a b c]
+      letS  val = con $
+*/
+USED("CBy-1")
+NodeOrigin(r, val) :-
+  REACHABLE(r)
+  Call(r, f, 0),
+  EvalMode(r, "strict"),
+  NodeOrigin(f, val).
+  // CHECKED
+
+// TODO: better model forcing ; what about externals?
+/*
+Error(ext, "forced external name"),
+Error(r, "forced external") :-
+  Call(r, f, 0),
+  EvalMode(r, "strict"),
+  !NodeOrigin(f,_),
+  !PNode(f, _, _, _),
+  ExternalOrigin(f, ext_result, _),
+  Call(ext_result, ext, _).
+*/
+USED("CBy-1-external")
+ExternalOrigin(r, ext_result, ty_var) :-
+  REACHABLE(r)
+  Call(r, f, 0),
+  EvalMode(r, "strict"),
+  ExternalOrigin(f, ext_result, ty_var).
+  // CHECKED
+
+// SECTION: Origin
+
+USED("CBy-2")
+NodeOrigin(n, n) :- Node(n, _).
+  // CHECKED
+
+USED("CBy-3")
+ExternalOrigin(r, r, ty_node) :-
+  Call(r, f, _),
+  EvalMode(r, "strict"),
+  ExternalFunction(f, _, _),
+  ExternalReturnType(f, ty_node).
+  // CHECKED
+
+// Move
+USED("CBy-4")
+PointsTo(result, value) :-
+  REACHABLE(result)
+  Move(result, value).
+  // CHECKED
+
+// SECTION: Case + Alt
+
+.decl MatchedAlt(case_result:symbol, alt_name:symbol)
+.output MatchedAlt
+
+// scrutinee projection to alt value ; NodeOrigin
+USED("CBy-5")
+MatchedAlt(case_result, alt_val),
+PointsTo(alt_val, scrut_val) :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  Alt(case_result, alt_val, tag),
+  NodeOrigin(scrut, scrut_val),
+  Node(scrut_val, tag).
+  // CHECKED
+
+// scrutinee projection to alt value ; ExternalOrigin
+USED("CBy-6")
+MatchedAlt(case_result, alt_val),
+ExternalOrigin(alt_val, ext_result, ty_var) :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  Alt(case_result, alt_val, tag),
+  ExternalOrigin(scrut, ext_result, ty_var),
+  TypeNode(ty_var, tag).
+  // CHECKED
+
+// alt params from Node
+USED("CBy-7")
+PointsTo(p, val) :-
+  ReachableCode(alt),
+  Alt(_, alt, tag),
+  AltParameter(alt, i, p),
+  NodeOrigin(alt, node),
+  Node(node, tag),
+  NodeArgument(node, i, val).
+  // CHECKED
+
+// alt params from External (i.e. ... -> {"GHC.Prim.Unit#" %a} or ... -> {"GHC.Prim.Unit#" T_Int})
+USED("CBy-8")
+ExternalOrigin(p, ext_result, ty_var) :-
+  ReachableCode(alt),
+  Alt(_, alt, tag),
+  AltParameter(alt, i, p),
+  ExternalOrigin(alt, ext_result, ty_node),
+  TypeNode(ty_node, tag),
+  TypeNodeArgument(ty_node, i, ty_var).
+  // CHECKED
+
+//////////////////////////
+// workaround for tagToEnum#
+USED("CBy-8-tagToEnum#-workaround")
+TagValue(alt, tag),
+MatchedAlt(case_result, alt),
+ReachableCode(alt) :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  ExternalOrigin(scrut, ext_result, _),
+  Call(ext_result, "tagToEnum#", _),
+  Alt(case_result, alt, tag).
+  // CHECKED
+
+//////////////////////////
+
+// alt result
+USED("CBy-9")
+PointsTo(case_result, val) :-
+  REACHABLE(case_result)
+  Case(case_result, _),
+  Alt(case_result, alt, _),
+  ReachableCode(alt),
+  ReturnValue(alt, val).
+  // CHECKED
+
+/*
+  TODO:
+    - handle default alternatives properly ; restrict alt_value to unhandled values only
+*/
+// default alternatives
+USED("CBy-10")
+MatchedAlt(case_result, alt_val),
+PointsTo(alt_val, scrut) :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  Alt(case_result, alt_val, "default:").
+  // CHECKED
+
+/*
+  Question:
+    Do we need to distinct external and interpreted-external origins?
+    Does this makes difference in perfomrmance?
+*/

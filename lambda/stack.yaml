@@ -1,0 +1,9 @@
+resolver: lts-16.13
+
+packages:
+  - '.'
+  - 'external-stg'
+
+extra-deps:
+  - souffle-haskell-2.1.0
+  - zip-1.7.0
