@@ -1,5 +1,5 @@
 {-# LANGUAGE LambdaCase, TupleSections, OverloadedStrings, RecordWildCards #-}
-module Lambda.ToDatalog where
+module Lambda.Datalog.ToDatalog where
 
 import Data.Functor.Foldable as Foldable
 import qualified Data.Foldable

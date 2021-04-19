@@ -20,7 +20,9 @@ library
     Lambda.Pretty
     Lambda.Name
     Lambda.Syntax
-    Lambda.ToDatalog
+    Lambda.Datalog.ToDatalog
+    Lambda.Stg.FromStg
+    Lambda.Stg.GHCPrimOps
     Lambda.Util
     Lambda.Lint
     Lambda.Transformation.StaticSingleAssignment
@@ -48,6 +50,8 @@ library
     , free
     , comonad
     , binary
+    , external-stg
+    , transformers
 
   default-language:    Haskell2010
 
