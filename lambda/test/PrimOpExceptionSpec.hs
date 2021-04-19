@@ -14,7 +14,7 @@ import Text.PrettyPrint.ANSI.Leijen
 
 import Lambda.TH
 import Lambda.Analysis.ControlFlowAnalysisM
-import Grin.Pretty (PP(..))
+import Lambda.Pretty (PP(..))
 
 runTests :: IO ()
 runTests = hspec spec

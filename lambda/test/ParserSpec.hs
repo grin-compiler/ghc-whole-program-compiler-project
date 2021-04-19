@@ -9,7 +9,7 @@ import Lambda.TH
 import Lambda.Pretty
 import Lambda.Parse
 import Lambda.Syntax
-import Grin.Pretty (PP(..))
+import Lambda.Pretty (PP(..))
 
 runTests :: IO ()
 runTests = hspec spec
