@@ -52,7 +52,7 @@
 
 .decl StaticGlobalEnv(id : Id, data : Atom)
 
-.decl MutableByteArray(mba : number, pinned : symbol, alignment : number, size : number)
+.decl MutableByteArray(mba : number, pinned : symbol, alignment : number, size : unsigned)
 
 .decl MVar(mv : number, value_count : unsigned, queue_size : unsigned, content_desc : symbol)
 .decl MVar_Value(mv : number, idx : unsigned, a : Atom)

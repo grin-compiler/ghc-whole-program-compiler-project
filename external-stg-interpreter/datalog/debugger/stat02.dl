@@ -1,0 +1,45 @@
+#include "stat01.dl"
+
+/*
+4622146 False ghc_GHC.Driver.Types.HscEnv 11
+5130682 False ghc_GHC.Driver.Types.HscEnv 11
+6100443 False ghc_GHC.Driver.Types.HscEnv 11
+7498243 False ghc_GHC.Driver.Types.HscEnv 11
+7983438 False ghc_GHC.Driver.Types.HscEnv 11
+8759092 False ghc_GHC.Driver.Types.HscEnv 11
+9246327 False ghc_GHC.Driver.Types.HscEnv 11
+9741277 False ghc_GHC.Driver.Types.HscEnv 11
+9951760 False ghc_GHC.Driver.Types.HscEnv 11
+9983620 False ghc_GHC.Driver.Types.HscEnv 11
+11551146  False ghc_GHC.Driver.Types.HscEnv 11
+11730042  False ghc_GHC.Driver.Types.HscEnv 11
+12773542  False ghc_GHC.Driver.Types.HscEnv 11
+14819074  False ghc_GHC.Driver.Types.HscEnv 11
+15171636  False ghc_GHC.Driver.Types.HscEnv 11
+15940933  False ghc_GHC.Driver.Types.HscEnv 11
+16431667  False ghc_GHC.Driver.Types.HscEnv 11
+16681033  False ghc_GHC.Driver.Types.HscEnv 11
+16824590  False ghc_GHC.Driver.Types.HscEnv 11
+16900997  False ghc_GHC.Driver.Types.HscEnv 11
+17493360  False ghc_GHC.Driver.Types.HscEnv 11
+19449635  False ghc_GHC.Driver.Types.HscEnv 11
+20044540  False ghc_GHC.Driver.Types.HscEnv 11
+20472383  False ghc_GHC.Driver.Types.HscEnv 11
+21262802  False ghc_GHC.Driver.Types.HscEnv 11
+23050231  False ghc_GHC.Driver.Types.HscEnv 11
+24848801  False ghc_GHC.Driver.Types.HscEnv 11
+24850821  False ghc_GHC.Driver.Types.HscEnv 11
+*/
+
+.decl HscEnv(r : RefTy)
+.input HscEnv
+.output Selected, SelectedRoot
+
+SelectedRoot([r, ns]) :-
+  HscEnv([con, _]), // HscEnv
+  Heap_ConArg(con, 6, a),
+  AtomToRef(a, ns, r).
+
+//SelectedRoot([4622146, $R_HeapPtr]).
+Selected(x) :- SelectedTo(x).
+

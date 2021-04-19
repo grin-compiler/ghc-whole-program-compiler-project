@@ -1,0 +1,29 @@
+/*
+  - calculate the spanning tree for the Selected objects + Ref
+  - calculate ref flows in the spanning tree
+  - sum size
+*/
+
+.decl RefSpanningTree(parent : RefTy, child : RefTy) choice-domain child // NOTE: a tree-node has only one parent
+
+RefSpanningTree(nil, x) :- SelectedRoot(x).
+RefSpanningTree(v, u) :- RefSpanningTree(_, v), Ref(v, u).
+
+// retained size
+
+.decl RefRetainedSize(r : RefTy, size : unsigned) choice-domain r
+
+.output RefRetainedSize
+
+RefRetainedSize(r, size + children_size) :-
+  RefDataSize(r, size),
+  children_size = sum s : {
+    RefFlows(r, to),
+    RefDataSize(to, s)
+  }.
+
+// utility
+.decl RefFlows(ancestor : RefTy, x : RefTy)
+
+RefFlows(n, m) :- Ref(n, m).
+RefFlows(n, m) :- RefFlows(n, x), Ref(x, m).
