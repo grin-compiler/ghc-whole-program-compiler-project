@@ -34,6 +34,8 @@ import Lambda.Name
 
 type ConName = Name
 
+-- HINT: the Ty and SimpleType is for externals only like FFI and primops
+
 data Ty
   = TyCon     Name ConName [Ty]
   | TyVar     Name
