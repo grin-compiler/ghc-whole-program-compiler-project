@@ -195,15 +195,17 @@ NSName($R_ThreadId,           "R_ThreadId").
 
 .decl GephiNode(Id : number, ref_value : number, ref_ns : RefNamespace,
                 note : symbol, kind : symbol, is_selection_root : symbol,
-                phase : symbol, phase_start_marker_idx : number)
+                phase : symbol, phase_start_marker_idx : number,
+                retained_size : unsigned)
 .decl GephiEdge(Source : number, Target : number)
 .output GephiNode (headers=true)
 .output GephiEdge (headers=true)
 
-GephiNode(uniq, addr, ns, cat(o, cat(" ; phase: ", to_string(phase_start_marker_idx))), kind, label, phase, phase_start_marker_idx) :-
+GephiNode(uniq, addr, ns, cat(o, cat(" ; phase: ", to_string(phase_start_marker_idx))), kind, label, phase, phase_start_marker_idx, retained_size) :-
   Selected(r),
   RefPhase(r, phase, phase_start_marker_idx),
   UnboxRef(r, addr, ns, uniq),
+  RefRetainedSize(r, retained_size),
   ( ns = $R_HeapPtr, HeapNote(addr, kind, o0), Origin(addr, origin_name, _, _), o = cat(o0, cat(" ; origin: ", origin_name))
   ; ns != $R_HeapPtr, NSName(ns, o), NSName(ns, kind)
   ),
@@ -222,33 +224,34 @@ GephiEdge(from, to) :-
 // source projection
 // Q: is this cork?
 
-.decl GephiNode2(Id : number, note : symbol, size : number, kind : symbol, phase : symbol, phase_start_marker_idx : number)
+.decl GephiNode2(Id : number, note : symbol, size : number, kind : symbol, phase : symbol, phase_start_marker_idx : number, retained_size : unsigned)
 .decl GephiEdge2(Source : number, Target : number, Weight : number, size : number)
 .output GephiNode2 (headers=true)
 .output GephiEdge2 (headers=true)
 
-.decl GephiNode2_tmp(note : symbol, size : number, kind : symbol, phase : symbol, phase_start_marker_idx : number)
-GephiNode2_tmp(o, c, kind, phase, pidx) :-
-  GephiNode(_, _, _, o, kind, _, phase, pidx),
-  c = count : { GephiNode(_, _, _, o, kind, _, phase, pidx) }.
+.decl GephiNode2_tmp(note : symbol, size : number, kind : symbol, phase : symbol, phase_start_marker_idx : number, retained_size : unsigned)
+GephiNode2_tmp(o, c, kind, phase, pidx, retained_size) :-
+  GephiNode(_, _, _, o, kind, _, phase, pidx, _),
+  c = count : { GephiNode(_, _, _, o, kind, _, phase, pidx, _) },
+  retained_size = sum s : { GephiNode(_, _, _, o, kind, _, phase, pidx, s) }.
 
-GephiNode2($, o, c, k, p, pidx) :-
-  GephiNode2_tmp(o, c, k, p, pidx).
+GephiNode2($, o, c, k, p, pidx, retained_size) :-
+  GephiNode2_tmp(o, c, k, p, pidx, retained_size).
 
 .decl GephiEdge2_tmp(from_note : symbol, to_note : symbol)
 GephiEdge2_tmp(from_note, to_note) :-
   GephiEdge(from, to),
-  GephiNode(from, _, _, from_note, _, _, _, _),
-  GephiNode(to, _, _, to_note, _, _, _, _).
+  GephiNode(from, _, _, from_note, _, _, _, _, _),
+  GephiNode(to, _, _, to_note, _, _, _, _, _).
 
 GephiEdge2(f, t, c, c) :-
   GephiEdge2_tmp(from_note, to_note),
-  GephiNode2(f, from_note, _, _, _, _),
-  GephiNode2(t, to_note, _, _, _, _),
+  GephiNode2(f, from_note, _, _, _, _, _),
+  GephiNode2(t, to_note, _, _, _, _, _),
   c = count : {
         GephiEdge(from, to),
-        GephiNode(from, _, _, from_note, _, _, _, _),
-        GephiNode(to, _, _, to_note, _, _, _, _)
+        GephiNode(from, _, _, from_note, _, _, _, _, _),
+        GephiNode(to, _, _, to_note, _, _, _, _, _)
   }.
 
 

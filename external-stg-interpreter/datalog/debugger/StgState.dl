@@ -22,6 +22,8 @@
   | R_StablePointer{}
   | R_WeakPointer{}
   | R_ThreadId{}
+  // special namespace for analyses
+  | Analysis{}
 
 // mapping: resource ids  <->  Atom
 .decl AtomToRef(a : Atom, r : RefNamespace, value : number)
