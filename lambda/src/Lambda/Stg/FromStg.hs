@@ -1,5 +1,5 @@
 {-# LANGUAGE LambdaCase, TupleSections, StandaloneDeriving, TypeSynonymInstances, FlexibleInstances, RecordWildCards, OverloadedStrings #-}
-module Lambda.Stg.FromStg (codegenLambda) where
+module Lambda.Stg.FromStg (codegenLambda, CGStat(..)) where
 
 import Data.List (intercalate, partition)
 import Data.Set (Set)
@@ -45,6 +45,10 @@ data Env
 
   -- data constructors
   , conGroupMap   :: Map Name ConGroup
+
+  -- logging
+  , errors        :: [String]
+  , messages      :: [String]
   }
 
 emptyEnv :: Env
@@ -58,12 +62,14 @@ emptyEnv = Env
   , nameSet       = mempty
   , binderNameMap = mempty
   , conGroupMap   = mempty
+  , errors        = mempty
+  , messages      = mempty
   }
 
 -- utility
 
 addExternal :: External -> CG ()
-addExternal ext = modify $ \env@Env{..} -> env {externals = Map.insert (eName ext) ext externals}
+addExternal ext = modify' $ \env@Env{..} -> env {externals = Map.insert (eName ext) ext externals}
 
 addDef :: Def -> CG ()
 addDef d = modify' $ \env -> env {defs = d : defs env}
@@ -114,12 +120,12 @@ genName b = do
     Nothing -> case Set.member originalName nameSet of
       False -> do
         -- case: new GHC binder name (without name conflict)
-        modify $ \env@Env{..} -> env {nameSet = Set.insert originalName nameSet, binderNameMap = Map.insert originalName originalName binderNameMap}
+        modify' $ \env@Env{..} -> env {nameSet = Set.insert originalName nameSet, binderNameMap = Map.insert originalName originalName binderNameMap}
         pure originalName
       True -> do
         -- case: new GHC binder name (with name conflict)
         name <- deriveNewName originalName
-        modify $ \env@Env{..} -> env {binderNameMap = Map.insert originalName name binderNameMap}
+        modify' $ \env@Env{..} -> env {binderNameMap = Map.insert originalName name binderNameMap}
         pure name
 
 genBinder :: C.Binder -> CG (Name, RepType)
@@ -423,6 +429,16 @@ primMap :: Map Name External
 primMap = Map.fromList [(eName, e) | e@External{..} <- pExternals] where
   Program{..}  = GHCPrim.primPrelude
 
+reportError :: String -> CG ()
+reportError msg = do
+  modify' $ \env@Env{..} -> env {errors = msg : errors}
+  liftIO . P.putDoc $ P.dullred (P.text msg) P.<+> P.hardline
+
+reportMessage :: String -> CG ()
+reportMessage msg = do
+  modify' $ \env@Env{..} -> env {messages = msg : messages}
+  liftIO . P.putDoc $ P.dullcyan (P.text msg) P.<+> P.hardline
+
 visitOpApp :: Name -> C.StgOp -> [C.Arg] -> C.Type -> Maybe C.TyCon -> CG ()
 visitOpApp resultName op args ty mtc = do
   ffiTys <- runMaybeT $ do
@@ -433,13 +449,16 @@ visitOpApp resultName op args ty mtc = do
   case op of
     -- NOTE: tagToEnum primop is replaced with generated code
     C.StgPrimOp "tagToEnum#" -> do
+      reportMessage $ "replacing tagToEnum# at " ++ unpackName resultName
       genTagToEnum resultName args mtc
 
     C.StgPrimOp prim -> do
       let name = packName (BS8.unpack prim)
       case Map.lookup name primMap of
         Nothing -> do
-          let errLit = Lit $ LError $ "Unsupported GHC primop: " <> BS8.pack (BS8.unpack prim ++ " return type: " ++ show ty)
+          let errMsg = "Unsupported GHC primop: " ++ BS8.unpack prim ++ " return type: " ++ show ty
+              errLit = Lit . LError $ BS8.pack errMsg
+          reportError errMsg
           emitCmd $ S (resultName, resultRepType, errLit)
 
         Just e  -> do
@@ -464,14 +483,18 @@ visitOpApp resultName op args ty mtc = do
         let name    = BS8.unpack labelName
             argsTy  = map showArgType args
             retTy   = show ty
-            errLit  = Lit . LError . BS8.pack $ "Unsupported foreign primitive type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
+            errMsg  = "Unsupported foreign primitive type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
+            errLit  = Lit . LError . BS8.pack $ errMsg
+        reportError errMsg
         emitCmd $ S (resultName, resultRepType, errLit)
 
     C.StgFCallOp f@C.ForeignCall{..} -> case foreignCTarget of
       C.DynamicTarget -> do
         let (fnTy:argsTy) = map showArgType args
             retTy         = show ty
-            errLit        =  Lit . LError . BS8.pack $ "DynamicTarget is not supported: (" ++ fnTy ++ ") :: " ++ intercalate " -> " (argsTy ++ [retTy])
+            errMsg        = "DynamicTarget is not supported: (" ++ fnTy ++ ") :: " ++ intercalate " -> " (argsTy ++ [retTy])
+            errLit        =  Lit . LError . BS8.pack $ errMsg
+        reportError errMsg
         emitCmd $ S (resultName, resultRepType, errLit)
 
       C.StaticTarget _ labelName _ _ -> case ffiTys of
@@ -491,7 +514,9 @@ visitOpApp resultName op args ty mtc = do
           let name    = BS8.unpack labelName
               argsTy  = map showArgType args
               retTy   = show ty
-              errLit  = Lit . LError . BS8.pack $ "Unsupported foreign function type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
+              errMsg  = "Unsupported foreign function type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
+              errLit  = Lit . LError . BS8.pack $ errMsg
+          reportError errMsg
           emitCmd $ S (resultName, resultRepType, errLit)
 
 {-
@@ -605,6 +630,8 @@ visitExpr mname expr = case expr of
     emitCmd $ R bs2
     visitExpr mname e
 
+  C.StgTick _ e -> visitExpr mname e
+
   _ -> error . printf "unsupported expr %s" $ show expr
 
 visitAlt :: C.Alt -> CG (RepType, Alt)
@@ -698,7 +725,7 @@ isInternalScope :: C.Scope -> Bool
 isInternalScope = \case
   C.HaskellExported -> False
   C.ForeignExported -> False
-  _ -> False
+  _ -> True
 
 visitModule :: C.Module -> CG ([Name], [Name])
 visitModule C.Module{..} = do
@@ -715,17 +742,28 @@ visitModule C.Module{..} = do
   -- return public names: external top ids + exported top bindings
   pure (extNames ++ exportedTopNamesHS, exportedTopNamesFFI)
 
-codegenLambda :: C.Module -> IO Program
+codegenLambda :: C.Module -> IO (Program, CGStat)
 codegenLambda mod = do
   let modName     = packName . BS8.unpack . C.getModuleName $ C.moduleName mod
       conGroups   = convertTyCons $ C.moduleTyCons mod
       initialEnv  = emptyEnv { conGroupMap = Map.fromList [(cgName c, c) | c <- conGroups] }
   ((publicNames, foreignExportedNames), Env{..}) <- runStateT (visitModule mod) initialEnv
-  pure . smashLet $ Program
-    { pExternals            = Map.elems externals
-    , pConstructors         = conGroups
-    , pPublicNames          = publicNames
-    , pForeignExportedNames = foreignExportedNames
-    , pStaticData           = staticData
-    , pDefinitions          = defs
-    }
+  let finalPrg = smashLet $ Program
+        { pExternals            = Map.elems externals
+        , pConstructors         = conGroups
+        , pPublicNames          = publicNames
+        , pForeignExportedNames = foreignExportedNames
+        , pStaticData           = staticData
+        , pDefinitions          = defs
+        }
+      cgStat = CGStat
+        { cgMessages  = messages
+        , cgErrors    = errors
+        }
+  pure (finalPrg, cgStat)
+
+data CGStat
+  = CGStat
+  { cgMessages  :: [String]
+  , cgErrors    :: [String]
+  }
