@@ -114,13 +114,23 @@ repType = choice
   [ UnboxedTuple <$> braces (many primRep)
   , SingleValue  <$> primRep
   , PolymorphicRep <$ kw "PolymorphicRep"
+  , Auto <$ kw "Auto"
   ]
 
 binder :: Parser (Name, RepType)
-binder = (,) <$> var <* op ":" <*> repType
+binder = do
+  name <- var
+  ty <- choice
+    [ op ":" *> repType
+    , pure Auto
+    ]
+  pure (name, ty)
 
 binderArg :: Parser (Name, RepType)
-binderArg = parens binder
+binderArg = choice
+  [ parens binder
+  , (,) <$> var <*> pure Auto
+  ]
 
 integer = lexeme L.decimal
 signedInteger = L.signed sc' integer
@@ -175,7 +185,7 @@ data ExpKind
 
 expKind :: Parser ExpKind
 expKind = lookAhead $ do
-  var
+  binder
   op "="
   choice
     [ KClosure <$ op "\\closure"

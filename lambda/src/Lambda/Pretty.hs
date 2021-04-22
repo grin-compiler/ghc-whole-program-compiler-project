@@ -165,6 +165,7 @@ instance Pretty RepType where
     SingleValue t   -> pretty t
     UnboxedTuple l  -> braces (hsep $ map pretty l)
     PolymorphicRep  -> red $ text "PolymorphicRep"
+    Auto            -> red $ text "Auto"
 
 -- Name
 showName :: Name -> String

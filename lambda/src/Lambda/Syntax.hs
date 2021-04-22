@@ -104,6 +104,7 @@ data RepType
   = SingleValue   PrimRep
   | UnboxedTuple  [PrimRep]
   | PolymorphicRep
+  | Auto          -- HINT: inferred type
   deriving (Generic, Data, Eq, Show, Ord)
 
 -- data constructor declaration
