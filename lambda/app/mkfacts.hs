@@ -38,6 +38,8 @@ main = do
 
   putStrLn $ "linking lambda IR datalog facts into: " ++ irFactsPath
 
+  -- HINT: cleanup old content
+  removePathForcibly irFactsPath
   createDirectoryIfMissing True irFactsPath
 
   withArchive lampakPath $ do
