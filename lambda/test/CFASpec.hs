@@ -262,7 +262,7 @@ spec = do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           main =
             let
-              clo = \[] p10 ->
+              clo = \closure [] p10 ->
                 letS
                   v10 = p10
                 v10
@@ -419,7 +419,7 @@ spec = do
             v02
           fun2 =
             let
-              c20 = \[] p20 ->
+              c20 = \closure [] p20 ->
                 letS
                   v20 = p20
                 v20
@@ -455,7 +455,7 @@ spec = do
             v02
           fun2 =
             let
-              c20 = \[] p20 ->
+              c20 = \closure [] p20 ->
                 p20
             c20
         |]
@@ -529,11 +529,11 @@ spec = do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           main =
             let
-              clo1_ap = \[] p10 p11 ->
+              clo1_ap = \closure [] p10 p11 ->
                 letS
                   v10 = p10 $ p11
                 v10
-              clo2_id = \[] p20 ->
+              clo2_id = \closure [] p20 ->
                 p20
             letS
               v00 = #T_Int64 0
@@ -701,7 +701,7 @@ spec = do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           main =
             let
-              c00 = \[] p00 p01 ->
+              c00 = \closure [] p00 p01 ->
                 letS
                   v10 = [Tup2 p00 p01]
                 v10
@@ -751,7 +751,7 @@ spec = do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           main =
             let
-              c00 = \[] p00 p01 ->
+              c00 = \closure [] p00 p01 ->
                 letS
                   v10 = [Tup2 p00 p01]
                 v10
@@ -853,21 +853,21 @@ spec = do
             v04
           clo_fun1_ap =
             let
-              fun1_ap = \[] p10 p11 ->
+              fun1_ap = \closure [] p10 p11 ->
                 letS
                   v10 = p10 $ p11
                 v10
             fun1_ap
           clo_fun2_ap =
             let
-              fun2_ap = \[] p20 p21 ->
+              fun2_ap = \closure [] p20 p21 ->
                 letS
                   v20 = p20 $ p21
                 v20
             fun2_ap
           clo_fun3_id =
             let
-              fun3_id = \[] p30 ->
+              fun3_id = \closure [] p30 ->
                 p30
             fun3_id
         |]
@@ -1065,7 +1065,7 @@ spec = do
             letS
               v10 = [Tup2 p10 p11]
             let
-              v11 = \[] p20 p21 ->
+              v11 = \closure [] p20 p21 ->
                 p21
             letS
               v12 = v11 $ v10

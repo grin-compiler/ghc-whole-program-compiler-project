@@ -75,7 +75,7 @@ spec = do
             , [ "v11" , "v11" ]
             ]
           )
-        , ( "RaisedEx" , [] )
+        , ( "RaisedEx" , [["Control.Exception.Base.nestedAtomically"]] )
         , ( "TVar", [] )
         , ( "TagValue"
           , [ [ "a00" , "GHC.Prim.Unit#" ]

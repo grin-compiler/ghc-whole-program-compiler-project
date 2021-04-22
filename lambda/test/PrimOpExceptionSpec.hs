@@ -302,9 +302,9 @@ spec = do
             fun1_normal
           fun4_handler_thunk =
             let
-              clo40 = \[] p40 ->
+              clo40 = \closure [] p40 ->
                 let
-                  clo41 = \[] ->
+                  clo41 = \closure [] ->
                     letS
                       v40 = fun2_handler $ p40
                     v40

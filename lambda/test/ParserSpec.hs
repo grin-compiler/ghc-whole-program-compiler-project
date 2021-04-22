@@ -28,12 +28,12 @@ spec = do
                 r
           x
         |]
-      let after = Program [] []
-            [ Def "test" ["p"]
+      let after = Program [] [] [] [] []
+            [ Def "test" [("p", Auto)]
               ( LetS
-                [ ("x", Case "p"
+                [ ("x", Auto, Case "p"
                     [ Alt "alt.1" DefaultPat
-                        ( LetS [("r", Lit (LInt64 1)) ] (Var "r"))
+                        ( LetS [("r", Auto, Lit (LInt64 1)) ] (Var "r"))
                     ]
                   )
                 ] (Var "x")
