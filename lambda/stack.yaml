@@ -8,6 +8,5 @@ packages:
   - 'preprocess-ghc-primops'
 
 extra-deps:
-  - souffle-haskell-2.1.0
   - zip-1.7.0
   - functor-infix-0.0.5@sha256:cea21a321031f556d7a21b51e049493e7cb78baf64dd63f0d1a36de01c4c735b,661
