@@ -143,7 +143,7 @@ convertDef :: Exp -> DL ()
 convertDef = \case
   Def n a b -> do
     emit [("IsFunction", [N n])]
-    emit [("FunctionParameter", [N n, I i, N p]) | (i,(p,t)) <- zip [0..] a]
+    emit [("FunctionParameter", [N n, I i, N p]) | (i,(p,_t)) <- zip [0..] a]
     emit [("CodeArity", [N n, I $ length a])]
     -- bind
     ret <- convertBind (CodeName n) b
@@ -163,19 +163,19 @@ convertBind prevInst = \case
   Var n -> do
     pure n
   Let l b -> do
-    forM_ l $ \(n,t,e) -> do
+    forM_ l $ \(n,_t,e) -> do
       emit [("EvalMode", [N n, S "lazy"])]
       convertSimpleExp n e
     i <- foldM emitInstSeq prevInst l
     convertBind i b
   LetS l b -> do
-    forM_ l $ \(n,t,e) -> do
+    forM_ l $ \(n,_t,e) -> do
       emit [("EvalMode", [N n, S "strict"])]
       convertSimpleExp n e
     i <- foldM emitInstSeq prevInst l
     convertBind i b
   LetRec l b -> do
-    forM_ l $ \(n,t,e) -> do
+    forM_ l $ \(n,_t,e) -> do
       emit [("EvalMode", [N n, S "lazy"])]
       convertSimpleExp n e
     case l of
@@ -210,7 +210,7 @@ convertSimpleExp result = \case
   Closure v p b -> do
     emit [("IsClosure", [N result])]
     emit [("ClosureVariable",  [N result, I i, N x]) | (i,x) <- zip [0..] v]
-    emit [("ClosureParameter", [N result, I i, N x]) | (i,(x,t)) <- zip [0..] p]
+    emit [("ClosureParameter", [N result, I i, N x]) | (i,(x,_t)) <- zip [0..] p]
     emit [("CodeArity", [N result, I $ length p])]
     -- bind
     ret <- convertBind (CodeName result) b
