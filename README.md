@@ -90,3 +90,9 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
 ## TODO
 **Ext-STG IR**
 - export IdInfo (without it `gen-exe` compiles -O0 executables)
+
+## UnZip with Zstd support
+The `.modpak` and `.fullpak` files use Zstd compression method that was introduced in the Zip 6.3.8 standard in 2020.  
+The GHC-WPC tooling can handle Zstd zip files out of the box.  
+But if you'd like to unpack the `.modpak` and `.fullpak` files manually then you'll need an `unzip` version with Zstd support.  
+https://github.com/csabahruska/unzip-zstd
