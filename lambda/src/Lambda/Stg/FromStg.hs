@@ -13,6 +13,10 @@ import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Text as T
 import Control.Monad.Trans.Maybe
 
+import Data.Functor.Foldable
+import qualified Data.Foldable
+import Transformations.Util
+
 -- External STG
 import qualified Stg.Syntax as C
 import Stg.Reconstruct (topBindings)
@@ -38,10 +42,9 @@ data Env
   , commands      :: ![Cmd]
   , commandStack  :: ![[Cmd]]
 
-  -- name handling
+  -- derive new name related and defined names
   , namePool      :: !(Map Name Int)
   , nameSet       :: !(Set Name)
-  , binderNameMap :: !(Map Name Name)
 
   -- data constructors
   , conGroupMap   :: Map Name ConGroup
@@ -49,6 +52,15 @@ data Env
   -- logging
   , errors        :: [String]
   , messages      :: [String]
+
+  -- current module info
+  , thisUnitId    :: String
+  , thisModule    :: String
+
+  -- name shadowing related
+  , scopeName       :: Name             -- HINT: current scope name
+  , shadowedNameMap :: !(Map Name Name) -- HINT: substitution map for shadowed names, original name -> unique name
+  , scopeShadowSet  :: !(Set Name)      -- HINT: shadowed (original) names defined in the current scope
   }
 
 emptyEnv :: Env
@@ -60,16 +72,58 @@ emptyEnv = Env
   , commandStack  = mempty
   , namePool      = mempty
   , nameSet       = mempty
-  , binderNameMap = mempty
   , conGroupMap   = mempty
   , errors        = mempty
   , messages      = mempty
+  , thisUnitId    = ""
+  , thisModule    = ""
+  , scopeName       = mempty
+  , shadowedNameMap = mempty
+  , scopeShadowSet  = mempty
   }
 
 -- utility
 
+scopeBracket :: Name -> CG a -> CG a
+scopeBracket sn action = do
+  curScopeName <- gets scopeName
+  curShadowMap <- gets shadowedNameMap
+  curScopeShadowSet <- gets scopeShadowSet
+  modify' $ \env@Env{..} ->
+    env { scopeName       = sn
+        , scopeShadowSet  = mempty
+        }
+  result <- action
+  modify' $ \env@Env{..} ->
+    env { scopeName       = curScopeName
+        , shadowedNameMap = curShadowMap
+        , scopeShadowSet  = curScopeShadowSet
+        }
+  pure result
+
+refreshTyVars :: [Ty] -> CG [Ty]
+refreshTyVars tys = do
+  let tyVars    = Set.toList $ Set.unions [cata folder t | t <- tys]
+      folder tf = foldNameTyF Set.singleton tf `mappend` Data.Foldable.fold tf
+
+  substEnv <- forM tyVars $ \oldName -> do
+    newName <- deriveNewQualifiedName oldName
+    pure (oldName, newName)
+
+  let substFun :: Ty -> Ty
+      substFun t = ana (project . mapNameTy (subst $ Map.fromList substEnv)) t
+  pure $ map substFun tys
+
 addExternal :: External -> CG ()
 addExternal ext = modify' $ \env@Env{..} -> env {externals = Map.insert (eName ext) ext externals}
+
+addPrimOpExternal :: External -> CG ()
+addPrimOpExternal ext@External{..} = do
+  extMap <- gets externals
+  unless (Map.member eName extMap) $ do
+    -- gen fresh names
+    newRetTy : newArgsTy <- refreshTyVars $ eRetType : eArgsType
+    addExternal $ ext {eRetType = newRetTy, eArgsType = newArgsTy}
 
 addDef :: Def -> CG ()
 addDef d = modify' $ \env -> env {defs = d : defs env}
@@ -83,53 +137,84 @@ genDataConName C.DataCon{..} = mkPackageQualifiedName (BS8.unpack $ C.getUnitId 
 
 -- name handling
 
-deriveNewName :: Name -> CG Name
-deriveNewName name = do
+deriveNewName :: Bool -> Name -> CG Name
+deriveNewName isQualified name = do
   {-
-    - renerates unique name like: my_name.1
+    - generates unique name like: my_name.1
     - does not add to substitution map
   -}
   (newName, conflict) <- state $ \env@Env{..} ->
     let idx = Map.findWithDefault 0 name namePool
-        new = packName $ printf "%s_%d" name idx
+        new = if isQualified
+                then mkPackageQualifiedName thisUnitId thisModule (printf "%s_%d" name idx)
+                else packName (printf "%s_%d" name idx)
     in  ( (new, Set.member new nameSet)
         , env {namePool = Map.insert name (succ idx) namePool, nameSet = Set.insert new nameSet}
         )
   if conflict
-    then deriveNewName name
+    then deriveNewName isQualified name
     else pure newName
+
+deriveNewQualifiedName :: Name -> CG Name
+deriveNewQualifiedName = deriveNewName True
 
 encodeBinderName :: C.Binder -> Name
 encodeBinderName C.Binder{..}
+  -- special case
+  | binderId == C.rootMainBinderId = mkPackageQualifiedName "main" ":Main" "main"
+
+  -- normal case
   | isExported      = mkPackageQualifiedName unitId modName (BS8.unpack binderName)
   | binderTopLevel  = mkPackageQualifiedName unitId modName (BS8.unpack binderName ++ "_" ++ show bu)
-  | otherwise       = packName (BS8.unpack binderName ++ "_" ++ show bu)
+  | otherwise       = mkPackageQualifiedName unitId modName (BS8.unpack binderName ++ "_" ++ show bu)
+--  | otherwise       = packName (BS8.unpack binderName ++ "_" ++ show bu)
   where
     C.BinderId bu = binderId
     unitId        = BS8.unpack $ C.getUnitId binderUnitId
     modName       = BS8.unpack $ C.getModuleName binderModule
     isExported    = not $ isInternalScope binderScope
 
--- maps GHC unique binder names to unique lambda names
-genName :: C.Binder -> CG Name
-genName b = do
+defBinder :: C.Binder -> CG (Name, RepType)
+defBinder b = (,) <$> defName b <*> pure (convertType $ C.binderType b)
+
+getBinder :: C.Binder -> CG (Name, RepType)
+getBinder b = (,) <$> getName b <*> pure (convertType $ C.binderType b)
+
+getName :: C.Binder -> CG Name
+getName b = do
   let originalName = encodeBinderName b
   Env{..} <- get
-  case Map.lookup originalName binderNameMap of
-    Just name -> pure name
-    Nothing -> case Set.member originalName nameSet of
-      False -> do
-        -- case: new GHC binder name (without name conflict)
-        modify' $ \env@Env{..} -> env {nameSet = Set.insert originalName nameSet, binderNameMap = Map.insert originalName originalName binderNameMap}
-        pure originalName
-      True -> do
-        -- case: new GHC binder name (with name conflict)
-        name <- deriveNewName originalName
-        modify' $ \env@Env{..} -> env {binderNameMap = Map.insert originalName name binderNameMap}
-        pure name
+  unless (Set.member originalName nameSet) $ do
+    fail $ "unknown name: " ++ unpackName originalName
+  pure $ case Map.lookup originalName shadowedNameMap of
+    Nothing           -> originalName
+    Just shadowedName -> shadowedName
 
-genBinder :: C.Binder -> CG (Name, RepType)
-genBinder b = (,) <$> genName b <*> pure (convertType $ C.binderType b)
+defName :: C.Binder -> CG Name
+defName b = do
+  let originalName = encodeBinderName b
+  Env{..} <- get
+  case Set.member originalName nameSet of
+    False -> do
+      -- not defined yet
+      modify' $ \env@Env{..} -> env {nameSet = Set.insert originalName nameSet}
+      pure originalName
+    True -> case Set.member originalName scopeShadowSet of
+      True  -> do
+        -- already shadowed in this scope
+        -- only one shadowing per scope is allowed
+        reportError $ "redefinition of name: " ++ unpackName originalName ++ " in: " ++ unpackName scopeName
+        pure $ originalName <> scopeName <> "_illegal_redefinition"
+      False -> do
+        -- not defined in the current scope yet (only in parent scope)
+        shadowedName <- deriveNewName False originalName
+        reportMessage $ "shadowing of name: " ++ unpackName originalName ++ " remapped to: " ++ unpackName shadowedName ++
+                        " in: " ++ unpackName scopeName
+        modify' $ \env@Env{..} ->
+          env { nameSet         = Set.insert originalName nameSet
+              , shadowedNameMap = Map.insert originalName shadowedName shadowedNameMap
+              }
+        pure shadowedName
 
 -- rep type conversion
 
@@ -192,42 +277,42 @@ showArgType = \case
 
 ffiArgType :: C.Arg -> MaybeT CG Ty
 ffiArgType = \case
-  C.StgLitArg l -> TySimple <$> lift (deriveNewName "t") <*> pure (getLitType l)
+  C.StgLitArg l -> TySimple <$> lift (deriveNewQualifiedName "t") <*> pure (getLitType l)
   C.StgVarArg b -> do
-    (name, repType) <- lift $ genBinder b
+    (name, repType) <- lift $ getBinder b
     let cvtName = packName . BS8.unpack
     case C.binderType b of
       C.SingleValue C.UnliftedRep -> case BS8.words $ C.binderTypeSig b of
         -- NOTE: byte array is allowed as FFI argument ; this is GHC special case
         ["MutableByteArray#", varA] -> do
-          n0 <- lift (deriveNewName "t")
-          n1 <- lift (deriveNewName "t")
+          n0 <- lift (deriveNewQualifiedName "t")
+          n1 <- lift (deriveNewQualifiedName "t")
           pure $ TyCon n0 "MutableByteArray#" [TyCon n1 (cvtName varA) []]
 
         ["ByteArray#"] -> do
-          n0 <- lift (deriveNewName "t")
+          n0 <- lift (deriveNewQualifiedName "t")
           pure $ TyCon n0 "ByteArray#" []
 
         ["Weak#", varA] -> do
-          n0 <- lift (deriveNewName "t")
-          n1 <- lift (deriveNewName "t")
+          n0 <- lift (deriveNewQualifiedName "t")
+          n1 <- lift (deriveNewQualifiedName "t")
           pure $ TyCon n0 "Weak#" [TyCon n1 (cvtName varA) []]
 
         ["ThreadId#"] -> do
-          n0 <- lift (deriveNewName "t")
+          n0 <- lift (deriveNewQualifiedName "t")
           pure $ TyCon n0 "ThreadId#" []
 
         _ -> fail ""
 
       C.SingleValue t -> do
         t1 <- MaybeT . pure $ getType (C.binderTypeSig b) t
-        n0 <- lift (deriveNewName "t")
+        n0 <- lift (deriveNewQualifiedName "t")
         pure $ TySimple n0 t1
 
       C.UnboxedTuple []
         | name `elem` ["ghc-prim_GHC.Prim.coercionToken#", "ghc-prim_GHC.Prim.realWorld#", "ghc-prim_GHC.Prim.void#"]
         -> do
-          n0 <- lift (deriveNewName "t")
+          n0 <- lift (deriveNewQualifiedName "t")
           pure $ TyCon n0 name []
 
       _ -> fail ""
@@ -240,12 +325,12 @@ ffiRetType = \case
   where
     mkFFIUTup l = do
       args <- forM (filter (/= C.VoidRep) l) $ \r ->
-        TySimple <$> lift (deriveNewName "t") <*> MaybeT (pure $ getType "" r)
+        TySimple <$> lift (deriveNewQualifiedName "t") <*> MaybeT (pure $ getType "" r)
       lift $ mkUnboxedTuple args
 
 mkUnboxedTuple :: [Ty] -> CG Ty
 mkUnboxedTuple args = do
-  n0 <- deriveNewName "t"
+  n0 <- deriveNewQualifiedName "t"
   pure $ case length args of
     0 -> TyCon n0 "ghc-prim_GHC.Prim.(##)" []
     1 -> TyCon n0 "ghc-prim_GHC.Prim.Unit#" args
@@ -340,7 +425,7 @@ isPrimVoidRep n = Set.member n voidNames where
 
 emitLitArg :: RepType -> Lit -> CG Name
 emitLitArg t l = do
-  name <- deriveNewName "lit"
+  name <- deriveNewQualifiedName "lit"
   emitCmd $ S (name, t, Lit l)
   pure name
 
@@ -354,7 +439,7 @@ visitArgT = \case
     (,t) <$> emitLitArg t (convertLit l)
 
   C.StgVarArg o -> do
-    (name, repType) <- genBinder o
+    (name, repType) <- getBinder o
     n <- if isPrimVoidRep name
       then emitLitArg (SingleValue VoidRep) . LToken . BS8.pack . unpackName $ name
       else pure name
@@ -394,7 +479,7 @@ closeBindChain = do
 genResultName :: Maybe Name -> CG Name
 genResultName = \case
   Just n  -> pure n
-  Nothing -> deriveNewName "result"
+  Nothing -> deriveNewQualifiedName "result"
 
 -- tagToEnum special case
 genTagToEnum :: Name -> [C.Arg] -> Maybe C.TyCon -> CG ()
@@ -411,8 +496,8 @@ genTagToEnum resultName [arg] (Just tc) = do
       | otherwise -> do
           arg2 <- visitArg arg
           alts <- forM (zip [0..] cgCons) $ \(tagIdx, ConSpec{..}) -> do
-            altName <- deriveNewName "tagToEnum_alt"
-            conVar <- deriveNewName "tagToEnum_con"
+            altName <- deriveNewQualifiedName "tagToEnum_alt"
+            conVar <- deriveNewQualifiedName "tagToEnum_con"
             let conExp = LetS [(conVar, SingleValue UnliftedRep, Con csName [])] $ Var conVar
             pure $ Alt altName (LitPat (LInt64 tagIdx)) conExp
           let ((Alt defaultAltName _ defaultExp) : alts2) = alts
@@ -462,7 +547,7 @@ visitOpApp resultName op args ty mtc = do
           emitCmd $ S (resultName, resultRepType, errLit)
 
         Just e  -> do
-          addExternal e
+          addPrimOpExternal e
           args2 <- mapM visitArg args
           emitCmd $ S (resultName, resultRepType, App name args2)
 
@@ -534,7 +619,7 @@ visitExpr mname expr = case expr of
 
   -- S item
   C.StgApp var [] _ _ -> do
-    (n, t) <- genBinder var
+    (n, t) <- getBinder var
     name <- genResultName mname
     case t of
       SingleValue LiftedRep -> do
@@ -551,7 +636,7 @@ visitExpr mname expr = case expr of
   -- S item
   -- generate result var if necessary
   C.StgApp fun args t _ -> do
-    fun2 <- genName fun
+    fun2 <- getName fun
     args2 <- mapM visitArg args
     name <- genResultName mname
     emitCmd $ S (name, convertType t, App fun2 args2)
@@ -578,7 +663,7 @@ visitExpr mname expr = case expr of
     -- caseses
       -- pattern match: emit case an create alts ; generate result var if necessary
       -- eval: continue building the binding chain (default rhs) ; no need for result var because binding chain continues
-    (scrutName, scrutType) <- genBinder scrutResult
+    (scrutName, scrutType) <- defBinder scrutResult
     visitExpr (Just scrutName) scrutExpr
     case alts of
       -- NOTE: force convention in STG
@@ -600,15 +685,18 @@ visitExpr mname expr = case expr of
   ---------------------------
   -- L item ; no need for result var because binding chain continues
   C.StgLet (C.StgNonRec b r) e -> do
-    name <- genName b
-    (t, exp) <- visitRhs r
-    emitCmd $ L (name, t, exp)
-    visitExpr mname e
+    name <- defName b
+    scopeBracket name $ do
+      (t, exp) <- visitRhs r
+      emitCmd $ L (name, t, exp)
+      visitExpr mname e
 
   -- R item ; no need for result var because binding chain continues
   C.StgLet (C.StgRec bs) e -> do
-    bs2 <- forM bs $ \(b, r) -> do
-      name <- genName b
+    bs1 <- forM bs $ \(b, r) -> do
+      name <- defName b
+      pure (name, r)
+    bs2 <- forM bs1 $ \(name, r) -> scopeBracket name $ do
       (t, exp) <- visitRhs r
       pure (name, t, exp)
     emitCmd $ R bs2
@@ -616,15 +704,18 @@ visitExpr mname expr = case expr of
 
   -- L item ; no need for result var because binding chain continues
   C.StgLetNoEscape (C.StgNonRec b r) e -> do
-    name <- genName b
-    (t, exp) <- visitRhs r
-    emitCmd $ L (name, t, exp)
-    visitExpr mname e
+    name <- defName b
+    scopeBracket name $ do
+      (t, exp) <- visitRhs r
+      emitCmd $ L (name, t, exp)
+      visitExpr mname e
 
   -- R item ; no need for result var because binding chain continues
   C.StgLetNoEscape (C.StgRec bs) e -> do
-    bs2 <- forM bs $ \(b, r) -> do
-      name <- genName b
+    bs1 <- forM bs $ \(b, r) -> do
+      name <- defName b
+      pure (name, r)
+    bs2 <- forM bs1 $ \(name, r) -> scopeBracket name $ do
       (t, exp) <- visitRhs r
       pure (name, t, exp)
     emitCmd $ R bs2
@@ -636,16 +727,17 @@ visitExpr mname expr = case expr of
 
 visitAlt :: C.Alt -> CG (RepType, Alt)
 visitAlt (C.Alt altCon argIds body) = do
-  openNewBindChain
-  cpat <- case altCon of
-    C.AltDataCon dc  -> NodePat (genDataConName dc) <$> mapM genName argIds
-    C.AltLit lit     -> pure . LitPat $ convertLit lit
-    C.AltDefault     -> pure DefaultPat
-  -- bind chain
-  visitExpr Nothing body
-  (rt, body2) <- closeBindChain
-  altName <- deriveNewName "alt"
-  pure (rt, Alt altName cpat body2)
+  altName <- deriveNewQualifiedName "alt"
+  scopeBracket altName $ do
+    openNewBindChain
+    cpat <- case altCon of
+      C.AltDataCon dc  -> NodePat (genDataConName dc) <$> mapM defName argIds
+      C.AltLit lit     -> pure . LitPat $ convertLit lit
+      C.AltDefault     -> pure DefaultPat
+    -- bind chain
+    visitExpr Nothing body
+    (rt, body2) <- closeBindChain
+    pure (rt, Alt altName cpat body2)
 
 joinRepTypes :: String -> [RepType] -> RepType
 joinRepTypes msg = foldr1 f where
@@ -674,7 +766,7 @@ visitRhs = \case
 
   C.StgRhsClosure _ _ bs body -> do
     openNewBindChain
-    bs2 <- mapM genBinder bs
+    bs2 <- mapM defBinder bs
     visitExpr Nothing body
     (_, body2) <- closeBindChain
     pure (SingleValue LiftedRep, Closure [] bs2 body2)
@@ -682,17 +774,18 @@ visitRhs = \case
 visitTopRhs :: C.Binder -> C.Rhs -> CG ()
 visitTopRhs b = \case
   C.StgRhsClosure _ _ bs body -> do
-    openNewBindChain
-    name <- genName b
-    params <- mapM genBinder bs
-    visitExpr Nothing body
-    (_, body2) <- closeBindChain
-    addDef (Def name params body2)
+    name <- getName b
+    scopeBracket name $ do
+      openNewBindChain
+      params <- mapM defBinder bs
+      visitExpr Nothing body
+      (_, body2) <- closeBindChain
+      addDef (Def name params body2)
 
   C.StgRhsCon con args -> do
     openNewBindChain
-    name <- genName b
-    resultVar <- deriveNewName "result"
+    name <- getName b
+    resultVar <- deriveNewQualifiedName "result"
     con2 <- Con (genDataConName con) <$> mapM visitArg args
     emitCmd $ S (resultVar, SingleValue LiftedRep, con2)
     (_, body) <- closeBindChain
@@ -701,7 +794,7 @@ visitTopRhs b = \case
 visitTopBinder :: C.TopBinding -> CG ()
 visitTopBinder = \case
   C.StgTopStringLit b s -> do
-    name <- genName b
+    name <- getName b
     addStaticData $ StaticData name (StaticString s)
 
   C.StgTopLifted (C.StgNonRec b r) -> do
@@ -729,14 +822,19 @@ isInternalScope = \case
 
 visitModule :: C.Module -> CG ([Name], [Name])
 visitModule C.Module{..} = do
+  -- setup module info
+  modify' $ \env ->
+    env { thisUnitId = BS8.unpack $ C.getUnitId moduleUnitId
+        , thisModule = BS8.unpack $ C.getModuleName moduleName
+        }
   -- register top level names
-  let (internalIds, exportedIds)    = partition (isInternalScope . C.binderScope) $ concatMap topBindings moduleTopBindings
+  let (internalIds, exportedIds)      = partition (isInternalScope . C.binderScope) $ concatMap topBindings moduleTopBindings
       (exportedIdsHS, exportedIdsFFI) = partition (\b -> C.binderScope b == C.HaskellExported) exportedIds
-  mapM_ genName internalIds
-  exportedTopNamesHS <- mapM genName exportedIdsHS
-  exportedTopNamesFFI <- mapM genName exportedIdsFFI
+  mapM_ defName internalIds
+  exportedTopNamesHS <- mapM defName exportedIdsHS
+  exportedTopNamesFFI <- mapM defName exportedIdsFFI
   -- register external names
-  extNames <- mapM genName (concatMap snd $ concatMap snd moduleExternalTopIds)
+  extNames <- mapM defName (concatMap snd $ concatMap snd moduleExternalTopIds)
   -- convert bindings
   mapM_ visitTopBinder moduleTopBindings
   -- return public names: external top ids + exported top bindings
