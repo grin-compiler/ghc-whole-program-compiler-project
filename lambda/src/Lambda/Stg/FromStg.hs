@@ -623,8 +623,15 @@ visitExpr mname expr = case expr of
     name <- genResultName mname
     case t of
       SingleValue LiftedRep -> do
-        -- NOTE: force thunk -- FIXME: this is wrong!!! handle join and non-join ids properly! take the interpreter as an example
+        -- NOTE: force thunk
         emitCmd $ S (name, SingleValue LiftedRep, App n [])
+
+      _ | C.JoinId x <- C.binderDetails var
+        -> do
+          unless (x == 0) $ do
+            reportError $ "join-id var arity error, expected 0, got: " ++ show x ++ " id: " ++ show var
+          -- HINT: call join id
+          emitCmd $ S (name, t, App n [])
 
       _ | isPrimVoidRep n
         -> do
