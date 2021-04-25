@@ -623,7 +623,7 @@ visitExpr mname expr = case expr of
     name <- genResultName mname
     case t of
       SingleValue LiftedRep -> do
-        -- NOTE: force thunk
+        -- NOTE: force thunk -- FIXME: this is wrong!!! handle join and non-join ids properly! take the interpreter as an example
         emitCmd $ S (name, SingleValue LiftedRep, App n [])
 
       _ | isPrimVoidRep n
@@ -823,9 +823,11 @@ isInternalScope = \case
 visitModule :: C.Module -> CG ([Name], [Name])
 visitModule C.Module{..} = do
   -- setup module info
+  let unitId  = BS8.unpack $ C.getUnitId moduleUnitId
+      modName = BS8.unpack $ C.getModuleName moduleName
   modify' $ \env ->
-    env { thisUnitId = BS8.unpack $ C.getUnitId moduleUnitId
-        , thisModule = BS8.unpack $ C.getModuleName moduleName
+    env { thisUnitId = unitId
+        , thisModule = modName
         }
   -- register top level names
   let (internalIds, exportedIds)      = partition (isInternalScope . C.binderScope) $ concatMap topBindings moduleTopBindings
@@ -837,6 +839,11 @@ visitModule C.Module{..} = do
   extNames <- mapM defName (concatMap snd $ concatMap snd moduleExternalTopIds)
   -- convert bindings
   mapM_ visitTopBinder moduleTopBindings
+
+  -- HACK: add a super main function for the Main module
+  when (unitId == "main" && modName == "Main") $ do
+    addMain
+
   -- return public names: external top ids + exported top bindings
   pure (extNames ++ exportedTopNamesHS, exportedTopNamesFFI)
 
@@ -865,3 +872,13 @@ data CGStat
   { cgMessages  :: [String]
   , cgErrors    :: [String]
   }
+
+---------
+
+addMain :: CG ()
+addMain = addDef mainFun where
+  mainName = "main_::Main.main"
+  mainFun = Def mainName [] $ LetS
+    [ ("main_::Main.main_v00", SingleValue VoidRep, Lit $ LToken $ BS8.pack "ghc-prim_GHC.Prim.void#")
+    , ("main_::Main.main_v01", SingleValue LiftedRep, App (packName "main_:Main.main") ["main_::Main.main_v00"])
+    ] (Var "main_::Main.main_v01")

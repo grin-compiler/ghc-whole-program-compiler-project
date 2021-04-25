@@ -57,3 +57,6 @@ main = do
         factData <- getEntry e
         let entryFileName = takeFileName entryPath
         liftIO $ BS8.appendFile (irFactsPath </> entryFileName) factData
+
+  -- InitialReachable.facts
+  writeFile (irFactsPath </> "InitialReachable.facts") $ "main_::Main.main\n"
