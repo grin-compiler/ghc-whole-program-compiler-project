@@ -40,19 +40,19 @@ spec = do
     it "atomically#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "atomically#" :: (tf.4 : {"State#" {RealWorld} @ t.14} @ t.13 -> {"GHC.Prim.Unit#" %a.1} @ t.15) -> {"State#" {RealWorld} @ t.17} @ t.16 -> {"GHC.Prim.Unit#" %a.1} @ t.18
+            "atomically#" :: (tf.4 : {"State#" {RealWorld} @ t.14} @ t.13 -> {"ghc-prim_GHC.Prim.Unit#" %a.1} @ t.15) -> {"State#" {RealWorld} @ t.17} @ t.16 -> {"ghc-prim_GHC.Prim.Unit#" %a.1} @ t.18
           main =
             letS
               v00 = #T_Token "RealWorld"
               v01 = "atomically#" $ fun1 v00
               v02 = case v01 of
-                ("GHC.Prim.Unit#" v03) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v03) @ a00 ->
                   v03
             v02
           fun1 p10 =
             letS
               v10 = #T_Int64 0
-              v11 = ["GHC.Prim.Unit#" v10]
+              v11 = ["ghc-prim_GHC.Prim.Unit#" v10]
             v11
         |]
       addUsedM cfa
@@ -78,14 +78,14 @@ spec = do
         , ( "RaisedEx" , [["Control.Exception.Base.nestedAtomically"]] )
         , ( "TVar", [] )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "p10" , "lit:T_Token \"RealWorld\"" ]
             , [ "v00" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v01" , "GHC.Prim.Unit#" ]
+            , [ "v01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v02" , "lit:T_Int64" ]
             , [ "v03" , "lit:T_Int64" ]
             , [ "v10" , "lit:T_Int64" ]
-            , [ "v11" , "GHC.Prim.Unit#" ]
+            , [ "v11" , "ghc-prim_GHC.Prim.Unit#" ]
             ]
           )
         ]
@@ -93,24 +93,24 @@ spec = do
     it "catchRetry#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "catchRetry#" :: (tf.0 : {"State#" {RealWorld} @ t.1} @ t.0 -> {"GHC.Prim.Unit#" %a.0} @ t.2) -> (tf.1 : {"State#" {RealWorld} @ t.4} @ t.3 -> {"GHC.Prim.Unit#" %a.0} @ t.5) -> {"State#" {RealWorld} @ t.7} @ t.6 -> {"GHC.Prim.Unit#" %a.0} @ t.8
+            "catchRetry#" :: (tf.0 : {"State#" {RealWorld} @ t.1} @ t.0 -> {"ghc-prim_GHC.Prim.Unit#" %a.0} @ t.2) -> (tf.1 : {"State#" {RealWorld} @ t.4} @ t.3 -> {"ghc-prim_GHC.Prim.Unit#" %a.0} @ t.5) -> {"State#" {RealWorld} @ t.7} @ t.6 -> {"ghc-prim_GHC.Prim.Unit#" %a.0} @ t.8
           main =
             letS
               v00 = #T_Token "RealWorld"
               v01 = "catchRetry#" $ fun1_normal fun2_handler v00
               v03 = case v01 of
-                ("GHC.Prim.Unit#" v02) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v02) @ a00 ->
                   v02
             v03
           fun1_normal p10 =
             letS
               v10 = #T_Int64 0
-              v11 = ["GHC.Prim.Unit#" v10]
+              v11 = ["ghc-prim_GHC.Prim.Unit#" v10]
             v11
           fun2_handler p20 =
             letS
               v20 = #T_Int64 0
-              v21 = ["GHC.Prim.Unit#" v20]
+              v21 = ["ghc-prim_GHC.Prim.Unit#" v20]
             v21
         |]
       addUsedM cfa
@@ -143,17 +143,17 @@ spec = do
         , ( "RaisedEx" , [ ] )
         , ( "TVar", [] )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "p10" , "lit:T_Token \"RealWorld\"" ]
             , [ "p20" , "lit:T_Token \"RealWorld\"" ]
             , [ "v00" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v01" , "GHC.Prim.Unit#" ]
+            , [ "v01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v02" , "lit:T_Int64" ]
             , [ "v03" , "lit:T_Int64" ]
             , [ "v10" , "lit:T_Int64" ]
-            , [ "v11" , "GHC.Prim.Unit#" ]
+            , [ "v11" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v20" , "lit:T_Int64" ]
-            , [ "v21" , "GHC.Prim.Unit#" ]
+            , [ "v21" , "ghc-prim_GHC.Prim.Unit#" ]
             ]
           )
         ]
@@ -161,14 +161,14 @@ spec = do
     it "catchSTM# - raise#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "catchSTM#" :: (tf.0 : {"State#" {RealWorld} @ t.1} @ t.0 -> {"GHC.Prim.Unit#" %a.0} @ t.2) -> (tf.1 : %b.0 -> {"State#" {RealWorld} @ t.4} @ t.3 -> {"GHC.Prim.Unit#" %a.0} @ t.5) -> {"State#" {RealWorld} @ t.7} @ t.6 -> {"GHC.Prim.Unit#" %a.0} @ t.8
+            "catchSTM#" :: (tf.0 : {"State#" {RealWorld} @ t.1} @ t.0 -> {"ghc-prim_GHC.Prim.Unit#" %a.0} @ t.2) -> (tf.1 : %b.0 -> {"State#" {RealWorld} @ t.4} @ t.3 -> {"ghc-prim_GHC.Prim.Unit#" %a.0} @ t.5) -> {"State#" {RealWorld} @ t.7} @ t.6 -> {"ghc-prim_GHC.Prim.Unit#" %a.0} @ t.8
             "raise#"    :: %a.3 -> %b.2
           main =
             letS
               v00 = #T_Token "RealWorld"
               v01 = "catchSTM#" $ fun1_normal fun2_handler v00
               v03 = case v01 of
-                ("GHC.Prim.Unit#" v02) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v02) @ a00 ->
                   v02
             v03
           fun1_normal p10 =
@@ -179,7 +179,7 @@ spec = do
           fun2_handler p20 p21 =
             letS
               v20 = #T_Int64 0
-              v21 = ["GHC.Prim.Unit#" v20]
+              v21 = ["ghc-prim_GHC.Prim.Unit#" v20]
             v21
         |]
       addUsedM cfa
@@ -210,17 +210,17 @@ spec = do
         , ( "RaisedEx" , [ [ "v10" ] ] )
         , ( "TVar", [] )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "p10" , "lit:T_Token \"RealWorld\"" ]
             , [ "p20" , "lit:T_Int64" ]
             , [ "p21" , "lit:T_Token \"RealWorld\"" ]
             , [ "v00" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v01" , "GHC.Prim.Unit#" ]
+            , [ "v01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v02" , "lit:T_Int64" ]
             , [ "v03" , "lit:T_Int64" ]
             , [ "v10" , "lit:T_Int64" ]
             , [ "v20" , "lit:T_Int64" ]
-            , [ "v21" , "GHC.Prim.Unit#" ]
+            , [ "v21" , "ghc-prim_GHC.Prim.Unit#" ]
             ]
           )
         ]
@@ -228,14 +228,14 @@ spec = do
     it "newTVar#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newTVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"TVar#" %s.2 %a.6} @ t.109} @ t.108
+            "newTVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"TVar#" %s.2 %a.6} @ t.109} @ t.108
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "newTVar#" $ v01 v02
               v05 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   v04
             v05
         |]
@@ -256,10 +256,10 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "TVar#" ]
             , [ "v05" , "TVar#" ]
             ]
@@ -269,19 +269,19 @@ spec = do
     it "readTVar#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newTVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"TVar#" %s.2 %a.6} @ t.109} @ t.108
-            "readTVar#" :: {"TVar#" %s.21 %a.11} @ t.243 -> {"State#" %s.21} @ t.245 -> {"GHC.Prim.Unit#" %a.11} @ t.246
+            "newTVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"TVar#" %s.2 %a.6} @ t.109} @ t.108
+            "readTVar#" :: {"TVar#" %s.21 %a.11} @ t.243 -> {"State#" %s.21} @ t.245 -> {"ghc-prim_GHC.Prim.Unit#" %a.11} @ t.246
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "newTVar#" $ v01 v02
               v09 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v06 = "readTVar#" $ v04 v02
                     v08 = case v06 of
-                      ("GHC.Prim.Unit#" v07) @ a01 ->
+                      ("ghc-prim_GHC.Prim.Unit#" v07) @ a01 ->
                         v07
                   v08
             v09
@@ -310,13 +310,13 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "TVar#" ]
-            , [ "v06" , "GHC.Prim.Unit#" ]
+            , [ "v06" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v07" , "Tup0" ]
             , [ "v08" , "Tup0" ]
             , [ "v09" , "Tup0" ]
@@ -327,15 +327,15 @@ spec = do
     it "writeTVar#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newTVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"TVar#" %s.2 %a.6} @ t.109} @ t.108
-            "writeTVar#" :: {"TVar#" %s.4 %a.9} @ t.115 -> %a.9 -> {"State#" %s.4} @ t.117 -> {"GHC.Prim.(##)"} @ t.118
+            "newTVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"TVar#" %s.2 %a.6} @ t.109} @ t.108
+            "writeTVar#" :: {"TVar#" %s.4 %a.9} @ t.115 -> %a.9 -> {"State#" %s.4} @ t.117 -> {"ghc-prim_GHC.Prim.(##)"} @ t.118
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "newTVar#" $ v01 v02
               v09 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v06 = [C1]
                     v08 = "writeTVar#" $ v04 v06 v02
@@ -365,14 +365,14 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "TVar#" ]
             , [ "v06" , "C1" ]
-            , [ "v08" , "GHC.Prim.(##)" ]
-            , [ "v09" , "GHC.Prim.(##)" ]
+            , [ "v08" , "ghc-prim_GHC.Prim.(##)" ]
+            , [ "v09" , "ghc-prim_GHC.Prim.(##)" ]
             ]
           )
         ]

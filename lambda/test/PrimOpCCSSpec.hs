@@ -40,20 +40,20 @@ spec = do
     it "clearCCS#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "clearCCS#" :: (tf.4 : {"State#" {RealWorld} @ t.14} @ t.13 -> {"GHC.Prim.Unit#" %a.1} @ t.15) -> {"State#" {RealWorld} @ t.17} @ t.16 -> {"GHC.Prim.Unit#" %a.1} @ t.18
+            "clearCCS#" :: (tf.4 : {"State#" {RealWorld} @ t.14} @ t.13 -> {"ghc-prim_GHC.Prim.Unit#" %a.1} @ t.15) -> {"State#" {RealWorld} @ t.17} @ t.16 -> {"ghc-prim_GHC.Prim.Unit#" %a.1} @ t.18
 
           main =
             letS
               v00 = #T_Token "RealWorld"
               v01 = "clearCCS#" $ fun1 v00
               v02 = case v01 of
-                ("GHC.Prim.Unit#" v03) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v03) @ a00 ->
                   v03
             v02
           fun1 p10 =
             letS
               v10 = #T_Int64 0
-              v11 = ["GHC.Prim.Unit#" v10]
+              v11 = ["ghc-prim_GHC.Prim.Unit#" v10]
             v11
         |]
       addUsedM cfa
@@ -77,14 +77,14 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "p10" , "lit:T_Token \"RealWorld\"" ]
             , [ "v00" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v01" , "GHC.Prim.Unit#" ]
+            , [ "v01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v02" , "lit:T_Int64" ]
             , [ "v03" , "lit:T_Int64" ]
             , [ "v10" , "lit:T_Int64" ]
-            , [ "v11" , "GHC.Prim.Unit#" ]
+            , [ "v11" , "ghc-prim_GHC.Prim.Unit#" ]
             ]
           )
         ]

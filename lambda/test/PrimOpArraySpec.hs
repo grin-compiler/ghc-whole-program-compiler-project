@@ -36,65 +36,65 @@ spec = do
   ----------------------------
 {-
   primop effectful
-    + "newArray#" :: T_Int64 -> %a -> {"State#" %s} -> {"GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+    + "newArray#" :: T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
 
   primop pure
     - "sameMutableArray#" :: {"MutableArray#" %s %a} -> {"MutableArray#" %s %a} -> T_Int64
 
   primop effectful
-    + "readArray#"  :: {"MutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
-    + "writeArray#" :: {"MutableArray#" %s %a} -> T_Int64 -> %a -> {"State#" %s} -> {"GHC.Prim.(##)"}
+    + "readArray#"  :: {"MutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "writeArray#" :: {"MutableArray#" %s %a} -> T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
     - "sizeofArray#"        :: {"Array#" %a} -> T_Int64
     - "sizeofMutableArray#" :: {"MutableArray#" %s %a} -> T_Int64
-    + "indexArray#"         :: {"Array#" %a} -> T_Int64 -> {"GHC.Prim.Unit#" %a}
+    + "indexArray#"         :: {"Array#" %a} -> T_Int64 -> {"ghc-prim_GHC.Prim.Unit#" %a}
 
   primop effectful
-    + "unsafeFreezeArray#" :: {"MutableArray#" %s %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" {"Array#" %a}}
-    + "unsafeThawArray#"   :: {"Array#" %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" {"MutableArray#" %s %a}}
-    + "copyArray#"         :: {"Array#" %a} -> T_Int64 -> {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.(##)"}
-    + "copyMutableArray#"  :: {"MutableArray#" %s %a} -> T_Int64 -> {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.(##)"}
+    + "unsafeFreezeArray#" :: {"MutableArray#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a}}
+    + "unsafeThawArray#"   :: {"Array#" %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+    + "copyArray#"         :: {"Array#" %a} -> T_Int64 -> {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
+    + "copyMutableArray#"  :: {"MutableArray#" %s %a} -> T_Int64 -> {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     + "cloneArray#"        :: {"Array#" %a} -> T_Int64 -> T_Int64 -> {"Array#" %a}
-    + "cloneMutableArray#" :: {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.Unit#" {"MutableArray#" %s %a}}
-    + "freezeArray#"       :: {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.Unit#" {"Array#" %a}}
-    + "thawArray#"         :: {"Array#" %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.Unit#" {"MutableArray#" %s %a}}
-    + "casArray#"          :: {"MutableArray#" %s %a} -> T_Int64 -> %a -> %a -> {"State#" %s} -> {"GHC.Prim.(#,#)" T_Int64 %a}
+    + "cloneMutableArray#" :: {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+    + "freezeArray#"       :: {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a}}
+    + "thawArray#"         :: {"Array#" %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+    + "casArray#"          :: {"MutableArray#" %s %a} -> T_Int64 -> %a -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 
   Small Arrays
 
   primop effectful
-    + "newSmallArray#" :: T_Int64 -> %a -> {"State#" %s} -> {"GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
+    + "newSmallArray#" :: T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
 
   primop pure
     - "sameSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> {"SmallMutableArray#" %s %a} -> T_Int64
 
   primop effectful
-    + "readSmallArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
-    + "writeSmallArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64 -> %a -> {"State#" %s} -> {"GHC.Prim.(##)"}
+    + "readSmallArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "writeSmallArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
     - "sizeofSmallArray#"        :: {"SmallArray#" %a} -> T_Int64
     - "sizeofSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64
-    + "indexSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> {"GHC.Prim.Unit#" %a}
+    + "indexSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> {"ghc-prim_GHC.Prim.Unit#" %a}
 
   primop effectful
-    + "unsafeFreezeSmallArray#" :: {"SmallMutableArray#" %s %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" {"SmallArray#" %a}}
-    + "unsafeThawSmallArray#"   :: {"SmallArray#" %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
-    + "copySmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.(##)"}
-    + "copySmallMutableArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.(##)"}
+    + "unsafeFreezeSmallArray#" :: {"SmallMutableArray#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallArray#" %a}}
+    + "unsafeThawSmallArray#"   :: {"SmallArray#" %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
+    + "copySmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
+    + "copySmallMutableArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     + "cloneSmallArray#"        :: {"SmallArray#" %a} -> T_Int64 -> T_Int64 -> {"SmallArray#" %a}
-    + "cloneSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
-    + "freezeSmallArray#"       :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.Unit#" {"SmallArray#" %a}}
-    + "thawSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
-    + "casSmallArray#"          :: {"SmallMutableArray#" %s %a} -> T_Int64 -> %a -> %a -> {"State#" %s} -> {"GHC.Prim.(#,#)" T_Int64 %a}
+    + "cloneSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
+    + "freezeSmallArray#"       :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallArray#" %a}}
+    + "thawSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
+    + "casSmallArray#"          :: {"SmallMutableArray#" %s %a} -> T_Int64 -> %a -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 -}
   describe "GHC Array PrimOps" $ do
 
     it "newArray#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#" :: (T_Int64) @ t.106 -> %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.2 %a.6} @ t.109} @ t.108
+            "newArray#" :: (T_Int64) @ t.106 -> %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.2 %a.6} @ t.109} @ t.108
           main =
             letS
               v00 = #T_Int64 10
@@ -102,7 +102,7 @@ spec = do
               v02 = #T_Token "RealWorld"
               v03 = "newArray#" $ v00 v01 v02
               v05 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   v04
             v05
         |]
@@ -123,11 +123,11 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutableArray#" ]
             , [ "v05" , "MutableArray#" ]
             ]
@@ -137,8 +137,8 @@ spec = do
     it "readArray#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#" :: (T_Int64) @ t.106 -> %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.2 %a.6} @ t.109} @ t.108
-            "readArray#" :: {"MutableArray#" %s.21 %a.11} @ t.243 -> (T_Int64) @ t.244 -> {"State#" %s.21} @ t.245 -> {"GHC.Prim.Unit#" %a.11} @ t.246
+            "newArray#" :: (T_Int64) @ t.106 -> %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.2 %a.6} @ t.109} @ t.108
+            "readArray#" :: {"MutableArray#" %s.21 %a.11} @ t.243 -> (T_Int64) @ t.244 -> {"State#" %s.21} @ t.245 -> {"ghc-prim_GHC.Prim.Unit#" %a.11} @ t.246
           main =
             letS
               v00 = #T_Int64 10
@@ -146,12 +146,12 @@ spec = do
               v02 = #T_Token "RealWorld"
               v03 = "newArray#" $ v00 v01 v02
               v09 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v05 = #T_Int64 0
                     v06 = "readArray#" $ v04 v05 v02
                     v08 = case v06 of
-                      ("GHC.Prim.Unit#" v07) @ a01 ->
+                      ("ghc-prim_GHC.Prim.Unit#" v07) @ a01 ->
                         v07
                   v08
             v09
@@ -181,15 +181,15 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutableArray#" ]
             , [ "v05" , "lit:T_Int64" ]
-            , [ "v06" , "GHC.Prim.Unit#" ]
+            , [ "v06" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v07" , "Tup0" ]
             , [ "v08" , "Tup0" ]
             , [ "v09" , "Tup0" ]
@@ -200,8 +200,8 @@ spec = do
     it "writeArray#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#"   :: (T_Int64) @ t.106 -> %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.2 %a.6} @ t.109} @ t.108
-            "writeArray#" :: {"MutableArray#" %s.4 %a.9} @ t.115 -> (T_Int64) @ t.116 -> %a.9 -> {"State#" %s.4} @ t.117 -> {"GHC.Prim.(##)"} @ t.118
+            "newArray#"   :: (T_Int64) @ t.106 -> %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.2 %a.6} @ t.109} @ t.108
+            "writeArray#" :: {"MutableArray#" %s.4 %a.9} @ t.115 -> (T_Int64) @ t.116 -> %a.9 -> {"State#" %s.4} @ t.117 -> {"ghc-prim_GHC.Prim.(##)"} @ t.118
           main =
             letS
               v00 = #T_Int64 10
@@ -209,7 +209,7 @@ spec = do
               v02 = #T_Token "RealWorld"
               v03 = "newArray#" $ v00 v01 v02
               v09 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v05 = #T_Int64 0
                     v06 = [C1]
@@ -243,17 +243,17 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutableArray#" ]
             , [ "v05" , "lit:T_Int64" ]
             , [ "v06" , "C1" ]
             , [ "v07" , "C1" ]
-            , [ "v08" , "GHC.Prim.(##)" ]
-            , [ "v09" , "GHC.Prim.(##)" ]
+            , [ "v08" , "ghc-prim_GHC.Prim.(##)" ]
+            , [ "v09" , "ghc-prim_GHC.Prim.(##)" ]
             ]
           )
         ]
@@ -261,8 +261,8 @@ spec = do
     it "unsafeFreezeArray#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#"           :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
-            "unsafeFreezeArray#"  :: {"MutableArray#" %s.10 %a.11} @ t.12 -> {"State#" %s.10} @ t.13 -> {"GHC.Prim.Unit#" {"Array#" %a.11} @ t.14} @ t.15
+            "newArray#"           :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
+            "unsafeFreezeArray#"  :: {"MutableArray#" %s.10 %a.11} @ t.12 -> {"State#" %s.10} @ t.13 -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a.11} @ t.14} @ t.15
           main =
             letS
               v00 = #T_Int64 10
@@ -270,11 +270,11 @@ spec = do
               v02 = #T_Token "RealWorld"
               v03 = "newArray#" $ v00 v01 v02
               v08 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v05 = "unsafeFreezeArray#" $ v04 v02
                     v07 = case v05 of
-                      ("GHC.Prim.Unit#" v06) @ a01 ->
+                      ("ghc-prim_GHC.Prim.Unit#" v06) @ a01 ->
                         v06
                   v07
             v08
@@ -306,14 +306,14 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutableArray#" ]
-            , [ "v05" , "GHC.Prim.Unit#" ]
+            , [ "v05" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v06" , "Array#" ]
             , [ "v06" , "MutableArray#" ]
             , [ "v07" , "Array#" ]
@@ -327,8 +327,8 @@ spec = do
     it "copyMutableArray#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#"         :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
-            "copyMutableArray#" :: {"MutableArray#" %s.10 %a.11} @ t.12 -> (T_Int64) @ t.13 -> {"MutableArray#" %s.10 %a.11} @ t.14 -> (T_Int64) @ t.15 -> (T_Int64) @ t.16 -> {"State#" %s.10} @ t.17 -> {"GHC.Prim.(##)"} @ t.18
+            "newArray#"         :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
+            "copyMutableArray#" :: {"MutableArray#" %s.10 %a.11} @ t.12 -> (T_Int64) @ t.13 -> {"MutableArray#" %s.10 %a.11} @ t.14 -> (T_Int64) @ t.15 -> (T_Int64) @ t.16 -> {"State#" %s.10} @ t.17 -> {"ghc-prim_GHC.Prim.(##)"} @ t.18
           main =
             letS
               v00 = #T_Int64 10
@@ -336,12 +336,12 @@ spec = do
               v02 = #T_Token "RealWorld"
               v03 = "newArray#" $ v00 v01 v02
               v11 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v05 = [C1]
                     v06 = "newArray#" $ v00 v05 v02
                     v10 = case v06 of
-                      ("GHC.Prim.Unit#" v07) @ a01 ->
+                      ("ghc-prim_GHC.Prim.Unit#" v07) @ a01 ->
                         letS
                           v08 = #T_Int64 0
                           v09 = "copyMutableArray#" $ v04 v08 v07 v08 v00 v02
@@ -378,20 +378,20 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutableArray#" ]
             , [ "v05" , "C1" ]
-            , [ "v06" , "GHC.Prim.Unit#" ]
+            , [ "v06" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v07" , "MutableArray#" ]
             , [ "v08" , "lit:T_Int64" ]
-            , [ "v09" , "GHC.Prim.(##)" ]
-            , [ "v10" , "GHC.Prim.(##)" ]
-            , [ "v11" , "GHC.Prim.(##)" ]
+            , [ "v09" , "ghc-prim_GHC.Prim.(##)" ]
+            , [ "v10" , "ghc-prim_GHC.Prim.(##)" ]
+            , [ "v11" , "ghc-prim_GHC.Prim.(##)" ]
             ]
           )
         ]
@@ -399,8 +399,8 @@ spec = do
     it "cloneArray#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#"           :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
-            "unsafeFreezeArray#"  :: {"MutableArray#" %s.10 %a.11} @ t.12 -> {"State#" %s.10} @ t.13 -> {"GHC.Prim.Unit#" {"Array#" %a.11} @ t.14} @ t.15
+            "newArray#"           :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
+            "unsafeFreezeArray#"  :: {"MutableArray#" %s.10 %a.11} @ t.12 -> {"State#" %s.10} @ t.13 -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a.11} @ t.14} @ t.15
             "cloneArray#"         :: {"Array#" %a.20} @ t.21 -> (T_Int64) @ t.22 -> (T_Int64) @ t.23 -> {"Array#" %a.20} @ t.24
           main =
             letS
@@ -409,11 +409,11 @@ spec = do
               v02 = #T_Token "RealWorld"
               v03 = "newArray#" $ v00 v01 v02
               v10 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v05 = "unsafeFreezeArray#" $ v04 v02
                     v09 = case v05 of
-                      ("GHC.Prim.Unit#" v06) @ a01 ->
+                      ("ghc-prim_GHC.Prim.Unit#" v06) @ a01 ->
                         letS
                           v07 = #T_Int64 0
                           v08 = "cloneArray#" $ v06 v07 v00
@@ -449,14 +449,14 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutableArray#" ]
-            , [ "v05" , "GHC.Prim.Unit#" ]
+            , [ "v05" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v06" , "Array#" ]
             , [ "v06" , "MutableArray#" ]
             , [ "v07" , "lit:T_Int64" ]
@@ -470,8 +470,8 @@ spec = do
     it "cloneMutableArray#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#"          :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
-            "cloneMutableArray#" :: {"MutableArray#" %s.10 %a.11} @ t.12 -> (T_Int64) @ t.13 -> (T_Int64) @ t.14 -> {"State#" %s.10} @ t.15 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.10 %a.11} @ t.16} @ t.17
+            "newArray#"          :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
+            "cloneMutableArray#" :: {"MutableArray#" %s.10 %a.11} @ t.12 -> (T_Int64) @ t.13 -> (T_Int64) @ t.14 -> {"State#" %s.10} @ t.15 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.10 %a.11} @ t.16} @ t.17
           main =
             letS
               v00 = #T_Int64 10
@@ -479,12 +479,12 @@ spec = do
               v02 = #T_Token "RealWorld"
               v03 = "newArray#" $ v00 v01 v02
               v09 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v05 = #T_Int64 0
                     v06 = "cloneMutableArray#" $ v04 v05 v00 v02
                     v08 = case v06 of
-                      ("GHC.Prim.Unit#" v07) @ a01 ->
+                      ("ghc-prim_GHC.Prim.Unit#" v07) @ a01 ->
                         v07
                   v08
             v09
@@ -515,15 +515,15 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutableArray#" ]
             , [ "v05" , "lit:T_Int64" ]
-            , [ "v06" , "GHC.Prim.Unit#" ]
+            , [ "v06" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v07" , "MutableArray#" ]
             , [ "v08" , "MutableArray#" ]
             , [ "v09" , "MutableArray#" ]
@@ -534,8 +534,8 @@ spec = do
     it "casArray#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#" :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
-            "casArray#" :: {"MutableArray#" %s.10 %a.11} @ t.12 -> (T_Int64) @ t.13 -> %a.11 -> %a.11 -> {"State#" %s.10} @ t.14 -> {"GHC.Prim.(#,#)" (T_Int64) @ t.15 %a.11} @ t.16
+            "newArray#" :: (T_Int64) @ t.00 -> %a.01 -> {"State#" %s.02} @ t.03 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.02 %a.01} @ t.04} @ t.05
+            "casArray#" :: {"MutableArray#" %s.10 %a.11} @ t.12 -> (T_Int64) @ t.13 -> %a.11 -> %a.11 -> {"State#" %s.10} @ t.14 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t.15 %a.11} @ t.16
           main =
             letS
               v00 = #T_Int64 10
@@ -543,13 +543,13 @@ spec = do
               v02 = #T_Token "RealWorld"
               v03 = "newArray#" $ v00 v01 v02
               v11 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v05 = #T_Int64 0
                     v06 = [C1]
                     v07 = "casArray#" $ v04 v05 v01 v06 v02
                     v10 = case v07 of
-                      ("GHC.Prim.(#,#)" v08 v09) @ a01 ->
+                      ("ghc-prim_GHC.Prim.(#,#)" v08 v09) @ a01 ->
                         v08
                   v10
             v11
@@ -584,16 +584,16 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.(#,#)" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.(#,#)" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutableArray#" ]
             , [ "v05" , "lit:T_Int64" ]
             , [ "v06" , "C1" ]
-            , [ "v07" , "GHC.Prim.(#,#)" ]
+            , [ "v07" , "ghc-prim_GHC.Prim.(#,#)" ]
             , [ "v08" , "lit:T_Int64" ]
             , [ "v09" , "C1" ]
             , [ "v09" , "Tup0" ]

@@ -65,7 +65,7 @@ spec = do
     it "force external result" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newArray#" :: (T_Int64) @ t.106 -> %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"MutableArray#" %s.2 %a.6} @ t.109} @ t.108
+            "newArray#" :: (T_Int64) @ t.106 -> %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s.2 %a.6} @ t.109} @ t.108
           main =
             letS
               v00 = #T_Int64 10
@@ -75,7 +75,7 @@ spec = do
               v04 = v03 $
               v05 = v04 $
               v07 = case v05 of
-                ("GHC.Prim.Unit#" v06) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v06) @ a00 ->
                   v06
             v07
         |]
@@ -97,13 +97,13 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v00" , "lit:T_Int64" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
-            , [ "v04" , "GHC.Prim.Unit#" ]
-            , [ "v05" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "v04" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "v05" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v06" , "MutableArray#" ]
             , [ "v07" , "MutableArray#" ]
             ]

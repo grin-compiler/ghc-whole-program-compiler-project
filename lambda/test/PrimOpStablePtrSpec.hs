@@ -40,14 +40,14 @@ spec = do
     it "makeStablePtr#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "makeStablePtr#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"StablePtr#" %s.2 %a.6} @ t.109} @ t.108
+            "makeStablePtr#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %s.2 %a.6} @ t.109} @ t.108
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "makeStablePtr#" $ v01 v02
               v05 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   v04
             v05
         |]
@@ -67,10 +67,10 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "StablePtr#" ]
             , [ "v05" , "StablePtr#" ]
             ]
@@ -80,19 +80,19 @@ spec = do
     it "deRefStablePtr#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "makeStablePtr#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"StablePtr#" %s.2 %a.6} @ t.109} @ t.108
-            "deRefStablePtr#" :: {"StablePtr#" %s.21 %a.11} @ t.243 -> {"State#" %s.21} @ t.245 -> {"GHC.Prim.Unit#" %a.11} @ t.246
+            "makeStablePtr#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %s.2 %a.6} @ t.109} @ t.108
+            "deRefStablePtr#" :: {"StablePtr#" %s.21 %a.11} @ t.243 -> {"State#" %s.21} @ t.245 -> {"ghc-prim_GHC.Prim.Unit#" %a.11} @ t.246
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "makeStablePtr#" $ v01 v02
               v09 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v06 = "deRefStablePtr#" $ v04 v02
                     v08 = case v06 of
-                      ("GHC.Prim.Unit#" v07) @ a01 ->
+                      ("ghc-prim_GHC.Prim.Unit#" v07) @ a01 ->
                         v07
                   v08
             v09
@@ -120,13 +120,13 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "StablePtr#" ]
-            , [ "v06" , "GHC.Prim.Unit#" ]
+            , [ "v06" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v07" , "Tup0" ]
             , [ "v08" , "Tup0" ]
             , [ "v09" , "Tup0" ]

@@ -40,14 +40,14 @@ spec = do
     it "newMutVar#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newMutVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"MutVar#" %s.2 %a.6} @ t.109} @ t.108
+            "newMutVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"MutVar#" %s.2 %a.6} @ t.109} @ t.108
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "newMutVar#" $ v01 v02
               v05 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   v04
             v05
         |]
@@ -67,10 +67,10 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutVar#" ]
             , [ "v05" , "MutVar#" ]
             ]
@@ -80,19 +80,19 @@ spec = do
     it "readMutVar#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newMutVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"MutVar#" %s.2 %a.6} @ t.109} @ t.108
-            "readMutVar#" :: {"MutVar#" %s.21 %a.11} @ t.243 -> {"State#" %s.21} @ t.245 -> {"GHC.Prim.Unit#" %a.11} @ t.246
+            "newMutVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"MutVar#" %s.2 %a.6} @ t.109} @ t.108
+            "readMutVar#" :: {"MutVar#" %s.21 %a.11} @ t.243 -> {"State#" %s.21} @ t.245 -> {"ghc-prim_GHC.Prim.Unit#" %a.11} @ t.246
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "newMutVar#" $ v01 v02
               v09 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v06 = "readMutVar#" $ v04 v02
                     v08 = case v06 of
-                      ("GHC.Prim.Unit#" v07) @ a01 ->
+                      ("ghc-prim_GHC.Prim.Unit#" v07) @ a01 ->
                         v07
                   v08
             v09
@@ -120,13 +120,13 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutVar#" ]
-            , [ "v06" , "GHC.Prim.Unit#" ]
+            , [ "v06" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v07" , "Tup0" ]
             , [ "v08" , "Tup0" ]
             , [ "v09" , "Tup0" ]
@@ -137,15 +137,15 @@ spec = do
     it "writeMutVar#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newMutVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"MutVar#" %s.2 %a.6} @ t.109} @ t.108
-            "writeMutVar#" :: {"MutVar#" %s.4 %a.9} @ t.115 -> %a.9 -> {"State#" %s.4} @ t.117 -> {"GHC.Prim.(##)"} @ t.118
+            "newMutVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"MutVar#" %s.2 %a.6} @ t.109} @ t.108
+            "writeMutVar#" :: {"MutVar#" %s.4 %a.9} @ t.115 -> %a.9 -> {"State#" %s.4} @ t.117 -> {"ghc-prim_GHC.Prim.(##)"} @ t.118
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "newMutVar#" $ v01 v02
               v09 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v06 = [C1]
                     v08 = "writeMutVar#" $ v04 v06 v02
@@ -174,14 +174,14 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutVar#" ]
             , [ "v06" , "C1" ]
-            , [ "v08" , "GHC.Prim.(##)" ]
-            , [ "v09" , "GHC.Prim.(##)" ]
+            , [ "v08" , "ghc-prim_GHC.Prim.(##)" ]
+            , [ "v09" , "ghc-prim_GHC.Prim.(##)" ]
             ]
           )
         ]
@@ -189,20 +189,20 @@ spec = do
     it "casMutVar#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "newMutVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"GHC.Prim.Unit#" {"MutVar#" %s.2 %a.6} @ t.109} @ t.108
-            "casMutVar#" :: {"MutVar#" %s.10 %a.11} @ t.12 -> %a.11 -> %a.11 -> {"State#" %s.10} @ t.14 -> {"GHC.Prim.(#,#)" (T_Int64) @ t.15 %a.11} @ t.16
+            "newMutVar#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"MutVar#" %s.2 %a.6} @ t.109} @ t.108
+            "casMutVar#" :: {"MutVar#" %s.10 %a.11} @ t.12 -> %a.11 -> %a.11 -> {"State#" %s.10} @ t.14 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t.15 %a.11} @ t.16
           main =
             letS
               v01 = [Tup0]
               v02 = #T_Token "RealWorld"
               v03 = "newMutVar#" $ v01 v02
               v11 = case v03 of
-                ("GHC.Prim.Unit#" v04) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v04) @ a00 ->
                   letS
                     v06 = [C1]
                     v07 = "casMutVar#" $ v04 v01 v06 v02
                     v10 = case v07 of
-                      ("GHC.Prim.(#,#)" v08 v09) @ a01 ->
+                      ("ghc-prim_GHC.Prim.(#,#)" v08 v09) @ a01 ->
                         v08
                   v10
             v11
@@ -235,14 +235,14 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.(#,#)" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.(#,#)" ]
             , [ "v01" , "Tup0" ]
             , [ "v02" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v03" , "GHC.Prim.Unit#" ]
+            , [ "v03" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v04" , "MutVar#" ]
             , [ "v06" , "C1" ]
-            , [ "v07" , "GHC.Prim.(#,#)" ]
+            , [ "v07" , "ghc-prim_GHC.Prim.(#,#)" ]
             , [ "v08" , "lit:T_Int64" ]
             , [ "v09" , "C1" ]
             , [ "v09" , "Tup0" ]

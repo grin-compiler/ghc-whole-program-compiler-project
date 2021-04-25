@@ -40,7 +40,7 @@ spec = do
     it "mkWeak#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "mkWeak#" :: %o.1 -> %b.2 -> (tf.3 : {"State#" {RealWorld} @ t.4} @ t.5 -> {"GHC.Prim.Unit#" %c.6} @ t.7) -> {"State#" {RealWorld} @ t.8} @ t.9 -> {"GHC.Prim.Unit#" {"Weak#" %b.12} @ t.10} @ t.11
+            "mkWeak#" :: %o.1 -> %b.2 -> (tf.3 : {"State#" {RealWorld} @ t.4} @ t.5 -> {"ghc-prim_GHC.Prim.Unit#" %c.6} @ t.7) -> {"State#" {RealWorld} @ t.8} @ t.9 -> {"ghc-prim_GHC.Prim.Unit#" {"Weak#" %b.12} @ t.10} @ t.11
 
           main =
             letS
@@ -49,13 +49,13 @@ spec = do
               v03 = #T_Token "RealWorld"
               v04 = "mkWeak#" $ v01 v02 fun1 v03
               v06 = case v04 of
-                ("GHC.Prim.Unit#" v05) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v05) @ a00 ->
                   v05
             v06
           fun1 p10 =
             letS
               v10 = [Tup0]
-              v11 = ["GHC.Prim.Unit#" v10]
+              v11 = ["ghc-prim_GHC.Prim.Unit#" v10]
             v11
 
         |]
@@ -81,17 +81,17 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "mkWeak#-finalizer-ignored-result" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "mkWeak#-finalizer-ignored-result" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "p10" , "lit:T_Token \"RealWorld\"" ]
             , [ "v01" , "Key" ]
             , [ "v02" , "Value" ]
             , [ "v03" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v04" , "GHC.Prim.Unit#" ]
+            , [ "v04" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v05" , "Weak#" ]
             , [ "v06" , "Weak#" ]
             , [ "v10" , "Tup0" ]
-            , [ "v11" , "GHC.Prim.Unit#" ]
+            , [ "v11" , "ghc-prim_GHC.Prim.Unit#" ]
             ]
           )
         ]
@@ -99,7 +99,7 @@ spec = do
     it "mkWeakNoFinalizer#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "mkWeakNoFinalizer#" :: %o.1 -> %b.2 -> {"State#" {RealWorld} @ t.8} @ t.9 -> {"GHC.Prim.Unit#" {"Weak#" %b.12} @ t.10} @ t.11
+            "mkWeakNoFinalizer#" :: %o.1 -> %b.2 -> {"State#" {RealWorld} @ t.8} @ t.9 -> {"ghc-prim_GHC.Prim.Unit#" {"Weak#" %b.12} @ t.10} @ t.11
 
           main =
             letS
@@ -108,7 +108,7 @@ spec = do
               v03 = #T_Token "RealWorld"
               v04 = "mkWeakNoFinalizer#" $ v01 v02 v03
               v06 = case v04 of
-                ("GHC.Prim.Unit#" v05) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v05) @ a00 ->
                   v05
             v06
         |]
@@ -130,11 +130,11 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v01" , "Key" ]
             , [ "v02" , "Value" ]
             , [ "v03" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v04" , "GHC.Prim.Unit#" ]
+            , [ "v04" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v05" , "Weak#" ]
             , [ "v06" , "Weak#" ]
             ]
@@ -144,8 +144,8 @@ spec = do
     it "deRefWeak#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "mkWeakNoFinalizer#" :: %o.1 -> %b.2 -> {"State#" {RealWorld} @ t.8} @ t.9 -> {"GHC.Prim.Unit#" {"Weak#" %b.12} @ t.10} @ t.11
-            "deRefWeak#"         :: {"Weak#" %a.24} @ t.20 -> {"State#" {RealWorld} @ t.21} @ t.22 -> {"GHC.Prim.(#,#)" (T_Int64) @ t.23 %a.24} @ t.25
+            "mkWeakNoFinalizer#" :: %o.1 -> %b.2 -> {"State#" {RealWorld} @ t.8} @ t.9 -> {"ghc-prim_GHC.Prim.Unit#" {"Weak#" %b.12} @ t.10} @ t.11
+            "deRefWeak#"         :: {"Weak#" %a.24} @ t.20 -> {"State#" {RealWorld} @ t.21} @ t.22 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t.23 %a.24} @ t.25
 
           main =
             letS
@@ -154,11 +154,11 @@ spec = do
               v03 = #T_Token "RealWorld"
               v04 = "mkWeakNoFinalizer#" $ v01 v02 v03
               v10 = case v04 of
-                ("GHC.Prim.Unit#" v05) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v05) @ a00 ->
                   letS
                     v06 = "deRefWeak#" $ v05 v03
                     v09 = case v06 of
-                      ("GHC.Prim.(#,#)" v07 v08) @ a01 ->
+                      ("ghc-prim_GHC.Prim.(#,#)" v07 v08) @ a01 ->
                         v07
                   v09
             v10
@@ -187,14 +187,14 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.(#,#)" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.(#,#)" ]
             , [ "v01" , "Key" ]
             , [ "v02" , "Value" ]
             , [ "v03" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v04" , "GHC.Prim.Unit#" ]
+            , [ "v04" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v05" , "Weak#" ]
-            , [ "v06" , "GHC.Prim.(#,#)" ]
+            , [ "v06" , "ghc-prim_GHC.Prim.(#,#)" ]
             , [ "v07" , "lit:T_Int64" ]
             , [ "v08" , "Value" ]
             , [ "v09" , "lit:T_Int64" ]
@@ -206,8 +206,8 @@ spec = do
     it "finalizeWeak#" $ do
       cfa <- controlFlowAnalysisM ["main"] [prog|
           primop effectful
-            "mkWeak#" :: %o.1 -> %b.2 -> (tf.3 : {"State#" {RealWorld} @ t.4} @ t.5 -> {"GHC.Prim.Unit#" %c.6} @ t.7) -> {"State#" {RealWorld} @ t.8} @ t.9 -> {"GHC.Prim.Unit#" {"Weak#" %b.12} @ t.10} @ t.11
-            "finalizeWeak#"  :: {"Weak#" %a.20} @ t.21 -> {"State#" {RealWorld} @ t.22} @ t.23 -> {"GHC.Prim.(#,#)" (T_Int64) @ t.24 (tf.25 : {"State#" {RealWorld} @ t.26} @ t.27 -> {"GHC.Prim.Unit#" %b} @ t.28)} @ t.29
+            "mkWeak#" :: %o.1 -> %b.2 -> (tf.3 : {"State#" {RealWorld} @ t.4} @ t.5 -> {"ghc-prim_GHC.Prim.Unit#" %c.6} @ t.7) -> {"State#" {RealWorld} @ t.8} @ t.9 -> {"ghc-prim_GHC.Prim.Unit#" {"Weak#" %b.12} @ t.10} @ t.11
+            "finalizeWeak#"  :: {"Weak#" %a.20} @ t.21 -> {"State#" {RealWorld} @ t.22} @ t.23 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t.24 (tf.25 : {"State#" {RealWorld} @ t.26} @ t.27 -> {"ghc-prim_GHC.Prim.Unit#" %b} @ t.28)} @ t.29
 
           main =
             letS
@@ -216,18 +216,18 @@ spec = do
               v03 = #T_Token "RealWorld"
               v04 = "mkWeak#" $ v01 v02 fun1 v03
               v010 = case v04 of
-                ("GHC.Prim.Unit#" v05) @ a00 ->
+                ("ghc-prim_GHC.Prim.Unit#" v05) @ a00 ->
                   letS
                     v06 = "finalizeWeak#" $ v05 v03
                     v09 = case v06 of
-                      ("GHC.Prim.(#,#)" v07 v08) @ a01 ->
+                      ("ghc-prim_GHC.Prim.(#,#)" v07 v08) @ a01 ->
                         v07
                   v09
             v010
           fun1 p10 =
             letS
               v10 = [Tup0]
-              v11 = ["GHC.Prim.Unit#" v10]
+              v11 = ["ghc-prim_GHC.Prim.Unit#" v10]
             v11
 
         |]
@@ -258,21 +258,21 @@ spec = do
             ]
           )
         , ( "TagValue"
-          , [ [ "a00" , "GHC.Prim.Unit#" ]
-            , [ "a01" , "GHC.Prim.(#,#)" ]
-            , [ "mkWeak#-finalizer-ignored-result" , "GHC.Prim.Unit#" ]
+          , [ [ "a00" , "ghc-prim_GHC.Prim.Unit#" ]
+            , [ "a01" , "ghc-prim_GHC.Prim.(#,#)" ]
+            , [ "mkWeak#-finalizer-ignored-result" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "p10" , "lit:T_Token \"RealWorld\"" ]
             , [ "v01" , "Key" ]
             , [ "v010", "lit:T_Int64" ]
             , [ "v02" , "Value" ]
             , [ "v03" , "lit:T_Token \"RealWorld\"" ]
-            , [ "v04" , "GHC.Prim.Unit#" ]
+            , [ "v04" , "ghc-prim_GHC.Prim.Unit#" ]
             , [ "v05" , "Weak#" ]
-            , [ "v06" , "GHC.Prim.(#,#)" ]
+            , [ "v06" , "ghc-prim_GHC.Prim.(#,#)" ]
             , [ "v07" , "lit:T_Int64" ]
             , [ "v09" , "lit:T_Int64" ]
             , [ "v10" , "Tup0" ]
-            , [ "v11" , "GHC.Prim.Unit#" ]
+            , [ "v11" , "ghc-prim_GHC.Prim.Unit#" ]
             ]
           )
         ]
