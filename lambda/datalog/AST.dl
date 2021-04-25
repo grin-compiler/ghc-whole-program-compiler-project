@@ -123,13 +123,13 @@ CodeParameter(f, i, p) :- (FunctionParameter(f, i, p) ; ClosureParameter(f, i, p
 .output RetTup1Node0
 .output RetTup
 
-// i.e. {"GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+// i.e. {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
 RetTup1Node0(ext, ty_node) :-
   ExternalReturnType(ext, ty_res),
-  TypeNode(ty_res, "GHC.Prim.Unit#"),
+  TypeNode(ty_res, "ghc-prim_GHC.Prim.Unit#"),
   TypeNodeArgument(ty_res, 0, ty_node).
 
-// i.e. {"GHC.Prim.(#,#)" T_Int64 %a}
+// i.e. {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 RetTup(ext, tag, i, ty_node) :-
   ExternalReturnType(ext, ty_res),
   TypeNode(ty_res, tag),

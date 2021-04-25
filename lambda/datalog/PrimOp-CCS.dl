@@ -2,12 +2,12 @@
   HINT: is interpreted -/+
 
   primop pure
-    - "getCCSOf#"      :: %a -> {"State#" %s} -> {"GHC.Prim.Unit#" T_Addr}
-    - "getCurrentCCS#" :: %a -> {"State#" %s} -> {"GHC.Prim.Unit#" T_Addr}
-    + "clearCCS#"      :: ({"State#" %s} -> {"GHC.Prim.Unit#" %a}) -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+    - "getCCSOf#"      :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Addr}
+    - "getCurrentCCS#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Addr}
+    + "clearCCS#"      :: ({"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
 */
 
-// "clearCCS#" :: ({"State#" %s} -> {"GHC.Prim.Unit#" %a}) -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+// "clearCCS#" :: ({"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
 USED("PrimOp-CCS-01")
 Called(r, op),
 CallPNode1("clearCCS#-wrapped", r, v0, v1_state) :-

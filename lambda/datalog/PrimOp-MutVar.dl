@@ -2,22 +2,22 @@
   HINT: is interpreted -/+
 
   primop effectful
-    + "newMutVar#"   :: %a -> {"State#" %s} -> {"GHC.Prim.Unit#" {"MutVar#" %s %a}}
-    + "readMutVar#"  :: {"MutVar#" %s %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
-    + "writeMutVar#" :: {"MutVar#" %s %a} -> %a -> {"State#" %s} -> {"GHC.Prim.(##)"}
+    + "newMutVar#"   :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutVar#" %s %a}}
+    + "readMutVar#"  :: {"MutVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "writeMutVar#" :: {"MutVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
     - "sameMutVar#" :: {"MutVar#" %s %a} -> {"MutVar#" %s %a} -> T_Int64
 
   primop effectful
-    + "atomicModifyMutVar#" :: {"MutVar#" %s %a} -> (%a -> %b) -> {"State#" %s} -> {"GHC.Prim.Unit#" %c}
-    + "casMutVar#"          :: {"MutVar#" %s %a} -> %a -> %a -> {"State#" %s} -> {"GHC.Prim.(#,#)" T_Int64 %a}
+    + "atomicModifyMutVar#" :: {"MutVar#" %s %a} -> (%a -> %b) -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %c}
+    + "casMutVar#"          :: {"MutVar#" %s %a} -> %a -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 */
 
 .decl MutVar(ext_result:Variable, ty_node:Variable, item:Variable)
 .output MutVar
 
-// "newMutVar#" :: %a -> {"State#" %s} -> {"GHC.Prim.Unit#" {"MutVar#" %s %a}}
+// "newMutVar#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutVar#" %s %a}}
 // new mut var
 USED("PrimOp-MutVar-01")
 Called(r, op),
@@ -31,7 +31,7 @@ MutVar(r, ty_node, item) :-
   RetTup1Node0(op, ty_node).
   // CHECKED
 
-// "readMutVar#" :: {"MutVar#" %s %a} -> {"State#" %s} -> {"GHC.Prim.Unit#" %a}
+// "readMutVar#" :: {"MutVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
 USED("PrimOp-MutVar-02")
 Called(r, op),
 TypeVarPointsTo(r, ty_node, item) :-
@@ -46,7 +46,7 @@ TypeVarPointsTo(r, ty_node, item) :-
   RetTup1Node0(op, ty_node).
   // CHECKED
 
-// "writeMutVar#" :: {"MutVar#" %s %a} -> %a -> {"State#" %s} -> {"GHC.Prim.(##)"}
+// "writeMutVar#" :: {"MutVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 // extend mut var
 USED("PrimOp-MutVar-03")
 Called(r, op),
@@ -63,14 +63,14 @@ MutVar(ext_result, ty_node, item) :-
   MutVar(ext_result, ty_node, _).
   // CHECKED
 
-// "atomicModifyMutVar#" :: {"MutVar#" %s %a} -> (%a -> %b) -> {"State#" %s} -> {"GHC.Prim.Unit#" %c}
+// "atomicModifyMutVar#" :: {"MutVar#" %s %a} -> (%a -> %b) -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %c}
 // TODO: check how atomicModifyMutVar# works, this type signature does not reflect its semantics
 Error(r, "Unsupported (reachable) primop: atomicModifyMutVar# (TBD)") :-
   Call(r, "atomicModifyMutVar#", _),
   HasInst(f, r),
   ReachableCode(f).
 
-// "casMutVar#" :: {"MutVar#" %s %a} -> %a -> %a -> {"State#" %s} -> {"GHC.Prim.(#,#)" T_Int64 %a}
+// "casMutVar#" :: {"MutVar#" %s %a} -> %a -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 // extend mut var
 USED("PrimOp-MutVar-04")
 Called(r, op),
@@ -88,5 +88,5 @@ MutVar(ext_result, arr_node, new_item) :-
   // mut var items
   MutVar(ext_result, arr_node, item),
   // extract result node
-  RetTup(op, "GHC.Prim.(#,#)", 1, ty_node).
+  RetTup(op, "ghc-prim_GHC.Prim.(#,#)", 1, ty_node).
   // CHECKED

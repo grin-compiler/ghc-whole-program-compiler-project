@@ -1,15 +1,15 @@
 /*
   primop pure
-    "addrToAny#" :: T_Addr -> {"GHC.Prim.Unit#" %a}
-    "anyToAddr#" :: %a -> {"State#" {RealWorld}} -> {"GHC.Prim.Unit#" T_Addr}
-    "mkApUpd0#"  :: {"BCO#"} -> {"GHC.Prim.Unit#" %a}
+    "addrToAny#" :: T_Addr -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    "anyToAddr#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Addr}
+    "mkApUpd0#"  :: {"BCO#"} -> {"ghc-prim_GHC.Prim.Unit#" %a}
 
   primop effectful
-    "newBCO#" :: {"ByteArray#"} -> {"ByteArray#"} -> {"Array#" %a} -> T_Int64 -> {"ByteArray#"} -> {"State#" %s} -> {"GHC.Prim.Unit#" {"BCO#"}}
+    "newBCO#" :: {"ByteArray#"} -> {"ByteArray#"} -> {"Array#" %a} -> T_Int64 -> {"ByteArray#"} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"BCO#"}}
 
   primop pure
-    "unpackClosure#" :: %a -> {"GHC.Prim.(#,,#)" T_Addr {"ByteArray#"} {"Array#" %b}}
-    "getApStackVal#" :: %a -> T_Int64 -> {"GHC.Prim.(#,#)" T_Int64 %b}
+    "unpackClosure#" :: %a -> {"ghc-prim_GHC.Prim.(#,,#)" T_Addr {"ByteArray#"} {"Array#" %b}}
+    "getApStackVal#" :: %a -> T_Int64 -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %b}
 */
 
 // Future work
