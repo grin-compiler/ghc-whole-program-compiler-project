@@ -9,6 +9,7 @@
 
   primop pure
     "unpackClosure#" :: %a -> {"ghc-prim_GHC.Prim.(#,,#)" T_Addr {"ByteArray#"} {"Array#" %b}}
+    "closureSize#"   :: %a_100 -> (T_Int64) @ t_1945
     "getApStackVal#" :: %a -> T_Int64 -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %b}
 */
 

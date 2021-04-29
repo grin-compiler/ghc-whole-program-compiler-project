@@ -38,12 +38,14 @@
     - "sameSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> {"SmallMutableArray#" %s %a} -> T_Int64
 
   primop effectful
+    - "shrinkSmallMutableArray#" :: {"SmallMutableArray#" %s_15 %a_18} @ t_702 -> (T_Int64) @ t_703 -> {"State#" %s_15} @ t_704 -> {"ghc-prim_GHC.Prim.(##)"} @ t_705
     + "readSmallArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
     + "writeSmallArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
     - "sizeofSmallArray#"        :: {"SmallArray#" %a} -> T_Int64
     - "sizeofSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64
+    - "getSizeofSmallMutableArray#" :: {"SmallMutableArray#" %s_19 %a_23} @ t_718 -> {"State#" %s_19} @ t_719 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_720} @ t_721
     + "indexSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> {"ghc-prim_GHC.Prim.Unit#" %a}
 
   primop effectful

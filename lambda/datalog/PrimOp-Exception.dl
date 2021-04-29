@@ -4,6 +4,9 @@
   primop effectful
     + "catch#"                 :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
     + "raise#"                 :: %b -> %o
+    - "raiseDivZero#"          :: {"Void#"} @ t_1649 -> %o_1
+    - "raiseUnderflow#"        :: {"Void#"} @ t_1650 -> %o_2
+    - "raiseOverflow#"         :: {"Void#"} @ t_1651 -> %o_3
     + "raiseIO#"               :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %b}
     + "maskAsyncExceptions#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
     + "maskUninterruptible#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
