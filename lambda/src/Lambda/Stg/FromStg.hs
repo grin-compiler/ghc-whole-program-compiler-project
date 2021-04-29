@@ -29,6 +29,7 @@ import Lambda.Util
 import Lambda.Name
 
 import qualified Lambda.Stg.GHCPrimOps as GHCPrim
+import qualified Lambda.GHC.RtsAbstractModel as GHCRts
 
 type CG = StateT Env IO
 
@@ -118,12 +119,15 @@ addExternal :: External -> CG ()
 addExternal ext = modify' $ \env@Env{..} -> env {externals = Map.insert (eName ext) ext externals}
 
 addPrimOpExternal :: External -> CG ()
+addPrimOpExternal = addExternal
+{-
 addPrimOpExternal ext@External{..} = do
   extMap <- gets externals
   unless (Map.member eName extMap) $ do
     -- gen fresh names
     newRetTy : newArgsTy <- refreshTyVars $ eRetType : eArgsType
     addExternal $ ext {eRetType = newRetTy, eArgsType = newArgsTy}
+-}
 
 addDef :: Def -> CG ()
 addDef d = modify' $ \env -> env {defs = d : defs env}
@@ -849,7 +853,7 @@ visitModule C.Module{..} = do
 
   -- HACK: add a super main function for the Main module
   when (unitId == "main" && modName == "Main") $ do
-    addMain
+    addRtsModel
 
   -- return public names: external top ids + exported top bindings
   pure (extNames ++ exportedTopNamesHS, exportedTopNamesFFI)
@@ -882,10 +886,8 @@ data CGStat
 
 ---------
 
-addMain :: CG ()
-addMain = addDef mainFun where
-  mainName = "main_::Main.main"
-  mainFun = Def mainName [] $ LetS
-    [ ("main_::Main.main_v00", SingleValue VoidRep, Lit $ LToken $ BS8.pack "ghc-prim_GHC.Prim.void#")
-    , ("main_::Main.main_v01", SingleValue LiftedRep, App (packName "main_:Main.main") ["main_::Main.main_v00"])
-    ] (Var "main_::Main.main_v01")
+addRtsModel :: CG ()
+addRtsModel = do
+  let Program{..} = GHCRts.rtsModel
+  mapM_ addDef pDefinitions
+  mapM_ addExternal pExternals

@@ -59,4 +59,4 @@ main = do
         liftIO $ BS8.appendFile (irFactsPath </> entryFileName) factData
 
   -- InitialReachable.facts
-  writeFile (irFactsPath </> "InitialReachable.facts") $ "main_::Main.main\n"
+  writeFile (irFactsPath </> "InitialReachable.facts") $ "ghc_rts_abstract_model\n"
