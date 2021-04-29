@@ -23,6 +23,7 @@ library
     Lambda.Datalog.ToDatalog
     Lambda.Stg.FromStg
     Lambda.Stg.GHCPrimOps
+    Lambda.GHC.RtsAbstractModel
     Lambda.Util
     Lambda.Lint
     Lambda.Transformation.StaticSingleAssignment
