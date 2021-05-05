@@ -69,6 +69,11 @@
 // arity
 .decl CodeArity(n:CodeName, arity:number)
 
+// constructor definitions
+.decl ConGroup(type_name : symbol, con_count : number)
+.decl ConSpec(type_name : symbol, con_name : symbol, arg_count : number)
+.decl ConSpecArg(con_name : symbol, arg_idx : number, prim_rep : symbol)
+
 .input EvalMode
 .input Move
 .input NodeRole
@@ -99,6 +104,7 @@
 .input FunctionTypeParameterType
 .input FunctionTypeReturnType
 .input IsStaticData
+.input ConGroup, ConSpec, ConSpecArg
 
 // utility
 .decl HasInst(n:CodeName, v:Variable)

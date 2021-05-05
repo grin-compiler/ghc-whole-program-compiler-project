@@ -49,7 +49,7 @@ programToFactsM log outDir prg = do
                   , "Case", "Alt", "AltParameter", "IsClosure", "ClosureVariable", "ClosureParameter", "ReturnValue", "FirstInst"
                   , "NextInst", "RecGroup", "ExternalFunction", "ExternalParameterType", "ExternalReturnType", "CodeArity"
                   , "TypeNode", "TypeNodeArgument", "IsTypeVariable", "FunctionType", "FunctionTypeReturnType", "FunctionTypeParameterType"
-                  , "IsStaticData"
+                  , "IsStaticData", "ConGroup", "ConSpec", "ConSpecArg"
                   ]
   files <- forM factNames $ \fname -> do
     let filename = outDir </> fname ++ ".facts"
@@ -131,14 +131,22 @@ convertStaticData StaticData{..} = do
       emit [("NodeArgument", [N sName, I 0, S $ show bs])]
   pure ()
 
+convertConGroup :: ConGroup -> DL ()
+convertConGroup ConGroup{..} = do
+  emit [("ConGroup", [N cgName, I (length cgCons)])]
+  forM_ cgCons $ \ConSpec{..} -> do
+    emit [("ConSpec", [N cgName, N csName, I (length csArgsRep)])]
+    forM_ (zip [0..] csArgsRep) $ \(idx, rep) -> do
+      emit [("ConSpecArg", [N csName, I idx, S (show rep)])]
+
 convertProgram :: Exp -> DL ()
 convertProgram = \case
   Program{..} -> do
     mapM_ convertExternal pExternals
     mapM_ convertStaticData pStaticData
-    -- TODO: cons, and others
+    mapM_ convertConGroup pConstructors
+    -- TODO: others
     mapM_ convertDef pDefinitions
-
 convertDef :: Exp -> DL ()
 convertDef = \case
   Def n a b -> do
