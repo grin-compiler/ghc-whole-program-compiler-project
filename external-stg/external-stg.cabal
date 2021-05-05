@@ -16,6 +16,7 @@ library
   exposed-modules:
     Stg.Pretty
     Stg.Reconstruct
+    Stg.Deconstruct
     Stg.Syntax
     Stg.Program
     Stg.IO
