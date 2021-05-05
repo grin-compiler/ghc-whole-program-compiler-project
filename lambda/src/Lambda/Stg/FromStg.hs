@@ -62,6 +62,9 @@ data Env
   , scopeName       :: Name             -- HINT: current scope name
   , shadowedNameMap :: !(Map Name Name) -- HINT: substitution map for shadowed names, original name -> unique name
   , scopeShadowSet  :: !(Set Name)      -- HINT: shadowed (original) names defined in the current scope
+
+  -- code name mapping
+  , codeNameMap   :: [String]
   }
 
 emptyEnv :: Env
@@ -81,9 +84,20 @@ emptyEnv = Env
   , scopeName       = mempty
   , shadowedNameMap = mempty
   , scopeShadowSet  = mempty
+  , codeNameMap   = mempty
   }
 
 -- utility
+
+addBinderNameMapEntry :: C.Binder -> Name -> CG ()
+addBinderNameMapEntry b name = do
+  let nameMapEntry = "b\t" ++ (BS8.unpack $ C.binderUniqueName b) ++ "\t" ++ unpackName name
+  modify' $ \env@Env{..} -> env { codeNameMap = nameMapEntry : codeNameMap }
+
+addAltNameMapEntry :: C.Binder -> [Name] -> CG ()
+addAltNameMapEntry b altNames = do
+  let nameMapEntry = intercalate "\t" $ "a" : (BS8.unpack $ C.binderUniqueName b) : map unpackName altNames
+  modify' $ \env@Env{..} -> env { codeNameMap = nameMapEntry : codeNameMap }
 
 scopeBracket :: Name -> CG a -> CG a
 scopeBracket sn action = do
@@ -394,12 +408,14 @@ convertTyCons tyConsGroups =
   | (u, ml) <- tyConsGroups
   , (mod, tyCons) <- ml
   , tc <- tyCons
-  , not (isUnboxed tc)
+--  , not (isUnboxed tc)
   ] where
+{-
       isUnboxed tc = case C.tcDataCons tc of
         [dc] | C.UnboxedTupleCon _ <- C.dcRep dc
               -> True
         _     -> False
+-}
 
 mkConGroup :: C.UnitId -> C.ModuleName -> C.TyCon -> ConGroup
 mkConGroup u mod tc
@@ -414,7 +430,7 @@ mkConSpec tc C.DataCon{..}
   { csName    = mkPackageQualifiedName (BS8.unpack $ C.getUnitId dcUnitId) (BS8.unpack $ C.getModuleName dcModule) (BS8.unpack dcName)
   , csArgsRep = case dcRep of
       C.AlgDataCon l      -> map getPrimRep l
-      C.UnboxedTupleCon _ -> error $ "impossible - unboxed type: " ++ show tc
+      C.UnboxedTupleCon n -> replicate (n `div` 2) VoidRep -- TODO: make this better ; old code: error $ "impossible - unboxed type: " ++ show tc
   }
 
 -- stg ast conversion
@@ -687,7 +703,11 @@ visitExpr mname expr = case expr of
 -}
       -- normal case
       _ -> do
-        (altResultRepTypes, alts2) <- unzip <$> mapM visitAlt alts
+        altNames <- forM alts $ \_ -> deriveNewQualifiedName "alt"
+        addAltNameMapEntry scrutResult altNames
+        lamAlts <- forM (zip altNames alts) $ \(altName, alt) -> do
+          visitAlt altName alt
+        let (altResultRepTypes, alts2) = unzip lamAlts
         name <- genResultName mname
         emitCmd $ S (name, joinRepTypes ("case scrut: " ++ show (P.pretty scrutResult)) altResultRepTypes, Case scrutName alts2)
 
@@ -697,6 +717,7 @@ visitExpr mname expr = case expr of
   -- L item ; no need for result var because binding chain continues
   C.StgLet (C.StgNonRec b r) e -> do
     name <- defName b
+    addBinderNameMapEntry b name
     scopeBracket name $ do
       (t, exp) <- visitRhs r
       emitCmd $ L (name, t, exp)
@@ -706,6 +727,7 @@ visitExpr mname expr = case expr of
   C.StgLet (C.StgRec bs) e -> do
     bs1 <- forM bs $ \(b, r) -> do
       name <- defName b
+      addBinderNameMapEntry b name
       pure (name, r)
     bs2 <- forM bs1 $ \(name, r) -> scopeBracket name $ do
       (t, exp) <- visitRhs r
@@ -716,6 +738,7 @@ visitExpr mname expr = case expr of
   -- L item ; no need for result var because binding chain continues
   C.StgLetNoEscape (C.StgNonRec b r) e -> do
     name <- defName b
+    addBinderNameMapEntry b name
     scopeBracket name $ do
       (t, exp) <- visitRhs r
       emitCmd $ L (name, t, exp)
@@ -725,6 +748,7 @@ visitExpr mname expr = case expr of
   C.StgLetNoEscape (C.StgRec bs) e -> do
     bs1 <- forM bs $ \(b, r) -> do
       name <- defName b
+      addBinderNameMapEntry b name
       pure (name, r)
     bs2 <- forM bs1 $ \(name, r) -> scopeBracket name $ do
       (t, exp) <- visitRhs r
@@ -736,9 +760,8 @@ visitExpr mname expr = case expr of
 
   _ -> error . printf "unsupported expr %s" $ show expr
 
-visitAlt :: C.Alt -> CG (RepType, Alt)
-visitAlt (C.Alt altCon argIds body) = do
-  altName <- deriveNewQualifiedName "alt"
+visitAlt :: Name -> C.Alt -> CG (RepType, Alt)
+visitAlt altName (C.Alt altCon argIds body) = do
   scopeBracket altName $ do
     openNewBindChain
     cpat <- case altCon of
@@ -765,6 +788,8 @@ joinRepTypes msg = foldr1 f where
     , fa == fb
     = UnboxedTuple fa
 -}
+  f Auto b = b
+  f a Auto = a
   f a b
     | a == b    = a
     | otherwise = error $ "can not join RepType: " ++ show (a, b) ++ "\n" ++ msg
@@ -786,6 +811,7 @@ visitTopRhs :: C.Binder -> C.Rhs -> CG ()
 visitTopRhs b = \case
   C.StgRhsClosure _ _ bs body -> do
     name <- getName b
+    addBinderNameMapEntry b name
     scopeBracket name $ do
       openNewBindChain
       params <- mapM defBinder bs
@@ -796,6 +822,7 @@ visitTopRhs b = \case
   C.StgRhsCon con args -> do
     openNewBindChain
     name <- getName b
+    addBinderNameMapEntry b name
     resultVar <- deriveNewQualifiedName "result"
     con2 <- Con (genDataConName con) <$> mapM visitArg args
     emitCmd $ S (resultVar, SingleValue LiftedRep, con2)
@@ -806,6 +833,7 @@ visitTopBinder :: C.TopBinding -> CG ()
 visitTopBinder = \case
   C.StgTopStringLit b s -> do
     name <- getName b
+    addBinderNameMapEntry b name
     addStaticData $ StaticData name (StaticString s)
 
   C.StgTopLifted (C.StgNonRec b r) -> do
@@ -875,6 +903,7 @@ codegenLambda mod = do
       cgStat = CGStat
         { cgMessages  = messages
         , cgErrors    = errors
+        , cgNameMap   = codeNameMap
         }
   pure (finalPrg, cgStat)
 
@@ -882,6 +911,7 @@ data CGStat
   = CGStat
   { cgMessages  :: [String]
   , cgErrors    :: [String]
+  , cgNameMap   :: [String]
   }
 
 ---------

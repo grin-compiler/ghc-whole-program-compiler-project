@@ -79,6 +79,9 @@ main = do
         unless (null cgErrors) $ do
           addZstdEntry (modName </> "errors.info") . BS8.pack $ unlines cgErrors
 
+        unless (null cgNameMap) $ do
+          addZstdEntry (modName </> "name-map.info") . BS8.pack $ unlines cgNameMap
+
         -- export .lambdabin
         let lambdaBin = BSL.toStrict $ encode prg
         addZstdEntry (modName </> "module.lambdabin") lambdaBin
