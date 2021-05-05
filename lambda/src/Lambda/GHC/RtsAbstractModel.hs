@@ -126,7 +126,7 @@ rtsModel = [prog|
       letS
         p_v00 = p_arg0 $
         p_result00 = case p_v00 of
-          ("ghc-prim_GHC.Tuple.(,)" p_tup_arg_0 p_tup_arg_1) ->
+          ("ghc-prim_GHC.Tuple.(,)" p_tup_arg_0 p_tup_arg_1) @ p_alt00 ->
             p_tup_arg_0
       p_result00
   |]
