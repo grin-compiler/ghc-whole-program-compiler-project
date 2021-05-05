@@ -31,3 +31,7 @@ new primops to add to CFA:
     "copyArrayArray#"              :: {"ArrayArray#"} @ t_1365 -> (T_Int64) @ t_1366 -> {"MutableArrayArray#" %s_125} @ t_1367 -> (T_Int64) @ t_1368 -> (T_Int64) @ t_1369 -> {"State#" %s_125} @ t_1370 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1371
     "copyMutableArrayArray#"       :: {"MutableArrayArray#" %s_126} @ t_1372 -> (T_Int64) @ t_1373 -> {"MutableArrayArray#" %s_126} @ t_1374 -> (T_Int64) @ t_1375 -> (T_Int64) @ t_1376 -> {"State#" %s_126} @ t_1377 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1378
 
+dead code elimination ideas:
+  find dead/unused:
+    constructors = never pattern matched
+    closure = never called

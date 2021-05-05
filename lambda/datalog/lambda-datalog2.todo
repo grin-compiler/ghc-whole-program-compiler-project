@@ -27,3 +27,8 @@ done - simplify array operations ; merge commmon rules
 BIG:
 - context sensitive analysis?
 - unification based analysis?
+
+IDEA:
+  calculate tags and nodes and origins on demand
+    for each reachable case expressions we'd emit a new Request value to calculate the tag of the scrutinee and
+    then the matching alts body expression would request the elaboration further
