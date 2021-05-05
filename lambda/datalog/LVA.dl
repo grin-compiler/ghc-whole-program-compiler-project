@@ -44,7 +44,7 @@ ReachableCode(alt) :-
   ReachableCode(f),
   HasInst(f, r),
   Alt(r, alt, t),
-  // is the tag created somewhere?
+  // is the tag created somewhere? yes: LVA-07 sets the TagValue
   TagValue(alt, t).
 
 
@@ -132,3 +132,60 @@ LeafCode(caller) :-
     - without default pattern
 */
 
+///////////////////
+
+.decl LiveStaticData(v:Variable)
+.decl DeadStaticData(v:Variable)
+.output LiveStaticData, DeadStaticData
+
+LiveStaticData(d) :-
+  REACHABLE(r)
+  ( NodeArgument(r, _, d)
+  ; CallArgument(r, _, d)
+  ; Move(r, d)
+  ; Case(r, d)
+  ),
+  IsStaticData(d).
+
+LiveStaticData(d) :-
+  IsStaticData(d),
+  ReturnValue(c, d),
+  ReachableCode(c).
+
+DeadStaticData(d) :-
+  IsStaticData(d),
+  !LiveStaticData(d).
+
+//////////////////
+
+.decl LiveConstructor(con_name : symbol)
+.decl DeadConstructor(con_name : symbol)
+.decl LiveConGroup(con_group_name : symbol)
+.decl DeadConGroup(con_group_name : symbol)
+.output LiveConstructor, DeadConstructor, LiveConGroup, DeadConGroup
+
+LiveConGroup(cg),
+LiveConstructor(t) :-
+  REACHABLE(r)
+  TagValue(r, t),
+  ConSpec(cg, t, _).
+
+DeadConstructor(c) :-
+  ConSpec(_, c, _),
+  !LiveConstructor(c).
+
+DeadConGroup(cg) :-
+  ConGroup(cg, _),
+  !LiveConGroup(cg).
+
+
+/////////////////////
+.decl DeletableCode(n : symbol)
+.output DeletableCode
+
+DeletableCode(r) :-
+  REACHABLE(r)
+  ( IsFunction(r)
+  ; IsClosure(r)
+  ),
+  !CalledCode(_, r).
