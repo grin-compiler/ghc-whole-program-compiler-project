@@ -23,6 +23,7 @@ library
     Lambda.Datalog.ToDatalog
     Lambda.Stg.FromStg
     Lambda.Stg.GHCPrimOps
+    Lambda.Stg.StripDeadCode
     Lambda.GHC.RtsAbstractModel
     Lambda.Util
     Lambda.Lint
@@ -53,6 +54,7 @@ library
     , binary
     , external-stg
     , transformers
+    , hashable
 
   default-language:    Haskell2010
 
@@ -125,6 +127,36 @@ executable mkfacts
   default-language:    Haskell2010
   hs-source-dirs:      app
   main-is:             mkfacts.hs
+  build-depends:       base
+                     , containers
+                     , optparse-applicative
+                     , filepath
+                     , directory
+                     , mtl
+                     , bytestring
+                     , zip
+
+executable strip-fullpak
+  default-language:    Haskell2010
+  hs-source-dirs:      app
+  main-is:             strip-fullpak.hs
+  build-depends:       base
+                     , containers
+                     , exceptions
+                     , optparse-applicative
+                     , filepath
+                     , directory
+                     , mtl
+                     , bytestring
+                     , binary
+                     , zip
+                     , external-stg
+                     , lambda
+
+executable catlambda
+  default-language:    Haskell2010
+  hs-source-dirs:      app
+  main-is:             catlambda.hs
   build-depends:       base
                      , containers
                      , optparse-applicative
