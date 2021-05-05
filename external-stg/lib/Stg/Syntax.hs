@@ -20,6 +20,7 @@ import Data.Binary
 
 -- utility
 
+-- Binder
 newtype Id = Id {unId :: Binder}
 
 instance Eq Id where
@@ -32,6 +33,34 @@ instance Ord Id where
 
 instance Show Id where
   show (Id a) = BS8.unpack $ binderUniqueName a
+
+-- DataCon
+newtype DC = DC {unDC :: DataCon}
+
+instance Eq DC where
+  (DC a) == (DC b) = dcUNameHash a == dcUNameHash b && dcUniqueName a == dcUniqueName b
+
+instance Ord DC where
+  compare (DC a) (DC b) = case compare (dcUNameHash a) (dcUNameHash b) of
+    EQ  -> compare (dcUniqueName a) (dcUniqueName b)
+    x   -> x
+
+instance Show DC where
+  show (DC a) = BS8.unpack $ dcUniqueName a
+
+-- TyCon
+newtype TC = TC {unTC :: TyCon}
+
+instance Eq TC where
+  (TC a) == (TC b) = tcUNameHash a == tcUNameHash b && tcUniqueName a == tcUniqueName b
+
+instance Ord TC where
+  compare (TC a) (TC b) = case compare (tcUNameHash a) (tcUNameHash b) of
+    EQ  -> compare (tcUniqueName a) (tcUniqueName b)
+    x   -> x
+
+instance Show TC where
+  show (TC a) = BS8.unpack $ tcUniqueName a
 
 -- idinfo
 
