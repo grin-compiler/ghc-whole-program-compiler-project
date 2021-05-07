@@ -5,8 +5,7 @@ import Control.Monad
 import Options.Applicative
 import Data.Semigroup ((<>))
 
-import Data.Containers.ListUtils (nubOrd)
-import Data.List (isSuffixOf, sort, foldl')
+import Data.List (isSuffixOf, foldl')
 import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -97,13 +96,10 @@ main = do
 
     -- top level info
     let content = BS8.pack $ unlines
-          [ "modules:", ppSection . sort $ catMaybes liveModules
+          [ "modules:", Stg.printSection $ catMaybes liveModules
           ]
 
     addZstdEntry "app.info" content
-
-
-ppSection l = unlines ["- " ++ x | x <- nubOrd $ map show l]
 
 addZstdEntry :: FilePath -> BS8.ByteString -> ZipArchive ()
 addZstdEntry path content = do

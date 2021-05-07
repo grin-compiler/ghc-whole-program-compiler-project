@@ -16,6 +16,8 @@ import qualified Data.ByteString.Char8 as BS8
 
 import Codec.Archive.Zip
 
+import qualified Stg.Program as Stg
+
 data CatLambdaOpts
   = CatLambdaOpts
   { lampakPath  :: FilePath
@@ -24,9 +26,6 @@ data CatLambdaOpts
 appOpts :: Parser CatLambdaOpts
 appOpts = CatLambdaOpts
   <$> argument str (metavar "LAMPAKFILE" <> help "The .lampak file to collect .lambda IR from")
-
-parseSection :: [String] -> String -> [String]
-parseSection content n = map (read . tail) . takeWhile (isPrefixOf "-") . tail . dropWhile (not . isPrefixOf n) $ content
 
 main :: IO ()
 main = do
@@ -43,7 +42,7 @@ main = do
     -- get list of modules
     appInfoEntry <- mkEntrySelector "app.info"
     content <- lines . BS8.unpack <$> getEntry appInfoEntry
-    let mods = parseSection content "modules:"
+    let mods = Stg.parseSection content "modules:"
 
     forM_ mods $ \m -> do
       e <- mkEntrySelector $ m </> "module.lambda"

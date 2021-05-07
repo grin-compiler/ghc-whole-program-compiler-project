@@ -12,8 +12,6 @@ import Codec.Archive.Zip.Unix
 import Text.Printf
 
 import qualified Data.Map as Map
-import Data.Containers.ListUtils (nubOrd)
-import Data.List (sort)
 
 import Stg.Program
 import qualified Stg.GHC.Symbols as GHCSymbols
@@ -51,16 +49,13 @@ main = do
 
   let modpakMap       = Map.fromList [(modModpakPath m , m) | m <- modinfoList]
       fullpakModules  = [modpakMap Map.! m | m <- appModpaks]
-
-      ppSection l     = unlines ["- " ++ x | x <- nubOrd $ map show l]
-
       fullpakName     = ghcstgappPath -<.> ".fullpak"
 
   putStrLn $ "creating " ++ fullpakName
   createArchive fullpakName $ do
     -- top level info
     let content = BS8.pack $ unlines
-          [ "modules:", ppSection . sort $ map modModuleName fullpakModules
+          [ "modules:", printSection $ map modModuleName fullpakModules
           ]
     appinfo <- mkEntrySelector "app.info"
     addEntry Deflate content appinfo

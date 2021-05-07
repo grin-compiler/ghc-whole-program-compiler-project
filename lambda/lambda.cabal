@@ -135,6 +135,7 @@ executable mkfacts
                      , mtl
                      , bytestring
                      , zip
+                     , external-stg
 
 executable strip-fullpak
   default-language:    Haskell2010
@@ -165,3 +166,4 @@ executable catlambda
                      , mtl
                      , bytestring
                      , zip
+                     , external-stg

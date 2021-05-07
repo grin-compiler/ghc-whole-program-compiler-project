@@ -5,8 +5,7 @@ import Control.Monad
 import Options.Applicative
 import Data.Semigroup ((<>))
 
-import Data.Containers.ListUtils (nubOrd)
-import Data.List (isSuffixOf, sort)
+import Data.List (isSuffixOf)
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -49,8 +48,7 @@ main = do
     ext | isSuffixOf "_ghc_stgapp" ext  -> Stg.getGhcStgAppModules appPath
     _                                   -> error "unknown input file format"
 
-  let ppSection l = unlines ["- " ++ x | x <- nubOrd $ map show l]
-      lampakName  = appPath -<.> ".lampak"
+  let lampakName  = appPath -<.> ".lampak"
 
   putStrLn $ "creating " ++ lampakName
   putStrLn "modules:"
@@ -61,7 +59,7 @@ main = do
     createArchive lampakName $ do
       -- top level info
       let content = BS8.pack $ unlines
-            [ "modules:", ppSection . sort $ map (Stg.getModuleName . Stg.moduleName) mods
+            [ "modules:", Stg.printSection $ map (Stg.getModuleName . Stg.moduleName) mods
             ]
 
       addZstdEntry "app.info" content
