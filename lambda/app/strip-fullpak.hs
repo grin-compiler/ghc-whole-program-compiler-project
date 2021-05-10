@@ -31,55 +31,53 @@ import Lambda.Stg.StripDeadCode
 
 data StrippedFullpakOpts
   = StrippedFullpakOpts
-  { lampakPath :: FilePath
+  { fullpakPath :: FilePath
   }
 
 appOpts :: Parser StrippedFullpakOpts
 appOpts = StrippedFullpakOpts
-  <$> argument str (metavar "LAMPAKFILE" <> help "The .lampak file name")
+  <$> argument str (metavar "FULLPAK" <> help "The .fullpak file name to strip")
+
+readNameSet :: FilePath -> IO (Set Stg.Name)
+readNameSet f = Set.fromList . BS8.lines <$> BS8.readFile f
 
 main :: IO ()
 main = do
   let opts = info (appOpts <**> helper) mempty
   StrippedFullpakOpts{..} <- execParser opts
 
-  let fullpakName         = lampakPath -<.> ".fullpak"
-      strippedFullpakName = lampakPath -<.> ".stripped.fullpak"
-      factsPath           = lampakPath -<.> ".ir-datalog-facts"
+  let lampakPath          = fullpakPath -<.> ".lampak"
+      strippedFullpakName = fullpakPath -<.> ".stripped.fullpak"
+      outputFactsPath     = fullpakPath -<.> ".ir-datalog-facts" </> "out"
 
-      reachableCodePath   = factsPath </> "out" </> "ReachableCode.csv"
-      liveStaticDataPath  = factsPath </> "out" </> "LiveStaticData.csv"
-      liveConPath         = factsPath </> "out" </> "LiveConstructor.csv"
-      liveConGroupPath    = factsPath </> "out" </> "LiveConGroup.csv"
-
-  reachableCodeSet <- Set.fromList . BS8.lines <$> BS8.readFile reachableCodePath
-  liveStaticDataSet <- Set.fromList . BS8.lines <$> BS8.readFile liveStaticDataPath
-  liveCons <- Set.fromList . BS8.lines <$> BS8.readFile liveConPath
-  liveConGroups <- Set.fromList . BS8.lines <$> BS8.readFile liveConGroupPath
+  livenessFacts <- LivenessFacts
+    <$> readNameSet (outputFactsPath </> "ReachableCode.csv")
+    <*> readNameSet (outputFactsPath </> "LiveStaticData.csv")
+    <*> readNameSet (outputFactsPath </> "LiveConstructor.csv")
+    <*> readNameSet (outputFactsPath </> "LiveConGroup.csv")
 
   putStrLn $ "creating " ++ strippedFullpakName
   putStrLn "modules:"
 
-
   createArchive strippedFullpakName $ do
 
-    appInfo <- liftIO $ Stg.readModpakS fullpakName "app.info" id
+    appInfo <- liftIO $ Stg.readModpakS fullpakPath "app.info" id
 
     let content = lines . BS8.unpack $ appInfo
         mods    = Stg.parseSection content "modules:"
 
-    addCFAResult $ factsPath </> "out"
+    addCFAResult outputFactsPath
 
     liveModules <- forM (zip [1..] mods) $ \(idx, modName) -> do
       let modStgbinName = modName </> Stg.modpakStgbinPath
       stgMod <- liftIO $ do
         putStrLn $ "  " ++ modName
-        Stg.readModpakL fullpakName modStgbinName Stg.decodeStgbin
+        Stg.readModpakL fullpakPath modStgbinName Stg.decodeStgbin
 
       modNameMap <- liftIO $ Stg.readModpakS lampakPath (modName </> "name-map.info") readNameMap
 
       -- export stripped .stgbin and stats
-      mmod <- liftIO $ stripDeadCode liveCons liveConGroups liveStaticDataSet reachableCodeSet modNameMap stgMod
+      mmod <- liftIO $ stripDeadCode livenessFacts modNameMap stgMod
       result <- case mmod of
         Nothing -> pure Nothing
         Just (strippedMod, stripStat) -> do

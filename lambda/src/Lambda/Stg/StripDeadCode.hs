@@ -1,5 +1,5 @@
 {-# LANGUAGE LambdaCase, TupleSections, RecordWildCards, OverloadedStrings, BangPatterns #-}
-module Lambda.Stg.StripDeadCode (stripDeadCode, StripStat(..)) where
+module Lambda.Stg.StripDeadCode (stripDeadCode, StripStat(..), LivenessFacts(..)) where
 
 import Control.Monad.State
 
@@ -19,35 +19,40 @@ import Stg.Syntax
 
 data Env
   = Env
-  { deletedNames  :: Set Name
-  , dummyLifted   :: Binder
-  , deletedDefs   :: Set Name
-  , deletedRefs   :: Set Name
-  , deletedData   :: Set Name
-  , deletedAlts   :: Set Name
-  , deletedCons   :: Set Name
-  , deletedTyCons :: Set Name
+  { dummyLifted     :: Binder
+  , deletedDefs     :: Set Name
+  , deletedRefs     :: Set Name
+  , deletedData     :: Set Name
+  , deletedAlts     :: Set Name
+  , deletedCons     :: Set Name
+  , deletedTyCons   :: Set Name
   , referredIds     :: !(Set Id)
   , referredCons    :: !(Set DC)
   , referredTyCons  :: !(Set TC)
+  , definedIds      :: !(Set Id)
   }
 
 emptyEnv :: Env
 emptyEnv = Env
-  { deletedNames  = Set.empty
-  , dummyLifted   = dummyBinder
-  , deletedDefs   = Set.empty
-  , deletedRefs   = Set.empty
-  , deletedData   = Set.empty
-  , deletedAlts   = Set.empty
-  , deletedCons   = Set.empty
-  , deletedTyCons = Set.empty
+  { dummyLifted     = dummyBinder
+  , deletedDefs     = Set.empty
+  , deletedRefs     = Set.empty
+  , deletedData     = Set.empty
+  , deletedAlts     = Set.empty
+  , deletedCons     = Set.empty
+  , deletedTyCons   = Set.empty
   , referredIds     = Set.empty
   , referredCons    = Set.empty
   , referredTyCons  = Set.empty
+  , definedIds      = Set.empty
   }
 
 type SM a = StateT Env IO a
+
+addDefId :: Binder -> SM ()
+addDefId b = do
+  let i = Id b
+  modify' $ \env@Env{..} -> env {definedIds = if Set.member i definedIds then definedIds else Set.insert i definedIds}
 
 addRefId :: Binder -> SM ()
 addRefId b = do
@@ -63,10 +68,6 @@ addRefTyCon :: TyCon -> SM ()
 addRefTyCon tc = do
   let i = TC tc
   modify' $ \env@Env{..} -> env {referredTyCons = if Set.member i referredTyCons then referredTyCons else Set.insert i referredTyCons}
-
-markDeleted :: Name -> SM ()
-markDeleted n = do
-  modify' $ \env@Env{..} -> env {deletedNames = Set.insert n deletedNames}
 
 markDeletedDef :: Name -> SM ()
 markDeletedDef n = do
@@ -114,86 +115,91 @@ markDeletedTyCon tc n = do
 
 dummyBinder :: Binder
 dummyBinder = Binder
-  { binderName      = "lifted_dummy"
+  { binderName      = "()"
   , binderId        = BinderId (Unique '-' 0)
   , binderType      = SingleValue LiftedRep
-  , binderTypeSig   = "forall a . a"
+  , binderTypeSig   = "()"
   , binderScope     = HaskellExported
   , binderDetails   = VanillaId
   , binderInfo      = ""
   , binderDefLoc    = UnhelpfulSpan "strip-dead-code"
-  , binderUnitId    = UnitId "strip-dead-code"
-  , binderModule    = ModuleName "Dummy"
+  , binderUnitId    = UnitId "ghc-prim"
+  , binderModule    = ModuleName "GHC.Tuple"
   , binderTopLevel  = True
   -- optimization
-  , binderUniqueName  = "strip-dead-code_Dummy.lifted_dummy"
-  , binderUNameHash   = hash ("strip-dead-code_Dummy.lifted_dummy" :: Name)
+  , binderUniqueName  = "ghc_prim_GHC.Tuple.()"
+  , binderUNameHash   = hash ("ghc_prim_GHC.Tuple.()" :: Name)
   }
 
 data StripStat
   = StripStat
-  { ssDeletedDefs :: [Name]
-  , ssDeletedRefs :: [Name]
-  , ssDeletedData :: [Name]
-  , ssDeletedAlts :: [Name]
+  { ssDeletedDefs   :: [Name]
+  , ssDeletedRefs   :: [Name]
+  , ssDeletedData   :: [Name]
+  , ssDeletedAlts   :: [Name]
   , ssDeletedCons   :: [Name]
   , ssDeletedTyCons :: [Name]
   }
 
-stripDeadCode :: Set Name -> Set Name -> Set Name -> Set Name -> (Map Name Name, Map Name [Name]) -> Module -> IO (Maybe (Module, StripStat))
-stripDeadCode liveCons liveConGroups liveStaticDataSet liveCodeSet (idBndMap, caseResultMap) stgMod =
+data LivenessFacts
+  = LivenessFacts
+  { lfReachableCode   :: Set Name
+  , lfLiveStaticData  :: Set Name
+  , lfLiveConstructor :: Set Name
+  , lfLiveConGroup    :: Set Name
+  }
+
+stripDeadCode :: LivenessFacts -> (Map Name Name, Map Name [Name]) -> Module -> IO (Maybe (Module, StripStat))
+stripDeadCode LivenessFacts{..} (idBndMap, caseResultMap) stgMod =
  evalStateT (stripModule stgMod) emptyEnv where
 
-  isLiveBinder :: Binder -> Bool
-  isLiveBinder Binder{..}
-    | binderScope == LocalScope || binderScope == GlobalScope
-    = case Map.lookup binderUniqueName idBndMap of
-        Nothing -> error $ "internal error - name not found in binder name map: " ++ show binderUniqueName
-        Just n  -> Set.member n liveCodeSet
-    | otherwise
-    = Set.member binderUniqueName liveCodeSet
+  isLiveRhs :: Binder -> Rhs -> Bool
+  isLiveRhs idBnd@Binder{..} = \case
+    StgRhsCon{}
+      -- HINT: keep local constructors
+      | binderTopLevel == False -> True
+
+    -- HINT: top level constructors and closures
+    _ | binderScope == LocalScope || binderScope == GlobalScope
+      -> case Map.lookup binderUniqueName idBndMap of
+          Nothing -> error $ "internal error - name not found in binder name map: " ++ show binderUniqueName
+          Just n  -> Set.member n lfReachableCode
+      | otherwise
+      -> Set.member binderUniqueName lfReachableCode
 
   isLiveAlt :: Name -> Bool
-  isLiveAlt n = Set.member n liveCodeSet
+  isLiveAlt n = Set.member n lfReachableCode
 
-  isLiveData :: Name -> Bool
-  isLiveData n = Set.member n liveStaticDataSet
+  isLiveStaticData :: Name -> Bool
+  isLiveStaticData n = Set.member n lfLiveStaticData
 
   stripModule :: Module -> SM (Maybe (Module, StripStat))
   stripModule m@Module{..} = do
     -- mark all deleted top level names
     let allExternalIds = concatMap (concatMap snd . snd) moduleExternalTopIds
-    forM_ (concatMap topLiftedBindings moduleTopBindings ++ allExternalIds) $ \idBnd -> do
-      let BinderId u = binderId idBnd
-      case isLiveBinder idBnd of
-        True  -> do
-          pure ()
+    forM_ (concatMap topLiftedBindings moduleTopBindings ++ allExternalIds) $ \idBnd@Binder{..} -> do
+      -- setup dummy lifted symbol
+      when (binderUniqueName == "ghc_prim_GHC.Tuple.()") $ do
+        modify' $ \env -> env {dummyLifted = idBnd}
+
+      -- mark top binder defined if it is reachable
+      case Set.member binderUniqueName lfReachableCode of
+        True  -> addDefId idBnd
         False -> do
-          markDeleted (binderUniqueName idBnd)
+          when (binderModule == ModuleName "GHC.Prim" && binderUnitId == UnitId "ghc-prim") $ do
+            -- HINT: do not dummify GHC's builtin values, e.g void#
+            addDefId idBnd
 
     tops <- mapM stripTopBinding moduleTopBindings
     (depList, externalIds) <- calcDependencies moduleUnitId moduleName
     let myTyCons = concat [concat [tcs | (m, tcs) <- ml, m == moduleName] | (uid, ml) <- moduleTyCons, uid == moduleUnitId]
 
     -- NOTE: stripTyCons must be call after stripTopBinding because it needs the populated ref sets
-    strippedTyCons <- stripTyCons liveCons liveConGroups myTyCons
+    strippedTyCons <- stripTyCons lfLiveConstructor lfLiveConGroup myTyCons
 
     Env{..} <- get
 
-    let {-allExtIds = moduleExternalTopIds ++ [(UnitId "strip-dead-code", [(ModuleName "Dummy" , [dummyBinder])])]
-        filteredExtIds = dropEmpty
-          [ ( uid
-            , dropEmpty [ (m, filter (\i -> Set.member (Id i) referredIds) ids)
-                        | (m, ids) <- ml
-                        ]
-            )
-          | (uid, ml) <- allExtIds
-          ]
-
-        strippedDeps = calcDependencies moduleUnitId moduleName filteredExtIds strippedTyCons
-        -}
-
-        strippedMod = m
+    let strippedMod = m
           { moduleTopBindings     = catMaybes tops
           , moduleExternalTopIds  = externalIds
           , moduleTyCons          = strippedTyCons
@@ -215,34 +221,37 @@ stripDeadCode liveCons liveConGroups liveStaticDataSet liveCodeSet (idBndMap, ca
 
   stripTopBinding :: TopBinding -> SM (Maybe TopBinding)
   stripTopBinding tb = case tb of
-    StgTopLifted b -> fmap StgTopLifted <$> stripBinding True b
-    StgTopStringLit idBnd stg -> case isLiveData (binderUniqueName idBnd) of
-      True  -> pure $ Just tb
+    StgTopLifted b -> fmap StgTopLifted <$> stripBinding b
+    StgTopStringLit idBnd stg -> case isLiveStaticData (binderUniqueName idBnd) of
+      True  -> do
+        addDefId idBnd
+        pure $ Just tb
       False -> do
-        markDeleted (binderUniqueName idBnd)
         markDeletedData (binderUniqueName idBnd)
         pure Nothing
 
-  stripBinding :: Bool -> Binding -> SM (Maybe Binding)
-  stripBinding isTopLevel = \case
-    StgNonRec idBnd rhs -> case isLiveBinder idBnd || (not isTopLevel) of
-      True  -> Just . StgNonRec idBnd <$> stripRhs rhs
+  stripBinding :: Binding -> SM (Maybe Binding)
+  stripBinding = \case
+    StgNonRec idBnd rhs -> case isLiveRhs idBnd rhs of -- HINT: strip closures, keep constructors
+      True -> do
+        addDefId idBnd
+        Just . StgNonRec idBnd <$> stripRhs rhs
       False -> do
-        markDeleted (binderUniqueName idBnd)
         markDeletedDef (binderUniqueName idBnd)
         pure Nothing
 
     StgRec l -> do
       -- mark all deleted names before the traversal
-      forM_ l $ \(idBnd, _) -> do
-        unless (isLiveBinder idBnd) $ do
-          markDeleted (binderUniqueName idBnd)
+      lives <- forM l $ \x@(idBnd, rhs) -> case isLiveRhs idBnd rhs of
+        True  -> do
+          addDefId idBnd
+          pure $ Just x
+        False -> do
           markDeletedDef (binderUniqueName idBnd)
+          pure Nothing
 
-      l' <- forM l $ \(idBnd, rhs) -> case isLiveBinder idBnd || (not isTopLevel) of
-        True  -> Just . (idBnd,) <$> stripRhs rhs
-        False -> pure Nothing
-      case catMaybes l' of
+      l' <- forM (catMaybes lives) $ \(idBnd, rhs) -> (idBnd,) <$> stripRhs rhs
+      case l' of
         [] -> pure Nothing
         xs -> pure . Just $ StgRec xs
 
@@ -250,6 +259,7 @@ stripDeadCode liveCons liveConGroups liveStaticDataSet liveCodeSet (idBndMap, ca
   stripRhs rhs = case rhs of
     -- check occ ids
     StgRhsClosure capturedVars uf args e -> do
+      mapM_ addDefId args
       cvars' <- mapM stripIdOcc capturedVars
       StgRhsClosure cvars' uf args <$> stripExpr e
 
@@ -263,18 +273,19 @@ stripDeadCode liveCons liveConGroups liveStaticDataSet liveCodeSet (idBndMap, ca
     StgCase scrutExpr scrutResult altType alts
       | [Alt AltDefault [] _] <- alts
       -> do
+          addDefId scrutResult
           visitAltType altType
           -- it's a force and not a case
           StgCase <$> stripExpr scrutExpr <*> pure scrutResult <*> pure altType <*> mapM stripAlt alts
 
       | otherwise -> do
+          addDefId scrutResult
           let altNames = case Map.lookup (binderUniqueName scrutResult) caseResultMap of
                 Just l  -> l
                 Nothing -> error $ "internal error - unknown case scrutinee result name: " ++ show (Id scrutResult)
           alts' <- forM (zip altNames alts) $ \(n, a) -> case isLiveAlt n of
             True  -> Just <$> stripAlt a
             False -> do
-              markDeleted n
               markDeletedAlt n
               pure Nothing
           case catMaybes alts' of
@@ -283,11 +294,11 @@ stripDeadCode liveCons liveConGroups liveStaticDataSet liveCodeSet (idBndMap, ca
               visitAltType altType
               StgCase <$> stripExpr scrutExpr <*> pure scrutResult <*> pure altType <*> pure liveAlts
 
-    StgLet b e -> stripBinding False b >>= \case
+    StgLet b e -> stripBinding b >>= \case
       Just b' -> StgLet b' <$> stripExpr e
       Nothing -> stripExpr e
 
-    StgLetNoEscape b e -> stripBinding False b >>= \case
+    StgLetNoEscape b e -> stripBinding b >>= \case
       Just b' -> StgLetNoEscape b' <$> stripExpr e
       Nothing -> stripExpr e
 
@@ -315,6 +326,7 @@ stripDeadCode liveCons liveConGroups liveStaticDataSet liveCodeSet (idBndMap, ca
     case altCon of
       AltDataCon dc -> addRefCon dc
       _ -> pure ()
+    mapM_ addDefId altBinders
     Alt altCon altBinders <$> stripExpr altRHS
 
   stripArg :: Arg -> SM Arg
@@ -325,11 +337,11 @@ stripDeadCode liveCons liveConGroups liveStaticDataSet liveCodeSet (idBndMap, ca
   stripIdOcc :: Binder -> SM Binder
   stripIdOcc b@Binder{..} = do
     Env{..} <- get
-    case Set.member binderUniqueName deletedNames of
-      False -> do
+    case Set.member (Id b) definedIds of
+      True -> do
         addRefId b
         pure b
-      True  -> do
+      False  -> do
         markDeletedRef binderUniqueName
         addRefId dummyLifted
         pure dummyLifted
@@ -446,5 +458,9 @@ isEmptyModule Module{..} =
     done - moduleForeignFiles        :: ![(ForeignSrcLang, FilePath)]
 
   fix:
-    - do not remove void tokens
+    done - do not remove void tokens
+    done - type correct dummification ; now only lifted binders are deleted
+    done - remove special dummification support from ext stg interpreter
+    - delete unused constructor allocations
+    done - delete unused closure allocations
 -}
