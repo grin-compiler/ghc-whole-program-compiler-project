@@ -26,6 +26,7 @@ RaisedEx(ex) :-
 // "fork#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
 USED("PrimOp-Concurrency-02")
 Called(r, "fork#"),
+HasInst("fork#", "fork#-action-ignored-result"), // fix & workaround - TODO: come up with a better and simpler design, NOTE: this is needed to make CalledCode work
 CallPNode1(r, "fork#-action-ignored-result", v0_io_action, v1_realworld) :-
   REACHABLE(r)
   Call(r, "fork#", _),
@@ -35,6 +36,7 @@ CallPNode1(r, "fork#-action-ignored-result", v0_io_action, v1_realworld) :-
 // "forkOn#" :: T_Int64 -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
 USED("PrimOp-Concurrency-03")
 Called(r, "forkOn#"),
+HasInst("forkOn#", "forkOn#-action-ignored-result"), // fix & workaround - TODO: come up with a better and simpler design, NOTE: this is needed to make CalledCode work
 CallPNode1(r, "forkOn#-action-ignored-result", v1_io_action, v2_realworld) :-
   REACHABLE(r)
   Call(r, "forkOn#", _),

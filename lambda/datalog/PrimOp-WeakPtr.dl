@@ -21,6 +21,7 @@
 USED("PrimOp-WeakPtr-01")
 Called(r, op),
 CallPNode1(r, "mkWeak#-finalizer-ignored-result", finalizer, v3_state), // TRICK: swap name space and result var in order to ignore the result value
+HasInst("mkWeak#", "mkWeak#-finalizer-ignored-result"), // fix & workaround - TODO: come up with a better and simpler design, NOTE: this is needed to make CalledCode work
 WeakFinalizer(r, finalizer),
 WeakPtr(r, ty_node, item) :-
   op = "mkWeak#",
