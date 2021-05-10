@@ -35,3 +35,9 @@ dead code elimination ideas:
   find dead/unused:
     constructors = never pattern matched
     closure = never called
+
+Q:
+  how are these related to dead code / dead data:
+    - reachable code
+    - referred value
+    - called code

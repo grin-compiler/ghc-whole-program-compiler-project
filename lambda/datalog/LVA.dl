@@ -20,6 +20,10 @@ CalledCode(caller, callee) :-
 
 .decl ReachableCode(n:CodeName)
 .output ReachableCode
+/*
+  HINT:
+    ReachableCode = initial reachable + called code + matching alt
+*/
 
 USED("LVA-02")
 ReachableCode(n) :-
@@ -189,3 +193,25 @@ DeletableCode(r) :-
   ; IsClosure(r)
   ),
   !CalledCode(_, r).
+
+///////////////////////
+.decl MatchedNodes(r : symbol)
+.decl UnmatchedNodes(r : symbol)
+.output MatchedNodes, UnmatchedNodes
+
+MatchedNodes(node) :-
+  ReachableCode(alt_value),
+  Alt(_, alt_value, t),
+  NodeOrigin(alt_value, node),
+  Node(node, t).
+
+UnmatchedNodes(r) :-
+  REACHABLE(r)
+  Node(r, _),
+  !MatchedNodes(r).
+
+/*
+.decl NodeRole(result_node:Variable, r:Role)
+.decl Node(result_node:Variable, t:Tag)
+.decl NodeArgument(result_node:Variable, i:number, item:Variable)
+*/
