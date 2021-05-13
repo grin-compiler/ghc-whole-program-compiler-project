@@ -32,7 +32,7 @@ main = do
   let opts = info (appOpts <**> helper) mempty
   MkFactsOpts{..} <- execParser opts
 
-  let irFactsPath0 = takeBaseName lampakPath -<.> ".ir-datalog-facts"
+  let irFactsPath0 = lampakPath -<.> ".ir-datalog-facts"
   irFactsPath <- makeAbsolute irFactsPath0
 
   putStrLn $ "linking lambda IR datalog facts into: " ++ irFactsPath
