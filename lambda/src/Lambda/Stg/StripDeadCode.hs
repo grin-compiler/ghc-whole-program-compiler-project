@@ -30,6 +30,7 @@ data Env
   , referredCons    :: !(Set DC)
   , referredTyCons  :: !(Set TC)
   , definedIds      :: !(Set Id)
+  , dataConMap      :: Map DataConId DataCon
   }
 
 emptyEnv :: Env
@@ -45,19 +46,31 @@ emptyEnv = Env
   , referredCons    = Set.empty
   , referredTyCons  = Set.empty
   , definedIds      = Set.empty
+  , dataConMap      = mempty
   }
 
 type SM a = StateT Env IO a
 
 addDefId :: Binder -> SM ()
-addDefId b = do
+addDefId b@Binder{..} = do
   let i = Id b
   modify' $ \env@Env{..} -> env {definedIds = if Set.member i definedIds then definedIds else Set.insert i definedIds}
+  case binderDetails of
+    DataConWorkId di -> addRefConId di
+    DataConWrapId di -> addRefConId di
+    _ -> pure ()
 
 addRefId :: Binder -> SM ()
 addRefId b = do
   let i = Id b
   modify' $ \env@Env{..} -> env {referredIds = if Set.member i referredIds then referredIds else Set.insert i referredIds}
+
+addRefConId :: DataConId -> SM ()
+addRefConId di = do
+  dcMap <- gets dataConMap
+  case Map.lookup di dcMap of
+    Nothing -> fail $ "missing DataCon for: " ++ show di
+    Just dc -> addRefCon dc
 
 addRefCon :: DataCon -> SM ()
 addRefCon dc = do
@@ -149,6 +162,12 @@ data LivenessFacts
   , lfLiveConGroup    :: Set Name
   }
 
+initDataConMap :: [(UnitId, [(ModuleName, [TyCon])])] -> SM ()
+initDataConMap tyCons = do
+  let cons :: [DataCon]
+      cons = concatMap tcDataCons . concatMap snd . concatMap snd $ tyCons
+  modify' $ \env -> env {dataConMap = Map.fromList [(dcId dc , dc) | dc <- cons]}
+
 stripDeadCode :: LivenessFacts -> (Map Name Name, Map Name [Name]) -> Module -> IO (Maybe (Module, StripStat))
 stripDeadCode LivenessFacts{..} (idBndMap, caseResultMap) stgMod =
  evalStateT (stripModule stgMod) emptyEnv where
@@ -175,6 +194,7 @@ stripDeadCode LivenessFacts{..} (idBndMap, caseResultMap) stgMod =
 
   stripModule :: Module -> SM (Maybe (Module, StripStat))
   stripModule m@Module{..} = do
+    initDataConMap moduleTyCons
     -- mark all deleted top level names
     let allExternalIds = concatMap (concatMap snd . snd) moduleExternalTopIds
     forM_ (concatMap topLiftedBindings moduleTopBindings ++ allExternalIds) $ \idBnd@Binder{..} -> do
@@ -438,7 +458,7 @@ groupByUnitIdAndModule l =
 
 isEmptyModule :: Module -> Bool
 isEmptyModule Module{..} =
-  null moduleTyCons &&
+  null [tc | (u, ml) <- moduleTyCons, u == moduleUnitId, (m, tcl) <- ml, m == moduleName, tc <- tcl] &&
   null moduleTopBindings &&
   null moduleForeignFiles &&
   NoStubs /= moduleForeignStubs
