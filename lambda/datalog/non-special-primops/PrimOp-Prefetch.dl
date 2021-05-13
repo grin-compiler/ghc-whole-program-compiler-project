@@ -1,0 +1,22 @@
+/*
+  {-
+    Prefetch
+  -}
+  primop effectful
+    "prefetchByteArray3#"        :: {"ByteArray#"} @ t_2001 -> (T_Int64) @ t_2002 -> {"State#" %s_201} @ t_2003 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2004
+    "prefetchMutableByteArray3#" :: {"MutableByteArray#" %s_202} @ t_2005 -> (T_Int64) @ t_2006 -> {"State#" %s_202} @ t_2007 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2008
+    "prefetchAddr3#"             :: (T_Addr) @ t_2009 -> (T_Int64) @ t_2010 -> {"State#" %s_203} @ t_2011 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2012
+    "prefetchValue3#"            :: %a_105 -> {"State#" %s_204} @ t_2013 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2014
+    "prefetchByteArray2#"        :: {"ByteArray#"} @ t_2015 -> (T_Int64) @ t_2016 -> {"State#" %s_205} @ t_2017 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2018
+    "prefetchMutableByteArray2#" :: {"MutableByteArray#" %s_206} @ t_2019 -> (T_Int64) @ t_2020 -> {"State#" %s_206} @ t_2021 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2022
+    "prefetchAddr2#"             :: (T_Addr) @ t_2023 -> (T_Int64) @ t_2024 -> {"State#" %s_207} @ t_2025 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2026
+    "prefetchValue2#"            :: %a_106 -> {"State#" %s_208} @ t_2027 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2028
+    "prefetchByteArray1#"        :: {"ByteArray#"} @ t_2029 -> (T_Int64) @ t_2030 -> {"State#" %s_209} @ t_2031 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2032
+    "prefetchMutableByteArray1#" :: {"MutableByteArray#" %s_210} @ t_2033 -> (T_Int64) @ t_2034 -> {"State#" %s_210} @ t_2035 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2036
+    "prefetchAddr1#"             :: (T_Addr) @ t_2037 -> (T_Int64) @ t_2038 -> {"State#" %s_211} @ t_2039 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2040
+    "prefetchValue1#"            :: %a_107 -> {"State#" %s_212} @ t_2041 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2042
+    "prefetchByteArray0#"        :: {"ByteArray#"} @ t_2043 -> (T_Int64) @ t_2044 -> {"State#" %s_213} @ t_2045 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2046
+    "prefetchMutableByteArray0#" :: {"MutableByteArray#" %s_214} @ t_2047 -> (T_Int64) @ t_2048 -> {"State#" %s_214} @ t_2049 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2050
+    "prefetchAddr0#"             :: (T_Addr) @ t_2051 -> (T_Int64) @ t_2052 -> {"State#" %s_215} @ t_2053 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2054
+    "prefetchValue0#"            :: %a_108 -> {"State#" %s_216} @ t_2055 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2056
+*/
