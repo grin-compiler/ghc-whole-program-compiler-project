@@ -128,20 +128,20 @@ markDeletedTyCon tc n = do
 
 dummyBinder :: Binder
 dummyBinder = Binder
-  { binderName      = "()"
+  { binderName      = "nonTermination"
   , binderId        = BinderId (Unique '-' 0)
   , binderType      = SingleValue LiftedRep
-  , binderTypeSig   = "()"
+  , binderTypeSig   = "SomeException"
   , binderScope     = HaskellExported
   , binderDetails   = VanillaId
   , binderInfo      = ""
   , binderDefLoc    = UnhelpfulSpan "strip-dead-code"
-  , binderUnitId    = UnitId "ghc-prim"
-  , binderModule    = ModuleName "GHC.Tuple"
+  , binderUnitId    = UnitId "base"
+  , binderModule    = ModuleName "Control.Exception.Base"
   , binderTopLevel  = True
   -- optimization
-  , binderUniqueName  = "ghc-prim_GHC.Tuple.()"
-  , binderUNameHash   = hash ("ghc-prim_GHC.Tuple.()" :: Name)
+  , binderUniqueName  = "base_Control.Exception.Base.nonTermination"
+  , binderUNameHash   = hash ("base_Control.Exception.Base.nonTermination" :: Name)
   }
 
 data StripStat
@@ -199,7 +199,7 @@ stripDeadCode LivenessFacts{..} (idBndMap, caseResultMap) stgMod =
     let allExternalIds = concatMap (concatMap snd . snd) moduleExternalTopIds
     forM_ (concatMap topLiftedBindings moduleTopBindings ++ allExternalIds) $ \idBnd@Binder{..} -> do
       -- setup dummy lifted symbol
-      when (binderUniqueName == "ghc-prim_GHC.Tuple.()") $ do
+      when (binderUniqueName == "base_Control.Exception.Base.nonTermination") $ do
         modify' $ \env -> env {dummyLifted = idBnd}
 
       -- mark top binder defined if it is reachable
