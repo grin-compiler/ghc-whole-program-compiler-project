@@ -140,8 +140,8 @@ dummyBinder = Binder
   , binderModule    = ModuleName "GHC.Tuple"
   , binderTopLevel  = True
   -- optimization
-  , binderUniqueName  = "ghc_prim_GHC.Tuple.()"
-  , binderUNameHash   = hash ("ghc_prim_GHC.Tuple.()" :: Name)
+  , binderUniqueName  = "ghc-prim_GHC.Tuple.()"
+  , binderUNameHash   = hash ("ghc-prim_GHC.Tuple.()" :: Name)
   }
 
 data StripStat
@@ -199,7 +199,7 @@ stripDeadCode LivenessFacts{..} (idBndMap, caseResultMap) stgMod =
     let allExternalIds = concatMap (concatMap snd . snd) moduleExternalTopIds
     forM_ (concatMap topLiftedBindings moduleTopBindings ++ allExternalIds) $ \idBnd@Binder{..} -> do
       -- setup dummy lifted symbol
-      when (binderUniqueName == "ghc_prim_GHC.Tuple.()") $ do
+      when (binderUniqueName == "ghc-prim_GHC.Tuple.()") $ do
         modify' $ \env -> env {dummyLifted = idBnd}
 
       -- mark top binder defined if it is reachable
