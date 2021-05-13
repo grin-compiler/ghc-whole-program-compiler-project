@@ -168,6 +168,7 @@ DeadStaticData(d) :-
 .decl DeadConGroup(con_group_name : symbol)
 .output LiveConstructor, DeadConstructor, LiveConGroup, DeadConGroup
 
+ReachableCode(t), // HINT: keep the constructor's worker closure live ; the constructor and its wrapper closure have identical names ; this is needed for GHC's STG/Cmm codegen
 LiveConGroup(cg),
 LiveConstructor(t) :-
   REACHABLE(r)
