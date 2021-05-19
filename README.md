@@ -80,7 +80,17 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
    ```
    **IMPORTANT:** use hadrian/build-stack
 4. Set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
-5. Install the external stg tooling with the following commands:
+   change the following line to your GHC-WPC build path:
+   ```
+   extra-path:
+     - /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin
+   ```
+   i.e. set the `USER` and `PROJECT` part properly (`./stack.yaml` line 32) 
+   ```
+   extra-path:
+     - /home/USER/PROJECT/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin
+   ```
+6. Install the external stg tooling with the following commands:
    ```
    stack --stack-root `pwd`/.stack-root install
    ```
