@@ -71,54 +71,6 @@ data CCallTarget
 data CCallConv = CCallConv | CApiConv | StdCallConv | PrimCallConv | JavaScriptCallConv
 -}
 
-allowedSymbols :: Set Name
-allowedSymbols = Set.fromList
-  [ "localeEncoding"
-  , "u_towupper"
-  , "hs_GLUT_getProcAddress"
-  , "_hs_text_memcpy"
-  , "_hs_text_encode_utf8"
-  , "hs_OpenGLRaw_getProcAddress"
-  , "hs_GLUT_marshalStrokeFont"
-  , "isatty"
-  , "__hsbase_MD5Init"
-  , "__hsbase_MD5Update"
-  , "__hsbase_MD5Final"
-  , "__hscore_o_noctty"
-  , "__hscore_o_creat"
-  , "__hscore_o_wronly"
-  , "__hscore_o_nonblock"
-  , "__hscore_open"
-  , "__hscore_sizeof_stat"
-  , "__hscore_fstat"
-  , "__hscore_st_mode"
-  , "ghczuwrapperZC5ZCbaseZCSystemziPosixziInternalsZCSzuISDIR"
-  , "ghczuwrapperZC4ZCbaseZCSystemziPosixziInternalsZCSzuISFIFO"
-  , "ghczuwrapperZC3ZCbaseZCSystemziPosixziInternalsZCSzuISSOCK"
-  , "ghczuwrapperZC7ZCbaseZCSystemziPosixziInternalsZCSzuISCHR"
-  , "ghczuwrapperZC8ZCbaseZCSystemziPosixziInternalsZCSzuISREG"
-  , "__hscore_st_dev"
-  , "__hscore_st_ino"
-  , "__hscore_ftruncate"
-  , "close"
-  , "fdReady"
-  , "__hscore_sizeof_termios"
-  , "ghczuwrapperZC10ZCbaseZCSystemziPosixziInternalsZCtcgetattr"
-  , "__hscore_get_saved_termios"
-  , "__hscore_sizeof_sigset_t"
-  , "ghczuwrapperZC13ZCbaseZCSystemziPosixziInternalsZCsigemptyset"
-  , "__hscore_sigttou"
-  , "ghczuwrapperZC12ZCbaseZCSystemziPosixziInternalsZCsigaddset"
-  , "__hscore_sig_block"
-  , "ghczuwrapperZC11ZCbaseZCSystemziPosixziInternalsZCsigprocmask"
-  , "__hscore_lflag"
-  , "__hscore_icanon"
-  , "__hscore_poke_lflag"
-  , "__hscore_ptr_c_cc"
-  , "__int_encodeDouble"
-  , "ghczuwrapperZC20ZCbaseZCSystemziPosixziInternalsZCwrite"
-  ]
-
 mkFFIArg :: Atom -> M (Maybe FFI.Arg)
 mkFFIArg = \case
   Void              -> pure Nothing
@@ -337,7 +289,6 @@ getProgArgv(int *argc, char **argv[])
 ------------------------------------------
 
       StaticTarget _ foreignSymbol _ _
-        -- | Set.member foreignSymbol allowedSymbols
         -> do
           --liftIO $ print foreignSymbol
           cArgs <- catMaybes <$> mapM mkFFIArg args
