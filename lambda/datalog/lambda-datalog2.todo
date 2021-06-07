@@ -60,3 +60,14 @@ IDEAS FOR BETTER PERFORMANCE:
   utilise static information:
     + use deconstruction for unboxed tuples instead of tag matching case/alt pairs
     + use separate relations for each constructor arities, this would reduce the search space
+
+improvement areas:
+  - better IR schema
+  - better rules
+  - track heap (boxed) values only, do not track literals
+  - distinct heap allocated nodes from stack/register (non-escaping) nodes
+      + heap allocated nodes  = heap context sensitivity
+      + stack allocated nodes = call context sensitivity
+  - filter according concrete types
+
+IDEA: combine type inference with CFA => track the constructor or closure names that can produce the currently inferred typed value

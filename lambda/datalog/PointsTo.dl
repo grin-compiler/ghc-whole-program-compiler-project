@@ -37,3 +37,11 @@ PointsTo(src, dst) :-
   ExternalOrigin(src, r, t),
   TypeVarPointsTo(r, t, dst).
   // CHECKED
+
+/*
+  points-to propagates:
+    NodeOrigin
+    ExternalOrigin
+    PNode
+    PNodeArgument
+*/
