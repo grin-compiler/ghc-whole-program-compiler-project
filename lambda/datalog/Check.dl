@@ -33,7 +33,7 @@ DefName(n) :- // instructions
 
 DefName(n) :- // top level functions
   ( IsFunction(n)
-  ; ExternalFunction(n, _, _)
+  ; ExternalFunction(n, _, _, _)
   ; IsStaticData(n)
   ).
 

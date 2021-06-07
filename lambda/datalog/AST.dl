@@ -1,11 +1,18 @@
-.symbol_type External
-.symbol_type Function
-.symbol_type Variable
-.symbol_type Tag
+/*
+.type External <: symbol
+.type Function <: symbol
+.type Variable <: symbol
 .type CodeName = Function | Variable | External
-.symbol_type Mode  // 'lazy' or 'strict'
-.symbol_type Eff   // 'pure' or 'effectful'
-.symbol_type Role  // 'lit'  or 'node'
+*/
+#define External symbol
+#define Function symbol
+#define Variable symbol
+#define CodeName symbol
+.type Tag <: symbol
+.type Mode <: symbol  // 'lazy' or 'strict'
+.type Eff <: symbol   // 'pure' or 'effectful'
+.type Role <: symbol  // 'lit'  or 'node'
+.type ExternalKind <: symbol  // 'ffi' or 'primop'
 
 // strictness context
 .decl EvalMode(result:Variable, mode:Mode)
@@ -59,7 +66,7 @@
 .decl FunctionTypeReturnType(ty_fun:Variable, ty_node:Variable)
 
 // external
-.decl ExternalFunction(f:External, eff:Eff, arity:number)
+.decl ExternalFunction(f:External, eff:Eff, arity:number, kind:ExternalKind)
 .decl ExternalParameterType(f:External, i:number, ty_node:Variable)
 .decl ExternalReturnType(f:External, ty_node:Variable)
 

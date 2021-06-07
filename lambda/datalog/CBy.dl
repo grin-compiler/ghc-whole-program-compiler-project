@@ -54,7 +54,7 @@ USED("CBy-3")
 ExternalOrigin(r, r, ty_node) :-
   Call(r, f, _),
   EvalMode(r, "strict"),
-  ExternalFunction(f, _, _),
+  ExternalFunction(f, _, _, _),
   ExternalReturnType(f, ty_node).
   // CHECKED
 

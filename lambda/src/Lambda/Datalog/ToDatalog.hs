@@ -94,8 +94,11 @@ convertExternal :: External -> DL ()
 convertExternal External{..} = do
   retN <- convertTy eRetType
   argsN <- mapM convertTy eArgsType
+  let extKind = case eKind of
+        PrimOp  -> "primop"
+        FFI     -> "ffi"
   emit $
-    [ ("ExternalFunction", [N eName, S $ if eEffectful then "effectful" else "pure", I $ length eArgsType])
+    [ ("ExternalFunction", [N eName, S $ if eEffectful then "effectful" else "pure", I $ length eArgsType, S extKind])
     , ("ExternalReturnType", [N eName, N retN])
     ] ++
     [ ("ExternalParameterType", [N eName, I i, N ty]) | (i, ty) <- zip [0..] argsN]

@@ -93,12 +93,12 @@ DeadCode(n) :-
 USED("LVA-10")
 ReachableExternal(callee) :-
   ReachableCode(caller),
-  ExternalFunction(callee, _, _),
+  ExternalFunction(callee, _, _, _),
   CalledCode(caller, callee).
 
 USED("LVA-11")
 DeadExternal(n) :-
-  ExternalFunction(n, _, _),
+  ExternalFunction(n, _, _, _),
   !ReachableExternal(n).
 
 //////
@@ -196,6 +196,7 @@ DeletableCode(r) :-
   !CalledCode(_, r).
 
 ///////////////////////
+/*
 .decl MatchedNodes(r : symbol)
 .decl UnmatchedNodes(r : symbol)
 .output MatchedNodes, UnmatchedNodes
@@ -210,7 +211,7 @@ UnmatchedNodes(r) :-
   REACHABLE(r)
   Node(r, _),
   !MatchedNodes(r).
-
+*/
 /*
 .decl NodeRole(result_node:Variable, r:Role)
 .decl Node(result_node:Variable, t:Tag)
