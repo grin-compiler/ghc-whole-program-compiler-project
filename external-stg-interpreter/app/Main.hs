@@ -5,7 +5,7 @@ import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 import Options.Applicative
 import Data.Semigroup ((<>))
 
-import Stg.Interpreter.Debugger.UI
+--import Stg.Interpreter.Debugger.UI
 import Stg.Interpreter.Base
 import Stg.Interpreter
 
@@ -44,5 +44,5 @@ main = do
   let dbgChan = DebuggerChan (dbgCmdO, dbgOutI)
 
   case runDebugger of
-    True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript
+    --True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript
     False -> loadAndRunProgram switchCWD appPath appArgs dbgChan DbgRunProgram doTracing

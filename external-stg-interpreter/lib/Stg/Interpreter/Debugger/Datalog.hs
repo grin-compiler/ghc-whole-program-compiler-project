@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
-module Stg.Interpreter.Debugger.Datalog (exportStgState) where
+module Stg.Interpreter.Debugger.Datalog_ (exportStgState) where
 
 import Control.Monad
 import Control.Monad.State

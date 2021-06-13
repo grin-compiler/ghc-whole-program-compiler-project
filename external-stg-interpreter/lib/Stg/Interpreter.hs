@@ -34,15 +34,16 @@ import Stg.JSON
 import Stg.Analysis.LiveVariable
 
 import Stg.Interpreter.Base
-import Stg.Interpreter.PrimCall
-import Stg.Interpreter.FFI
+--import qualified Stg.Interpreter.PrimCall as PrimCall
+--import qualified Stg.Interpreter.FFI as FFI
 import Stg.Interpreter.Rts
 import Stg.Interpreter.Debug
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
-import qualified Stg.Interpreter.Debugger        as Debugger
-import qualified Stg.Interpreter.Debugger.Region as Debugger
-import qualified Stg.Interpreter.GC as GC
+--import qualified Stg.Interpreter.Debugger        as Debugger
+--import qualified Stg.Interpreter.Debugger.Region as Debugger
+--import qualified Stg.Interpreter.GC as GC
 
+{-
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
 import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
 import qualified Stg.Interpreter.PrimOp.SmallArray    as PrimSmallArray
@@ -70,6 +71,7 @@ import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
 import qualified Stg.Interpreter.PrimOp.TagToEnum     as PrimTagToEnum
 import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
 import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
+-}
 
 {-
   Q: what is the operational semantic of StgApp
@@ -128,7 +130,7 @@ builtinStgEval :: HasCallStack => Atom -> M [Atom]
 builtinStgEval a@HeapPtr{} = do
   o <- readHeap a
   case o of
-    RaiseException ex -> PrimExceptions.raiseEx ex
+    --RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}       -> pure [a]
     BlackHole t -> stgErrorM $ "blackhole ; loop in evaluation of : " ++ show t
     Closure{..}
@@ -144,9 +146,9 @@ builtinStgEval a@HeapPtr{} = do
 
         markExecuted l
         modify' $ \s -> s {ssCurrentClosure = Just hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
-        Debugger.checkBreakpoint hoName
-        Debugger.checkRegion hoName
-        GC.checkGC [a] -- HINT: add local env as GC root
+        --Debugger.checkBreakpoint hoName
+        --Debugger.checkRegion hoName
+        --GC.checkGC [a] -- HINT: add local env as GC root
 
         -- TODO: env or free var handling
         case uf of
@@ -172,7 +174,7 @@ builtinStgApply a@HeapPtr{} args = do
       HeapPtr addr  = a
   o <- readHeap a
   case o of
-    RaiseException ex -> PrimExceptions.raiseEx ex
+    --RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}             -> stgErrorM $ "unexpexted con at apply: "-- ++ show o
     BlackHole t       -> stgErrorM $ "blackhole ; loop in application of : " ++ show t
     Closure{..}
@@ -361,7 +363,7 @@ evalStackContinuation result = \case
   RunScheduler sr -> Scheduler.runScheduler result sr
 
   -- HINT: dataToTag# has an eval call in the middle, that's why we need this continuation, it is the post-returning part of the op implementation
-  DataToTagOp -> PrimTagToEnum.dataToTagOp result
+  --DataToTagOp -> PrimTagToEnum.dataToTagOp result
 
   x -> error $ "unsupported continuation: " ++ show x ++ ", result: " ++ show result
 
@@ -451,21 +453,17 @@ evalExpr localEnv = \case
     args <- mapM (evalArg localEnv) l
     tid <- gets ssCurrentThreadId
     evalPrimOp op args t tc
-
+{-
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
     markFFI foreignCall
     args <- mapM (evalArg localEnv) l
-    evalFCallOp evalOnNewThread foreignCall args t tc
-{-
-  StgOpApp (StgPrimCallOp (PrimCall "stg_getThreadAllocationCounterzh" _)) _args t _tc -> do
-    i <- gets ssNextHeapAddr
-    pure [IntAtom (-i)]
--}
+    FFI.evalFCallOp evalOnNewThread foreignCall args t tc
+
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
     markPrimCall primCall
     args <- mapM (evalArg localEnv) l
-    evalPrimCallOp primCall args t tc
-
+    PrimCall.evalPrimCallOp primCall args t tc
+-}
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
 
@@ -606,8 +604,8 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
         -- TODO: do everything that 'hs_exit_' does
 
         -- HINT: start debugger REPL in debug mode
-        when (dbgState == DbgStepByStep) $ do
-          Debugger.processCommandsUntilExit
+        --when (dbgState == DbgStepByStep) $ do
+        --  Debugger.processCommandsUntilExit
 
   let (dbgCmdO, _) = getDebuggerChan dbgChan
   nextDbgCmd <- NextDebugCommand <$> Unagi.tryReadChan dbgCmdO
@@ -620,13 +618,17 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
       DoTracing <$> openFile (tracePath </> "originDB.tsv") WriteMode
 
   stateStore <- PrintableMVar <$> newEmptyMVar
+  {-
   (gcThreadId, gcIn', gcOut') <- GC.init
   let gcIn  = PrintableMVar gcIn'
       gcOut = PrintableMVar gcOut'
+  -}
+  gcIn <- PrintableMVar <$> newEmptyMVar
+  gcOut <- PrintableMVar <$> newEmptyMVar
   dl <- dlopen "./libHSbase-4.14.0.0.cbits.so" [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
   let freeResources = do
         dlclose dl
-        killThread gcThreadId
+        --killThread gcThreadId
         case tracingState of
           DoTracing h -> hClose h
           _ -> pure ()
@@ -771,6 +773,7 @@ scheduleWaitThread (StgTSO* tso, /*[out]*/HaskellObj* ret, Capability **pcap)
 
 evalPrimOp :: HasCallStack => Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp =
+{-
   PrimAddr.evalPrimOp $
   PrimArray.evalPrimOp $
   PrimSmallArray.evalPrimOp $
@@ -798,5 +801,6 @@ evalPrimOp =
   PrimTagToEnum.evalPrimOp $
   PrimUnsafe.evalPrimOp $
   PrimMiscEtc.evalPrimOp $
+-}
   unsupported where
     unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args

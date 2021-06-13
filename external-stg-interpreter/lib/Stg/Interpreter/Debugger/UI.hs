@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, LambdaCase #-}
-module Stg.Interpreter.Debugger.UI where
+module Stg.Interpreter.Debugger.UI_ where
 
 import System.Exit
 import System.Posix.Process

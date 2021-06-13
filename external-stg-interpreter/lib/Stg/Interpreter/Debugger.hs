@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
-module Stg.Interpreter.Debugger where
+module Stg.Interpreter.Debugger_ where
 
 import Control.Monad.State
 import qualified Data.Set as Set

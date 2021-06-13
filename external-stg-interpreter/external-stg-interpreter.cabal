@@ -17,51 +17,51 @@ library
 
     Stg.Interpreter
     Stg.Interpreter.Base
-    Stg.Interpreter.FFI
-    Stg.Interpreter.PrimCall
+--    Stg.Interpreter.FFI
+--    Stg.Interpreter.PrimCall
     Stg.Interpreter.Rts
     Stg.Interpreter.Debug
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
-    Stg.Interpreter.Debugger
-    Stg.Interpreter.Debugger.Datalog
-    Stg.Interpreter.Debugger.Internal
-    Stg.Interpreter.Debugger.Region
-    Stg.Interpreter.Debugger.UI
-    Stg.Interpreter.GC
-    Stg.Interpreter.GC.GCRef
-    Stg.Interpreter.GC.LiveDataAnalysis
-    Stg.Interpreter.GC.RetainerAnalysis
-    Stg.Interpreter.PrimOp.Addr
-    Stg.Interpreter.PrimOp.ArrayArray
-    Stg.Interpreter.PrimOp.Array
-    Stg.Interpreter.PrimOp.ByteArray
-    Stg.Interpreter.PrimOp.Char
-    Stg.Interpreter.PrimOp.Compact
-    Stg.Interpreter.PrimOp.Concurrency
-    Stg.Interpreter.PrimOp.DelayWait
-    Stg.Interpreter.PrimOp.Double
-    Stg.Interpreter.PrimOp.Exceptions
-    Stg.Interpreter.PrimOp.Float
-    Stg.Interpreter.PrimOp.GHCiBytecode
-    Stg.Interpreter.PrimOp.Int16
-    Stg.Interpreter.PrimOp.Int8
-    Stg.Interpreter.PrimOp.Int
-    Stg.Interpreter.PrimOp.MiscEtc
-    Stg.Interpreter.PrimOp.MutVar
-    Stg.Interpreter.PrimOp.MVar
-    Stg.Interpreter.PrimOp.Narrowings
-    Stg.Interpreter.PrimOp.Parallelism
-    Stg.Interpreter.PrimOp.Prefetch
-    Stg.Interpreter.PrimOp.SmallArray
-    Stg.Interpreter.PrimOp.StablePointer
-    Stg.Interpreter.PrimOp.STM
-    Stg.Interpreter.PrimOp.TagToEnum
-    Stg.Interpreter.PrimOp.Unsafe
-    Stg.Interpreter.PrimOp.WeakPointer
-    Stg.Interpreter.PrimOp.Word16
-    Stg.Interpreter.PrimOp.Word8
-    Stg.Interpreter.PrimOp.Word
+--    Stg.Interpreter.Debugger
+--    Stg.Interpreter.Debugger.Datalog
+--    Stg.Interpreter.Debugger.Internal
+--    Stg.Interpreter.Debugger.Region
+--    Stg.Interpreter.Debugger.UI
+--    Stg.Interpreter.GC
+--    Stg.Interpreter.GC.GCRef
+--    Stg.Interpreter.GC.LiveDataAnalysis
+--    Stg.Interpreter.GC.RetainerAnalysis
+--    Stg.Interpreter.PrimOp.Addr
+--    Stg.Interpreter.PrimOp.ArrayArray
+--    Stg.Interpreter.PrimOp.Array
+--    Stg.Interpreter.PrimOp.ByteArray
+--    Stg.Interpreter.PrimOp.Char
+--    Stg.Interpreter.PrimOp.Compact
+--    Stg.Interpreter.PrimOp.Concurrency
+--    Stg.Interpreter.PrimOp.DelayWait
+--    Stg.Interpreter.PrimOp.Double
+--    Stg.Interpreter.PrimOp.Exceptions
+--    Stg.Interpreter.PrimOp.Float
+--    Stg.Interpreter.PrimOp.GHCiBytecode
+--    Stg.Interpreter.PrimOp.Int16
+--    Stg.Interpreter.PrimOp.Int8
+--    Stg.Interpreter.PrimOp.Int
+--    Stg.Interpreter.PrimOp.MiscEtc
+--    Stg.Interpreter.PrimOp.MutVar
+--    Stg.Interpreter.PrimOp.MVar
+--    Stg.Interpreter.PrimOp.Narrowings
+--    Stg.Interpreter.PrimOp.Parallelism
+--    Stg.Interpreter.PrimOp.Prefetch
+--    Stg.Interpreter.PrimOp.SmallArray
+--    Stg.Interpreter.PrimOp.StablePointer
+--    Stg.Interpreter.PrimOp.STM
+--    Stg.Interpreter.PrimOp.TagToEnum
+--    Stg.Interpreter.PrimOp.Unsafe
+--    Stg.Interpreter.PrimOp.WeakPointer
+--    Stg.Interpreter.PrimOp.Word16
+--    Stg.Interpreter.PrimOp.Word8
+--    Stg.Interpreter.PrimOp.Word
 
   hs-source-dirs:      lib
   ghc-options:         -Wall -fobject-code -O2

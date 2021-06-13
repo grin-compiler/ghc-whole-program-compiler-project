@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
-module Stg.Interpreter.Debugger.Region where
+module Stg.Interpreter.Debugger.Region_ where
 
 import Text.Printf
 import Control.Monad.State

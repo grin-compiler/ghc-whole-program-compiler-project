@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections #-}
-module Stg.Interpreter.Debugger.Internal where
+module Stg.Interpreter.Debugger.Internal_ where
 
 import Text.Printf
 import qualified Text.Read as Text

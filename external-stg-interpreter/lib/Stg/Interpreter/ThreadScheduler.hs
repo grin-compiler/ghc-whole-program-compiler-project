@@ -7,7 +7,7 @@ import qualified Data.IntMap as IntMap
 import Data.Time.Clock
 
 import Stg.Interpreter.Base
-import Stg.Interpreter.IOManager
+import qualified Stg.Interpreter.IOManager as IOManager
 
 runScheduler :: [Atom] -> ScheduleReason -> M [Atom]
 runScheduler result sr = do
@@ -107,7 +107,7 @@ waitAndScheduleBlockedThreads = do
       -- HACK:
       pure $ map fst tsList
     else do
-      handleBlockedDelayWait
+      IOManager.handleBlockedDelayWait
       calculateNewSchedule
 
 {-
