@@ -162,6 +162,14 @@ data ScheduleReason
   | SR_ThreadYield
   deriving (Show, Eq, Ord)
 
+data StackFrame
+  = EmptyFrame
+  | StackFrame
+    { sfStackContinuation :: StackContinuation
+    , sfNextFrameAddress  :: KAddr
+    }
+  deriving (Show, Eq, Ord)
+
 {-
   Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
 -}
@@ -216,11 +224,13 @@ type Addr   = Int
 type Heap   = IntMap HeapObject
 type Env    = Map Id Atom   -- NOTE: must contain only the defined local variables
 type Stack  = [StackContinuation]
+type KAddr  = Int -- NOTE: kontinuation address in the stack store
 
 data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
+  , ssStackStore          :: IntMap StackFrame
 
   -- GC
   , ssLastGCAddr          :: !Int
@@ -255,6 +265,7 @@ data StgState
   , ssMutableArrayArrays  :: IntMap (Vector Atom)
 
   , ssNextThreadId          :: !Int
+  , ssNextStackAddr         :: !Int
   , ssNextHeapAddr          :: {-# UNPACK #-} !Int
   , ssNextStableName        :: !Int
   , ssNextWeakPointer       :: !Int
@@ -334,6 +345,7 @@ emptyStgState :: PrintableMVar StgState
 emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
+  , ssStackStore          = mempty
 
   -- GC
   , ssLastGCAddr          = 0
@@ -364,6 +376,7 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssMutableArrayArrays  = mempty
 
   , ssNextThreadId          = 0
+  , ssNextStackAddr         = 0
   , ssNextHeapAddr          = 0
   , ssNextStableName        = 0
   , ssNextWeakPointer       = 0
@@ -476,30 +489,39 @@ type M = StateT StgState IO
 
 -- stack operations
 
-{-
-  , ssThreads             :: IntMap ThreadState
-  , ssCurrentThreadId     :: Int
+allocEmptyStackFrame :: M KAddr
+allocEmptyStackFrame = do
+  kaddr <- freshStackAddress
+  modify' $ \s@StgState{..} -> s { ssStackStore = IntMap.insert kaddr EmptyFrame ssStackStore }
+  pure kaddr
 
-  = ThreadState
-  { tsCurrentResult   :: [Atom] -- Q: do we need this?
-  , tsStack           :: ![StackContinuation]
-  , tsStatus          :: !ThreadStatus
-  , tsBlockExceptions :: !Bool
-  , tsInterruptible   :: !Bool
-  }
--}
+freshStackAddress :: HasCallStack => M KAddr
+freshStackAddress = do
+  limit <- gets ssNextStackAddr
+  state $ \s@StgState{..} -> (ssNextStackAddr, s {ssNextStackAddr = succ ssNextStackAddr})
+
 stackPush :: StackContinuation -> M ()
 stackPush sc = do
-  let pushFun ts@ThreadState{..} = ts {tsStack = sc : tsStack}
-  modify' $ \s@StgState{..} -> s {ssThreads = IntMap.adjust pushFun ssCurrentThreadId ssThreads}
+  tid <- gets ssCurrentThreadId
+  ts@ThreadState{..} <- getThreadState tid
+
+  topKAddr <- freshStackAddress
+  let stackFrame = StackFrame sc tsTopStackFrame
+  modify' $ \s@StgState{..} -> s { ssStackStore = IntMap.insert topKAddr stackFrame ssStackStore }
+
+  updateThreadState tid ts {tsTopStackFrame = topKAddr}
 
 stackPop :: M (Maybe StackContinuation)
 stackPop = do
-  let tailFun ts@ThreadState{..} = ts {tsStack = drop 1 tsStack}
-  Just ts@ThreadState{..} <- state $ \s@StgState{..} -> (IntMap.lookup ssCurrentThreadId ssThreads, s {ssThreads = IntMap.adjust tailFun ssCurrentThreadId ssThreads})
-  pure $ case tsStack of
-    []    -> Nothing
-    c : _ -> Just c
+  tid <- gets ssCurrentThreadId
+  ts@ThreadState{..} <- getThreadState tid
+  stackStore <- gets ssStackStore
+  case IntMap.lookup tsTopStackFrame stackStore of
+    Nothing             -> stgErrorM $ "missing stack frame for address: " ++ show tsTopStackFrame
+    Just EmptyFrame     -> pure Nothing
+    Just StackFrame{..} -> do
+      updateThreadState tid ts {tsTopStackFrame = sfNextFrameAddress}
+      pure $ Just sfStackContinuation
 
 -- heap operations
 
@@ -752,7 +774,7 @@ data AsyncExceptionMask
 data ThreadState
   = ThreadState
   { tsCurrentResult     :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
-  , tsStack             :: ![StackContinuation]
+  , tsTopStackFrame     :: !KAddr
   , tsStatus            :: !ThreadStatus
   , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
   , tsBlockExceptions   :: !Bool  -- block async exceptions
@@ -769,9 +791,10 @@ data ThreadState
 
 createThread :: M (Int, ThreadState)
 createThread = do
+  emptyKAddr <- allocEmptyStackFrame
   let ts = ThreadState
         { tsCurrentResult     = []
-        , tsStack             = []
+        , tsTopStackFrame     = emptyKAddr
         , tsStatus            = ThreadRunning
         , tsBlockedExceptions = []
         , tsBlockExceptions   = False
@@ -982,7 +1005,7 @@ reportThreadIO tid endTS = do
     putStrLn ""
     putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
     putStrLn "stack:"
-    putStrLn $ unlines $ map show $ zip [0..] $ map showStackCont $ tsStack endTS
+    --putStrLn $ unlines $ map show $ zip [0..] $ map showStackCont $ tsStack endTS
     putStrLn ""
 
 showStackCont :: StackContinuation -> String
