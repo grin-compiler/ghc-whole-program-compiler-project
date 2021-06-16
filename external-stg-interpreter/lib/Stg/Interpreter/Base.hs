@@ -141,7 +141,7 @@ data HeapObject
   | BlackHole HeapObject
   | ApStack                   -- HINT: needed for the async exceptions
     { hoResult      :: [Atom]
-    , hoStack       :: [StackContinuation]
+    , hoStack       :: KAddr
     }
   | RaiseException Atom
   deriving (Show, Eq, Ord)
