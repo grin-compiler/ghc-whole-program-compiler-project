@@ -30,7 +30,7 @@ import qualified GHC.Types.Name         as GHC
 import qualified GHC.Types.SrcLoc       as GHC
 import qualified GHC.Types.RepType      as GHC
 import qualified GHC.Types.Unique       as GHC
-import qualified GHC.Types.Module       as GHC
+import qualified GHC.Unit.Module        as GHC
 import qualified GHC.Utils.Outputable   as GHC
 
 import Control.Monad
@@ -116,14 +116,14 @@ cvtUnique u = Unique a b
 cvtOccName :: GHC.OccName -> Name
 cvtOccName = GHC.bytesFS . GHC.occNameFS
 
-cvtUnitId :: GHC.UnitId -> UnitId
-cvtUnitId = UnitId . GHC.bytesFS . GHC.unitIdFS
+cvtUnit :: GHC.Unit -> UnitId
+cvtUnit = UnitId . GHC.bytesFS . GHC.unitFS
 
 cvtModuleName :: GHC.ModuleName -> ModuleName
 cvtModuleName = ModuleName . GHC.bytesFS . GHC.moduleNameFS
 
-cvtUnitIdAndModuleName :: GHC.Module -> (UnitId, ModuleName)
-cvtUnitIdAndModuleName m = (cvtUnitId $ GHC.moduleUnitId m, cvtModuleName $ GHC.moduleName m)
+cvtUnitAndModuleName :: GHC.Module -> (UnitId, ModuleName)
+cvtUnitAndModuleName m = (cvtUnit $ GHC.moduleUnit m, cvtModuleName $ GHC.moduleName m)
 
 -- source location conversion
 
@@ -439,7 +439,7 @@ cvtSourceText = \case
 
 cvtCCallTarget :: GHC.CCallTarget -> CCallTarget
 cvtCCallTarget = \case
-  GHC.StaticTarget s l u b  -> StaticTarget (cvtSourceText s) (GHC.bytesFS l) (fmap cvtUnitId u) b
+  GHC.StaticTarget s l u b  -> StaticTarget (cvtSourceText s) (GHC.bytesFS l) (fmap cvtUnit u) b
   GHC.DynamicTarget         -> DynamicTarget
 
 cvtCCallConv :: GHC.CCallConv -> CCallConv
@@ -460,7 +460,7 @@ cvtForeignCall :: GHC.ForeignCall -> ForeignCall
 cvtForeignCall (GHC.CCall (GHC.CCallSpec t c s)) = ForeignCall (cvtCCallTarget t) (cvtCCallConv c) (cvtSafety s)
 
 cvtPrimCall :: GHC.PrimCall -> PrimCall
-cvtPrimCall (GHC.PrimCall lbl uid) = PrimCall (GHC.bytesFS lbl) (cvtUnitId uid)
+cvtPrimCall (GHC.PrimCall lbl uid) = PrimCall (GHC.bytesFS lbl) (cvtUnit uid)
 
 cvtOp :: GHC.StgOp -> StgOp
 cvtOp = \case
@@ -563,8 +563,8 @@ cvtForeignSrcLang = \case
   GHC.RawObject   -> RawObject
 
 -- module conversion
-cvtModule :: String -> GHC.UnitId -> GHC.ModuleName -> Maybe FilePath -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
-cvtModule phase unitId' modName' mSrcPath binds foreignStubs foreignFiles =
+cvtModule :: String -> GHC.Unit -> GHC.ModuleName -> Maybe FilePath -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
+cvtModule phase unit modName' mSrcPath binds foreignStubs foreignFiles =
   Module
   { modulePhase               = BS8.pack phase
   , moduleUnitId              = unitId
@@ -583,11 +583,11 @@ cvtModule phase unitId' modName' mSrcPath binds foreignStubs foreignFiles =
       initialEnv          = emptyEnv
       stgTopIds           = concatMap topBindIds binds
       modName             = cvtModuleName modName'
-      unitId              = cvtUnitId unitId'
+      unitId              = cvtUnit unit
       tyCons              = groupByUnitIdAndModule . map mkTyCon $ IntMap.elems envTyCons
 
       -- calculate dependencies
-      externalTyCons      = [(cvtUnitIdAndModuleName m, ()) | m <- catMaybes $ map (GHC.nameModule_maybe . GHC.getName) $ IntMap.elems envTyCons]
+      externalTyCons      = [(cvtUnitAndModuleName m, ()) | m <- catMaybes $ map (GHC.nameModule_maybe . GHC.getName) $ IntMap.elems envTyCons]
       dependencies        = map (fmap (map fst)) $ groupByUnitIdAndModule $ [((u, m), ()) | (u, ml) <- externalIds, (m, _) <- ml] ++ externalTyCons
 
 -- utils
@@ -599,10 +599,10 @@ groupByUnitIdAndModule l =
   [Map.singleton u (Map.singleton m (Set.singleton b)) | ((u, m), b) <- l]
 
 mkExternalName :: GHC.Id -> M ((UnitId, ModuleName), SBinder)
-mkExternalName x = (cvtUnitIdAndModuleName . GHC.nameModule $ GHC.getName x,) <$> cvtBinderIdM "mkExternalName" x
+mkExternalName x = (cvtUnitAndModuleName . GHC.nameModule $ GHC.getName x,) <$> cvtBinderIdM "mkExternalName" x
 
 mkTyCon :: GHC.TyCon -> ((UnitId, ModuleName), STyCon)
-mkTyCon tc = (cvtUnitIdAndModuleName $ GHC.nameModule n, b) where
+mkTyCon tc = (cvtUnitAndModuleName $ GHC.nameModule n, b) where
   n = GHC.getName tc
   b = STyCon
       { stcName     = cvtOccName $ GHC.getOccName n

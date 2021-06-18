@@ -20,7 +20,7 @@ import GHC.Paths ( libdir )
 
 {-
   = StgModule
-  { stgUnitId       :: UnitId
+  { stgUnit         :: Unit
   , stgModuleName   :: ModuleName
   , stgModuleTyCons :: [TyCon]
   , stgTopBindings  :: [StgTopBinding]
@@ -48,4 +48,4 @@ main = do
           oName         = objectOutputPath </> modName ++ ".o"
 
       -- HINT: the stubs are compiled at link time
-      compileToObjectM cg stgUnitId stgModuleName GHC.NoStubs stgModuleTyCons stgTopBindings oName
+      compileToObjectM cg stgUnit stgModuleName GHC.NoStubs stgModuleTyCons stgTopBindings oName

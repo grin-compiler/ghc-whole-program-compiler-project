@@ -21,7 +21,7 @@ import GHC.Stg.Lint
 import GHC.Stg.Syntax
 import GHC.Stg.Unarise
 import GHC.Types.CostCentre
-import GHC.Types.Module
+import GHC.Unit.Module
 import GHC.Types.Name.Set
 import GHC.Data.Stream (Stream)
 import qualified GHC.Data.Stream as Stream
@@ -58,18 +58,18 @@ modl = mkModule mainUnitId (mkModuleName ":Main")
 data Backend = NCG | LLVM
 
 
-compileToObject :: Backend -> UnitId -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> IO ()
-compileToObject backend unitId modName stubs tyCons topBinds_simple outputName = do
-  runGhc (Just libdir) $ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName
+compileToObject :: Backend -> Unit -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> IO ()
+compileToObject backend unit modName stubs tyCons topBinds_simple outputName = do
+  runGhc (Just libdir) $ compileToObjectM backend unit modName stubs tyCons topBinds_simple outputName
 
-compileToObjectM :: Backend -> UnitId -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> Ghc ()
-compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName = do
+compileToObjectM :: Backend -> Unit -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> Ghc ()
+compileToObjectM backend unit modName stubs tyCons topBinds_simple outputName = do
   dflags <- getSessionDynFlags
 
   let ccs       = emptyCollectedCCs :: CollectedCCs
       hpc       = emptyHpcInfo False
 
-      this_mod  = mkModule unitId modName :: Module
+      this_mod  = mkModule unit modName :: Module
 
       -- backend
       (target, link, outAsmFName) = case backend of
@@ -189,7 +189,7 @@ type CollectedCCs
 
   let libSet = Set.fromList ["rts"] -- "rts", "ghc-prim-cbits", "base-cbits", "integer-gmp-cbits"]
   dflags <- getSessionDynFlags
-  let ignored_pkgs  = [IgnorePackage p |  p <- map (unpackFS . installedUnitIdFS) pkgs, Set.notMember p libSet]
+  let ignored_pkgs  = [IgnorePackage p |  p <- map unitIdString pkgs, Set.notMember p libSet]
       my_pkgs       = [ExposePackage p (PackageArg p)  (ModRenaming True []) | p <- Set.toList libSet]
   setSessionDynFlags $ dflags { ignorePackageFlags = ignored_pkgs, packageFlags = my_pkgs }
   dflags <- getSessionDynFlags
@@ -216,7 +216,7 @@ newGen :: DynFlags
        -> CollectedCCs
        -> [StgTopBinding]
        -> HpcInfo
-       -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], NameSet)
+       -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], NonCaffySet)
 newGen dflags hsc_env output_filename this_mod foreign_stubs data_tycons cost_centre_info stg_binds hpc_info = do
   -- TODO: add these to parameters
   let location = ModLocation
