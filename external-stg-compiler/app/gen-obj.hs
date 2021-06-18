@@ -18,7 +18,7 @@ import GHC.Paths ( libdir )
 
 {-
   = StgModule
-  { stgUnitId       :: UnitId
+  { stgUnit         :: Unit
   , stgModuleName   :: ModuleName
   , stgModuleTyCons :: [TyCon]
   , stgTopBindings  :: [StgTopBinding]
@@ -45,6 +45,6 @@ main = runGhc (Just libdir) $ do
     --putStrLn $ unlines $ map show stgIdUniqueMap
 
     -- HINT: the stubs are compiled at link time
-    compileToObjectM cg stgUnitId stgModuleName GHC.NoStubs stgModuleTyCons stgTopBindings oName
+    compileToObjectM cg stgUnit stgModuleName GHC.NoStubs stgModuleTyCons stgTopBindings oName
 
     -- TODO: simplify API to: compileToObject cg stgModule oName
