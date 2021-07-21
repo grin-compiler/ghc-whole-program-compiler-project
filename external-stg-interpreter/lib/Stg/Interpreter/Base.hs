@@ -9,6 +9,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Map.Strict as StrictMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.IntMap (IntMap)
@@ -281,10 +282,13 @@ data StgState
   , ssCurrentClosure      :: Maybe Id
   , ssCurrentClosureAddr  :: Int
   , ssExecutedClosures    :: !(Set Int)
+  , ssExecutedClosureIds  :: !(Set Id)
   , ssExecutedPrimOps     :: !(Set Name)
   , ssExecutedFFI         :: !(Set ForeignCall)
   , ssExecutedPrimCalls   :: !(Set PrimCall)
   , ssHeapStartAddress    :: !Int
+  , ssClosureCallCounter  :: !Int
+  , ssCallGraph           :: !(StrictMap.Map (Maybe Id, Id) Int)
 
   -- debugger API
   , ssDebuggerChan        :: DebuggerChan
@@ -389,10 +393,13 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssCurrentClosure      = Nothing
   , ssCurrentClosureAddr  = -1
   , ssExecutedClosures    = Set.empty
+  , ssExecutedClosureIds  = Set.empty
   , ssExecutedPrimOps     = Set.empty
   , ssExecutedFFI         = Set.empty
   , ssExecutedPrimCalls   = Set.empty
   , ssHeapStartAddress    = 0
+  , ssClosureCallCounter  = 0
+  , ssCallGraph           = mempty
 
   -- debugger api
   , ssDebuggerChan        = dbgChan
@@ -716,7 +723,10 @@ markClosure :: Name -> M ()
 markClosure n = modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = setInsert n ssEvaluatedClosures}
 
 markExecuted :: Int -> M ()
-markExecuted i = modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
+markExecuted i = pure () -- modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
+
+markExecutedId :: Id -> M ()
+markExecutedId i = modify' $ \s@StgState{..} -> s {ssExecutedClosureIds = setInsert i ssExecutedClosureIds}
 
 markPrimOp :: Name -> M ()
 markPrimOp i = modify' $ \s@StgState{..} -> s {ssExecutedPrimOps = setInsert i ssExecutedPrimOps}
@@ -726,6 +736,9 @@ markFFI i = modify' $ \s@StgState{..} -> s {ssExecutedFFI = setInsert i ssExecut
 
 markPrimCall :: PrimCall -> M ()
 markPrimCall i = modify' $ \s@StgState{..} -> s {ssExecutedPrimCalls = setInsert i ssExecutedPrimCalls}
+
+addCallGraphEdge :: Maybe Id -> Id -> M ()
+addCallGraphEdge from to = modify' $ \s@StgState{..} -> s {ssCallGraph = StrictMap.insertWith (+) (from, to) 1 ssCallGraph}
 
 -- string constants
 -- NOTE: the string gets extended with a null terminator

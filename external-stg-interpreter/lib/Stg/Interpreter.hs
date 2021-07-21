@@ -17,6 +17,7 @@ import qualified Data.Primitive.ByteArray as BA
 import Data.List (partition, isSuffixOf)
 import Data.Set (Set)
 import Data.Map (Map)
+import qualified Data.Map.Strict as StrictMap
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.IntMap as IntMap
@@ -142,7 +143,14 @@ builtinStgEval a@HeapPtr{} = do
             HeapPtr l = a
             extendedEnv = addManyBindersToEnv params hoCloArgs hoEnv
 
+        modify' $ \s@StgState{..} -> s {ssClosureCallCounter = succ ssClosureCallCounter}
         markExecuted l
+        markExecutedId hoName
+
+        -- build call graph
+        currentClosure <- gets ssCurrentClosure
+        addCallGraphEdge currentClosure hoName
+
         modify' $ \s -> s {ssCurrentClosure = Just hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
         Debugger.checkBreakpoint hoName
         Debugger.checkRegion hoName
@@ -605,6 +613,8 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
         --showDebug evalOnNewThread
         -- TODO: do everything that 'hs_exit_' does
 
+        exportCallGraph
+
         -- HINT: start debugger REPL in debug mode
         when (dbgState == DbgStepByStep) $ do
           Debugger.processCommandsUntilExit
@@ -635,6 +645,10 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
+    putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
+    putStrLn $ "executed closure count: " ++ show (Set.size ssExecutedClosures)
+    putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
+    putStrLn $ "call graph size: " ++ show (StrictMap.size ssCallGraph)
     --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
     --print ssNextHeapAddr
     --print $ head $ Map.toList ssEnv

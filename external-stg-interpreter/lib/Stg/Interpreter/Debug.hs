@@ -6,6 +6,8 @@ import qualified Data.Set as Set
 import qualified Data.IntMap as IntMap
 import qualified Data.Primitive.ByteArray as BA
 import qualified Data.ByteString.Internal as BS
+import qualified Data.Map.Strict as StrictMap
+import System.IO
 
 import Control.Monad.State.Strict
 
@@ -118,3 +120,15 @@ showDebug evalOnNewThread = do
   liftIO $ putStrLn "WeakPointers:"
   liftIO $ putStrLn "\n-------------------------------------------\n"
   --showWeakPointers builtinStgApply
+
+exportCallGraph :: M ()
+exportCallGraph = do
+  Rts{..} <- gets ssRtsSupport
+  cg <- gets ssCallGraph
+  liftIO $ do
+    withFile (rtsProgName ++ "-call-graph.tsv") WriteMode $ \h -> do
+      hPutStrLn h "Source\tTarget\tcount"
+      forM_ (StrictMap.toList cg) $ \((from, to), count) -> do
+        let fromS = maybe "<global>" show from
+            toS   = show to
+        hPutStrLn h $ fromS ++ "\t" ++ toS ++ "\t" ++ show count

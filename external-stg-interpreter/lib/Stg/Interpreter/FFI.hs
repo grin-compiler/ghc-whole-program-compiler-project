@@ -208,6 +208,7 @@ getProgArgv(int *argc, char **argv[])
         -> do
           --showDebug evalOnNewThread
           --error $ "shutdownHaskellAndExit exit code:  " ++ show retCode ++ ", fast exit: " ++ show fastExit
+          exportCallGraph
           liftIO . exitWith $ case retCode of
             0 -> ExitSuccess
             n -> ExitFailure n

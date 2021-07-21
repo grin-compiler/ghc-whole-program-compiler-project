@@ -12,6 +12,7 @@ import qualified Data.IntSet as IntSet
 import Control.Concurrent
 
 import Stg.Syntax
+import Stg.Interpreter.Debug (exportCallGraph)
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.LiveDataAnalysis
 import qualified Stg.Interpreter.PrimOp.WeakPointer as PrimWeakPointer
@@ -25,6 +26,7 @@ checkGC localGCRoots = do
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
   when (not gcIsRunning && nextAddr - lastGCAddr > 3000000) $ do
+    exportCallGraph -- HINT: export call graph in case the app does not terminate in the normal way
     a <- getAddressState
     modify' $ \s@StgState{..} -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True, ssGCMarkers = a : ssGCMarkers}
     runGC localGCRoots
