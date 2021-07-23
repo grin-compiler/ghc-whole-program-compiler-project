@@ -651,7 +651,6 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
 
     putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
     putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
-    putStrLn $ "executed closure count: " ++ show (Set.size ssExecutedClosures)
     putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
     putStrLn $ "call graph size: " ++ show (StrictMap.size ssCallGraph)
     --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
