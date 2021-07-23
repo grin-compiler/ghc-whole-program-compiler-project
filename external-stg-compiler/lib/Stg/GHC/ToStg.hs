@@ -10,7 +10,7 @@ import GHC.Driver.Types
 import GHC.Utils.Outputable
 
 -- Stg Types
-import GHC.Types.Module
+import GHC.Unit.Module
 import GHC.Types.Name
 import GHC.Types.Id
 import GHC.Types.Id.Info
@@ -240,8 +240,8 @@ cvtNewId Ext.Binder{..} = do
 
   state $ \env@Env{..} -> (finalId, env {envIdMap = Map.insert binderId finalId envIdMap})
 
-cvtUnitId :: Ext.UnitId -> UnitId
-cvtUnitId = fsToUnitId . mkFastStringByteString . Ext.getUnitId
+cvtUnitId :: Ext.UnitId -> Unit
+cvtUnitId = fsToUnit . mkFastStringByteString . Ext.getUnitId
 
 cvtModuleName :: Ext.ModuleName -> ModuleName
 cvtModuleName = mkModuleNameFS . mkFastStringByteString . Ext.getModuleName
@@ -284,7 +284,7 @@ cvtPrimRepType = \case
   Ext.SingleValue Ext.VoidRep -> mkTupleTy Unboxed []
   Ext.SingleValue r   -> primRepToType $ cvtPrimRep r
   Ext.UnboxedTuple l  -> mkTupleTy Unboxed $ map (primRepToType . cvtPrimRep) l
-  Ext.PolymorphicRep  -> mkInvForAllTy runtimeRep2TyVar
+  Ext.PolymorphicRep  -> mkInfForAllTy runtimeRep2TyVar
                           $ mkSpecForAllTys [openBetaTyVar]
                           $ mkTyVarTy openBetaTyVar
                           -- HINT: forall (r :: RuntimeRep) (b :: TYPE r). b
@@ -460,7 +460,7 @@ cvtForeignSrcLang = \case
 
 data StgModule
   = StgModule
-  { stgUnitId       :: UnitId
+  { stgUnit         :: Unit
   , stgModuleName   :: ModuleName
   , stgModuleTyCons :: [TyCon]
   , stgTopBindings  :: [StgTopBinding]
@@ -499,7 +499,7 @@ toStg Ext.Module{..} = stgModule where
     ]
 
   stgModule = StgModule
-    { stgUnitId       = cvtUnitId moduleUnitId
+    { stgUnit         = cvtUnitId moduleUnitId
     , stgModuleName   = cvtModuleName moduleName
     , stgModuleTyCons = Map.elems $ Map.restrictKeys envADTTyConMap localTyConIds
     , stgTopBindings  = topBindings
