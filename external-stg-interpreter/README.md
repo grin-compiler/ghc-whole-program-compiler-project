@@ -34,6 +34,18 @@ hello
 
 Check the content of the content of the `ghc-rts-base.fullpak`.
 
+### Run in the debugger
+
+```
+cd ghc-whole-program-compiler-project/external-stg-interpreter/data
+
+ext-stg-interpreter -d ghc-rts-base.fullpak
+```
+
+Check the list of debugger commands.  
+
+Use the `e` command to do step-by-step evaluation.
+
 ## Readings
 - [External STG Interpreter](https://www.patreon.com/posts/external-stg-49857800)
 
