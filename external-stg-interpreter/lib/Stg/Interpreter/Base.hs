@@ -229,6 +229,9 @@ data StgState
   , ssGCOutput            :: PrintableMVar RefSet
   , ssGCIsRunning         :: Bool
 
+  -- let-no-escape support
+  , ssTotalLNECount       :: !Int
+
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
   , ssCStringConstants    :: Map ByteString Atom
@@ -344,6 +347,9 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssGCInput             = gcIn
   , ssGCOutput            = gcOut
   , ssGCIsRunning         = False
+
+  -- let-no-escape support
+  , ssTotalLNECount       = 0
 
   , ssCStringConstants    = mempty
 
@@ -1106,3 +1112,9 @@ data Region
   , regionEnd   :: Name
   }
   deriving (Eq, Ord, Show)
+
+-- let-no-escape statistics
+markLNE :: [Addr] -> M ()
+markLNE lneAddrs = do
+  let count = length lneAddrs
+  modify' $ \s@StgState{..} -> s { ssTotalLNECount = count + ssTotalLNECount}

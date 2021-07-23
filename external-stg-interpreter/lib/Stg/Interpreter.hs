@@ -519,6 +519,8 @@ declareBinding isLetNoEscape localEnv = \case
   StgNonRec b rhs -> do
     addr <- freshHeapAddress
     storeRhs isLetNoEscape localEnv b addr rhs
+    when isLetNoEscape $ do
+      markLNE [addr]
     pure $ addBinderToEnv b (HeapPtr addr) localEnv
 
   StgRec l -> do
@@ -528,6 +530,8 @@ declareBinding isLetNoEscape localEnv = \case
     let extendedEnv = addZippedBindersToEnv newEnvItems localEnv
     forM_ (zip ls l) $ \(addr, (b, rhs)) -> do
       storeRhs isLetNoEscape extendedEnv b addr rhs
+    when isLetNoEscape $ do
+      markLNE ls
     pure extendedEnv
 
 storeRhs :: HasCallStack => Bool -> Env -> Binder -> Addr -> Rhs -> M ()
@@ -645,6 +649,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
+    putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
     putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
     putStrLn $ "executed closure count: " ++ show (Set.size ssExecutedClosures)
     putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
