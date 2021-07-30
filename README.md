@@ -79,7 +79,11 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
    hadrian/build-stack -j
    ```
    **IMPORTANT:** use hadrian/build-stack
-4. Set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
+
+4. **At this point you have a working GHC-WPC.**  
+   The next steps are about the compilation of GHC-WPC tooling and the usage of GHC-WPC.
+
+5. Set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
    change the following line to your GHC-WPC build path:
    ```
    extra-path:
@@ -95,7 +99,7 @@ If you change the External STG IR, then GHC-WPC must be recompiled. If you just 
    stack --stack-root `pwd`/.stack-root install
    ```
    *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
-6. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
+7. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
 
 ## TODO
 **Ext-STG IR**
