@@ -125,8 +125,27 @@ evalArg localEnv = \case
     }
 -}
 
-builtinStgEval :: HasCallStack => Atom -> M [Atom]
-builtinStgEval a@HeapPtr{} = do
+stackPushRestoreProgramPoint :: Int -> M ()
+stackPushRestoreProgramPoint argCount = do
+  progPoint <- gets ssCurrentProgramPoint
+  currentClosure <- gets ssCurrentClosure
+  stackPush $ DebugFrame (RestoreProgramPoint currentClosure $ PP_Apply argCount progPoint)
+
+buildCallGraph :: StaticOrigin -> Id -> M ()
+buildCallGraph so hoName = do
+  progPoint <- gets ssCurrentProgramPoint
+  addCallGraphEdge so progPoint $ PP_Closure hoName
+  setProgramPoint $ PP_Closure hoName
+  -- connect call sites to parent closure
+  currentClosure <- gets ssCurrentClosure
+  case progPoint of
+    PP_Global -> pure ()
+    _ -> case currentClosure of
+      Just cloId  -> addCallGraphSubEdge (PP_Closure cloId) so progPoint
+      _           -> pure ()
+
+builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
+builtinStgEval so a@HeapPtr{} = do
   o <- readHeap a
   case o of
     RaiseException ex -> PrimExceptions.raiseEx ex
@@ -141,15 +160,14 @@ builtinStgEval a@HeapPtr{} = do
 
         let StgRhsClosure _ uf params e = hoCloBody
             HeapPtr l = a
-            extendedEnv = addManyBindersToEnv params hoCloArgs hoEnv
+            extendedEnv = addManyBindersToEnv SO_CloArg params hoCloArgs hoEnv
 
         modify' $ \s@StgState{..} -> s {ssClosureCallCounter = succ ssClosureCallCounter}
         markExecuted l
         markExecutedId hoName
 
         -- build call graph
-        currentClosure <- gets ssCurrentClosure
-        addCallGraphEdge currentClosure hoName
+        buildCallGraph so hoName
 
         modify' $ \s -> s {ssCurrentClosure = Just hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
         Debugger.checkBreakpoint hoName
@@ -171,11 +189,11 @@ builtinStgEval a@HeapPtr{} = do
             store l (BlackHole o)
             evalExpr extendedEnv e
     _ -> stgErrorM $ "expected heap object: " ++ show o
-builtinStgEval a = stgErrorM $ "expected a thunk, got: " ++ show a
+builtinStgEval so a = stgErrorM $ "expected a thunk, got: " ++ show a ++ ", static-origin: " ++ show so
 
-builtinStgApply :: HasCallStack => Atom -> [Atom] -> M [Atom]
-builtinStgApply a [] = builtinStgEval a
-builtinStgApply a@HeapPtr{} args = do
+builtinStgApply :: HasCallStack => StaticOrigin -> Atom -> [Atom] -> M [Atom]
+builtinStgApply so a [] = builtinStgEval so a
+builtinStgApply so a@HeapPtr{} args = do
   let argCount      = length args
       HeapPtr addr  = a
   o <- readHeap a
@@ -196,16 +214,19 @@ builtinStgApply a@HeapPtr{} args = do
       -> do
         let (satArgs, remArgs) = splitAt hoCloMissing args
         stackPush (Apply remArgs)
-        builtinStgApply a satArgs
+        stackPushRestoreProgramPoint $ length remArgs -- HINT: for call-graph builder ; use the current closure as call origin
+        builtinStgApply so a satArgs
 
       -- saturation
       | hoCloMissing - argCount == 0
       -> do
         newAp <- freshHeapAddress
         store newAp (o {hoCloArgs = hoCloArgs ++ args, hoCloMissing = hoCloMissing - argCount})
-        builtinStgEval (HeapPtr newAp)
+        builtinStgEval so (HeapPtr newAp)
 
-builtinStgApply a args = stgErrorM $ "builtinStgApply - expected a closure (ptr), got: " ++ show a ++ ", args: " ++ show args
+builtinStgApply so a args = stgErrorM $ "builtinStgApply - expected a closure (ptr), got: " ++
+  show a ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
+
 {-
 heapObjectKind :: HeapObject -> String
 heapObjectKind = \case
@@ -312,7 +333,7 @@ evalStackContinuation :: [Atom] -> StackContinuation -> M [Atom]
 evalStackContinuation result = \case
   Apply args
     | [fun@HeapPtr{}] <- result
-    -> builtinStgApply fun args
+    -> builtinStgApply SO_ClosureResult fun args
 
   Update dstAddr
     | [src@HeapPtr{}] <- result
@@ -325,37 +346,42 @@ evalStackContinuation result = \case
   CaseOf curClosureAddr curClosure localEnv resultBinder altType alts -> do
     modify' $ \s -> s {ssCurrentClosure = Just curClosure, ssCurrentClosureAddr = curClosureAddr}
     assertWHNF result altType resultBinder
+    let resultId = (Id resultBinder)
     case altType of
       AlgAlt tc -> do
         let v = case result of
               [l] -> l
               _   -> error $ "expected a single value: " ++ show result
-            extendedEnv = addBinderToEnv resultBinder v localEnv
+            extendedEnv = addBinderToEnv SO_Scrut resultBinder v localEnv
         con <- readHeapCon v
         case alts of
-          d@(Alt AltDefault _ _) : al -> matchFirstCon (Id resultBinder) extendedEnv con $ al ++ [d]
-          _ -> matchFirstCon (Id resultBinder) extendedEnv con alts
+          d@(Alt AltDefault _ _) : al -> matchFirstCon resultId extendedEnv con $ al ++ [d]
+          _ -> matchFirstCon resultId extendedEnv con alts
 
       PrimAlt _r -> do
         let lit = case result of
               [l] -> l
               _   -> error $ "expected a single value: " ++ show result
-            extendedEnv = addBinderToEnv resultBinder lit localEnv
+            extendedEnv = addBinderToEnv SO_Scrut resultBinder lit localEnv
         case alts of
-          d@(Alt AltDefault _ _) : al -> matchFirstLit extendedEnv lit $ al ++ [d]
-          _ -> matchFirstLit extendedEnv lit alts
+          d@(Alt AltDefault _ _) : al -> matchFirstLit resultId extendedEnv lit $ al ++ [d]
+          _ -> matchFirstLit resultId extendedEnv lit alts
 
       MultiValAlt _n -> do -- unboxed tuple
         -- NOTE: result binder is not assigned
         let [Alt{..}] = alts
-            extendedEnv = addManyBindersToEnv altBinders result localEnv
+            extendedEnv = addManyBindersToEnv SO_Scrut altBinders result localEnv
+
+        setProgramPoint $ PP_Alt resultId AltDefault
         evalExpr extendedEnv altRHS
 
       PolyAlt -> do
         let [Alt{..}]   = alts
             [v]         = result
-            extendedEnv = addBinderToEnv resultBinder v $                 -- HINT: bind the result
-                          addManyBindersToEnv altBinders result localEnv  -- HINT: bind alt params
+            extendedEnv = addBinderToEnv SO_Scrut resultBinder v $                 -- HINT: bind the result
+                          addManyBindersToEnv SO_AltArg altBinders result localEnv  -- HINT: bind alt params
+
+        setProgramPoint $ PP_Alt resultId AltDefault
         evalExpr extendedEnv altRHS
 
   RestoreExMask b i -> do
@@ -371,7 +397,18 @@ evalStackContinuation result = \case
   -- HINT: dataToTag# has an eval call in the middle, that's why we need this continuation, it is the post-returning part of the op implementation
   DataToTagOp -> PrimTagToEnum.dataToTagOp result
 
+  DebugFrame df -> evalDebugFrame result df
+
   x -> error $ "unsupported continuation: " ++ show x ++ ", result: " ++ show result
+
+evalDebugFrame :: [Atom] -> DebugFrame -> M [Atom]
+evalDebugFrame result = \case
+  RestoreProgramPoint currentClosure progPoint -> do
+    modify' $ \s -> s {ssCurrentClosure = currentClosure}
+    setProgramPoint progPoint
+    pure result
+
+  x -> error $ "unsupported debug-frame: " ++ show x ++ ", result: " ++ show result
 
 evalExpr :: HasCallStack => Env -> Expr -> M [Atom]
 evalExpr localEnv = \case
@@ -403,8 +440,8 @@ evalExpr localEnv = \case
     -> do
       -- HINT: join id-s are always closures, needs eval
       -- NOTE: join id's type tells the closure return value representation
-      v <- lookupEnv localEnv i
-      builtinStgEval v
+      (so, v) <- lookupEnvSO localEnv i
+      builtinStgEval so v
 
     | JoinId x <- binderDetails i
     -> stgErrorM $ "join-id var arity error, expected 0, got: " ++ show x ++ " id: " ++ show i
@@ -414,8 +451,8 @@ evalExpr localEnv = \case
 
     SingleValue LiftedRep -> do
       -- HINT: must be HeapPtr ; read heap ; check if Con or Closure ; eval if Closure ; return HeapPtr if Con
-      v <- lookupEnv localEnv i
-      builtinStgEval v
+      (so, v) <- lookupEnvSO localEnv i
+      builtinStgEval so v
 
     SingleValue _ -> do
       v <- lookupEnv localEnv i
@@ -436,15 +473,15 @@ evalExpr localEnv = \case
     | JoinId _ <- binderDetails i
     -> do
       args <- mapM (evalArg localEnv) l
-      v <- lookupEnv localEnv i
-      builtinStgApply v args
+      (so, v) <- lookupEnvSO localEnv i
+      builtinStgApply so v args
 
   {- non-join id -}
   StgApp i l _t _ -> case binderType i of
     SingleValue LiftedRep -> do
       args <- mapM (evalArg localEnv) l
-      v <- lookupEnv localEnv i
-      builtinStgApply v args
+      (so, v) <- lookupEnvSO localEnv i
+      builtinStgApply so v args
 
     r -> stgErrorM $ "unsupported app rep: " ++ show r -- unboxed: invalid
 
@@ -452,6 +489,7 @@ evalExpr localEnv = \case
     Just curClosure <- gets ssCurrentClosure
     curClosureAddr <- gets ssCurrentClosureAddr
     stackPush (CaseOf curClosureAddr curClosure localEnv scrutineeResult altType alts)
+    setProgramPoint . PP_Scrutinee $ Id scrutineeResult
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
@@ -477,12 +515,15 @@ evalExpr localEnv = \case
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
 
-matchFirstLit :: HasCallStack => Env -> Atom -> [Alt] -> M [Atom]
-matchFirstLit localEnv a ([Alt AltDefault _ rhs]) = evalExpr localEnv rhs
-matchFirstLit localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (atom, map altCon alts)) of
+matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [Atom]
+matchFirstLit resultId localEnv a ([Alt AltDefault _ rhs]) = do
+  setProgramPoint $ PP_Alt resultId AltDefault
+  evalExpr localEnv rhs
+matchFirstLit resultId localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (atom, map altCon alts)) of
   Alt{..} -> do
+    setProgramPoint $ PP_Alt resultId altCon
     evalExpr localEnv altRHS
-matchFirstLit localEnv l alts = error $ "no lit match" ++ show (localEnv, l, map altCon alts)
+matchFirstLit resultId localEnv l alts = error $ "no lit match" ++ show (resultId, localEnv, l, map altCon alts)
 
 matchLit :: HasCallStack => Atom -> AltCon -> Bool
 matchLit a = \case
@@ -505,7 +546,8 @@ matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
 matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
   []  -> stgErrorM $ "no matching alts for: " ++ show resultId
   Alt{..} : _ -> do
-    let extendedEnv = addManyBindersToEnv altBinders args localEnv
+    let extendedEnv = addManyBindersToEnv SO_AltArg altBinders args localEnv
+    setProgramPoint $ PP_Alt resultId altCon
     evalExpr extendedEnv altRHS
 
 matchCon :: HasCallStack => DataCon -> AltCon -> Bool
@@ -521,13 +563,13 @@ declareBinding isLetNoEscape localEnv = \case
     storeRhs isLetNoEscape localEnv b addr rhs
     when isLetNoEscape $ do
       markLNE [addr]
-    pure $ addBinderToEnv b (HeapPtr addr) localEnv
+    pure $ addBinderToEnv SO_Let b (HeapPtr addr) localEnv
 
   StgRec l -> do
     (ls, newEnvItems) <- fmap unzip . forM l $ \(b, _) -> do
       addr <- freshHeapAddress
       pure (addr, (b, (HeapPtr addr)))
-    let extendedEnv = addZippedBindersToEnv newEnvItems localEnv
+    let extendedEnv = addZippedBindersToEnv SO_Let newEnvItems localEnv
     forM_ (zip ls l) $ \(addr, (b, rhs)) -> do
       storeRhs isLetNoEscape extendedEnv b addr rhs
     when isLetNoEscape $ do
@@ -556,7 +598,7 @@ declareTopBindings mods = do
   -- bind string lits
   stringEnv <- forM strings $ \(StgTopStringLit b str) -> do
     strPtr <- getCStringConstantPtrAtom str
-    pure (Id b, strPtr)
+    pure (Id b, (SO_TopLevel, strPtr))
 
   -- bind closures
   let bindings = concatMap getBindings closures
@@ -566,7 +608,7 @@ declareTopBindings mods = do
 
   (closureEnv, rhsList) <- fmap unzip . forM bindings $ \(b, rhs) -> do
     addr <- freshHeapAddress
-    pure ((Id b, HeapPtr addr), (b, addr, rhs))
+    pure ((Id b, (SO_TopLevel, HeapPtr addr)), (b, addr, rhs))
 
   -- set the top level binder env
   modify' $ \s@StgState{..} -> s {ssStaticGlobalEnv = Map.fromList $ stringEnv ++ closureEnv}
@@ -649,6 +691,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
+    putStrLn $ "ssHeapStartAddress: " ++ show ssHeapStartAddress
     putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
     putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
     putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)

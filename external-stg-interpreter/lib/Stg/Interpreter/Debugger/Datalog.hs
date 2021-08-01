@@ -181,7 +181,7 @@ exportStgStateM stgState@StgState{..} = do
 
   -- static global env
   forM_ (Map.toList ssStaticGlobalEnv) $ \(n, a) -> do
-    addFact "StaticGlobalEnv" [ID n, A a]
+    addFact "StaticGlobalEnv" [ID n, A $ snd a]
 
   -- heap
   forM_ (IntMap.toList ssHeap) $ \(i, ho) -> case ho of
@@ -195,7 +195,7 @@ exportStgStateM stgState@StgState{..} = do
       forM_ (zip [0..] hoCloArgs) $ \(idx, a) -> do
         addFact "Heap_ClosureArg" [I i, I idx, A a]
       forM_ (zip [0..] (Map.toList hoEnv)) $ \(idx, (n, a)) -> do
-        addFact "Heap_ClosureEnv" [I i, I idx, ID n, A a]
+        addFact "Heap_ClosureEnv" [I i, I idx, ID n, A $ snd a]
 
     BlackHole o -> do
       addFact "Heap_BlackHole" [I i, S (GC.debugPrintHeapObject o)]
@@ -291,7 +291,7 @@ emitStack stackId stack = do
       CaseOf _ clName env result _ _ -> do
         addFact "Stack_CaseOf" [S stackId, I frame, ID clName, ID (Id result), I (Map.size env)]
         forM_ (zip [0..] (Map.toList env)) $ \(envIdx, (n, a)) -> do
-          addFact "Stack_CaseOfEnv" [S stackId, I frame, I envIdx, ID n, A a]
+          addFact "Stack_CaseOfEnv" [S stackId, I frame, I envIdx, ID n, A $ snd a]
 
       _ -> pure ()
 

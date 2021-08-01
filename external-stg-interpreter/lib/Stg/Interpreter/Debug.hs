@@ -7,6 +7,7 @@ import qualified Data.IntMap as IntMap
 import qualified Data.Primitive.ByteArray as BA
 import qualified Data.ByteString.Internal as BS
 import qualified Data.Map.Strict as StrictMap
+import Data.List (intercalate)
 import System.IO
 
 import Control.Monad.State.Strict
@@ -125,10 +126,19 @@ exportCallGraph :: M ()
 exportCallGraph = do
   Rts{..} <- gets ssRtsSupport
   cg <- gets ssCallGraph
+  scg <- gets ssSubCallGraph
+  let showSO = \case
+        SO_CloArg         -> "unknown"
+        SO_Let            -> "known"
+        SO_Scrut          -> "unknown"
+        SO_AltArg         -> "unknown"
+        SO_TopLevel       -> "known"
+        SO_Builtin        -> "known"
+        SO_ClosureResult  -> "unknown"
   liftIO $ do
     withFile (rtsProgName ++ "-call-graph.tsv") WriteMode $ \h -> do
-      hPutStrLn h "Source\tTarget\tcount"
-      forM_ (StrictMap.toList cg) $ \((from, to), count) -> do
-        let fromS = maybe "<global>" show from
-            toS   = show to
-        hPutStrLn h $ fromS ++ "\t" ++ toS ++ "\t" ++ show count
+      hPutStrLn h "Source\tTarget\tcount\tstatic-origin\tcall-site-type"
+      forM_ (StrictMap.toList cg) $ \((so, from, to), count) -> do
+        hPutStrLn h $ intercalate "\t" [show from, show to, show count, show so, showSO so]
+      forM_ (StrictMap.toList scg) $ \((from, so, to), count) -> do
+        hPutStrLn h $ intercalate "\t" [show from, show to, show count, "direct", "direct"]
