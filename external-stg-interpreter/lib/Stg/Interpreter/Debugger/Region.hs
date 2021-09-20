@@ -12,6 +12,7 @@ import qualified Data.ByteString.Char8 as BS8
 import System.Console.Pretty
 
 import Stg.Interpreter.Base
+import Stg.Interpreter.Debug
 import Stg.Syntax
 
 import qualified Stg.Interpreter.GC as GC
@@ -53,7 +54,7 @@ showRegion doHeapDump start end = do
       printDelimiter = when doHeapDump $ liftIO $ putStrLn "\n==============================================================================\n"
   case Map.lookup r regions of
     Nothing       -> pure ()
-    Just (cur, l) -> do
+    Just (cur, _curCallGraph, l) -> do
       liftIO $ putStrLn $ "region data count: " ++ show (length l)
       liftIO $ putStrLn $ "order:  OLD -> NEW"
       forM_ (reverse l) $ \(s, e) -> do
@@ -75,7 +76,7 @@ addRegion start end = do
       e = BS8.pack end
       r = Region s e
   unless (Map.member r regions) $ do
-    modify $ \s@StgState{..} -> s {ssRegions = Map.insert r (Nothing, []) ssRegions}
+    modify $ \s@StgState{..} -> s {ssRegions = Map.insert r (Nothing, emptyCallGraph, []) ssRegions}
     addMarker s r
     addMarker e r
 
@@ -114,20 +115,22 @@ checkRegion (Id b) = do
 startRegion :: Region -> M ()
 startRegion r = do
   a <- getAddressState
-  let start (Nothing, l) = (Just a, l)
+  let start (Nothing, _, l) = (Just a, emptyCallGraph, l)
       start x = x -- HINT: multiple start is allowed to support more flexible debugging
   modify $ \s@StgState{..} -> s {ssRegions = Map.adjust start r ssRegions}
 
 endRegion :: Region -> M ()
 endRegion r = do
+  exportRegionCallGraph r
   a <- getAddressState
-  let end (Just s, l) = (Nothing, (s, a) : l)
+  let end (Just s, _, l) = (Nothing, emptyCallGraph, (s, a) : l)
       end x = x -- HINT: if the region was not started then there is nothing to do
   modify $ \s@StgState{..} -> s {ssRegions = Map.adjust end r ssRegions}
 
 startEndRegion :: Region -> M ()
 startEndRegion r = do
+  exportRegionCallGraph r
   a <- getAddressState
-  let fun (Nothing, l)  = (Just a, l)
-      fun (Just s, l)   = (Just a, (s, a) : l)
+  let fun (Nothing, _, l) = (Just a, emptyCallGraph, l)
+      fun (Just s, _, l)  = (Just a, emptyCallGraph, (s, a) : l)
   modify $ \s@StgState{..} -> s {ssRegions = Map.adjust fun r ssRegions}

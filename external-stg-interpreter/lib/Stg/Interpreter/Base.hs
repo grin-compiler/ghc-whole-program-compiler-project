@@ -218,6 +218,22 @@ data TracingState
   | DoTracing Handle
   deriving (Show)
 
+data CallGraph
+  = CallGraph
+  { cgInterClosureCallGraph :: !(StrictMap.Map (StaticOrigin, ProgramPoint, ProgramPoint) Int)
+  , cgIntraClosureCallGraph :: !(StrictMap.Map (ProgramPoint, StaticOrigin, ProgramPoint) Int)
+  }
+  deriving (Show)
+
+joinCallGraph :: CallGraph -> CallGraph -> CallGraph
+joinCallGraph (CallGraph a1 b1) (CallGraph a2 b2) = CallGraph (StrictMap.unionWith (+) a1 a2) (StrictMap.unionWith (+) b1 b2)
+
+emptyCallGraph :: CallGraph
+emptyCallGraph = CallGraph
+  { cgInterClosureCallGraph = mempty
+  , cgIntraClosureCallGraph = mempty
+  }
+
 type Addr   = Int
 type Heap   = IntMap HeapObject
 type Env    = Map Id (StaticOrigin, Atom)   -- NOTE: must contain only the defined local variables
@@ -306,8 +322,9 @@ data StgState
   , ssExecutedPrimCalls   :: !(Set PrimCall)
   , ssHeapStartAddress    :: !Int
   , ssClosureCallCounter  :: !Int
-  , ssCallGraph           :: !(StrictMap.Map (StaticOrigin, ProgramPoint, ProgramPoint) Int)
-  , ssSubCallGraph        :: !(StrictMap.Map (ProgramPoint, StaticOrigin, ProgramPoint) Int)
+
+  -- call graph
+  , ssCallGraph           :: !CallGraph
   , ssCurrentProgramPoint :: !ProgramPoint
 
   -- debugger API
@@ -320,7 +337,7 @@ data StgState
 
   -- region tracker
   , ssMarkers             :: !(Map Name (Set Region))
-  , ssRegions             :: !(Map Region (Maybe AddressState, [(AddressState, AddressState)]) )
+  , ssRegions             :: !(Map Region (Maybe AddressState, CallGraph, [(AddressState, AddressState)]) )
 
   -- retainer db
   , ssReferenceMap        :: !(IntMap IntSet)
@@ -422,8 +439,9 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssExecutedPrimCalls   = Set.empty
   , ssHeapStartAddress    = 0
   , ssClosureCallCounter  = 0
-  , ssCallGraph           = mempty
-  , ssSubCallGraph        = mempty
+
+  -- call graph
+  , ssCallGraph           = emptyCallGraph
   , ssCurrentProgramPoint = PP_Global
 
   -- debugger api
@@ -765,11 +783,30 @@ markFFI i = modify' $ \s@StgState{..} -> s {ssExecutedFFI = setInsert i ssExecut
 markPrimCall :: PrimCall -> M ()
 markPrimCall i = modify' $ \s@StgState{..} -> s {ssExecutedPrimCalls = setInsert i ssExecutedPrimCalls}
 
-addCallGraphEdge :: StaticOrigin -> ProgramPoint -> ProgramPoint -> M ()
-addCallGraphEdge so from to = modify' $ \s@StgState{..} -> s {ssCallGraph = StrictMap.insertWith (+) (so, from, to) 1 ssCallGraph}
+-- call graph
+-- HINT: build separate call graph for each region
 
-addCallGraphSubEdge :: ProgramPoint -> StaticOrigin -> ProgramPoint -> M ()
-addCallGraphSubEdge from so to = modify' $ \s@StgState{..} -> s {ssSubCallGraph = StrictMap.insertWith (+) (from, so, to) 1 ssSubCallGraph}
+addInterClosureCallGraphEdge :: StaticOrigin -> ProgramPoint -> ProgramPoint -> M ()
+addInterClosureCallGraphEdge so from to = do
+  let addEdge g@CallGraph{..} = g {cgInterClosureCallGraph = StrictMap.insertWith (+) (so, from, to) 1 cgInterClosureCallGraph}
+      updateRegion = \case
+        (a@Just{}, regionCallGraph, l) -> (a, addEdge regionCallGraph, l)
+        r -> r
+  modify' $ \s@StgState{..} -> s
+    { ssCallGraph = addEdge ssCallGraph
+    , ssRegions   = fmap updateRegion ssRegions
+    }
+
+addIntraClosureCallGraphEdge :: ProgramPoint -> StaticOrigin -> ProgramPoint -> M ()
+addIntraClosureCallGraphEdge from so to = do
+  let addEdge g@CallGraph{..} = g {cgIntraClosureCallGraph = StrictMap.insertWith (+) (from, so, to) 1 cgIntraClosureCallGraph}
+      updateRegion = \case
+        (a@Just{}, regionCallGraph, l) -> (a, addEdge regionCallGraph, l)
+        r -> r
+  modify' $ \s@StgState{..} -> s
+    { ssCallGraph = addEdge ssCallGraph
+    , ssRegions   = fmap updateRegion ssRegions
+    }
 
 setProgramPoint :: ProgramPoint -> M ()
 setProgramPoint pp = modify' $ \s@StgState{..} -> s {ssCurrentProgramPoint = pp}

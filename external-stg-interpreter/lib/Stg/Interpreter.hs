@@ -134,14 +134,14 @@ stackPushRestoreProgramPoint argCount = do
 buildCallGraph :: StaticOrigin -> Id -> M ()
 buildCallGraph so hoName = do
   progPoint <- gets ssCurrentProgramPoint
-  addCallGraphEdge so progPoint $ PP_Closure hoName
+  addInterClosureCallGraphEdge so progPoint $ PP_Closure hoName
   setProgramPoint $ PP_Closure hoName
   -- connect call sites to parent closure
   currentClosure <- gets ssCurrentClosure
   case progPoint of
     PP_Global -> pure ()
     _ -> case currentClosure of
-      Just cloId  -> addCallGraphSubEdge (PP_Closure cloId) so progPoint
+      Just cloId  -> addIntraClosureCallGraphEdge (PP_Closure cloId) so progPoint
       _           -> pure ()
 
 builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
@@ -695,7 +695,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
     putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
     putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
     putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
-    putStrLn $ "call graph size: " ++ show (StrictMap.size ssCallGraph)
+    putStrLn $ "call graph size: " ++ show (StrictMap.size . cgInterClosureCallGraph $ ssCallGraph)
     --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
     --print ssNextHeapAddr
     --print $ head $ Map.toList ssEnv
