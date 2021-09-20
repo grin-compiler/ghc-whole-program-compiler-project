@@ -23,6 +23,7 @@ library
     Stg.GHC.Symbols
     Stg.JSON
     Stg.Analysis.LiveVariable
+    Stg.Analysis.Closure
   hs-source-dirs:      lib
   ghc-options:         -Wall
   cpp-options:         -DEXTERNAL_STG_PACKAGE
@@ -50,6 +51,14 @@ executable ext-stg
                        external-stg,
                        ansi-wl-pprint,
                        bytestring,
+                       optparse-applicative
+  default-language:    Haskell2010
+
+executable fullpak
+  hs-source-dirs:      app
+  main-is:             fullpak.hs
+  build-depends:       base < 5.0,
+                       external-stg,
                        optparse-applicative
   default-language:    Haskell2010
 
