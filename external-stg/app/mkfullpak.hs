@@ -71,6 +71,7 @@ main = do
             , "module.hs"
             , "module.cmm"
             , "module.s"
+            , "module.info"
             ]
       forM_ files $ \fn -> do
         (src, dst) <- liftIO $ do
