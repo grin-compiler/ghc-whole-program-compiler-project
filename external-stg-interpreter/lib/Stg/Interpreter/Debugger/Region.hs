@@ -100,17 +100,16 @@ delMarker m r = do
   let del s = let s' = Set.delete r s in if Set.null s' then Nothing else Just s'
   modify $ \s@StgState{..} -> s {ssMarkers = Map.update del m ssMarkers}
 
-checkRegion :: Id -> M ()
-checkRegion (Id b) = do
-  let closureName = binderUniqueName b
+checkRegion :: Name -> M ()
+checkRegion markerName = do
   markers <- gets ssMarkers
-  case Map.lookup closureName markers of
+  case Map.lookup markerName markers of
     Nothing -> pure ()
     Just rl -> do
       forM_ rl $ \r@(Region s e) -> case r of
-        _ | closureName == s && closureName == e -> startEndRegion r
-        _ | closureName == s -> startRegion r
-        _ | closureName == e -> endRegion r
+        _ | markerName == s && markerName == e -> startEndRegion r
+        _ | markerName == s -> startRegion r
+        _ | markerName == e -> endRegion r
 
 startRegion :: Region -> M ()
 startRegion r = do

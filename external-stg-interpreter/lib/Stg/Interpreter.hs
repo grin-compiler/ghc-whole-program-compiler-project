@@ -170,8 +170,11 @@ builtinStgEval so a@HeapPtr{} = do
         buildCallGraph so hoName
 
         modify' $ \s -> s {ssCurrentClosure = Just hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
-        Debugger.checkBreakpoint hoName
-        Debugger.checkRegion hoName
+        -- check breakpoints and region entering
+        let closureName = binderUniqueName $ unId hoName
+        markClosure closureName -- HINT: this list can be deleted by a debugger command, so this is not the same as `markExecutedId`
+        Debugger.checkBreakpoint closureName
+        Debugger.checkRegion closureName
         GC.checkGC [a] -- HINT: add local env as GC root
 
         -- TODO: env or free var handling
@@ -372,7 +375,7 @@ evalStackContinuation result = \case
         let [Alt{..}] = alts
             extendedEnv = addManyBindersToEnv SO_Scrut altBinders result localEnv
 
-        setProgramPoint $ PP_Alt resultId AltDefault
+        setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
 
       PolyAlt -> do
@@ -381,7 +384,7 @@ evalStackContinuation result = \case
             extendedEnv = addBinderToEnv SO_Scrut resultBinder v $                 -- HINT: bind the result
                           addManyBindersToEnv SO_AltArg altBinders result localEnv  -- HINT: bind alt params
 
-        setProgramPoint $ PP_Alt resultId AltDefault
+        setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
 
   RestoreExMask b i -> do
@@ -493,6 +496,8 @@ evalExpr localEnv = \case
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
+    Debugger.checkBreakpoint op
+    Debugger.checkRegion op
     markPrimOp op
     args <- mapM (evalArg localEnv) l
     tid <- gets ssCurrentThreadId
@@ -516,7 +521,7 @@ evalExpr localEnv = \case
 
 
 matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [Atom]
-matchFirstLit resultId localEnv a ([Alt AltDefault _ rhs]) = do
+matchFirstLit resultId localEnv a [Alt AltDefault _ rhs] = do
   setProgramPoint $ PP_Alt resultId AltDefault
   evalExpr localEnv rhs
 matchFirstLit resultId localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (atom, map altCon alts)) of

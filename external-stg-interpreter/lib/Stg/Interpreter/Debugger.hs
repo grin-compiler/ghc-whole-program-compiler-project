@@ -98,30 +98,25 @@ processCommandsUntilExit = do
     then pure ()
     else processCommandsUntilExit
 
-checkBreakpoint :: Id -> M ()
-checkBreakpoint (Id b) = do
-  let closureName = binderUniqueName b
-  markClosure closureName
-
+checkBreakpoint :: Name -> M ()
+checkBreakpoint breakpointName = do
   dbgState <- gets ssDebugState
-
   exit <- processCommandsNonBlocking
-
   case dbgState of
     DbgStepByStep -> do
       reportState
       unless exit processCommandsUntilExit
     DbgRunProgram -> do
       bkMap <- gets ssBreakpoints
-      case Map.lookup closureName bkMap of
+      case Map.lookup breakpointName bkMap of
         Nothing -> pure ()
         Just i
           | i > 0 -> do
               -- HINT: the breakpoint can postpone triggering for the requested time
-              modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.adjust pred closureName ssBreakpoints}
+              modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.adjust pred breakpointName ssBreakpoints}
 
           | otherwise -> do
-              -- HINT: trigger brakpoint
+              -- HINT: trigger breakpoint
               reportState
               modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
               unless exit processCommandsUntilExit
