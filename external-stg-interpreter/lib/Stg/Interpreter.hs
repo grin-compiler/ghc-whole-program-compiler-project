@@ -14,6 +14,7 @@ import Control.Monad.State.Strict
 import Control.Exception
 import qualified Data.Primitive.ByteArray as BA
 
+import Data.Maybe
 import Data.List (partition, isSuffixOf)
 import Data.Set (Set)
 import Data.Map (Map)
@@ -146,7 +147,7 @@ buildCallGraph so hoName = do
   -- write whole program path entry
   gets ssTracingState >>= \case
     NoTracing     -> pure ()
-    DoTracing{..} -> liftIO $ hPutStrLn thWholeProgramPath $ show progPoint ++ "\t" ++ show hoName
+    DoTracing{..} -> liftIO $ hPutStrLn thWholeProgramPath $ maybe "<global>" show currentClosure ++ "\t" ++ show progPoint ++ "\t" ++ show hoName
 
 builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
 builtinStgEval so a@HeapPtr{} = do
