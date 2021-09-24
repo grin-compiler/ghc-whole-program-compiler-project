@@ -52,8 +52,9 @@ main = do
   , appNoHsMain       :: Bool
   }
   -}
-  let stgAppFname = fullpakPath -<.> "o_ghc_stgapp"
-  StgAppInfo{..} <- getAppInfo stgAppFname
+  -- HINT: `readModpakS` reads from zip files, so it works for .fullpak also
+  ghcstgappContent <- readModpakS fullpakPath "app.ghc_stgapp" BS8.unpack
+  StgAppInfo{..} <- getAppInfoFromString ghcstgappContent
 
   putStrLn $ unlines $ "appIncludePaths:" : appIncludePaths
   putStrLn $ unlines $ "appLibPaths:" : appLibPaths

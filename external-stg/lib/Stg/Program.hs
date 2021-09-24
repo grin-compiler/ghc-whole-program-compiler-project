@@ -52,8 +52,12 @@ data StgAppInfo
 
 getAppInfo :: FilePath -> IO StgAppInfo
 getAppInfo ghcStgAppFname = do
-  content <- lines <$> readFile ghcStgAppFname
-  let [root]      = parseSection content "root:"
+  readFile ghcStgAppFname >>= getAppInfoFromString
+
+getAppInfoFromString :: String -> IO StgAppInfo
+getAppInfoFromString rawContent = do
+  let content     = lines rawContent
+      [root]      = parseSection content "root:"
       [osuf]      = parseSection content "o_suffix:"
       libPaths    = parsePathSection root content "pkg_lib_paths:"
       incPaths    = parsePathSection root content "pkg_include_paths:"

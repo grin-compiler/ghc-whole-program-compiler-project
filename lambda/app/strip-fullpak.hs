@@ -99,6 +99,10 @@ main = do
 
     addZstdEntry "app.info" content
 
+    -- copy original app.ghc_stgapp file
+    ghcstgapp <- liftIO $ Stg.readModpakS fullpakPath "app.ghc_stgapp" id
+    addZstdEntry "app.ghc_stgapp" ghcstgapp
+
 addZstdEntry :: FilePath -> BS8.ByteString -> ZipArchive ()
 addZstdEntry path content = do
   e <- mkEntrySelector path
