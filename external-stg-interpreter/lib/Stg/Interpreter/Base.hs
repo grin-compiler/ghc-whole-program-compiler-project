@@ -215,7 +215,10 @@ data DebugState
 
 data TracingState
   = NoTracing
-  | DoTracing Handle
+  | DoTracing
+    { thOriginDB          :: Handle
+    , thWholeProgramPath  :: Handle
+    }
   deriving (Show)
 
 data CallGraph

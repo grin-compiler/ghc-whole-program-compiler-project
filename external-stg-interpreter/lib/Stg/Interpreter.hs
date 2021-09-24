@@ -143,6 +143,10 @@ buildCallGraph so hoName = do
     _ -> case currentClosure of
       Just cloId  -> addIntraClosureCallGraphEdge (PP_Closure cloId) so progPoint
       _           -> pure ()
+  -- write whole program path entry
+  gets ssTracingState >>= \case
+    NoTracing     -> pure ()
+    DoTracing{..} -> liftIO $ hPutStrLn thWholeProgramPath $ show progPoint ++ "\t" ++ show hoName
 
 builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
 builtinStgEval so a@HeapPtr{} = do
@@ -679,6 +683,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
       let tracePath = ".extstg-trace" </> takeFileName progName
       createDirectoryIfMissing True tracePath
       DoTracing <$> openFile (tracePath </> "originDB.tsv") WriteMode
+                <*> openFile (progName ++ ".whole-program-path.tsv") WriteMode
 
   stateStore <- PrintableMVar <$> newEmptyMVar
   (gcThreadId, gcIn', gcOut') <- GC.init
@@ -689,7 +694,9 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
         dlclose dl
         killThread gcThreadId
         case tracingState of
-          DoTracing h -> hClose h
+          DoTracing h wpp -> do
+            hClose wpp
+            hClose h
           _ -> pure ()
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
     s@StgState{..} <- execStateT run (emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut)
