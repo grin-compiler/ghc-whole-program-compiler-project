@@ -71,6 +71,12 @@ data CCallTarget
 data CCallConv = CCallConv | CApiConv | StdCallConv | PrimCallConv | JavaScriptCallConv
 -}
 
+getFFILabelPtrAtom :: Name -> LabelSpec -> M Atom
+getFFILabelPtrAtom labelName labelSpec = do
+  dl <- gets ssCBitsMap
+  funPtr <- liftIO . dlsym dl $ BS8.unpack labelName
+  pure $ PtrAtom (LabelPtr labelName labelSpec) $ castFunPtrToPtr funPtr
+
 mkFFIArg :: Atom -> M (Maybe FFI.Arg)
 mkFFIArg = \case
   Void              -> pure Nothing
@@ -250,7 +256,7 @@ getProgArgv(int *argc, char **argv[])
       StaticTarget _ "createAdjustor" _ _
         | [ IntV 1
           , PtrAtom StablePtr{} sp
-          , Literal (LitLabel{})
+          , _
           , PtrAtom (CStringPtr typeCString) _
           , PtrAtom (CStringPtr hsTypeCString) _
           , Void

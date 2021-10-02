@@ -103,7 +103,8 @@ data Lit
 
 evalLiteral :: HasCallStack => Lit -> M Atom
 evalLiteral = \case
-  LitString str -> getCStringConstantPtrAtom str
+  LitLabel name spec  -> getFFILabelPtrAtom name spec
+  LitString str       -> getCStringConstantPtrAtom str
   LitFloat f    -> pure . FloatAtom $ realToFrac f
   LitDouble d   -> pure . DoubleAtom $ realToFrac d
   LitNullAddr   -> pure $ PtrAtom RawPtr nullPtr
@@ -509,6 +510,13 @@ evalExpr localEnv = \case
     evalPrimOp op args t tc
 
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
+    -- check foreign target region and breakpoint
+    case foreignCTarget foreignCall of
+      StaticTarget _ targetName _ _ -> do
+        Debugger.checkBreakpoint targetName
+        Debugger.checkRegion targetName
+      _ -> pure ()
+
     markFFI foreignCall
     args <- mapM (evalArg localEnv) l
     evalFCallOp evalOnNewThread foreignCall args t tc

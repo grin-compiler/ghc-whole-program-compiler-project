@@ -79,6 +79,7 @@ data PtrOrigin
   | ByteArrayPtr  !ByteArrayIdx     -- raw ptr to the byte array
   | RawPtr                          -- raw ptr to a values with unknown origin (i.e. FFI)
   | StablePtr     !Int              -- stable pointer must have AddrRep
+  | LabelPtr      !Name !LabelSpec  -- foreign symbol/label name + label sepcification (i.e. data or function)
   deriving (Show, Eq, Ord)
 
 data WeakPtrDescriptor
