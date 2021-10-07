@@ -32,3 +32,5 @@
 #include "PrimOp-StablePtr.dl"
 #include "PrimOp-TagToEnum.dl"
 #include "PrimOp-WeakPtr.dl"
+
+#include "Escape.dl"

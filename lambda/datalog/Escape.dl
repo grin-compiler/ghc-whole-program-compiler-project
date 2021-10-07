@@ -1,0 +1,75 @@
+// clustered CFA / escape analysis
+.decl IsClusterInternal(v:symbol)
+.decl IsClusterExternal(v:symbol)
+
+.decl OuterOrigin(v:Variable)
+.output OuterOrigin
+
+.decl OuterCode(v:symbol)
+.decl CalledByOuterCode(v:symbol)
+
+//////////////////////////
+// source of outer origin
+//////////////////////////
+
+// direct origin for top level outer functions
+OuterOrigin(v) :- OuterCode(v).
+
+// direct origin for outer parameters
+OuterOrigin(v) :-
+  CalledByOuterCode(f),
+  CodeParameter(f, _, v).
+
+//////////////////////////
+// function call
+//////////////////////////
+
+USED("Escape-call-return-value")
+OuterOrigin(r) :-
+  REACHABLE(r)
+  Call(r, f, _),
+  EvalMode(r, "strict"),
+  OuterOrigin(f).
+
+USED("Escape-call-argument")
+OuterOrigin(arg) :-
+  REACHABLE(r)
+  Call(r, f, _),
+  EvalMode(r, "strict"),
+  OuterOrigin(f),
+  CallArgument(r, _, arg).
+
+//////////////////////////
+// pattern match
+//////////////////////////
+
+// scrutinee projection to alt value ; OuterOrigin
+USED("Escape-pattern-match-alt-value")
+MatchedAlt(case_result, alt_val),
+OuterOrigin(alt_val) :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  Alt(case_result, alt_val, _),
+  OuterOrigin(scrut).
+
+USED("Escape-pattern-match-alt-parameter")
+OuterOrigin(p) :-
+  ReachableCode(alt),
+  Alt(_, alt, _),
+  AltParameter(alt, _, p),
+  OuterOrigin(alt).
+
+//////////////////////////
+// other
+//////////////////////////
+
+USED("Escape-points-to")
+OuterOrigin(src) :-
+  PointsTo(src, dst),
+  OuterOrigin(dst).
+
+/*
+  TODO:
+  - primops
+  - tests
+*/
