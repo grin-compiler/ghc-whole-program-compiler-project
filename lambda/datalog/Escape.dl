@@ -12,6 +12,8 @@
 // source of outer origin
 //////////////////////////
 
+OuterOrigin("outer-origin"). // HINT: pre-defined outer origin, used by some primops
+
 // direct origin for top level outer functions
 OuterOrigin(v) :- OuterCode(v).
 
@@ -72,4 +74,26 @@ OuterOrigin(src) :-
   TODO:
   - primops
   - tests
+*/
+
+/*
+  primos to implement
+    mvar          - done
+    arrays        - done
+    mutvar
+    stm
+    weakptr
+
+    concurrency   - should work out of the box
+    exception     - should work out of the box
+    parallelism   - should work out of the box
+    stableptr     - should work out of the box
+*/
+
+/*
+  other:
+    CallPNode1
+      ExecCallArgument
+      ExecCall
+    CallPNode2
 */
