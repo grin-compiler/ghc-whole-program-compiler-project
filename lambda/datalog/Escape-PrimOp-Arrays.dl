@@ -98,7 +98,7 @@ TypeVarPointsTo(r, ty_node, "outer-origin") :-
 // extend array
 USED("Escape-PrimOp-Arrays-03")
 Called(r, op),
-OuterOrigin(item) :-
+Escaped(item) :-
   ( op = "writeArray#"
   ; op = "writeSmallArray#"
   ),
@@ -135,7 +135,7 @@ Array(dst_ext_result, dst_arr_node, "outer-origin") :-
 
 USED("Escape-PrimOp-Arrays-05-foreign-dst")
 Called(r, op),
-OuterOrigin(src_item) :-
+Escaped(src_item) :-
   ( op = "copyArray#"
   ; op = "copySmallArray#"
   ; op = "copyMutableArray#"
@@ -203,7 +203,7 @@ USED("Escape-PrimOp-Arrays-08")
 Called(r, op),
 TypeVarPointsTo(r, ty_node, "outer-origin"), // can return any array item
 TypeVarPointsTo(r, ty_node, new_item),
-OuterOrigin(new_item) :-
+Escaped(new_item) :-
   ( op = "casArray#"
   ; op = "casSmallArray#"
   ),

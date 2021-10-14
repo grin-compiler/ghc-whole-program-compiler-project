@@ -57,7 +57,7 @@ TypeVarPointsTo(r, ty_node, "outer-origin") :-
 // Q: should we backpropagate the outer-origin property on the points-to chain? (TODO)
 USED("Escape-PrimOp-MVar-04")
 Called(r, op),
-OuterOrigin(item) :-
+Escaped(item) :-
   ( op = "putMVar#"
   ; op = "tryPutMVar#"
   ),

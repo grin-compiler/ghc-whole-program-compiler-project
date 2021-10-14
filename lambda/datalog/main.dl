@@ -36,3 +36,4 @@
 #include "Escape.dl"
 #include "Escape-PrimOp-Arrays.dl"
 #include "Escape-PrimOp-MVar.dl"
+#include "Escape-PrimOp-MutVar.dl"

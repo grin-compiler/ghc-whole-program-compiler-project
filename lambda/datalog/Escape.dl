@@ -8,6 +8,11 @@
 .decl OuterCode(v:symbol)
 .decl CalledByOuterCode(v:symbol)
 
+.decl Escaped(v:Variable)
+.output Escaped
+
+OuterOrigin(v) :- Escaped(v).
+
 //////////////////////////
 // source of outer origin
 //////////////////////////
@@ -34,7 +39,7 @@ OuterOrigin(r) :-
   OuterOrigin(f).
 
 USED("Escape-call-argument")
-OuterOrigin(arg) :-
+Escaped(arg) :-
   REACHABLE(r)
   Call(r, f, _),
   EvalMode(r, "strict"),
@@ -80,7 +85,7 @@ OuterOrigin(src) :-
   primos to implement
     mvar          - done
     arrays        - done
-    mutvar
+    mutvar        - done
     stm
     weakptr
 
