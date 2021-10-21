@@ -86,8 +86,8 @@ OuterOrigin(src) :-
     mvar          - done
     arrays        - done
     mutvar        - done
-    stm
-    weakptr
+    weakptr       - done
+    stm           - done
 
     concurrency   - should work out of the box
     exception     - should work out of the box

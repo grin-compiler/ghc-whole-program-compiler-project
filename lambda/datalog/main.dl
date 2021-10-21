@@ -38,3 +38,4 @@
 #include "Escape-PrimOp-MVar.dl"
 #include "Escape-PrimOp-MutVar.dl"
 #include "Escape-PrimOp-WeakPtr.dl"
+#include "Escape-PrimOp-STM.dl"
