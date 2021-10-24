@@ -77,7 +77,6 @@ OuterOrigin(src) :-
 
 /*
   TODO:
-  - primops
   - tests
 */
 
@@ -96,9 +95,16 @@ OuterOrigin(src) :-
 */
 
 /*
-  other:
+  other: read CFA module
     CallPNode1
       ExecCallArgument
       ExecCall
     CallPNode2
+
+  ExecCall is created form:
+    AST Call
+    CallPNode1
+    CallPNode2
+
+  mutvar creates PNode directly
 */
