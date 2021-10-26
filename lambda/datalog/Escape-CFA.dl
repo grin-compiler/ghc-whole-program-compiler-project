@@ -56,3 +56,26 @@ USED("Escape-CFA-ExecCall-return-value")
 PointsTo(r, "outer-origin") :-
   ExecCall(_, r, unknown_fun, _),
   OuterOrigin(unknown_fun).
+
+// CASE: escaping PNode
+
+// arguments: mark the unbound function parameters escaped
+USED("Escape-CFA-escaped-PNode-args")
+Escaped(p) :-
+  PNode(r, fun, arity, missing),
+  OuterOrigin(r),
+  arity - missing <= i, i < arity,
+  CodeParameter(fun, i, p).
+
+// return value: mark the function return value escaped
+USED("Escape-CFA-escaped-PNode-return-value")
+Escaped(v) :-
+  PNode(r, fun, _, _),
+  OuterOrigin(r),
+  ReturnValue(fun, v).
+
+/*
+  Q: what about escaping:
+      + constructors?
+      + primop results?
+*/
