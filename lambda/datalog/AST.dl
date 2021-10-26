@@ -147,3 +147,34 @@ RetTup(ext, tag, i, ty_node) :-
   ExternalReturnType(ext, ty_res),
   TypeNode(ty_res, tag),
   TypeNodeArgument(ty_res, i, ty_node).
+
+// name use/def utility
+.decl DefinedName(v:symbol)
+.output DefinedName
+
+DefinedName(v) :-
+  ( Move(v, _)
+  ; Node(v, _)
+  ; Call(v, _, _)
+  ; IsFunction(v)
+  ; FunctionParameter(_, _, v)
+  ; Case(v, _)
+  ; Alt(_, v, _)
+  ; AltParameter(_, _, v)
+  ; IsClosure(v)
+  ; ClosureParameter(_, _, v)
+  ; ExternalFunction(v, _, _, _) // HINT: primops and C land FFI
+  ).
+
+.decl UsedName(v:symbol)
+.output UsedName
+
+UsedName(v) :-
+  ( Move(_, v)
+  ; NodeArgument(_, _, v)
+  ; Call(_, v, _)
+  ; CallArgument(_, _, v)
+  ; Case(_, v)
+  ; ClosureVariable(_, _, v)
+  ; ReturnValue(_, v)
+  ).
