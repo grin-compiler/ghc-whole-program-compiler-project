@@ -1,12 +1,36 @@
-// clustered CFA / escape analysis
-.decl IsClusterInternal(v:symbol)
-.decl IsClusterExternal(v:symbol)
+
+//////////////////////////
+// input facts
+//////////////////////////
+
+// NOTE: either called form other clusters or via FFI (used as code library)
+.decl CalledByOuterCode(v:symbol)
+.input CalledByOuterCode
+
+//////////////////////////
+// inferred facts
+//////////////////////////
+
+.decl OuterCode(v:symbol)
+.output OuterCode
+
+OuterCode(v) :-
+  UsedName(v),
+  !DefinedName(v).
+
+/*
+  convenient input API (AST defines the cluster)
+  implicit
+    OuterCode: infer => referred, but does not have binding
+
+  explicit
+    CalledByOuterCode
+*/
+
+// analysis
 
 .decl OuterOrigin(v:Variable)
 .output OuterOrigin
-
-.decl OuterCode(v:symbol)
-.decl CalledByOuterCode(v:symbol)
 
 .decl Escaped(v:Variable)
 .output Escaped
@@ -88,8 +112,9 @@ OuterOrigin(src) :-
     weakptr       - done
     stm           - done
 
+    exception     - rethink TODO!
+
     concurrency   - should work out of the box
-    exception     - should work out of the box
     parallelism   - should work out of the box
     stableptr     - should work out of the box
 */
