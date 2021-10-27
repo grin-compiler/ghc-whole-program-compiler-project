@@ -111,12 +111,11 @@ OuterOrigin(src) :-
     mutvar        - done
     weakptr       - done
     stm           - done
-
-    exception     - rethink TODO!
+    exception     - done
+    stableptr     - done
 
     concurrency   - should work out of the box
     parallelism   - should work out of the box
-    stableptr     - should work out of the box
 */
 
 /*

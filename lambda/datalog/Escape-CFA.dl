@@ -76,6 +76,50 @@ Escaped(v) :-
 
 /*
   Q: what about escaping:
-      + constructors?
-      + primop results?
+      + constructors?     DONE
+      + primop results?   DONE
+      + containers?       DONE
+*/
+
+USED("Escape-CFA-escaped-Node-argument")
+Escaped(arg) :-
+  OuterOrigin(v),
+  NodeOrigin(v, node),
+  NodeArgument(node, _, arg).
+
+USED("Escape-CFA-escaped-ExternalOrigin-container")
+Escaped(arg) :-
+  OuterOrigin(v),
+  ExternalOrigin(v, ext_result, _),
+  ( Array(ext_result, _, arg)
+  ; MVar(ext_result, _, arg)
+  ; MutVar(ext_result, _, arg)
+  ; TVar(ext_result, _, arg)
+  ; WeakPtr(ext_result, _, arg)
+  ; WeakFinalizer(ext_result, arg)
+  ).
+
+USED("Escape-CFA-escaped-ExternalFunction-result")
+Escaped(arg) :-
+  OuterOrigin(v),
+  ExternalOrigin(v, ext_result, _),
+  TypeVarPointsTo(ext_result, _, arg).
+
+// exceptions can come from anywhere
+RaisedEx("outer-origin").
+
+// sparks can be come from outside of the current cluster also
+// IDEA: this assumption/constraint might be relaxed with the escape analysis + spark primop tracking
+Spark("outer-origin").
+
+/*
+  - IsFunction      ; handled in PNode rule
+  - IsClosure       ; handled in PNode rule
+  - PNode           ; handled in PNode rule
+  - ApplyChain      ; handlel in ApplyChain rule
+
+  - Node            ; handled in Escape-CFA-escaped-Node-argument
+  - NodeOrigin      ; handled in Escape-CFA-escaped-Node-argument
+  - ExternalOrigin  ; handled in ExternalFunction-result
+  - container       ; handled in ExternalOrigin-container
 */
