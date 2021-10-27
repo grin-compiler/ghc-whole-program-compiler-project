@@ -20,7 +20,7 @@
 
 // "atomically#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
 USED("PrimOp-STM-01")
-RaisedEx("Control.Exception.Base.nestedAtomically"), // hardwired closure for GHC RTS
+RaisedEx("base_Control.Exception.Base.nestedAtomically"), // hardwired closure for GHC RTS
 Called(r, op),
 CallPNode1("atomically#", r, v0, v1_state) :-
   op = "atomically#",
