@@ -85,6 +85,7 @@ USED("Escape-CFA-escaped-Node-argument")
 Escaped(arg) :-
   OuterOrigin(v),
   NodeOrigin(v, node),
+  NodeRole(v, "node"), // HINT: literals are not tracked by the escape analysis, only nodes are
   NodeArgument(node, _, arg).
 
 USED("Escape-CFA-escaped-ExternalOrigin-container")
@@ -105,14 +106,21 @@ Escaped(arg) :-
   ExternalOrigin(v, ext_result, _),
   TypeVarPointsTo(ext_result, _, arg).
 
-// exceptions can come from anywhere
-RaisedEx("outer-origin").
+/*
+  HINT: assumptions when outer clusters exist
+    exceptions can come from anywhere
+    sparks can be come from outside of the current cluster also
 
-// sparks can be come from outside of the current cluster also
-// IDEA: this assumption/constraint might be relaxed with the escape analysis + spark primop tracking
-Spark("outer-origin").
+  IDEA: this assumption/constraint might be relaxed with the escape analysis + spark primop tracking
+*/
+Spark("outer-origin"),
+RaisedEx("outer-origin") :-
+  ( CalledByOuterCode(_)
+  ; OuterCode(_)
+  ).
 
 /*
+  abstract values:
   - IsFunction      ; handled in PNode rule
   - IsClosure       ; handled in PNode rule
   - PNode           ; handled in PNode rule
