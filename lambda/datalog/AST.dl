@@ -171,7 +171,7 @@ DefinedName(v) :-
 
 UsedName(v) :-
   ( Move(_, v)
-  ; NodeArgument(_, _, v)
+  ; (NodeArgument(n, _, v), NodeRole(n, "node")) // HINT: ignore literal node values, those are constants and not variables
   ; Call(_, v, _)
   ; CallArgument(_, _, v)
   ; Case(_, v)
