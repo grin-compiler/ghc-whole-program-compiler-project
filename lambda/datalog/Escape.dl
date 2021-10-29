@@ -51,6 +51,14 @@ OuterOrigin(v) :-
   CalledByOuterCode(f),
   CodeParameter(f, _, v).
 
+
+//////////////////////////
+// initially reachable functions
+//////////////////////////
+
+ReachableCode(f) :-
+  CalledByOuterCode(f).
+
 //////////////////////////
 // function call
 //////////////////////////
