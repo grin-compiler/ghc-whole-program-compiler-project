@@ -113,6 +113,7 @@ Escaped(arg) :-
 
   IDEA: this assumption/constraint might be relaxed with the escape analysis + spark primop tracking
 */
+USED("Escape-CFA-escaped-spark-and-exception")
 Spark("outer-origin"),
 RaisedEx("outer-origin") :-
   ( CalledByOuterCode(_)

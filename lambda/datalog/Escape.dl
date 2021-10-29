@@ -7,6 +7,8 @@
 .decl CalledByOuterCode(v:symbol)
 .input CalledByOuterCode
 
+// Q: should we merge CalledByOuterCode and InitialReachable?
+
 //////////////////////////
 // inferred facts
 //////////////////////////
