@@ -38,7 +38,7 @@ spec = do
   describe "GHC StablePtr PrimOps" $ do
 
     it "makeStablePtr#" $ do
-      cfa <- controlFlowAnalysisM ["main"] [prog|
+      cfa <- controlFlowAnalysisM [] ["main"] [prog|
           primop effectful
             "makeStablePtr#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %s.2 %a.6} @ t.109} @ t.108
           main =
@@ -78,7 +78,7 @@ spec = do
         ]
 
     it "deRefStablePtr#" $ do
-      cfa <- controlFlowAnalysisM ["main"] [prog|
+      cfa <- controlFlowAnalysisM [] ["main"] [prog|
           primop effectful
             "makeStablePtr#" :: %a.6 -> {"State#" %s.2} @ t.107 -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %s.2 %a.6} @ t.109} @ t.108
             "deRefStablePtr#" :: {"StablePtr#" %s.21 %a.11} @ t.243 -> {"State#" %s.21} @ t.245 -> {"ghc-prim_GHC.Prim.Unit#" %a.11} @ t.246
