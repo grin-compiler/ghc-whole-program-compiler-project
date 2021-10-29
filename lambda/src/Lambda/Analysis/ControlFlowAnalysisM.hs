@@ -19,14 +19,14 @@ import System.IO.Temp
 import Lambda.Syntax
 import Lambda.Datalog.ToDatalog
 
-controlFlowAnalysisM :: [String] -> Program -> IO (Map String [[Text]])
+controlFlowAnalysisM :: [String] -> [String] -> Program -> IO (Map String [[Text]])
 controlFlowAnalysisM = controlFlowAnalysisImplM False
 
-controlFlowAnalysisLogM :: [String] -> Program -> IO (Map String [[Text]])
+controlFlowAnalysisLogM :: [String] -> [String] -> Program -> IO (Map String [[Text]])
 controlFlowAnalysisLogM = controlFlowAnalysisImplM True
 
-controlFlowAnalysisImplM :: Bool -> [String] -> Program -> IO (Map String [[Text]])
-controlFlowAnalysisImplM log initialReachable prg = do
+controlFlowAnalysisImplM :: Bool -> [String] -> [String] -> Program -> IO (Map String [[Text]])
+controlFlowAnalysisImplM log calledByOuterCode initialReachable prg = do
 
   tmpSys <- getCanonicalTemporaryDirectory
   tmpCfa <- createTempDirectory tmpSys "lambda-cfa"
@@ -38,9 +38,15 @@ controlFlowAnalysisImplM log initialReachable prg = do
 
   programToFactsM log tmpCfa prg
 
+  -- HINT: main function, that does not take closures or constructors as arguments, only C-land values
   let srcFile = tmpCfa </> "InitialReachable.facts"
   when log $ putStrLn srcFile
   writeFile srcFile $ unlines initialReachable
+
+  -- HINT: these functions can receive closures and constructors as arguments
+  let outerFile = tmpCfa </> "CalledByOuterCode.facts"
+  when log $ putStrLn outerFile
+  writeFile outerFile $ unlines calledByOuterCode
 
   when log $ putStrLn "run: lambda-cfa"
   callProcess "lambda-cfa" ["--output=" ++ tmpCfa, "--facts=" ++ tmpCfa, "--jobs=4"]
