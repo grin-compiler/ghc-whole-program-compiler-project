@@ -7,9 +7,7 @@ GHC-WPC is an extended GHC that exports the STG IR `(.modpak)` for the compiled 
 
 <img height="350" src="https://user-images.githubusercontent.com/877489/114280753-0d311300-9a3b-11eb-8d50-facad35f0e9a.png"/>
 
-This repo uses GHC-WPC via stack, so no worries, stack will download it and do the setup automatically, but **only on x64 Debian9, Ubuntu 16.04-17.10**.
-If you use macOS or Windows you have to compile GHC-WPC manually. See the developer instructions below.  
-However `external-stg` package compiles with vanilla GHC also.
+The `external-stg-compiler` package should be compiled with GHC-WPC but the other packages i.e. `external-stg` compiles with vanilla GHC also.
 
 ## Readings
 - [Introducing GHC whole program compiler (GHC-WPC)](https://www.patreon.com/posts/introducing-ghc-38173710)
@@ -24,8 +22,8 @@ However `external-stg` package compiles with vanilla GHC also.
 ## Sample applications for GHC-WPC
 
 There is a set of prepared applications in the [ghc-wpc-sample-programs](https://github.com/grin-compiler/ghc-wpc-sample-programs) repository that you can compile easily to try out GHC-WPC.
+<!--
 No special preparation needed if you use x64 Debian9, Ubuntu 16.04-17.10. It's only the regular stack based workflow.
-
 ## Usage (user)
 ### DOES NOT WORK AT THE MOMENT, NEW BINARY RELEASE OF GHC-WPC IS NEEDED
 ### try the GHC-WPC developer usage way
@@ -46,7 +44,7 @@ I.e. `external-stg-compiler` is such an example.
    ```
    *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
 3. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
-
+-->
 ## Why?
 - to make it easy to develop new backends for GHC without extending Cabal with new targets
 - to facilitate compiler/PL research that needs real world programs to analyse
@@ -56,9 +54,9 @@ I.e. `external-stg-compiler` is such an example.
 - to make it easy to focus on the compiler backend development without hacking GHC
 - to allow other compilers to target GHC/STG and the feature rich RTS 
 
-## Usage (GHC-WPC developer)
+## Usage
 
-If you change the External STG IR, then GHC-WPC must be recompiled. If you just would like to use Ext-STG IR in you project then please follow the **(user) usage** instructions.
+If you change the External STG IR, then GHC-WPC must be recompiled.
 
 0. Install (exact version):
    - GHC 8.8.3
