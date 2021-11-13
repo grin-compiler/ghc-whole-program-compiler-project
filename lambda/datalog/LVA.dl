@@ -1,0 +1,219 @@
+// reachibility
+.decl InitialReachable(n:CodeName)
+.input InitialReachable
+
+// hardcoded edb
+//InitialReachable("::Main.main").
+//InitialReachable(":Main.main").
+//InitialReachable("Main.main").
+
+// Call tree
+.decl CalledCode(caller:CodeName, callee:CodeName)
+.output CalledCode
+
+USED("LVA-01")
+CalledCode(caller, callee) :-
+  HasInst(caller, r), // NOTE: alts can be callers ; needs fix to include the function or closure?
+  Called(r, callee).
+
+// SECTION: reachability
+
+.decl ReachableCode(n:CodeName)
+.output ReachableCode
+/*
+  HINT:
+    ReachableCode = initial reachable + called code + matching alt
+*/
+
+USED("LVA-02")
+ReachableCode(n) :-
+  InitialReachable(n).
+
+// call
+USED("LVA-03")
+ReachableCode(callee) :-
+  ReachableCode(caller),
+  CalledCode(caller, callee).
+
+// alt ; tag sensitive
+USED("LVA-04")
+ReachableCode(alt) :-
+  ReachableCode(f),
+  HasInst(f, r),
+  // default case is always reachable
+  Alt(r, alt, "default:").
+
+USED("LVA-05")
+ReachableCode(alt) :-
+  ReachableCode(f),
+  HasInst(f, r),
+  Alt(r, alt, t),
+  // is the tag created somewhere? yes: LVA-07 sets the TagValue
+  TagValue(alt, t).
+
+
+.decl Reachable(inst:Variable)
+.output Reachable
+
+USED("LVA-06")
+Reachable(inst) :-
+  HasInst(f, inst),
+  ReachableCode(f).
+
+
+.decl TagValue(v:Variable, t:Tag)
+.output TagValue
+
+USED("LVA-07")
+TagValue(v, tag) :-
+  NodeOrigin(v, node),
+  Node(node, tag).
+
+USED("LVA-08")
+TagValue(v, tag) :-
+  ExternalOrigin(v, _, ty_var),
+  TypeNode(ty_var, tag).
+
+// SECTION: dead code
+
+.decl DeadCode(n:CodeName)
+.output DeadCode
+
+USED("LVA-09")
+DeadCode(n) :-
+  ReturnValue(n, _),
+  !ReachableCode(n).
+
+.decl DeadExternal(n:External)
+.output DeadExternal
+
+.decl ReachableExternal(n:External)
+.output ReachableExternal
+
+USED("LVA-10")
+ReachableExternal(callee) :-
+  ReachableCode(caller),
+  ExternalFunction(callee, _, _, _),
+  CalledCode(caller, callee).
+
+USED("LVA-11")
+DeadExternal(n) :-
+  ExternalFunction(n, _, _, _),
+  !ReachableExternal(n).
+
+//////
+
+.decl HasCallOp(code:CodeName)
+.output HasCallOp
+
+USED("LVA-12")
+HasCallOp(code) :-
+  ReturnValue(code, _),
+  HasInst(code, r),
+  Call(r, _, _).
+
+USED("LVA-13")
+HasCallOp(code) :- // flatten alts
+  HasInst(code, r),
+  Alt(r, alt, _),
+  HasCallOp(alt).
+
+.decl LeafCode(code:CodeName)
+.output LeafCode
+
+USED("LVA-14")
+LeafCode(caller) :-
+  HasCallOp(caller),
+  !Alt(_, caller, _),
+  !CalledCode(caller, _).
+
+/////////////////////////////////
+
+/*
+  check:
+    - reachable case
+    - no matching alternative
+    - without default pattern
+*/
+
+///////////////////
+
+.decl LiveStaticData(v:Variable)
+.decl DeadStaticData(v:Variable)
+.output LiveStaticData, DeadStaticData
+
+LiveStaticData(d) :-
+  REACHABLE(r)
+  ( NodeArgument(r, _, d)
+  ; CallArgument(r, _, d)
+  ; Move(r, d)
+  ; Case(r, d)
+  ),
+  IsStaticData(d).
+
+LiveStaticData(d) :-
+  IsStaticData(d),
+  ReturnValue(c, d),
+  ReachableCode(c).
+
+DeadStaticData(d) :-
+  IsStaticData(d),
+  !LiveStaticData(d).
+
+//////////////////
+
+.decl LiveConstructor(con_name : symbol)
+.decl DeadConstructor(con_name : symbol)
+.decl LiveConGroup(con_group_name : symbol)
+.decl DeadConGroup(con_group_name : symbol)
+.output LiveConstructor, DeadConstructor, LiveConGroup, DeadConGroup
+
+ReachableCode(t), // HINT: keep the constructor's worker closure live ; the constructor and its wrapper closure have identical names ; this is needed for GHC's STG/Cmm codegen
+LiveConGroup(cg),
+LiveConstructor(t) :-
+  REACHABLE(r)
+  TagValue(r, t),
+  ConSpec(cg, t, _).
+
+DeadConstructor(c) :-
+  ConSpec(_, c, _),
+  !LiveConstructor(c).
+
+DeadConGroup(cg) :-
+  ConGroup(cg, _),
+  !LiveConGroup(cg).
+
+
+/////////////////////
+.decl DeletableCode(n : symbol)
+.output DeletableCode
+
+DeletableCode(r) :-
+  REACHABLE(r)
+  ( IsFunction(r)
+  ; IsClosure(r)
+  ),
+  !CalledCode(_, r).
+
+///////////////////////
+/*
+.decl MatchedNodes(r : symbol)
+.decl UnmatchedNodes(r : symbol)
+.output MatchedNodes, UnmatchedNodes
+
+MatchedNodes(node) :-
+  ReachableCode(alt_value),
+  Alt(_, alt_value, t),
+  NodeOrigin(alt_value, node),
+  Node(node, t).
+
+UnmatchedNodes(r) :-
+  REACHABLE(r)
+  Node(r, _),
+  !MatchedNodes(r).
+*/
+/*
+.decl NodeRole(result_node:Variable, r:Role)
+.decl Node(result_node:Variable, t:Tag)
+.decl NodeArgument(result_node:Variable, i:number, item:Variable)
+*/

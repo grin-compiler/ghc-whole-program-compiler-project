@@ -1,0 +1,43 @@
+tagToEnum#
+
+new primops to add to CFA:
+  {-
+    Arrays of arrays
+  -}
+  primop effectful
+    "newArrayArray#" :: (T_Int64) @ t_1304 -> {"State#" %s_113} @ t_1305 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArrayArray#" %s_113} @ t_1306} @ t_1307
+
+  primop pure
+    "sameMutableArrayArray#" :: {"MutableArrayArray#" %s_114} @ t_1308 -> {"MutableArrayArray#" %s_114} @ t_1309 -> (T_Int64) @ t_1310
+
+  primop effectful
+    "unsafeFreezeArrayArray#" :: {"MutableArrayArray#" %s_115} @ t_1311 -> {"State#" %s_115} @ t_1312 -> {"ghc-prim_GHC.Prim.Unit#" {"ArrayArray#"} @ t_1313} @ t_1314
+
+  primop pure
+    "sizeofArrayArray#"        :: {"ArrayArray#"} @ t_1315 -> (T_Int64) @ t_1316
+    "sizeofMutableArrayArray#" :: {"MutableArrayArray#" %s_116} @ t_1317 -> (T_Int64) @ t_1318
+    "indexByteArrayArray#"     :: {"ArrayArray#"} @ t_1319 -> (T_Int64) @ t_1320 -> {"ByteArray#"} @ t_1321
+    "indexArrayArrayArray#"    :: {"ArrayArray#"} @ t_1322 -> (T_Int64) @ t_1323 -> {"ArrayArray#"} @ t_1324
+
+  primop effectful
+    "readByteArrayArray#"          :: {"MutableArrayArray#" %s_117} @ t_1325 -> (T_Int64) @ t_1326 -> {"State#" %s_117} @ t_1327 -> {"ghc-prim_GHC.Prim.Unit#" {"ByteArray#"} @ t_1328} @ t_1329
+    "readMutableByteArrayArray#"   :: {"MutableArrayArray#" %s_118} @ t_1330 -> (T_Int64) @ t_1331 -> {"State#" %s_118} @ t_1332 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s_118} @ t_1333} @ t_1334
+    "readArrayArrayArray#"         :: {"MutableArrayArray#" %s_119} @ t_1335 -> (T_Int64) @ t_1336 -> {"State#" %s_119} @ t_1337 -> {"ghc-prim_GHC.Prim.Unit#" {"ArrayArray#"} @ t_1338} @ t_1339
+    "readMutableArrayArrayArray#"  :: {"MutableArrayArray#" %s_120} @ t_1340 -> (T_Int64) @ t_1341 -> {"State#" %s_120} @ t_1342 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArrayArray#" %s_120} @ t_1343} @ t_1344
+    "writeByteArrayArray#"         :: {"MutableArrayArray#" %s_121} @ t_1345 -> (T_Int64) @ t_1346 -> {"ByteArray#"} @ t_1347 -> {"State#" %s_121} @ t_1348 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1349
+    "writeMutableByteArrayArray#"  :: {"MutableArrayArray#" %s_122} @ t_1350 -> (T_Int64) @ t_1351 -> {"MutableByteArray#" %s_122} @ t_1352 -> {"State#" %s_122} @ t_1353 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1354
+    "writeArrayArrayArray#"        :: {"MutableArrayArray#" %s_123} @ t_1355 -> (T_Int64) @ t_1356 -> {"ArrayArray#"} @ t_1357 -> {"State#" %s_123} @ t_1358 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1359
+    "writeMutableArrayArrayArray#" :: {"MutableArrayArray#" %s_124} @ t_1360 -> (T_Int64) @ t_1361 -> {"MutableArrayArray#" %s_124} @ t_1362 -> {"State#" %s_124} @ t_1363 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1364
+    "copyArrayArray#"              :: {"ArrayArray#"} @ t_1365 -> (T_Int64) @ t_1366 -> {"MutableArrayArray#" %s_125} @ t_1367 -> (T_Int64) @ t_1368 -> (T_Int64) @ t_1369 -> {"State#" %s_125} @ t_1370 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1371
+    "copyMutableArrayArray#"       :: {"MutableArrayArray#" %s_126} @ t_1372 -> (T_Int64) @ t_1373 -> {"MutableArrayArray#" %s_126} @ t_1374 -> (T_Int64) @ t_1375 -> (T_Int64) @ t_1376 -> {"State#" %s_126} @ t_1377 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1378
+
+dead code elimination ideas:
+  find dead/unused:
+    constructors = never pattern matched
+    closure = never called
+
+Q:
+  how are these related to dead code / dead data:
+    - reachable code
+    - referred value
+    - called code

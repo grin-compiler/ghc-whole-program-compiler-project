@@ -1,0 +1,169 @@
+name:                lambda
+version:             0.1.0.0
+
+homepage:            https://github.com/grin-compiler/ghc-whole-program-compiler-project
+license:             BSD3
+license-file:        LICENSE
+author:              Csaba Hruska, Andor Penzes
+maintainer:          csaba.hruska@gmail.com
+copyright:           2021 Csaba Hruska
+category:            Compiler
+build-type:          Simple
+
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:
+    Lambda.TH
+    Lambda.Parse
+    Lambda.Pretty
+    Lambda.Name
+    Lambda.Syntax
+    Lambda.Datalog.ToDatalog
+    Lambda.Stg.FromStg
+    Lambda.Stg.GHCPrimOps
+    Lambda.Stg.StripDeadCode
+    Lambda.GHC.RtsAbstractModel
+    Lambda.Util
+    Lambda.Lint
+    Lambda.Transformation.StaticSingleAssignment
+    Lambda.Transformation.ClosureConversion
+    Lambda.Analysis.ControlFlowAnalysisM
+    Transformations.Names
+    Transformations.Util
+
+  build-depends:
+      base
+    , containers
+    , mtl
+    , bytestring
+    , recursion-schemes
+    , ansi-wl-pprint
+    , megaparsec
+    , neat-interpolation
+    , text
+    , vector
+    , template-haskell
+    , process
+    , temporary
+    , filepath
+    , directory
+    , free
+    , comonad
+    , binary
+    , external-stg
+    , transformers
+    , hashable
+
+  default-language:    Haskell2010
+
+
+source-repository head
+  type:     git
+  location: https://github.com/grin-compiler/ghc-whole-program-compiler-project
+
+
+test-suite lambda-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  default-extensions:  OverloadedStrings
+  build-depends:       base >=4.11
+                     , containers
+                     , filepath
+                     , functor-infix
+                     , lambda
+                     , hspec
+                     , hspec-core
+                     , hspec-discover
+                     , QuickCheck
+                     , deepseq
+                     , vector
+                     , text
+                     , random
+                     , microlens
+                     , transformers
+                     , mtl
+                     , ansi-wl-pprint
+                     , pretty-show
+                     , directory
+                     , inline-c
+
+  other-modules:
+                     CBySpec
+                     CFASpec
+                     ParserSpec
+                     PrimOpArraySpec
+                     PrimOpCCSSpec
+                     PrimOpExceptionSpec
+                     PrimOpMutVarSpec
+                     PrimOpMVarSpec
+                     PrimOpStablePtrSpec
+                     PrimOpSTMSpec
+                     PrimOpWeakPtrSpec
+  default-language:    Haskell2010
+
+executable mklampak
+  default-language:    Haskell2010
+  hs-source-dirs:      app
+  main-is:             mklampak.hs
+  build-depends:       base
+                     , containers
+                     , exceptions
+                     , optparse-applicative
+                     , filepath
+                     , directory
+                     , temporary
+                     , mtl
+                     , bytestring
+                     , binary
+                     , ansi-wl-pprint
+                     , zip
+                     , external-stg
+                     , lambda
+
+executable mkfacts
+  default-language:    Haskell2010
+  hs-source-dirs:      app
+  main-is:             mkfacts.hs
+  build-depends:       base
+                     , containers
+                     , optparse-applicative
+                     , filepath
+                     , directory
+                     , mtl
+                     , bytestring
+                     , zip
+                     , external-stg
+
+executable strip-fullpak
+  default-language:    Haskell2010
+  hs-source-dirs:      app
+  main-is:             strip-fullpak.hs
+  build-depends:       base
+                     , containers
+                     , exceptions
+                     , optparse-applicative
+                     , filepath
+                     , directory
+                     , mtl
+                     , bytestring
+                     , binary
+                     , zip
+                     , external-stg
+                     , lambda
+
+executable catlambda
+  default-language:    Haskell2010
+  hs-source-dirs:      app
+  main-is:             catlambda.hs
+  build-depends:       base
+                     , containers
+                     , optparse-applicative
+                     , filepath
+                     , directory
+                     , mtl
+                     , bytestring
+                     , zip
+                     , external-stg

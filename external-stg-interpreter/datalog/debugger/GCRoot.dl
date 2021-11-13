@@ -1,0 +1,37 @@
+
+/*
+  active thread's
+    stack
+    current result
+
+  current closure
+  stable pointers
+
+  static env?
+*/
+.decl GCRootRef(r : RefTy)
+.printsize GCRootRef
+
+GCRootRef([addr, ns]) :-
+  StablePointer(_, a),
+  AtomToRef(a, ns, addr).
+
+GCRootRef([addr, $R_HeapPtr]) :-
+  CurrentClosureAddr(addr).
+
+GCRootRef([addr, ns]) :-
+  ThreadState(tid, status, _, stackId),
+  status != "ThreadFinished",
+  status != "ThreadDied",
+  ( Stack_ApplyArg(stackId, _, _, a)
+  ; Stack_CaseOfEnv(stackId, _, _, _, a)
+  ; Thread_CurrentResult(tid, _, a)
+  ),
+  AtomToRef(a, ns, addr).
+
+/*
+GCRootRef([addr, $R_HeapPtr]) :-
+  HeapStartAddress(addr_heap_start),
+  AtomToRef(_, $R_HeapPtr, addr),
+  addr < addr_heap_start.
+*/

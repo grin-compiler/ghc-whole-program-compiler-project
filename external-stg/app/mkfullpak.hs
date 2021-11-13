@@ -12,8 +12,6 @@ import Codec.Archive.Zip.Unix
 import Text.Printf
 
 import qualified Data.Map as Map
-import Data.Containers.ListUtils (nubOrd)
-import Data.List (sort)
 
 import Stg.Program
 import qualified Stg.GHC.Symbols as GHCSymbols
@@ -51,20 +49,22 @@ main = do
 
   let modpakMap       = Map.fromList [(modModpakPath m , m) | m <- modinfoList]
       fullpakModules  = [modpakMap Map.! m | m <- appModpaks]
-
-      ppSection l     = unlines ["- " ++ x | x <- nubOrd $ map show l]
-
       fullpakName     = ghcstgappPath -<.> ".fullpak"
 
   putStrLn $ "creating " ++ fullpakName
   createArchive fullpakName $ do
     -- top level info
     let content = BS8.pack $ unlines
-          [ "modules:", ppSection . sort $ map modModuleName fullpakModules
+          [ "modules:", printSection $ map modModuleName fullpakModules
           ]
     appinfo <- mkEntrySelector "app.info"
     addEntry Deflate content appinfo
     setExternalFileAttrs (fromFileMode 0o0644) appinfo
+
+    -- add .ghc_stgapp to .fullpak
+    app_ghcstgapp <- mkEntrySelector "app.ghc_stgapp"
+    loadEntry Deflate app_ghcstgapp ghcstgappPath
+    setExternalFileAttrs (fromFileMode 0o0644) app_ghcstgapp
 
     -- copy module content
     forM_ fullpakModules $ \StgModuleInfo{..} -> do
@@ -76,6 +76,7 @@ main = do
             , "module.hs"
             , "module.cmm"
             , "module.s"
+            , "module.info"
             ]
       forM_ files $ \fn -> do
         (src, dst) <- liftIO $ do

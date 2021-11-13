@@ -1,0 +1,420 @@
+#include "StgState.dl"
+#include "GCRoot.dl"
+#include "DataSize.dl"
+#include "RetainedSize.dl"
+
+.decl Thunk(addr : number, isLNE : symbol, closure_name : Id, origin_name : Id)
+.output Thunk
+
+Thunk(addr, isLNE, closure_name, origin_name) :-
+  HeapStartAddress(start),
+  Heap_Closure(addr, isLNE, closure_name, _, _, missing),
+  addr >= start,
+  missing = 0,
+  Origin(addr, origin_name, _, _).
+
+.decl ThunkStat(i : number, closure_name : Id, origin_name : Id)
+.output ThunkStat
+
+ThunkStat(c, n, o) :-
+  Thunk(_, _, n, o),
+  c = count : { Thunk(_, _, n, o) }.
+
+.decl ConStat(i : number, conName : symbol, arity : unsigned, origin : Id)
+.output ConStat
+
+.decl DynCon(i : number, conName : symbol, arity : unsigned, origin : Id)
+
+DynCon(addr, n, a, origin_name) :-
+  HeapStartAddress(start),
+  Heap_Con(addr, _, n, a),
+  addr >= start,
+  Origin(addr, origin_name, _, _).
+
+ConStat(c, n, a, o) :-
+  DynCon(_, n, a, o),
+  c = count : { DynCon(_, n, _, o)}.
+
+.printsize Thunk, ThunkStat, ConStat, DynCon
+
+/////////////////////////////////////////////
+/*
+.decl NotThunk(addr : number)
+
+NotThunk(addr) :-
+  HeapStartAddress(start),
+  Origin(addr, _, _, _),
+  addr >= start,
+  !Thunk(addr, _, _, _).
+
+.decl ConArgThunks(thunk_count : number, non_thunk_count : number, con : symbol, arg : unsigned)
+.printsize ConArgThunks, ConArgThunksT, ConArgThunksN
+.output ConArgThunks, ConArgThunksT, ConArgThunksN
+
+ConArgThunks(t, n, con, idx) :-
+  ConArgThunksT(t, con, idx),
+  ConArgThunksN(n, con, idx).
+
+.decl ConArgThunksT(c : number, con : symbol, arg : unsigned)
+.decl ConArgThunksN(c : number, con : symbol, arg : unsigned)
+
+ConArgThunksT(thunk_count, con, i) :-
+  ConArgHeapAddr(_, con, i, _),
+  thunk_count = count : { ConArgHeapAddr(_, con, i, arg_addr), Thunk(arg_addr, _, _, _) }.
+
+ConArgThunksN(non_thunk_count, con, i) :-
+  ConArgHeapAddr(_, con, i, _),
+  non_thunk_count = count : { ConArgHeapAddr(_, con, i, arg_addr), NotThunk(arg_addr) }.
+
+// workaround
+.decl ConArgHeapAddr(addr : number, con : symbol, idx : unsigned, arg_addr : number)
+
+ConArgHeapAddr(con_addr, con, i, arg_addr) :-
+  DynCon(con_addr, con, arity, _),
+  i = range(0, arity),
+  Heap_ConArg(con_addr, i, arg_atom),
+  AtomToRef(arg_atom, $R_HeapPtr, arg_addr).
+*/
+/////////////////////////////////////////////
+
+.type RefTy =
+  [ ref : number
+  , ns  : RefNamespace
+  ]
+
+.decl SelectedRoot(r : RefTy)
+.decl SelectedFrom(r : RefTy)
+.decl SelectedTo(r : RefTy)
+.decl Selected(r : RefTy)
+
+SelectedFrom(r) :-
+  ( SelectedRoot(r)
+//  ; GCRootRef(r)
+  ).
+SelectedTo(r) :-
+  SelectedRoot(r).
+
+SelectedFrom(from) :-
+  SelectedFrom(to),
+  Ref(from, to),
+  !GCRootRef(from),
+  !GCRootRef(to).
+
+SelectedTo(to) :-
+  SelectedTo(from),
+  Ref(from, to),
+  !GCRootRef(from),
+  !GCRootRef(to).
+
+// utility reference graph
+
+.decl Ref(from : RefTy, to : RefTy)
+
+Ref([from, $R_HeapPtr], [to, toNS]) :-
+  ( Heap_ConArg(from, _, a)
+  ; Heap_ClosureArg(from, _, a)
+  ; Heap_ClosureEnv(from, _, _, a)
+  ; Heap_ApStackResult(from, _, a)
+  ),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_Array], [to, toNS]) :-
+  ArrayArg(from, _, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_MutableArray], [to, toNS]) :-
+  MutableArrayArg(from, _, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_SmallArray], [to, toNS]) :-
+  SmallArrayArg(from, _, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_SmallMutableArray], [to, toNS]) :-
+  SmallMutableArrayArg(from, _, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_ArrayArray], [to, toNS]) :-
+  ArrayArrayArg(from, _, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_MutableArrayArray], [to, toNS]) :-
+  MutableArrayArrayArg(from, _, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_MutVar], [to, toNS]) :-
+  MutVar(from, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_StablePointer], [to, toNS]) :-
+  StablePointer(from, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_StableName], [to, toNS]) :-
+  StableName(from, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_MVar], [to, toNS]) :-
+  MVar_Value(from, _, a),
+  AtomToRef(a, toNS, to).
+
+Ref([from, $R_WeakPointer], [to, toNS]) :-
+  ( WeakPointer(from, a, _, _, _, _)
+  ; WeakPointer_Value(from, _, a)
+  ; WeakPointer_Finalizer(from, _, a)
+  ; WeakPointer_CFinalizer(from, _, a, _, _) // fun
+  ; WeakPointer_CFinalizer(from, _, _, a, _) // data
+  ; WeakPointer_CFinalizer_Env(from, _, _, a)
+  ),
+  AtomToRef(a, toNS, to).
+
+// TODO: add ApStack Refs
+
+/*
+
+.decl MVar_Queue(mv : number, idx : unsigned, thread_id : number) ???? this is a weak reference, if the thead is killed then it will be removed from this queue also
+
+*/
+
+.decl NSName(ns : RefNamespace, n : symbol)
+
+NSName($R_HeapPtr,            "R_HeapPtr").
+NSName($R_Array,              "R_Array").
+NSName($R_MutableArray,       "R_MutableArray").
+NSName($R_ArrayArray,         "R_ArrayArray").
+NSName($R_MutableArrayArray,  "R_MutableArrayArray").
+NSName($R_MutableByteArray,   "R_MutableByteArray").
+NSName($R_MutVar,             "R_MutVar").
+NSName($R_MVar,               "R_MVar").
+NSName($R_SmallArray,         "R_SmallArray").
+NSName($R_SmallMutableArray,  "R_SmallMutableArray").
+NSName($R_StableName,         "R_StableName").
+NSName($R_StablePointer,      "R_StablePointer").
+NSName($R_WeakPointer,        "R_WeakPointer").
+NSName($R_ThreadId,           "R_ThreadId").
+
+.decl GephiNode(Id : number, ref_value : number, ref_ns : RefNamespace,
+                note : symbol, kind : symbol, is_selection_root : symbol,
+                phase : symbol, phase_start_marker_idx : number,
+                retained_size : unsigned)
+.decl GephiEdge(Source : number, Target : number)
+.output GephiNode (headers=true)
+.output GephiEdge (headers=true)
+
+GephiNode(uniq, addr, ns, cat(o, cat(" ; phase: ", to_string(phase_start_marker_idx))), kind, label, phase, phase_start_marker_idx, retained_size) :-
+  Selected(r),
+  RefPhase(r, phase, phase_start_marker_idx),
+  UnboxRef(r, addr, ns, uniq),
+  RefRetainedSize(r, retained_size),
+  ( ns = $R_HeapPtr, HeapNote(addr, kind, o0), Origin(addr, origin_name, _, _), o = cat(o0, cat(" ; origin: ", origin_name))
+  ; ns != $R_HeapPtr, NSName(ns, o), NSName(ns, kind)
+  ),
+  ( SelectedRoot(r), label = "Selected-Root"
+  ; !SelectedRoot(r), label = ""
+  ).
+
+GephiEdge(from, to) :-
+  Ref(f, t),
+  Selected(f),
+  Selected(t),
+  UnboxRef(f, _, _, from),
+  UnboxRef(t, _, _, to).
+
+//////////
+// source projection
+// Q: is this cork?
+
+.decl GephiNode2(Id : number, note : symbol, size : number, kind : symbol, phase : symbol, phase_start_marker_idx : number, retained_size : unsigned)
+.decl GephiEdge2(Source : number, Target : number, Weight : number, size : number)
+.output GephiNode2 (headers=true)
+.output GephiEdge2 (headers=true)
+
+.decl GephiNode2_tmp(note : symbol, size : number, kind : symbol, phase : symbol, phase_start_marker_idx : number, retained_size : unsigned)
+GephiNode2_tmp(o, c, kind, phase, pidx, retained_size) :-
+  GephiNode(_, _, _, o, kind, _, phase, pidx, _),
+  c = count : { GephiNode(_, _, _, o, kind, _, phase, pidx, _) },
+  retained_size = sum s : { GephiNode(_, _, _, o, kind, _, phase, pidx, s) }.
+
+GephiNode2($, o, c, k, p, pidx, retained_size) :-
+  GephiNode2_tmp(o, c, k, p, pidx, retained_size).
+
+.decl GephiEdge2_tmp(from_note : symbol, to_note : symbol)
+GephiEdge2_tmp(from_note, to_note) :-
+  GephiEdge(from, to),
+  GephiNode(from, _, _, from_note, _, _, _, _, _),
+  GephiNode(to, _, _, to_note, _, _, _, _, _).
+
+GephiEdge2(f, t, c, c) :-
+  GephiEdge2_tmp(from_note, to_note),
+  GephiNode2(f, from_note, _, _, _, _, _),
+  GephiNode2(t, to_note, _, _, _, _, _),
+  c = count : {
+        GephiEdge(from, to),
+        GephiNode(from, _, _, from_note, _, _, _, _, _),
+        GephiNode(to, _, _, to_note, _, _, _, _, _)
+  }.
+
+
+////////////////
+
+.decl UnboxRef(r : RefTy, addr : number, ns : RefNamespace, uniq : number)
+
+UnboxRef([addr, ns], addr, ns, $) :- Selected([addr, ns]).
+
+////////////////
+// .decl Origin(heap_addr : number, closure_name : Id, closure_addr : number, thread_id : number)
+/*
+  .decl ThunkStat(i : number, closure_name : Id, origin_name : Id)
+
+  11469   base_GHC.IO.Unsafe.sat_sDy    base_GHC.IO.Unsafe.unsafeDupableInterleaveIO1
+*/
+/*
+SelectedRoot([addr, $R_HeapPtr]) :-
+  closure_name = "base_GHC.IO.Unsafe.sat_sDy",
+  origin_name = "base_GHC.IO.Unsafe.unsafeDupableInterleaveIO1",
+  Thunk(addr, _, closure_name, origin_name).
+*/
+/*
+21273427	False	base_GHC.IO.Unsafe.sat_sDy	base_GHC.IO.Unsafe.unsafeDupableInterleaveIO1
+*/
+
+
+////////////////////////////////////
+// current experiment: GHC.Tc.Types.Env
+// facts: facts-original-ghc
+//
+//    ---- 158	ghc_GHC.IfaceToCore.sat_sgqQ	ghc_GHC.IfaceToCore.sat_sgqR
+//21488109	False	ghc_GHC.IfaceToCore.sat_sgqQ	ghc_GHC.IfaceToCore.sat_sgqR
+//SelectedRoot([21488109, $R_HeapPtr]).
+/////////////////////////////////////
+
+/*
+SelectedRoot([max_addr, $R_HeapPtr]) :-
+  closure_name = "ghc_GHC.IfaceToCore.sat_sgqP",
+  origin_name = "ghc_GHC.IfaceToCore.sat_sgqQ",
+  max_addr = max addr : {Thunk(addr, _, closure_name, origin_name)}.
+*/
+//158	ghc_GHC.IfaceToCore.sat_sgqP	ghc_GHC.IfaceToCore.sat_sgqQ
+
+/*
+// check WeakPointers
+SelectedRoot([wp, $R_WeakPointer]) :-
+  WeakPointer(wp, _, _, _, _, _).
+*/
+/*
+// check all HomePackageTable and what it retains
+SelectedRoot([r, ns]) :-
+  Heap_Con(con, _, "ghc_GHC.Driver.Types.HscEnv", _),
+  Heap_ConArg(con, 4, a), // HINT: hsc_HPT :: HomePackageTable
+  AtomToRef(a, ns, r).
+*/
+/*
+  ghc_GHC.Driver.Types.HscEnv
+  .decl Heap_Con(addr : number, isLNE : symbol, conName : symbol, arg_count : unsigned)
+  .decl Heap_ConArg(addr : number, idx : unsigned, atom : Atom)
+*/
+//Selected(x) :- SelectedTo(x).
+
+/*
+  add to node:
+    - age (alias address)
+    done - origin
+    done - gc root
+*/
+//////
+//select all
+/*
+SelectedRoot([v, $R_HeapPtr]) :-
+  HeapStartAddress(start),
+  AtomToRef(_, $R_HeapPtr, v),
+  v >= start.
+*/
+////////////////
+
+.decl HeapNote(addr : number, kind : symbol, note : symbol)
+.output HeapNote
+
+HeapNote(addr, "constructor", cat(kind_str, arity_str)) :-
+  Heap_Con(addr, _, name, arity),
+  kind_str = cat("Con : ", name),
+  arity_str = cat(" ; arity: ", to_string(arity)).
+
+HeapNote(addr, kind, cat(kind_str, cat(cat(env_str, arg_str), missing_str))) :-
+  Heap_Closure(addr, _, name, env_count, arg_count, missing),
+  ( kind = "thunk", missing = 0
+  ; kind = "closure", missing > 0
+  ),
+  kind_str = cat("Clo : ", name),
+  env_str = cat(" ; env_count: ", to_string(env_count)),
+  arg_str = cat(" ; arg_count: ", to_string(arg_count)),
+  missing_str = cat(" ; missing: ", to_string(missing)).
+
+HeapNote(addr, "BlackHole", cat("BlackHole : ", desc)) :-
+  Heap_BlackHole(addr, desc).
+
+HeapNote(addr, "ApStack", cat("ApStack : ", cat(result_str, stack_str))) :-
+  Heap_ApStack(addr, result_count, stack_count),
+  result_str = cat(" ; result_count: ", to_string(result_count)),
+  stack_str  = cat(" ; stack_count: ", to_string(stack_count)).
+
+HeapNote(addr, "RaiseException", cat("RaiseException : ", ex)) :-
+  Heap_RaiseException(addr, ex).
+
+///////////////////////////////////////////////////////////////////////
+
+
+/*
+  .type RefTy =
+    [ ref : number
+    , ns  : RefNamespace
+    ]
+  .decl TraceMarker(name : symbol, idx : unsigned, ns : RefNamespace, value : number)
+  .decl CurrentAddressState(r : RefNamespace, value : number)
+*/
+
+.decl Phase(name : symbol, start_marker_idx : number, ns : RefNamespace, value_start : number, value_end : number)
+
+Phase(name, as(idx, number), ns, start, end) :-
+  TraceMarker(start_name, idx, ns, start),
+  TraceMarker(end_name, idx + 1, ns, end),
+  name = cat(start_name, cat(" - ", cat(end_name, cat(" ; marker_idx: ", to_string(idx))))).
+
+Phase(name, as(idx, number), ns, start, end) :-
+  idx = max i : {TraceMarker(_, i, _, _)},
+  TraceMarker(start_name, idx, ns, start),
+  CurrentAddressState(ns, end),
+  name = cat(start_name, cat(" - [PROGRAM_END] ; marker_idx: ", to_string(idx))).
+
+Phase(name, -1, ns, 0, start) :-
+  TraceMarker(start_name, 0, ns, start),
+  name = cat("[PROGRAM_START] - ", start_name).
+
+.decl RefPhase(r : RefTy, phase : symbol, start_marker : number)
+
+RefPhase([r, ns], name, start_marker2) :-
+  Selected([r, ns]),
+  Phase(name, start_marker, ns, start, end),
+  start <= r, r < end,
+
+  PhaseReMap(start_marker, start_marker2).
+
+.output Phase, RefPhase
+
+.decl PhaseReMap(midx : number, new_idx : number)
+
+PhaseReMap(midx, new_idx) :-
+  Phase(_, midx, _, _, _),
+  ( midx < 6, new_idx = 0
+  ; 6   <= midx, midx <= 65,  new_idx = 1
+  ; 66  <= midx, midx <= 125, new_idx = 2
+  ; 126 <= midx, midx <= 187, new_idx = 3
+  ; 187 < midx, new_idx = 4
+  ).
+
+/*
+0
+1  A1 start    6    A1 end      65
+2  A2 start    66   A2 end      125
+3  Main start  126  Main end    187
+4
+*/

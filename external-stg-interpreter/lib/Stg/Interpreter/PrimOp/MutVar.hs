@@ -46,7 +46,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     apFun <- readHeapClosure rtsApplyFun1Arg
     lazyNewTup2Value <- HeapPtr <$> allocAndStore (apFun {hoCloArgs = [fun, old], hoCloMissing = 0})
 
-    -- get the first value ud the pair
+    -- get the first value of the pair
     tup2Prj0 <- readHeapClosure rtsTuple2Proj0
     lazyNewMutVarValue <- HeapPtr <$> allocAndStore (tup2Prj0 {hoCloArgs = [lazyNewTup2Value], hoCloMissing = 0})
 

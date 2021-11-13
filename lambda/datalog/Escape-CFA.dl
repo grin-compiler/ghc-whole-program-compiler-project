@@ -1,0 +1,134 @@
+/*
+  PNode origin
+    - function as value: argument, move, return value ; only for know functions
+    - mutvar atomic primop ; only for known functions
+
+  ExecCall origin ; utility relation or CFA module (internal use)
+    - AST call ; handled in Escape.dl
+    - CallPNode1
+    - CallPNode2
+
+  INVARIANT:
+    ApplyChain contains only known function
+
+*/
+
+/*
+  unknown function call cases:
+    - ast call                      ; unknown function is directly called in the AST ; handled in Escape.dl
+    - CallPNode1 / CallPNode2 call  ; unknown function is called by a primop
+    - ApplyChain call               ; unknown function is called in an overapplication
+
+*/
+
+// CASE: ApplyChain can not consume all call argument due to unknown function
+
+// arguments
+USED("Escape-CFA-ApplyChain-arguments")
+Escaped(arg) :-
+  ApplyChain(ns, r, fun, _, consumed, arg_count),
+  consumed < arg_count,
+  ReturnValue(fun, unknown_pnode),
+  OuterOrigin(unknown_pnode),
+  // remaining call arguments
+  call_arg_i >= consumed,
+  call_arg_i < arg_count,
+  ExecCallArgument(ns, r, _, call_arg_i, arg).
+
+// return value
+USED("Escape-CFA-ApplyChain-return-value")
+PointsTo(r, "outer-origin") :-
+  ApplyChain(_, r, fun, _, consumed, arg_count),
+  consumed < arg_count,
+  ReturnValue(fun, unknown_pnode),
+  OuterOrigin(unknown_pnode).
+
+// CASE: CallPNode1 / CallPNode2 call for unknown function
+
+// arguments
+USED("Escape-CFA-ExecCall-arguments")
+Escaped(arg) :-
+  ExecCallArgument(_, _, unknown_fun, _, arg),
+  OuterOrigin(unknown_fun).
+
+// return value
+USED("Escape-CFA-ExecCall-return-value")
+PointsTo(r, "outer-origin") :-
+  ExecCall(_, r, unknown_fun, _),
+  OuterOrigin(unknown_fun).
+
+// CASE: escaping PNode
+
+// arguments: mark the unbound function parameters escaped
+USED("Escape-CFA-escaped-PNode-args")
+Escaped(p) :-
+  PNode(r, fun, arity, missing),
+  OuterOrigin(r),
+  arity - missing <= i, i < arity,
+  CodeParameter(fun, i, p).
+
+// return value: mark the function return value escaped
+USED("Escape-CFA-escaped-PNode-return-value")
+Escaped(v) :-
+  PNode(r, fun, _, _),
+  OuterOrigin(r),
+  ReturnValue(fun, v).
+
+/*
+  Q: what about escaping:
+      + constructors?     DONE
+      + primop results?   DONE
+      + containers?       DONE
+*/
+
+USED("Escape-CFA-escaped-Node-argument")
+Escaped(arg) :-
+  OuterOrigin(v),
+  NodeOrigin(v, node),
+  NodeRole(v, "node"), // HINT: literals are not tracked by the escape analysis, only nodes are
+  NodeArgument(node, _, arg).
+
+USED("Escape-CFA-escaped-ExternalOrigin-container")
+Escaped(arg) :-
+  OuterOrigin(v),
+  ExternalOrigin(v, ext_result, _),
+  ( Array(ext_result, _, arg)
+  ; MVar(ext_result, _, arg)
+  ; MutVar(ext_result, _, arg)
+  ; TVar(ext_result, _, arg)
+  ; WeakPtr(ext_result, _, arg)
+  ; WeakFinalizer(ext_result, arg)
+  ).
+
+USED("Escape-CFA-escaped-ExternalFunction-result")
+Escaped(arg) :-
+  OuterOrigin(v),
+  ExternalOrigin(v, ext_result, _),
+  TypeVarPointsTo(ext_result, _, arg).
+
+/*
+  HINT: assumptions when outer clusters exist
+    exceptions can come from anywhere
+    sparks can be come from outside of the current cluster also
+
+  IDEA: this assumption/constraint might be relaxed with the escape analysis + spark primop tracking
+*/
+USED("Escape-CFA-escaped-spark-and-exception")
+Spark("outer-origin"),
+RaisedEx("outer-origin") :-
+  ( CalledByOuterCode(_)
+  ; OuterCode(_)
+  ).
+
+/*
+  abstract values:
+  - IsFunction      ; handled in PNode rule
+  - IsClosure       ; handled in PNode rule
+  - PNode           ; handled in PNode rule
+  - ApplyChain      ; handlel in ApplyChain rule
+
+  - Node            ; handled in Escape-CFA-escaped-Node-argument
+  - NodeOrigin      ; handled in Escape-CFA-escaped-Node-argument
+  - ExternalOrigin  ; handled in ExternalFunction-result
+  - container       ; handled in ExternalOrigin-container
+*/

@@ -1,0 +1,180 @@
+/*
+.type External <: symbol
+.type Function <: symbol
+.type Variable <: symbol
+.type CodeName = Function | Variable | External
+*/
+#define External symbol
+#define Function symbol
+#define Variable symbol
+#define CodeName symbol
+.type Tag <: symbol
+.type Mode <: symbol  // 'lazy' or 'strict'
+.type Eff <: symbol   // 'pure' or 'effectful'
+.type Role <: symbol  // 'lit'  or 'node'
+.type ExternalKind <: symbol  // 'ffi' or 'primop'
+
+// strictness context
+.decl EvalMode(result:Variable, mode:Mode)
+
+// variable
+.decl Move(result:Variable, value:Variable)
+
+// node value
+.decl NodeRole(result_node:Variable, r:Role)
+.decl Node(result_node:Variable, t:Tag)
+.decl NodeArgument(result_node:Variable, i:number, item:Variable)
+
+// app a.k.a. call
+.decl Call(call_result:Variable, f:CodeName, arg_count:number)
+.decl CallArgument(call_result:Variable, i:number, value:Variable)
+
+// function
+// example: f param0 param1 = ...
+.decl IsFunction(f:CodeName)
+.decl FunctionParameter(f:Function, i:number, parameter:Variable)
+
+// case + alt
+.decl Case(case_result:Variable, scrutinee:Variable)
+.decl Alt(case_result:Variable, alt_value:Variable, t:Tag)
+.decl AltParameter(alt_value:Variable, i:number, parameter:Variable)
+
+// closure
+// example: result = \[captured0 captured1] param0 param1 = ...
+.decl IsClosure(result:CodeName)
+.decl ClosureVariable(result:Variable, i:number, captured:Variable)
+.decl ClosureParameter(result:Variable, i:number, parameter:Variable)
+
+// return value
+.decl ReturnValue(n:CodeName, value:Variable)
+
+// instruction ordering
+.decl FirstInst(n:CodeName, result:Variable)
+.decl NextInst(prev:Variable, next:Variable)
+
+// letrec
+.decl RecGroup(first:Variable, v:Variable)
+
+// external types
+.decl TypeNode(ty_node:Variable, t:Tag)
+.decl TypeNodeArgument(ty_node:Variable, i:number, item:Variable)
+.decl IsTypeVariable(v:Variable) // tells if it refers to a corresponding TypeNode
+
+// higher order external types
+.decl FunctionType(ty_fun:Variable, arity:number)
+.decl FunctionTypeParameterType(ty_fun:Variable, i:number, ty_node:Variable)
+.decl FunctionTypeReturnType(ty_fun:Variable, ty_node:Variable)
+
+// external
+.decl ExternalFunction(f:External, eff:Eff, arity:number, kind:ExternalKind)
+.decl ExternalParameterType(f:External, i:number, ty_node:Variable)
+.decl ExternalReturnType(f:External, ty_node:Variable)
+
+// static data, the value is encoded as lit node
+.decl IsStaticData(v:Variable)
+
+// arity
+.decl CodeArity(n:CodeName, arity:number)
+
+// constructor definitions
+.decl ConGroup(type_name : symbol, con_count : number)
+.decl ConSpec(type_name : symbol, con_name : symbol, arg_count : number)
+.decl ConSpecArg(con_name : symbol, arg_idx : number, prim_rep : symbol)
+
+.input EvalMode
+.input Move
+.input NodeRole
+.input Node
+.input NodeArgument
+.input Call
+.input CallArgument
+.input IsFunction
+.input FunctionParameter
+.input Case
+.input Alt
+.input AltParameter
+.input IsClosure
+.input ClosureVariable
+.input ClosureParameter
+.input ReturnValue
+.input FirstInst
+.input NextInst
+.input RecGroup
+.input ExternalFunction
+.input ExternalParameterType
+.input ExternalReturnType
+.input CodeArity
+.input TypeNode
+.input TypeNodeArgument
+.input IsTypeVariable
+.input FunctionType
+.input FunctionTypeParameterType
+.input FunctionTypeReturnType
+.input IsStaticData
+.input ConGroup, ConSpec, ConSpecArg
+
+// utility
+.decl HasInst(n:CodeName, v:Variable)
+
+HasInst(n, v) :-
+  FirstInst(n, v).
+HasInst(n, v) :-
+  HasInst(n, v0),
+  NextInst(v0, v).
+
+.output HasInst
+
+// unify functions and closures
+.decl CodeParameter(f:CodeName, i:number, parameter:Variable)
+
+CodeParameter(f, i, p) :- (FunctionParameter(f, i, p) ; ClosureParameter(f, i, p)).
+
+// utility for return type extraction
+.decl RetTup1Node0(ext:External, ty_node:Variable)
+.decl RetTup(ext:External, tag:Tag, i:number, ty_node:Variable)
+
+.output RetTup1Node0
+.output RetTup
+
+// i.e. {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+RetTup1Node0(ext, ty_node) :-
+  ExternalReturnType(ext, ty_res),
+  TypeNode(ty_res, "ghc-prim_GHC.Prim.Unit#"),
+  TypeNodeArgument(ty_res, 0, ty_node).
+
+// i.e. {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
+RetTup(ext, tag, i, ty_node) :-
+  ExternalReturnType(ext, ty_res),
+  TypeNode(ty_res, tag),
+  TypeNodeArgument(ty_res, i, ty_node).
+
+// name use/def utility
+.decl DefinedName(v:symbol)
+.output DefinedName
+
+DefinedName(v) :-
+  ( Move(v, _)
+  ; Node(v, _)
+  ; Call(v, _, _)
+  ; IsFunction(v)
+  ; FunctionParameter(_, _, v)
+  ; Case(v, _)
+  ; Alt(_, v, _)
+  ; AltParameter(_, _, v)
+  ; IsClosure(v)
+  ; ClosureParameter(_, _, v)
+  ; ExternalFunction(v, _, _, _) // HINT: primops and C land FFI
+  ).
+
+.decl UsedName(v:symbol)
+.output UsedName
+
+UsedName(v) :-
+  ( Move(_, v)
+  ; (NodeArgument(n, _, v), NodeRole(n, "node")) // HINT: ignore literal node values, those are constants and not variables
+  ; Call(_, v, _)
+  ; CallArgument(_, _, v)
+  ; Case(_, v)
+  ; ClosureVariable(_, _, v)
+  ; ReturnValue(_, v)
+  ).

@@ -1,0 +1,144 @@
+
+//////////////////////////
+// input facts
+//////////////////////////
+
+// NOTE: either called form other clusters or via FFI (used as code library)
+.decl CalledByOuterCode(v:symbol)
+.input CalledByOuterCode
+
+// Q: should we merge CalledByOuterCode and InitialReachable?
+
+//////////////////////////
+// inferred facts
+//////////////////////////
+
+.decl OuterCode(v:symbol)
+.output OuterCode
+
+OuterCode(v) :-
+  UsedName(v),
+  !DefinedName(v).
+
+/*
+  convenient input API (AST defines the cluster)
+  implicit
+    OuterCode: infer => referred, but does not have binding
+
+  explicit
+    CalledByOuterCode
+*/
+
+// analysis
+
+.decl OuterOrigin(v:Variable)
+.output OuterOrigin
+
+.decl Escaped(v:Variable)
+.output Escaped
+
+OuterOrigin(v) :- Escaped(v).
+
+//////////////////////////
+// source of outer origin
+//////////////////////////
+
+OuterOrigin("outer-origin"). // HINT: pre-defined outer origin, used by some primops
+
+// direct origin for top level outer functions
+OuterOrigin(v) :- OuterCode(v).
+
+// direct origin for outer parameters
+OuterOrigin(v) :-
+  CalledByOuterCode(f),
+  CodeParameter(f, _, v).
+
+
+//////////////////////////
+// initially reachable functions
+//////////////////////////
+
+ReachableCode(f) :-
+  CalledByOuterCode(f).
+
+//////////////////////////
+// function call
+//////////////////////////
+
+USED("Escape-call-return-value")
+OuterOrigin(r) :-
+  REACHABLE(r)
+  Call(r, f, _),
+  EvalMode(r, "strict"),
+  OuterOrigin(f).
+
+USED("Escape-call-argument")
+Escaped(arg) :-
+  REACHABLE(r)
+  Call(r, f, _),
+  EvalMode(r, "strict"),
+  OuterOrigin(f),
+  CallArgument(r, _, arg).
+
+//////////////////////////
+// pattern match
+//////////////////////////
+
+// scrutinee projection to alt value ; OuterOrigin
+USED("Escape-pattern-match-alt-value")
+MatchedAlt(case_result, alt_val),
+OuterOrigin(alt_val) :-
+  REACHABLE(case_result)
+  Case(case_result, scrut),
+  Alt(case_result, alt_val, _),
+  OuterOrigin(scrut).
+
+USED("Escape-pattern-match-alt-parameter")
+OuterOrigin(p) :-
+  ReachableCode(alt),
+  Alt(_, alt, _),
+  AltParameter(alt, _, p),
+  OuterOrigin(alt).
+
+//////////////////////////
+// other
+//////////////////////////
+
+USED("Escape-points-to")
+OuterOrigin(src) :-
+  PointsTo(src, dst),
+  OuterOrigin(dst).
+
+/*
+  TODO:
+  - tests
+*/
+
+/*
+  primos to implement
+    mvar          - done
+    arrays        - done
+    mutvar        - done
+    weakptr       - done
+    stm           - done
+    exception     - done
+    stableptr     - done
+
+    concurrency   - should work out of the box
+    parallelism   - should work out of the box
+*/
+
+/*
+  other: read CFA module
+    CallPNode1
+      ExecCallArgument
+      ExecCall
+    CallPNode2
+
+  ExecCall is created form:
+    AST Call
+    CallPNode1
+    CallPNode2
+
+  mutvar creates PNode directly
+*/

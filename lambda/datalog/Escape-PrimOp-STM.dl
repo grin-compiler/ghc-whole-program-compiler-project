@@ -1,0 +1,48 @@
+/*
+  HINT: is interpreted -/+
+
+  primop effectful
+    + "atomically#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    - "retry#"      :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "catchRetry#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "catchSTM#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "newTVar#"    :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"TVar#" %s %a}}
+    + "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "writeTVar#"  :: {"TVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
+
+  primop pure
+    - "sameTVar#" :: {"TVar#" %s %a} -> {"TVar#" %s %a} -> T_Int64
+*/
+
+
+// "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+USED("Escape-PrimOp-STM-06")
+Called(r, op),
+TypeVarPointsTo(r, ty_node, "outer-origin") :-
+  ( op = "readTVar#"
+  ; op = "readTVarIO#"
+  ),
+  REACHABLE(r)
+  Call(r, op, _),
+  // lookup tvar items
+  CallArgument(r, 0, tvar),
+  OuterOrigin(tvar),
+  // lookup result node
+  RetTup1Node0(op, ty_node).
+
+
+// "writeTVar#"  :: {"TVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
+// extend tvar
+USED("Escape-PrimOp-STM-07")
+Called(r, op),
+Escaped(item) :-
+  op = "writeTVar#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // item to write
+  CallArgument(r, 1, item),
+  // lookup tvar
+  CallArgument(r, 0, tvar),
+  OuterOrigin(tvar).

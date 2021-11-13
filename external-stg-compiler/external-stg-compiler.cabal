@@ -82,6 +82,37 @@ executable gen-obj
                      , external-stg-compiler
   default-language:    Haskell2010
 
+executable gen-exe2
+  hs-source-dirs:      app
+  main-is:             gen-exe2.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , ghc
+                     , external-stg
+                     , external-stg-compiler
+                     , split
+                     , async-pool
+                     , process
+                     , directory
+                     , filepath
+                     , bytestring
+
+  default-language:    Haskell2010
+
+executable gen-obj2
+  hs-source-dirs:      app
+  main-is:             gen-obj2.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , ghc
+                     , ghc-paths
+                     , directory
+                     , filepath
+                     , bytestring
+                     , external-stg
+                     , external-stg-compiler
+  default-language:    Haskell2010
+
 executable show-ghc-stg
   hs-source-dirs:      app
   main-is:             show-ghc-stg.hs
@@ -92,4 +123,20 @@ executable show-ghc-stg
                      , external-stg
                      , external-stg-compiler
                      , filepath
+  default-language:    Haskell2010
+
+executable dce-fullpak
+  hs-source-dirs:      app
+  main-is:             dce-fullpak.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , binary
+                     , external-stg
+                     , external-stg-compiler
+                     , async-pool
+                     , directory
+                     , filepath
+                     , bytestring
+                     , zip
+
   default-language:    Haskell2010

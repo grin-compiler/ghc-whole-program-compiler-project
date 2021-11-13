@@ -4,6 +4,7 @@ module Stg.Interpreter.Debugger where
 import Control.Monad.State
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import qualified Data.IntMap as IntMap
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 
 import Stg.Interpreter.Base
@@ -38,10 +39,10 @@ runDebugCommand cmd = do
   (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
   case cmd of
     CmdCurrentClosure -> do
-      Id currentClosure <- gets ssCurrentClosure
+      currentClosure <- gets ssCurrentClosure
       currentClosureAddr <- gets ssCurrentClosureAddr
       closureEnv <- gets ssCurrentClosureEnv
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure (binderUniqueName currentClosure) currentClosureAddr closureEnv
+      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure currentClosure currentClosureAddr closureEnv
 
     CmdClearClosureList -> do
       modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = Set.empty}
@@ -62,8 +63,10 @@ runDebugCommand cmd = do
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgRunProgram}
 
     CmdPeekHeap addr -> do
-      ho <- readHeap $ HeapPtr addr
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
+      heap <- gets ssHeap
+      when (IntMap.member addr heap) $ do
+        ho <- readHeap $ HeapPtr addr
+        liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
 
     CmdStop -> do
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
@@ -95,30 +98,25 @@ processCommandsUntilExit = do
     then pure ()
     else processCommandsUntilExit
 
-checkBreakpoint :: Id -> M ()
-checkBreakpoint (Id b) = do
-  let closureName = binderUniqueName b
-  markClosure closureName
-
+checkBreakpoint :: Name -> M ()
+checkBreakpoint breakpointName = do
   dbgState <- gets ssDebugState
-
   exit <- processCommandsNonBlocking
-
   case dbgState of
     DbgStepByStep -> do
       reportState
       unless exit processCommandsUntilExit
     DbgRunProgram -> do
       bkMap <- gets ssBreakpoints
-      case Map.lookup closureName bkMap of
+      case Map.lookup breakpointName bkMap of
         Nothing -> pure ()
         Just i
           | i > 0 -> do
               -- HINT: the breakpoint can postpone triggering for the requested time
-              modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.adjust pred closureName ssBreakpoints}
+              modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.adjust pred breakpointName ssBreakpoints}
 
           | otherwise -> do
-              -- HINT: trigger brakpoint
+              -- HINT: trigger breakpoint
               reportState
               modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
               unless exit processCommandsUntilExit

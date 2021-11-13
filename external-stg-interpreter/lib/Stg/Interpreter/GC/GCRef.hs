@@ -31,7 +31,7 @@ instance VisitGCRef HeapObject where
 instance VisitGCRef StackContinuation where
   visitGCRef action = \case
     CaseOf _ _ env _ _ _  -> visitGCRef action env
-    Update addr           -> action $ HeapPtr addr
+    Update addr           -> pure () -- action $ HeapPtr addr -- TODO/FIXME: this is not a GC root!
     Apply args            -> visitGCRef action args
     Catch handler _ _     -> action handler
     _                     -> pure ()
@@ -45,7 +45,7 @@ instance VisitGCRef WeakPtrDescriptor where
   -- NOTE: the value is not tracked by the GC
   visitGCRef action WeakPtrDescriptor{..} = do
     ----------- temporarly track the value -- FIXME
-    visitGCRef action wpdVale
+    visitGCRef action wpdValue
     -----------
     action wpdKey
     visitGCRef action wpdFinalizer
@@ -77,6 +77,11 @@ data RefNamespace
 
 encodeRef :: Int -> RefNamespace -> Int32
 encodeRef i ns = shiftL (fromIntegral i) 4 .|. (fromIntegral $ fromEnum ns)
+
+decodeRef :: Int32 -> (RefNamespace, Int)
+decodeRef n = (namespace, idx)
+  where namespace = toEnum $ fromIntegral (n .&. 0xf)
+        idx       = shiftR (fromIntegral n) 4
 
 visitAtom :: Atom -> (Int32 -> SouffleM ()) -> SouffleM ()
 visitAtom atom action = case atom of

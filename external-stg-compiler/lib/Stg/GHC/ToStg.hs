@@ -182,15 +182,15 @@ getBinderModule uid mod = do
       m = cvtModuleName mod
   pure $ mkModule u m
 
-cvtIdDetails :: Ext.IdDetails -> M IdDetails
-cvtIdDetails details = do
+cvtIdDetails :: Ext.IdDetails -> Ext.Name -> M IdDetails
+cvtIdDetails details uname = do
   dcMap <- gets envDataConMap
   pure $ case details of
     Ext.VanillaId       -> VanillaId
     Ext.FExportedId     -> VanillaId
     Ext.RecSelId        -> RecSelId       (error "Ext.RecSelId sel_tycon") (error "Ext.RecSelId sel_naughty")
-    Ext.DataConWorkId d -> DataConWorkId  $ Map.findWithDefault (error $ "Ext.DataConWorkId DataCon: " ++ show d) d dcMap
-    Ext.DataConWrapId d -> DataConWrapId  $ Map.findWithDefault (error $ "Ext.DataConWrapId DataCon: " ++ show d) d dcMap
+    Ext.DataConWorkId d -> DataConWorkId  $ Map.findWithDefault (error $ "Ext.DataConWorkId DataCon: " ++ show d ++ ", binder name: " ++ show uname) d dcMap
+    Ext.DataConWrapId d -> DataConWrapId  $ Map.findWithDefault (error $ "Ext.DataConWrapId DataCon: " ++ show d ++ ", binder name: " ++ show uname) d dcMap
     Ext.ClassOpId       -> ClassOpId      (error "Ext.ClassOpId Class")
     Ext.PrimOpId        -> PrimOpId       (error "Ext.PrimOpId PrimOp")
     Ext.FCallId         -> FCallId        (error "Ext.FCallId ForeignCall")
@@ -227,7 +227,7 @@ cvtIdDef b
 
 cvtNewId :: Ext.Binder -> M Id
 cvtNewId Ext.Binder{..} = do
-  details <- cvtIdDetails binderDetails
+  details <- cvtIdDetails binderDetails binderUniqueName
   nameId <- case binderScope of
     s | s == Ext.LocalScope || s == Ext.GlobalScope -> do
       name <- getFreshName OccName.varName binderUnitId binderModule binderName

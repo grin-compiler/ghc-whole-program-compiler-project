@@ -1,0 +1,10 @@
+/*
+  {-
+    Etc
+  -}
+  primop effectful
+    "traceEvent#"                 :: (T_Addr) @ t_1959 -> {"State#" %s_192} @ t_1960 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1961
+    "traceBinaryEvent#"           :: (T_Addr) @ t_1962 -> (T_Int64) @ t_1963 -> {"State#" %s_193} @ t_1964 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1965
+    "traceMarker#"                :: (T_Addr) @ t_1966 -> {"State#" %s_194} @ t_1967 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1968
+    "setThreadAllocationCounter#" :: (T_Int64) @ t_1969 -> {"State#" {RealWorld} @ t_1970} @ t_1971 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1972
+*/

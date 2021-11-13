@@ -1,0 +1,41 @@
+/*
+  HINT: is interpreted -/+
+
+  primop effectful
+    + "mkWeak#"              :: %o -> %b -> ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %c}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"Weak#" %b}}
+    + "mkWeakNoFinalizer#"   :: %o -> %b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"Weak#" %b}}
+    - "addCFinalizerToWeak#" :: T_Addr -> T_Addr -> T_Int64 -> T_Addr -> {"Weak#" %b} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    + "deRefWeak#"           :: {"Weak#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
+    + "finalizeWeak#"        :: {"Weak#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %b})}
+    - "touch#"               :: %o -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
+*/
+
+
+// "deRefWeak#" :: {"Weak#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
+USED("Escape-PrimOp-WeakPtr-03")
+Called(r, op),
+TypeVarPointsTo(r, ty_node, "outer-origin") :-
+  op = "deRefWeak#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // lookup weak ptr items
+  CallArgument(r, 0, wp),
+  OuterOrigin(wp),
+  // lookup result node
+  RetTup(op, "ghc-prim_GHC.Prim.(#,#)", 1, ty_node).
+
+
+// "finalizeWeak#"  :: {"Weak#" %a}
+//                  -> {"State#" {RealWorld}}
+//                  -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %b})}
+USED("Escape-PrimOp-WeakPtr-04")
+Called(r, op),
+TypeVarPointsTo(r, ty_node, "outer-origin") :-
+  op = "finalizeWeak#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // lookup weak ptr items
+  CallArgument(r, 0, wp),
+  OuterOrigin(wp),
+  // lookup result node
+  RetTup(op, "ghc-prim_GHC.Prim.(#,#)", 1, ty_node).

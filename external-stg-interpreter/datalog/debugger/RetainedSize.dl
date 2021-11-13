@@ -1,0 +1,71 @@
+/*
+  - calculate the spanning tree for the Selected objects + Ref
+  - calculate ref flows in the spanning tree
+  - sum size
+*/
+
+.decl RefSpanningTree(parent : RefTy, child : RefTy) choice-domain child // NOTE: a tree-node has only one parent
+
+RefSpanningTree(nil, x) :- SelectedRoot(x).
+RefSpanningTree(v, u) :- RefSpanningTree(_, v), Ref(v, u).
+.output RefSpanningTree
+
+// retained size
+
+.decl RefRetainedSize(r : RefTy, size : unsigned) choice-domain r
+.output RefRetainedSize
+
+.decl RefRetainedSize2(size : unsigned, r : RefTy) choice-domain r
+.output RefRetainedSize2
+
+RefRetainedSize2(s, r) :- RefRetainedSize(r, s).
+
+////////////////////
+
+// calculate tree size (fast)
+
+//  utility relations to simulate recursive aggregation
+
+// child ordering
+.decl next(parent : RefTy, a : RefTy, b : RefTy) choice-domain (parent, a), (parent, b)
+
+next(parent, [0, $Analysis], [1, $Analysis]) :-
+  RefSpanningTree(parent, _).
+
+next(parent, p, n) :-
+  next(parent, _, p),
+  RefSpanningTree(parent, n).
+
+.decl last(parent : RefTy, a : RefTy) choice-domain parent
+
+last(parent, n) :-
+  RefSpanningTree(parent, n),
+  ! next(parent, n, _).
+
+.output next, last
+
+//  recursive aggregation using a specific visit order (like a for loop)
+
+.decl size_accumulator(n : RefTy, v : unsigned) choice-domain n // loop variable
+.output size_accumulator
+
+size_accumulator(n, s) :-
+  next(_, [1, $Analysis], n),
+  RefRetainedSize(n, s).
+
+size_accumulator(n, prev_size + s) :-
+  next(_, prev, n),
+  size_accumulator(prev, prev_size),
+  RefRetainedSize(n, s).
+
+// inductive case: parent size = parent data size + children size
+RefRetainedSize(parent, size + s) :-
+  last(parent, n),
+  size_accumulator(n, s),
+  RefDataSize(parent, size).
+
+// base case: leaf size = data size
+RefRetainedSize(n, size) :-
+  RefSpanningTree(_, n),
+  ! RefSpanningTree(n, _),
+  RefDataSize(n, size).

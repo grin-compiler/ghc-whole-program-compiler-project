@@ -54,7 +54,7 @@ colorBinderExport b = case binderScope b of
   ForeignExported -> ondullcyan . green
 
 pprBinder :: Binder -> Doc
-pprBinder b = parens $ (colorBinderExport b . pretty . binderUniqueName $ b) <+> text ":" <+> ppType (binderType b) <+> parens (pretty $ binderTypeSig b) where
+pprBinder b = parens $ (colorBinderExport b . pretty . binderUniqueName $ b) <+> text ":" <+> ppType (binderType b) <+> parens (pretty $ binderTypeSig b) <+> parens (pretty $ show $ binderDetails b) where
   BinderId u  = binderId b
 
 pprVar :: Binder -> Doc
@@ -193,7 +193,7 @@ pprTyCon :: TyCon -> Doc
 pprTyCon TyCon{..} = pretty tcUnitId <> text "_" <> pretty tcModule <> text "." <> pretty tcName <$$> (indent 2 $ vsep (map pretty tcDataCons)) <> line where
 
 pprDataCon :: DataCon -> Doc
-pprDataCon DataCon{..} = pretty dcUnitId <> text "_" <> pretty dcModule <> text "." <> pretty dcName <+> text "::" <+> text (show dcRep)
+pprDataCon DataCon{..} = pretty dcUnitId <> text "_" <> pretty dcModule <> text "." <> pretty dcName <+> text "::" <+> text (show dcRep) <+> parens (text (show dcId))
 
 instance Pretty DataCon where
     pretty = pprDataCon

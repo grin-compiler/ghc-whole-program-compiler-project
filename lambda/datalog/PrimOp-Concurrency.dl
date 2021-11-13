@@ -1,0 +1,44 @@
+/*
+  HINT: is interpreted -/+
+
+  primop effectful
+    + "fork#"                 :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+    + "forkOn#"               :: T_Int64 -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+    + "killThread#"           :: {"ThreadId#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
+    - "yield#"                :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
+    - "myThreadId#"           :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+    - "labelThread#"          :: {"ThreadId#"} -> T_Addr -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
+    - "isCurrentThreadBound#" :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    - "noDuplicate#"          :: {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
+    - "threadStatus#"         :: {"ThreadId#"} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(#,,#)" T_Int64 T_Int64 T_Int64}
+*/
+
+
+// "killThread#" :: {"ThreadId#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
+// collect raised exceptions
+USED("PrimOp-Concurrency-01")
+Called(r, "killThread#"),
+RaisedEx(ex) :-
+  REACHABLE(r)
+  Call(r, "killThread#", _),
+  CallArgument(r, 1, ex).
+
+// "fork#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+USED("PrimOp-Concurrency-02")
+Called(r, "fork#"),
+HasInst("fork#", "fork#-action-ignored-result"), // fix & workaround - TODO: come up with a better and simpler design, NOTE: this is needed to make CalledCode work
+CallPNode1(r, "fork#-action-ignored-result", v0_io_action, v1_realworld) :-
+  REACHABLE(r)
+  Call(r, "fork#", _),
+  CallArgument(r, 0, v0_io_action),
+  CallArgument(r, 1, v1_realworld).
+
+// "forkOn#" :: T_Int64 -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+USED("PrimOp-Concurrency-03")
+Called(r, "forkOn#"),
+HasInst("forkOn#", "forkOn#-action-ignored-result"), // fix & workaround - TODO: come up with a better and simpler design, NOTE: this is needed to make CalledCode work
+CallPNode1(r, "forkOn#-action-ignored-result", v1_io_action, v2_realworld) :-
+  REACHABLE(r)
+  Call(r, "forkOn#", _),
+  CallArgument(r, 1, v1_io_action),
+  CallArgument(r, 2, v2_realworld).

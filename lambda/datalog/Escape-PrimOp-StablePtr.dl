@@ -1,0 +1,29 @@
+/*
+  HINT: is interpreted -/+
+
+  primop effectful
+    + "makeStablePtr#"  :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a}}
+    + "deRefStablePtr#" :: {"StablePtr#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    - "eqStablePtr#"    :: {"StablePtr#" %a} -> {"StablePtr#" %a} -> T_Int64
+    - "makeStableName#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"StableName#" %a}}
+
+  primop pure
+    - "eqStableName#"    :: {"StableName#" %a} -> {"StableName#" %b} -> T_Int64
+    - "stableNameToInt#" :: {"StableName#" %a} -> T_Int64
+
+*/
+
+
+// "deRefStablePtr#" :: {"StablePtr#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+USED("Escape-PrimOp-StablePtr-02")
+Called(r, op),
+TypeVarPointsTo(r, ty_node, "outer-origin") :-
+  op = "deRefStablePtr#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // lookup stable pointer
+  CallArgument(r, 0, sp),
+  OuterOrigin(sp),
+  // lookup result node
+  RetTup1Node0(op, ty_node).
+

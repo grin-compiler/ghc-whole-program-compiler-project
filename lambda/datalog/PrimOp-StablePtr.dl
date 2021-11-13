@@ -1,0 +1,42 @@
+/*
+  HINT: is interpreted -/+
+
+  primop effectful
+    + "makeStablePtr#"  :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a}}
+    + "deRefStablePtr#" :: {"StablePtr#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    - "eqStablePtr#"    :: {"StablePtr#" %a} -> {"StablePtr#" %a} -> T_Int64
+    - "makeStableName#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"StableName#" %a}}
+
+  primop pure
+    - "eqStableName#"    :: {"StableName#" %a} -> {"StableName#" %b} -> T_Int64
+    - "stableNameToInt#" :: {"StableName#" %a} -> T_Int64
+
+*/
+
+.decl StablePtr(item:Variable)
+.output StablePtr
+
+// "makeStablePtr#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a}}
+// new stable ptr
+USED("PrimOp-StablePtr-01")
+Called(r, op),
+StablePtr(item) :-
+  op = "makeStablePtr#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // initial item
+  CallArgument(r, 0, item).
+  // CHECKED
+
+// "deRefStablePtr#" :: {"StablePtr#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+USED("PrimOp-StablePtr-02")
+Called(r, op),
+TypeVarPointsTo(r, ty_node, item) :-
+  op = "deRefStablePtr#",
+  REACHABLE(r)
+  Call(r, op, _),
+  // lookup stable ptr items
+  StablePtr(item),
+  // lookup result node
+  RetTup1Node0(op, ty_node).
+  // CHECKED

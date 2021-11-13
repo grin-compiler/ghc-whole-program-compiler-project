@@ -1,0 +1,17 @@
+/*
+  {-
+    Tag to enum stuff
+  -}
+  primop pure
+    - "dataToTag#" :: %a_93 -> (T_Int64) @ t_1923
+    - "tagToEnum#" :: (T_Int64) @ t_1924 -> %a_94
+
+  NOTE: currently tagToEnum# is lowered to actial case expression during Stg to Lambda conversion, so it is not present in Lambda and does not need support from CFA.
+*/
+
+Error(r, "Unsupported (reachable) tagToEnum# primop") :-
+  ( op = "tagToEnum#"
+  ),
+  Call(r, op, _),
+  HasInst(f, r),
+  ReachableCode(f).

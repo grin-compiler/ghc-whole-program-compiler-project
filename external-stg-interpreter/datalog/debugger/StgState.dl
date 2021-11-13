@@ -1,0 +1,154 @@
+/*
+  GOALS:
+    - track references
+    - track origin: addr, Id source origin
+    - track Cons & Clos & Thunks
+*/
+.type Atom <: symbol
+.type Id <: symbol
+
+.type RefNamespace
+  = R_HeapPtr{}
+  | R_Array{}
+  | R_MutableArray{}
+  | R_ArrayArray{}
+  | R_MutableArrayArray{}
+  | R_MutableByteArray{}
+  | R_MutVar{}
+  | R_MVar{}
+  | R_SmallArray{}
+  | R_SmallMutableArray{}
+  | R_StableName{}
+  | R_StablePointer{}
+  | R_WeakPointer{}
+  | R_ThreadId{}
+  // special namespace for analyses
+  | Analysis{}
+
+// mapping: resource ids  <->  Atom
+.decl AtomToRef(a : Atom, r : RefNamespace, value : number)
+
+// stg state resources
+
+.decl Array(arr : number, size : unsigned)
+.decl ArrayArg(arr : number, arg_idx : unsigned, arg : Atom)
+
+.decl MutableArray(arr : number, size : unsigned)
+.decl MutableArrayArg(arr : number, arg_idx : unsigned, arg : Atom)
+
+.decl SmallArray(arr : number, size : unsigned)
+.decl SmallArrayArg(arr : number, arg_idx : unsigned, arg : Atom)
+
+.decl SmallMutableArray(arr : number, size : unsigned)
+.decl SmallMutableArrayArg(arr : number, arg_idx : unsigned, arg : Atom)
+
+.decl ArrayArray(arr : number, size : unsigned)
+.decl ArrayArrayArg(arr : number, arg_idx : unsigned, arg : Atom)
+
+.decl MutableArrayArray(arr : number, size : unsigned)
+.decl MutableArrayArrayArg(arr : number, arg_idx : unsigned, arg : Atom)
+
+.decl MutVar(mv : number, data : Atom)
+.decl StablePointer(sp : number, data : Atom)
+.decl StableName(sn : number, data : Atom)
+
+.decl StaticGlobalEnv(id : Id, data : Atom)
+
+.decl MutableByteArray(mba : number, pinned : symbol, alignment : number, size : unsigned)
+
+.decl MVar(mv : number, value_count : unsigned, queue_size : unsigned, content_desc : symbol)
+.decl MVar_Value(mv : number, idx : unsigned, a : Atom)
+.decl MVar_Queue(mv : number, idx : unsigned, thread_id : number)
+
+.decl WeakPointer(wp : number, key : Atom, value_count : unsigned, finalizer_count : unsigned, cfinalizer_count : unsigned, desc : symbol)
+.decl WeakPointer_Value(wp : number, idx : unsigned, a : Atom)
+.decl WeakPointer_Finalizer(wp : number, idx : unsigned, a : Atom)
+.decl WeakPointer_CFinalizer(wp : number, idx : unsigned, fun : Atom, data : Atom, env_count : unsigned)
+.decl WeakPointer_CFinalizer_Env(wp : number, idx : unsigned, env_idx : unsigned, env : Atom)
+
+// stg binder
+.decl BinderInfo(i : Id
+  , binderName      : symbol
+  , binderId        : symbol
+  , binderType      : symbol
+  , binderTypeSig   : symbol
+  , binderScope     : symbol
+  , binderDetails   : symbol
+  , binderInfo      : symbol
+  , binderDefLoc    : symbol
+  , binderUnitId    : symbol
+  , binderModule    : symbol
+  , binderTopLevel  : symbol
+  )
+
+// heap
+.decl Heap_Con(addr : number, isLNE : symbol, conName : symbol, arg_count : unsigned)
+.decl Heap_ConArg(addr : number, idx : unsigned, atom : Atom)
+
+.decl Heap_Closure(addr : number, isLNE : symbol, closure_name : Id, env_count : unsigned, arg_count : unsigned, missing : unsigned)
+.decl Heap_ClosureArg(addr : number, idx : unsigned, arg : Atom)
+.decl Heap_ClosureEnv(addr : number, idx : unsigned, var : Id, value : Atom)
+
+.decl Heap_BlackHole(addr : number, desc : symbol)
+
+.decl Heap_ApStack(addr : number, result_count : unsigned, stack_count : unsigned)
+.decl Heap_ApStackResult(addr : number, idx : unsigned, atom : Atom)
+
+.decl Heap_RaiseException(addr : number, ex : Atom)
+
+// stack
+
+.type StackId
+  = ApStackStack  {heap_addr : number}
+  | ThreadStack   {thread_id : number}
+
+.decl Stack(i : StackId, size : unsigned)
+.decl StackDesc(i : StackId, frame : unsigned, desc : symbol) // all frame has desc
+
+.decl Stack_Apply(i : StackId, frame : unsigned, arg_count : unsigned)
+.decl Stack_ApplyArg(i : StackId, frame : unsigned, idx : unsigned, a : Atom)
+
+.decl Stack_CaseOf(i : StackId, frame : unsigned, closure : Id, result : Id, env_size : unsigned)
+.decl Stack_CaseOfEnv(i : StackId, frame : unsigned, env_idx : unsigned, var : Id, value : Atom)
+
+// thread
+.decl ThreadState(i : number, status : symbol, result_size : unsigned, stack : StackId)
+.decl Thread_CurrentResult(i : number, idx : unsigned, a : Atom)
+
+// markers and regions
+.decl Region(start_name : symbol, end_name : symbol, idx : unsigned, ns : RefNamespace, start : number, end : number)
+.decl TraceEvent(name : symbol, idx : unsigned, ns : RefNamespace, value : number)
+.decl TraceMarker(name : symbol, idx : unsigned, ns : RefNamespace, value : number)
+
+// GC related
+.decl GCMarker(gc_index : unsigned, ns : RefNamespace, value : number)
+
+// needed for GC ??
+.decl CurrentClosureAddr(heap_addr : number)
+
+// origin
+.decl Origin(heap_addr : number, closure_name : Id, closure_addr : number, thread_id : number)
+
+//misc
+.decl HeapStartAddress(first_heap_addr : number)
+.decl CurrentAddressState(r : RefNamespace, value : number)
+
+// input
+.input AtomToRef, BinderInfo, StaticGlobalEnv
+
+.input Array, ArrayArg, MutableArray, MutableArrayArg
+.input SmallArray, SmallArrayArg, SmallMutableArray, SmallMutableArrayArg
+.input ArrayArray, ArrayArrayArg, MutableArrayArray, MutableArrayArrayArg
+.input MutableByteArray, MutVar, StablePointer, StableName
+.input MVar, MVar_Value, MVar_Queue
+.input WeakPointer, WeakPointer_Value, WeakPointer_Finalizer, WeakPointer_CFinalizer, WeakPointer_CFinalizer_Env
+
+.input Heap_Con, Heap_ConArg, Heap_Closure, Heap_ClosureArg, Heap_ClosureEnv, Heap_BlackHole
+.input Heap_ApStack, Heap_ApStackResult, Heap_RaiseException
+
+.input Stack, StackDesc, Stack_Apply, Stack_ApplyArg, Stack_CaseOf, Stack_CaseOfEnv
+
+.input ThreadState, Thread_CurrentResult
+
+.input Origin, Region, TraceEvent, TraceMarker, GCMarker
+.input CurrentClosureAddr, HeapStartAddress, CurrentAddressState

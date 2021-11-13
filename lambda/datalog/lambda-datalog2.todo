@@ -1,0 +1,73 @@
+BUGFIX:
+done - make utility/reusable application relation as a helper for wrapper operations ; i.e. apply the last argument of a function or PNode or actually call the staurated PNode
+done - fix higher order primop's function call parameter passing ; pass all parameters
+done - calculate dead alernative ; based on tag, not node origin with the specific tag ; NOT THIS: all pattern binders are dead/missing
+- fix applychain bug in: basic04_opt.2.lambda
+    ds3.s15353.0 = after.s15339.0 $ ipv3.s15348.0 val.6518
+    problem: ipv3.s15348.0 is not applied as argument
+- calcualte only the reachable code
+- some primop forces evaluation of thunks?
+
+ADVANCEMENT:
+done - remove dead alternatives
+done - remove dead closures ; may require dummy code insertion
+
+IMPROVE PERFORMANCE:
+- add Strict(x) and Lazy(x) deriving from EvalMode
+- reintroduce Origin ; keep PNode and others at their birth place ; do not propagate them instead calculate Origin for each variable
+- minimize value propagation
+- minimize joins
+done - simplify array operations ; merge commmon rules
+- simplify CFA rules
+- more accurate exception tracking
+- track node tags ; calcualte dead alternatives
+- calcualate dead fields
+- test
+
+BIG:
+- context sensitive analysis?
+- unification based analysis?
+
+IDEA:
+  calculate tags and nodes and origins on demand
+    for each reachable case expressions we'd emit a new Request value to calculate the tag of the scrutinee and
+    then the matching alts body expression would request the elaboration further
+
+TODO:
+  refactor / rewrite CFA to be much more performant
+
+PAPERS:
+  A Flow-Sensitive Approach for Steensgaard’s Pointer Analysis
+  http://www.novoscursos.ufv.br/graduacao/caf/ccp/www/wp-content/uploads/2019/02/POC-II-2018-2-Jos%C3%A9-Wesley-de-Souza-Magalh%C3%A3es.pdf
+
+  Making Context-sensitive Points-to Analysis with Heap Cloning Practical For The Real World
+  https://llvm.org/pubs/2007-06-10-PLDI-DSA.pdf
+
+  Fast Equivalence Relations in Datalog
+  https://souffle-lang.github.io/pdf/patrickthesis.pdf
+
+  Demand-Driven Points-to Analysis for Java
+  https://manu.sridharan.net/files/oopsla05.pdf
+
+  An Efficient Data Structure for Must-Alias Analysis
+  https://gkastrinis.github.io/pdf/must-alias-cc18.pdf
+  NOTE: this looks well suited for ASAP memory management implementation
+
+  Context-, Flow-, and Field-Sensitive Data-Flow Analysis using Synchronized Pushdown Systems
+  https://johspaeth.github.io/publications/boomerangPDS.pdf
+
+IDEAS FOR BETTER PERFORMANCE:
+  utilise static information:
+    + use deconstruction for unboxed tuples instead of tag matching case/alt pairs
+    + use separate relations for each constructor arities, this would reduce the search space
+
+improvement areas:
+  - better IR schema
+  - better rules
+  - track heap (boxed) values only, do not track literals
+  - distinct heap allocated nodes from stack/register (non-escaping) nodes
+      + heap allocated nodes  = heap context sensitivity
+      + stack allocated nodes = call context sensitivity
+  - filter according concrete types
+
+IDEA: combine type inference with CFA => track the constructor or closure names that can produce the currently inferred typed value

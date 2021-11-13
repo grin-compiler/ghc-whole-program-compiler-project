@@ -1,0 +1,64 @@
+// one data element size
+
+.decl RefDataSize(r : RefTy, size : unsigned)
+
+// resources
+
+// NOTE: size = tag + arity/arg-size
+
+RefDataSize([r, $R_Array], 1 + size) :-
+  Array(r, size).
+
+RefDataSize([r, $R_MutableArray], 1 + size) :-
+  MutableArray(r, size).
+
+RefDataSize([r, $R_SmallArray], 1 + size) :-
+  SmallArray(r, size).
+
+RefDataSize([r, $R_SmallMutableArray], 1 + size) :-
+  SmallMutableArray(r, size).
+
+RefDataSize([r, $R_ArrayArray], 1 + size) :-
+  ArrayArray(r, size).
+
+RefDataSize([r, $R_MutableArrayArray], 1 + size) :-
+  MutableArrayArray(r, size).
+
+RefDataSize([r, $R_MutVar], 2) :-
+  MutVar(r, _).
+
+RefDataSize([r, $R_StablePointer], 2) :-
+  StablePointer(r, _).
+
+RefDataSize([r, $R_StableName], 2) :-
+  StableName(r, _).
+
+RefDataSize([r, $R_MutableByteArray], 1 + size) :-
+  MutableByteArray(r, _, _, size).
+
+RefDataSize([r, $R_MVar], 1 + value_count + queue_size) :-
+  MVar(r, value_count, queue_size, _).
+
+RefDataSize([r, $R_WeakPointer], 2 + value_count + finalizer_count + cfinalizer_count) :-
+  WeakPointer(r, _, value_count, finalizer_count, cfinalizer_count, _).
+
+// heap
+
+RefDataSize([r, $R_HeapPtr], 1 + arg_count) :-
+  Heap_Con(r, _, _, arg_count).
+
+RefDataSize([r, $R_HeapPtr], 1 + env_count + arg_count) :-
+  Heap_Closure(r, _, _, env_count, arg_count, _).
+
+RefDataSize([r, $R_HeapPtr], 2) :-
+  Heap_BlackHole(r, _).
+
+RefDataSize([r, $R_HeapPtr], 1 + result_count + stack_count) :-
+  Heap_ApStack(r, result_count, stack_count).
+
+RefDataSize([r, $R_HeapPtr], 2) :-
+  Heap_RaiseException(r, _).
+
+// thread-id ; NOTE: this is not the thread just its ID, so we calcualte the ID's size not the thread's size
+RefDataSize([r, $R_ThreadId], 1) :-
+  ThreadState(r, _, _, _).

@@ -1,0 +1,47 @@
+// propagates inferred properties
+
+.decl PointsTo(src:Variable, dst:Variable)
+.output PointsTo
+
+USED("PointsTo-01")
+NodeOrigin(src, value) :-
+  PointsTo(src, dst),
+  NodeOrigin(dst, value).
+  // CHECKED
+
+USED("PointsTo-02")
+ExternalOrigin(src, value, tn) :-
+  PointsTo(src, dst),
+  ExternalOrigin(dst, value, tn).
+  // CHECKED
+
+USED("PointsTo-03")
+PNode(src, pap_f, pap_ar, pap_rem) :-
+  PointsTo(src, dst),
+  PNode(dst, pap_f, pap_ar, pap_rem).
+  // CHECKED
+
+USED("PointsTo-04")
+PNodeArgument(src, pap_f, pap_i, pap_value) :-
+  PointsTo(src, dst),
+  PNodeArgument(dst, pap_f, pap_i, pap_value).
+  // CHECKED
+
+// handling of external sub structure result & external sub structure pattern match
+
+.decl TypeVarPointsTo(result:Variable, ty_var:Variable, dst:Variable)
+.output TypeVarPointsTo
+
+USED("PointsTo-05")
+PointsTo(src, dst) :-
+  ExternalOrigin(src, r, t),
+  TypeVarPointsTo(r, t, dst).
+  // CHECKED
+
+/*
+  points-to propagates:
+    NodeOrigin
+    ExternalOrigin
+    PNode
+    PNodeArgument
+*/

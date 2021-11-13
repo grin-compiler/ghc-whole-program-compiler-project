@@ -9,6 +9,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Map.Strict as StrictMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.IntMap (IntMap)
@@ -80,12 +81,13 @@ data PtrOrigin
   | ByteArrayPtr  !ByteArrayIdx     -- raw ptr to the byte array
   | RawPtr                          -- raw ptr to a values with unknown origin (i.e. FFI)
   | StablePtr     !Int              -- stable pointer must have AddrRep
+  | LabelPtr      !Name !LabelSpec  -- foreign symbol/label name + label sepcification (i.e. data or function)
   deriving (Show, Eq, Ord)
 
 data WeakPtrDescriptor
   = WeakPtrDescriptor
   { wpdKey          :: Atom
-  , wpdVale         :: Maybe Atom -- live or dead
+  , wpdValue        :: Maybe Atom -- live or dead
   , wpdFinalizer    :: Maybe Atom -- closure
   , wpdCFinalizers  :: [(Atom, Maybe Atom, Atom)] -- fun, env ptr, data ptr
   }
@@ -156,6 +158,11 @@ data StackContinuation
   | RestoreExMask !Bool !Bool             -- saved: block async exceptions, interruptible
   | RunScheduler  !ScheduleReason
   | DataToTagOp
+  | DebugFrame    !DebugFrame             -- for debug purposes, it does not required for STG evaluation
+  deriving (Show, Eq, Ord)
+
+data DebugFrame
+  = RestoreProgramPoint !(Maybe Id) !ProgramPoint
   deriving (Show, Eq, Ord)
 
 data ScheduleReason
@@ -164,14 +171,13 @@ data ScheduleReason
   | SR_ThreadYield
   deriving (Show, Eq, Ord)
 
-type Addr   = Int
-type Heap   = IntMap HeapObject
-type Env    = Map Id Atom   -- NOTE: must contain only the defined local variables
-type Stack  = [StackContinuation]
-
 {-
   Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
 -}
+
+newtype Printable a = Printable {unPrintable :: a}
+instance Show (Printable a) where
+  show _ = "Printable"
 
 newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
 instance Show (PrintableMVar a) where
@@ -203,7 +209,7 @@ data DebugCommand
   deriving (Show)
 
 data DebugOutput
-  = DbgOutCurrentClosure  !Name !Addr !Env
+  = DbgOutCurrentClosure  !(Maybe Id) !Addr !Env
   | DbgOutClosureList     ![Name]
   | DbgOutThreadReport    !Int !ThreadState !Name !Addr
   | DbgOutHeapObject      !Addr !HeapObject
@@ -212,24 +218,60 @@ data DebugOutput
 data DebugState
   = DbgRunProgram
   | DbgStepByStep
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data TracingState
   = NoTracing
-  | DoTracing Handle
+  | DoTracing
+    { thOriginDB          :: Handle
+    , thWholeProgramPath  :: Handle
+    }
   deriving (Show)
+
+data CallGraph
+  = CallGraph
+  { cgInterClosureCallGraph :: !(StrictMap.Map (StaticOrigin, ProgramPoint, ProgramPoint) Int)
+  , cgIntraClosureCallGraph :: !(StrictMap.Map (ProgramPoint, StaticOrigin, ProgramPoint) Int)
+  }
+  deriving (Show)
+
+joinCallGraph :: CallGraph -> CallGraph -> CallGraph
+joinCallGraph (CallGraph a1 b1) (CallGraph a2 b2) = CallGraph (StrictMap.unionWith (+) a1 a2) (StrictMap.unionWith (+) b1 b2)
+
+emptyCallGraph :: CallGraph
+emptyCallGraph = CallGraph
+  { cgInterClosureCallGraph = mempty
+  , cgIntraClosureCallGraph = mempty
+  }
+
+type Addr   = Int
+type Heap   = IntMap HeapObject
+type Env    = Map Id (StaticOrigin, Atom)   -- NOTE: must contain only the defined local variables
+type Stack  = [StackContinuation]
+
+data StaticOrigin
+  = SO_CloArg
+  | SO_Let
+  | SO_Scrut
+  | SO_AltArg
+  | SO_TopLevel
+  | SO_Builtin
+  | SO_ClosureResult
+  deriving (Show, Eq, Ord)
 
 data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
-  , ssNextHeapAddr        :: {-# UNPACK #-} !Int
 
   -- GC
   , ssLastGCAddr          :: !Int
   , ssGCInput             :: PrintableMVar ([Atom], StgState)
-  , ssGCOutput            :: PrintableMVar DeadData
+  , ssGCOutput            :: PrintableMVar RefSet
   , ssGCIsRunning         :: Bool
+
+  -- let-no-escape support
+  , ssTotalLNECount       :: !Int
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
@@ -237,7 +279,6 @@ data StgState
 
   -- threading
   , ssThreads             :: IntMap ThreadState
-  , ssNextThreadId        :: !Int
 
   -- thread scheduler related
   , ssCurrentThreadId     :: Int
@@ -258,6 +299,8 @@ data StgState
   , ssArrayArrays         :: IntMap (Vector Atom)
   , ssMutableArrayArrays  :: IntMap (Vector Atom)
 
+  , ssNextThreadId          :: !Int
+  , ssNextHeapAddr          :: {-# UNPACK #-} !Int
   , ssNextStableName        :: !Int
   , ssNextWeakPointer       :: !Int
   , ssNextStablePointer     :: !Int
@@ -280,13 +323,19 @@ data StgState
 
   -- debug
   , ssCurrentClosureEnv   :: Env
-  , ssCurrentClosure      :: Id
+  , ssCurrentClosure      :: Maybe Id
   , ssCurrentClosureAddr  :: Int
   , ssExecutedClosures    :: !(Set Int)
+  , ssExecutedClosureIds  :: !(Set Id)
   , ssExecutedPrimOps     :: !(Set Name)
   , ssExecutedFFI         :: !(Set ForeignCall)
   , ssExecutedPrimCalls   :: !(Set PrimCall)
   , ssHeapStartAddress    :: !Int
+  , ssClosureCallCounter  :: !Int
+
+  -- call graph
+  , ssCallGraph           :: !CallGraph
+  , ssCurrentProgramPoint :: !ProgramPoint
 
   -- debugger API
   , ssDebuggerChan        :: DebuggerChan
@@ -295,9 +344,29 @@ data StgState
   , ssEvaluatedClosures   :: !(Set Name)
   , ssBreakpoints         :: !(Map Name Int)
   , ssDebugState          :: DebugState
+  , ssStgErrorAction      :: Printable (M ())
+
+  -- region tracker
+  , ssMarkers             :: !(Map Name (Set Region))
+  , ssRegions             :: !(Map Region (Maybe AddressState, CallGraph, [(AddressState, AddressState)]) )
+
+  -- retainer db
+  , ssReferenceMap        :: !(IntMap IntSet)
+  , ssRetainerMap         :: !(IntMap IntSet)
+  , ssGCRootSet           :: !IntSet
 
   -- tracing
   , ssTracingState        :: TracingState
+
+  -- origin db
+  , ssOrigin              :: !(IntMap (Id, Int, Int)) -- HINT: closure, closure address, thread id
+
+  -- GC marker
+  , ssGCMarkers           :: ![AddressState]
+
+  -- tracing primops
+  , ssTraceEvents         :: ![(String, AddressState)]
+  , ssTraceMarkers        :: ![(String, AddressState)]
   }
   deriving (Show)
 
@@ -312,12 +381,11 @@ emptyStgState :: PrintableMVar StgState
               -> DebugState
               -> TracingState
               -> PrintableMVar ([Atom], StgState)
-              -> PrintableMVar DeadData
+              -> PrintableMVar RefSet
               -> StgState
 emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
-  , ssNextHeapAddr        = 0
 
   -- GC
   , ssLastGCAddr          = 0
@@ -325,11 +393,13 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssGCOutput            = gcOut
   , ssGCIsRunning         = False
 
+  -- let-no-escape support
+  , ssTotalLNECount       = 0
+
   , ssCStringConstants    = mempty
 
   -- threading
   , ssThreads             = mempty
-  , ssNextThreadId        = 0
   , ssCurrentThreadId     = error "uninitialized ssCurrentThreadId"
   , ssScheduledThreadIds  = []
 
@@ -348,6 +418,8 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssArrayArrays         = mempty
   , ssMutableArrayArrays  = mempty
 
+  , ssNextThreadId          = 0
+  , ssNextHeapAddr          = 0
   , ssNextStableName        = 0
   , ssNextWeakPointer       = 0
   , ssNextStablePointer     = 0
@@ -369,13 +441,19 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
 
   -- debug
   , ssCurrentClosureEnv   = mempty
-  , ssCurrentClosure      = error "uninitalized ssCurrentClosure"
+  , ssCurrentClosure      = Nothing
   , ssCurrentClosureAddr  = -1
   , ssExecutedClosures    = Set.empty
+  , ssExecutedClosureIds  = Set.empty
   , ssExecutedPrimOps     = Set.empty
   , ssExecutedFFI         = Set.empty
   , ssExecutedPrimCalls   = Set.empty
   , ssHeapStartAddress    = 0
+  , ssClosureCallCounter  = 0
+
+  -- call graph
+  , ssCallGraph           = emptyCallGraph
+  , ssCurrentProgramPoint = PP_Global
 
   -- debugger api
   , ssDebuggerChan        = dbgChan
@@ -384,9 +462,29 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssEvaluatedClosures   = Set.empty
   , ssBreakpoints         = mempty
   , ssDebugState          = dbgState
+  , ssStgErrorAction      = Printable $ pure ()
+
+  -- region tracker
+  , ssMarkers             = mempty
+  , ssRegions             = mempty
+
+  -- retainer db
+  , ssReferenceMap        = mempty
+  , ssRetainerMap         = mempty
+  , ssGCRootSet           = IntSet.empty
 
   -- tracing
   , ssTracingState        = tracingState
+
+  -- origin db
+  , ssOrigin              = mempty
+
+  -- GC marker
+  , ssGCMarkers           = []
+
+  -- tracing primops
+  , ssTraceEvents         = []
+  , ssTraceMarkers        = []
   }
 
 data Rts
@@ -481,11 +579,22 @@ allocAndStore o = do
 store :: HasCallStack => Addr -> HeapObject -> M ()
 store a o = do
   modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
+
+  do
+    m <- gets ssCurrentClosure
+    case m of
+      Nothing       -> pure ()
+      Just originId -> do
+        originAddr <- gets ssCurrentClosureAddr
+        tid <- gets ssCurrentThreadId
+        modify' $ \s@StgState{..} -> s { ssOrigin = IntMap.insert a (originId, originAddr, tid) ssOrigin }
+  {-
   gets ssTracingState >>= \case
     NoTracing   -> pure ()
     DoTracing h -> do
       origin <- gets ssCurrentClosureAddr
       liftIO $ hPutStrLn h $ show a ++ "\t" ++ show origin
+  -}
 
 {-
   conclusion:
@@ -505,30 +614,32 @@ stgErrorM msg = do
   reportThread tid
   curClosure <- gets ssCurrentClosure
   liftIO $ putStrLn $ "current closure: " ++ show curClosure
+  action <- unPrintable <$> gets ssStgErrorAction
+  action
   error "stgErrorM"
 
-addBinderToEnv :: Binder -> Atom -> Env -> Env
-addBinderToEnv b = Map.insert (Id b)
+addBinderToEnv :: StaticOrigin -> Binder -> Atom -> Env -> Env
+addBinderToEnv so b a = Map.insert (Id b) (so, a)
 
-addZippedBindersToEnv :: [(Binder, Atom)] -> Env -> Env
-addZippedBindersToEnv bvList env = foldl' (\e (b, v) -> Map.insert (Id b) v e) env bvList
+addZippedBindersToEnv :: StaticOrigin -> [(Binder, Atom)] -> Env -> Env
+addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so, v) e) env bvList
 
-addManyBindersToEnv :: [Binder] -> [Atom] -> Env -> Env
-addManyBindersToEnv binders values = addZippedBindersToEnv $ zip binders values
+addManyBindersToEnv :: StaticOrigin -> [Binder] -> [Atom] -> Env -> Env
+addManyBindersToEnv so binders values = addZippedBindersToEnv so $ zip binders values
 
 -- NOTE: for builtin uniques see: compiler/GHC/Builtin/Names.hs i.e. voidPrimIdKey
-lookupEnv :: HasCallStack => Env -> Binder -> M Atom
-lookupEnv localEnv b
+lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, Atom)
+lookupEnvSO localEnv b
  | binderId b == BinderId (Unique '0' 124) -- coercionToken#
- = pure Void
+ = pure (SO_Builtin, Void)
  | binderId b == BinderId (Unique '0' 21) -- void#
- = pure Void
+ = pure (SO_Builtin, Void)
  | binderId b == BinderId (Unique '0' 15) -- realWorld#
- = pure Void
+ = pure (SO_Builtin, Void)
  | binderId b == BinderId (Unique '0' 502) -- proxy#
- = pure Void
+ = pure (SO_Builtin, Void)
  | binderId b == BinderId (Unique '8' 1) -- GHC.Prim.(##)
- = pure Void
+ = pure (SO_Builtin, Void)
  | otherwise
  = do
   env <- if binderTopLevel b
@@ -537,6 +648,9 @@ lookupEnv localEnv b
   case Map.lookup (Id b) env of
     Nothing -> stgErrorM $ "unknown variable: " ++ show b
     Just a  -> pure a
+
+lookupEnv :: HasCallStack => Env -> Binder -> M Atom
+lookupEnv localEnv b = snd <$> lookupEnvSO localEnv b
 
 readHeap :: HasCallStack => Atom -> M HeapObject
 readHeap (HeapPtr l) = do
@@ -678,7 +792,10 @@ markClosure :: Name -> M ()
 markClosure n = modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = setInsert n ssEvaluatedClosures}
 
 markExecuted :: Int -> M ()
-markExecuted i = modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
+markExecuted i = pure () -- modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
+
+markExecutedId :: Id -> M ()
+markExecutedId i = modify' $ \s@StgState{..} -> s {ssExecutedClosureIds = setInsert i ssExecutedClosureIds}
 
 markPrimOp :: Name -> M ()
 markPrimOp i = modify' $ \s@StgState{..} -> s {ssExecutedPrimOps = setInsert i ssExecutedPrimOps}
@@ -688,6 +805,34 @@ markFFI i = modify' $ \s@StgState{..} -> s {ssExecutedFFI = setInsert i ssExecut
 
 markPrimCall :: PrimCall -> M ()
 markPrimCall i = modify' $ \s@StgState{..} -> s {ssExecutedPrimCalls = setInsert i ssExecutedPrimCalls}
+
+-- call graph
+-- HINT: build separate call graph for each region
+
+addInterClosureCallGraphEdge :: StaticOrigin -> ProgramPoint -> ProgramPoint -> M ()
+addInterClosureCallGraphEdge so from to = do
+  let addEdge g@CallGraph{..} = g {cgInterClosureCallGraph = StrictMap.insertWith (+) (so, from, to) 1 cgInterClosureCallGraph}
+      updateRegion = \case
+        (a@Just{}, regionCallGraph, l) -> (a, addEdge regionCallGraph, l)
+        r -> r
+  modify' $ \s@StgState{..} -> s
+    { ssCallGraph = addEdge ssCallGraph
+    , ssRegions   = fmap updateRegion ssRegions
+    }
+
+addIntraClosureCallGraphEdge :: ProgramPoint -> StaticOrigin -> ProgramPoint -> M ()
+addIntraClosureCallGraphEdge from so to = do
+  let addEdge g@CallGraph{..} = g {cgIntraClosureCallGraph = StrictMap.insertWith (+) (from, so, to) 1 cgIntraClosureCallGraph}
+      updateRegion = \case
+        (a@Just{}, regionCallGraph, l) -> (a, addEdge regionCallGraph, l)
+        r -> r
+  modify' $ \s@StgState{..} -> s
+    { ssCallGraph = addEdge ssCallGraph
+    , ssRegions   = fmap updateRegion ssRegions
+    }
+
+setProgramPoint :: ProgramPoint -> M ()
+setProgramPoint pp = modify' $ \s@StgState{..} -> s {ssCurrentProgramPoint = pp}
 
 -- string constants
 -- NOTE: the string gets extended with a null terminator
@@ -947,6 +1092,7 @@ reportThreadIO tid endTS = do
     putStrLn $ unlines $ map show $ zip [0..] $ map showStackCont $ tsStack endTS
     putStrLn ""
 
+showStackCont :: StackContinuation -> String
 showStackCont = \case
   CaseOf clAddr clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", addr: " ++ show clAddr ++ ", result var: " ++ show (Id b)
   c -> show c
@@ -954,34 +1100,131 @@ showStackCont = \case
 -------------------------
 -- GC
 
-data DeadData
-  = DeadData
-  { deadHeap                :: !IntSet
-  , deadWeakPointers        :: !IntSet
-  , deadMVars               :: !IntSet
-  , deadMutVars             :: !IntSet
-  , deadArrays              :: !IntSet
-  , deadMutableArrays       :: !IntSet
-  , deadSmallArrays         :: !IntSet
-  , deadSmallMutableArrays  :: !IntSet
-  , deadArrayArrays         :: !IntSet
-  , deadMutableArrayArrays  :: !IntSet
-  , deadMutableByteArrays   :: !IntSet
-  , deadStableNames         :: !IntSet
+data RefSet
+  = RefSet
+  { rsHeap                :: !IntSet
+  , rsWeakPointers        :: !IntSet
+  , rsMVars               :: !IntSet
+  , rsMutVars             :: !IntSet
+  , rsArrays              :: !IntSet
+  , rsMutableArrays       :: !IntSet
+  , rsSmallArrays         :: !IntSet
+  , rsSmallMutableArrays  :: !IntSet
+  , rsArrayArrays         :: !IntSet
+  , rsMutableArrayArrays  :: !IntSet
+  , rsMutableByteArrays   :: !IntSet
+  , rsStableNames         :: !IntSet
+  , rsStablePointers      :: !IntSet
   }
 
-emptyDeadData :: DeadData
-emptyDeadData = DeadData
-  { deadHeap                = IntSet.empty
-  , deadWeakPointers        = IntSet.empty
-  , deadMVars               = IntSet.empty
-  , deadMutVars             = IntSet.empty
-  , deadArrays              = IntSet.empty
-  , deadMutableArrays       = IntSet.empty
-  , deadSmallArrays         = IntSet.empty
-  , deadSmallMutableArrays  = IntSet.empty
-  , deadArrayArrays         = IntSet.empty
-  , deadMutableArrayArrays  = IntSet.empty
-  , deadMutableByteArrays   = IntSet.empty
-  , deadStableNames         = IntSet.empty
+emptyRefSet :: RefSet
+emptyRefSet = RefSet
+  { rsHeap                = IntSet.empty
+  , rsWeakPointers        = IntSet.empty
+  , rsMVars               = IntSet.empty
+  , rsMutVars             = IntSet.empty
+  , rsArrays              = IntSet.empty
+  , rsMutableArrays       = IntSet.empty
+  , rsSmallArrays         = IntSet.empty
+  , rsSmallMutableArrays  = IntSet.empty
+  , rsArrayArrays         = IntSet.empty
+  , rsMutableArrayArrays  = IntSet.empty
+  , rsMutableByteArrays   = IntSet.empty
+  , rsStableNames         = IntSet.empty
+  , rsStablePointers      = IntSet.empty
   }
+
+-- Debugger
+data AddressState
+  = AddressState
+  { asNextThreadId          :: !Int
+  , asNextHeapAddr          :: !Int
+  , asNextStableName        :: !Int
+  , asNextWeakPointer       :: !Int
+  , asNextStablePointer     :: !Int
+  , asNextMutableByteArray  :: !Int
+  , asNextMVar              :: !Int
+  , asNextMutVar            :: !Int
+  , asNextArray             :: !Int
+  , asNextMutableArray      :: !Int
+  , asNextSmallArray        :: !Int
+  , asNextSmallMutableArray :: !Int
+  , asNextArrayArray        :: !Int
+  , asNextMutableArrayArray :: !Int
+  }
+  deriving (Eq, Ord, Show)
+
+emptyAddressState :: AddressState
+emptyAddressState = AddressState
+  { asNextThreadId          = 0
+  , asNextHeapAddr          = 0
+  , asNextStableName        = 0
+  , asNextWeakPointer       = 0
+  , asNextStablePointer     = 0
+  , asNextMutableByteArray  = 0
+  , asNextMVar              = 0
+  , asNextMutVar            = 0
+  , asNextArray             = 0
+  , asNextMutableArray      = 0
+  , asNextSmallArray        = 0
+  , asNextSmallMutableArray = 0
+  , asNextArrayArray        = 0
+  , asNextMutableArrayArray = 0
+  }
+
+getAddressState :: M AddressState
+getAddressState = do
+  convertAddressState <$> get
+
+convertAddressState :: StgState -> AddressState
+convertAddressState StgState{..} = AddressState
+  { asNextThreadId          = ssNextThreadId
+  , asNextHeapAddr          = ssNextHeapAddr
+  , asNextStableName        = ssNextStableName
+  , asNextWeakPointer       = ssNextWeakPointer
+  , asNextStablePointer     = ssNextStablePointer
+  , asNextMutableByteArray  = ssNextMutableByteArray
+  , asNextMVar              = ssNextMVar
+  , asNextMutVar            = ssNextMutVar
+  , asNextArray             = ssNextArray
+  , asNextMutableArray      = ssNextMutableArray
+  , asNextSmallArray        = ssNextSmallArray
+  , asNextSmallMutableArray = ssNextSmallMutableArray
+  , asNextArrayArray        = ssNextArrayArray
+  , asNextMutableArrayArray = ssNextMutableArrayArray
+  }
+
+data Region
+  = Region
+  { regionStart :: Name
+  , regionEnd   :: Name
+  }
+  deriving (Eq, Ord, Show)
+
+-- let-no-escape statistics
+markLNE :: [Addr] -> M ()
+markLNE lneAddrs = do
+  let count = length lneAddrs
+  modify' $ \s@StgState{..} -> s { ssTotalLNECount = count + ssTotalLNECount}
+
+-- program point
+
+data ProgramPoint
+  = PP_Global
+  | PP_Closure    Id          -- closure name
+  | PP_Scrutinee  Id          -- qualified scrutinee result name
+  | PP_Alt        Id AltCon   -- qualified scrutinee result name, alternative pattern
+  | PP_Apply      Int ProgramPoint
+  deriving (Eq, Ord)
+
+instance Show ProgramPoint where show = showProgramPoint
+
+showProgramPoint :: ProgramPoint -> String
+showProgramPoint = \case
+  PP_Global       -> "<global>"
+  PP_Closure n    -> show n
+  PP_Scrutinee v  -> "scrut: " ++ show v
+  PP_Alt v pat    -> "alt: " ++ show v ++ " " ++ case pat of
+    AltDataCon dc -> "AltDataCon " ++ show (DC dc)
+    _             -> show pat
+  PP_Apply i p    -> "apply " ++ show i ++ ": " ++ show p

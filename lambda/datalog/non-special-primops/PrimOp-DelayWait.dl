@@ -1,0 +1,6 @@
+/*
+  primop effectful
+    - "delay#"     :: (T_Int64) @ t_1750 -> {"State#" %s_180} @ t_1751 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1752
+    - "waitRead#"  :: (T_Int64) @ t_1753 -> {"State#" %s_181} @ t_1754 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1755
+    - "waitWrite#" :: (T_Int64) @ t_1756 -> {"State#" %s_182} @ t_1757 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1758
+*/

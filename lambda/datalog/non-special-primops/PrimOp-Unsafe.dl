@@ -1,0 +1,8 @@
+/*
+  {-
+    Unsafe pointer equality
+  -}
+  primop pure
+    - "reallyUnsafePtrEquality#" :: %a_88 -> %a_88 -> (T_Int64) @ t_1911
+
+*/

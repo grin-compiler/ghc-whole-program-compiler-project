@@ -6,6 +6,7 @@ import Text.Printf
 
 import Data.Maybe
 import Data.List (isPrefixOf, groupBy, sortBy, foldl')
+import Data.Containers.ListUtils (nubOrd)
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -31,6 +32,9 @@ moduleToModpak modpakExt moduleName = replaceEq '.' '/' moduleName ++ modpakExt
     replaceEq :: Eq a => a -> a -> [a] -> [a]
     replaceEq from to = map (\cur -> if cur == from then to else cur)
 
+printSection :: Show a => [a] -> String
+printSection l = unlines ["- " ++ x | x <- nubOrd $ map show l]
+
 parseSection :: [String] -> String -> [String]
 parseSection content n = map (read . tail) . takeWhile (isPrefixOf "-") . tail . dropWhile (not . isPrefixOf n) $ content
 
@@ -49,8 +53,12 @@ data StgAppInfo
 
 getAppInfo :: FilePath -> IO StgAppInfo
 getAppInfo ghcStgAppFname = do
-  content <- lines <$> readFile ghcStgAppFname
-  let [root]      = parseSection content "root:"
+  readFile ghcStgAppFname >>= getAppInfoFromString
+
+getAppInfoFromString :: String -> IO StgAppInfo
+getAppInfoFromString rawContent = do
+  let content     = lines rawContent
+      [root]      = parseSection content "root:"
       [osuf]      = parseSection content "o_suffix:"
       libPaths    = parsePathSection root content "pkg_lib_paths:"
       incPaths    = parsePathSection root content "pkg_include_paths:"

@@ -24,10 +24,14 @@ library
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
     Stg.Interpreter.Debugger
+    Stg.Interpreter.Debugger.Datalog
     Stg.Interpreter.Debugger.Internal
+    Stg.Interpreter.Debugger.Region
+    Stg.Interpreter.Debugger.UI
     Stg.Interpreter.GC
     Stg.Interpreter.GC.GCRef
     Stg.Interpreter.GC.LiveDataAnalysis
+    Stg.Interpreter.GC.RetainerAnalysis
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array
@@ -76,6 +80,7 @@ library
                        mtl,
                        inline-c,
                        unagi-chan,
+                       pretty-terminal,
                        souffle-haskell,
                        ansi-wl-pprint,
                        ghc-prim,

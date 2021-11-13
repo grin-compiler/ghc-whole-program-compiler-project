@@ -15,6 +15,7 @@ data Modpak
   , ghcstgPath  :: FilePath
   , cmmPath     :: FilePath
   , asmPath     :: FilePath
+  , infoPath    :: FilePath
   , hsSrcPath   :: Maybe FilePath
   , ghccorePath :: Maybe FilePath
   }
@@ -26,6 +27,7 @@ modpak = Modpak
   <*> strOption (long "ghcstg" <> metavar "FILENAME" <> help "Pretty printed GHC Stg file to be added to the archive")
   <*> strOption (long "cmm" <> metavar "FILENAME" <> help "Cmm source file to be added to the archive")
   <*> strOption (long "asm" <> metavar "FILENAME" <> help "Assembly source file to be added to the archive")
+  <*> strOption (long "info" <> metavar "FILENAME" <> help "Compilation info file to be added to the archive")
   <*> optional (strOption (long "hssrc" <> metavar "FILENAME" <> help "Haskell source file to be added to the archive"))
   <*> optional (strOption (long "ghccore" <> metavar "FILENAME" <> help "Pretty printed GHC Core file to be added to the archive"))
 
@@ -46,6 +48,9 @@ main = do
   asmData  <- BS.readFile asmPath
   asmEntry <- mkEntrySelector "module.s"
 
+  infoData  <- BS.readFile infoPath
+  infoEntry <- mkEntrySelector "module.info"
+
   ghccoreEntry <- mkEntrySelector "module.ghccore"
   hsEntry <- mkEntrySelector "module.hs"
   createArchive modpakName $ do
@@ -60,6 +65,9 @@ main = do
 
     addEntry Zstd asmData asmEntry
     setExternalFileAttrs (fromFileMode 0o0644) asmEntry
+
+    addEntry Zstd infoData infoEntry
+    setExternalFileAttrs (fromFileMode 0o0644) infoEntry
 
     case hsSrcPath of
       Nothing -> pure ()

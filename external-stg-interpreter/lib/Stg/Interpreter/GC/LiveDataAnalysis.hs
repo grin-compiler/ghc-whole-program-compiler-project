@@ -19,6 +19,9 @@ import qualified Language.Souffle.Compiled as Souffle
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.GCRef
 
+import qualified Stg.Interpreter.GC.RetainerAnalysis as Live
+
+
 -------- souffle program
 
 data ExtStgGC = ExtStgGC
@@ -56,7 +59,7 @@ instance Souffle.Marshal Dead
 -- analysis api
 ---------------------------
 
-runLiveDataAnalysis :: [Atom] -> StgState -> IO DeadData
+runLiveDataAnalysis :: [Atom] -> StgState -> IO RefSet
 runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybeProgram -> do  -- Initializes the Souffle program.
   case maybeProgram of
     Nothing -> liftIO $ fail "Failed to load ext-stg-gc datalog program."
@@ -77,7 +80,8 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
       liftIO $ putStrLn "Souffle.writeFiles done"
 
       -- read back result
-      readbackDeadData prog
+      --readbackDeadData prog
+      readbackLiveData
 
 ---------------------------
 -- handle input facts
@@ -143,27 +147,33 @@ addReferenceFacts prog StgState{..} = do
 -- handle output facts
 ---------------------------
 
-readbackDeadData :: Souffle.Handle ExtStgGC -> SouffleM DeadData
+readbackDeadData :: Souffle.Handle ExtStgGC -> SouffleM RefSet
 readbackDeadData prog = do
   dead :: [Dead] <- Souffle.getFacts prog
-  foldM collectDead emptyDeadData dead
+  foldM collectDead emptyRefSet dead
 
-collectDead :: DeadData -> Dead -> SouffleM DeadData
-collectDead dd@DeadData{..} (Dead l) = do
+collectDead :: RefSet -> Dead -> SouffleM RefSet
+collectDead dd@RefSet{..} (Dead l) = do
   -- HINT: decode datalog value
   let namespace = toEnum $ fromIntegral (l .&. 0xf)
       idx       = shiftR (fromIntegral l) 4
   pure $ case namespace of
-    NS_Array              -> dd {deadArrays             = IntSet.insert idx deadArrays}
-    NS_ArrayArray         -> dd {deadArrayArrays        = IntSet.insert idx deadArrayArrays}
-    NS_HeapPtr            -> dd {deadHeap               = IntSet.insert idx deadHeap}
-    NS_MutableArray       -> dd {deadMutableArrays      = IntSet.insert idx deadMutableArrays}
-    NS_MutableArrayArray  -> dd {deadMutableArrayArrays = IntSet.insert idx deadMutableArrayArrays}
-    NS_MutableByteArray   -> dd {deadMutableByteArrays  = IntSet.insert idx deadMutableByteArrays}
-    NS_MutVar             -> dd {deadMutVars            = IntSet.insert idx deadMutVars}
-    NS_MVar               -> dd {deadMVars              = IntSet.insert idx deadMVars}
-    NS_SmallArray         -> dd {deadSmallArrays        = IntSet.insert idx deadSmallArrays}
-    NS_SmallMutableArray  -> dd {deadSmallMutableArrays = IntSet.insert idx deadSmallMutableArrays}
-    NS_StableName         -> dd {deadStableNames        = IntSet.insert idx deadStableNames}
-    NS_WeakPointer        -> dd {deadWeakPointers       = IntSet.insert idx deadWeakPointers}
+    NS_Array              -> dd {rsArrays             = IntSet.insert idx rsArrays}
+    NS_ArrayArray         -> dd {rsArrayArrays        = IntSet.insert idx rsArrayArrays}
+    NS_HeapPtr            -> dd {rsHeap               = IntSet.insert idx rsHeap}
+    NS_MutableArray       -> dd {rsMutableArrays      = IntSet.insert idx rsMutableArrays}
+    NS_MutableArrayArray  -> dd {rsMutableArrayArrays = IntSet.insert idx rsMutableArrayArrays}
+    NS_MutableByteArray   -> dd {rsMutableByteArrays  = IntSet.insert idx rsMutableByteArrays}
+    NS_MutVar             -> dd {rsMutVars            = IntSet.insert idx rsMutVars}
+    NS_MVar               -> dd {rsMVars              = IntSet.insert idx rsMVars}
+    NS_SmallArray         -> dd {rsSmallArrays        = IntSet.insert idx rsSmallArrays}
+    NS_SmallMutableArray  -> dd {rsSmallMutableArrays = IntSet.insert idx rsSmallMutableArrays}
+    NS_StableName         -> dd {rsStableNames        = IntSet.insert idx rsStableNames}
+    NS_WeakPointer        -> dd {rsWeakPointers       = IntSet.insert idx rsWeakPointers}
+    NS_StablePointer      -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
     _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
+
+readbackLiveData :: SouffleM RefSet
+readbackLiveData = do
+  liveSet <- liftIO $ Live.loadSet "Live.csv"
+  foldM (\dd i -> collectDead dd $ Dead i) emptyRefSet $ map fromIntegral $ IntSet.toList liveSet
