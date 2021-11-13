@@ -173,6 +173,10 @@ data ScheduleReason
   Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
 -}
 
+newtype Printable a = Printable {unPrintable :: a}
+instance Show (Printable a) where
+  show _ = "Printable"
+
 newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
 instance Show (PrintableMVar a) where
   show _ = "MVar"
@@ -338,6 +342,7 @@ data StgState
   , ssEvaluatedClosures   :: !(Set Name)
   , ssBreakpoints         :: !(Map Name Int)
   , ssDebugState          :: DebugState
+  , ssStgErrorAction      :: Printable (M ())
 
   -- region tracker
   , ssMarkers             :: !(Map Name (Set Region))
@@ -455,6 +460,7 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssEvaluatedClosures   = Set.empty
   , ssBreakpoints         = mempty
   , ssDebugState          = dbgState
+  , ssStgErrorAction      = Printable $ pure ()
 
   -- region tracker
   , ssMarkers             = mempty
@@ -606,6 +612,8 @@ stgErrorM msg = do
   reportThread tid
   curClosure <- gets ssCurrentClosure
   liftIO $ putStrLn $ "current closure: " ++ show curClosure
+  action <- unPrintable <$> gets ssStgErrorAction
+  action
   error "stgErrorM"
 
 addBinderToEnv :: StaticOrigin -> Binder -> Atom -> Env -> Env

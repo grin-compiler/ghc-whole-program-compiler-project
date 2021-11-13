@@ -660,6 +660,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
         let rootMain = unId $ head $ [i | i <- Map.keys env, show i == "main_:Main.main"]
         limit <- gets ssNextHeapAddr
         modify' $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
+        modify' $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
 
         -- TODO: check how it is done in the native RTS: call hs_main
         mainAtom <- lookupEnv mempty rootMain
