@@ -9,6 +9,9 @@ GHC-WPC is an extended GHC that exports the STG IR `(.modpak)` for the compiled 
 
 The `external-stg-compiler` package should be compiled with GHC-WPC but the other packages i.e. `external-stg` compiles with vanilla GHC also.
 
+## Presentation video
+- [Why and How the External STG Interpreter is Useful](https://www.youtube.com/watch?v=wt6iCgYmVGA) *([slides](https://docs.google.com/presentation/d/1Lmfpwtx_7TbIAGYnSE0HqkawRu75y2GGwbObuu0xYPY/edit#slide=id.p))*
+
 ## Readings
 - [Introducing GHC whole program compiler (GHC-WPC)](https://www.patreon.com/posts/introducing-ghc-38173710)
 - [GHC-WPC thread on ghc-devs mailing list](https://mail.haskell.org/pipermail/ghc-devs/2020-June/018994.html)
