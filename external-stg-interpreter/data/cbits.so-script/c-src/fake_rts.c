@@ -47,3 +47,11 @@ uint32_t enabled_capabilities = 1;
 int *stable_ptr_table = NULL;
 
 void base_GHCziTopHandler_runIO_closure(){}
+
+void stg_interp_constr1_entry() {}
+void stg_interp_constr2_entry() {}
+void stg_interp_constr3_entry() {}
+void stg_interp_constr4_entry() {}
+void stg_interp_constr5_entry() {}
+void stg_interp_constr6_entry() {}
+void stg_interp_constr7_entry() {}
