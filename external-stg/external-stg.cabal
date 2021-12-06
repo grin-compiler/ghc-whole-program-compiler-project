@@ -58,6 +58,8 @@ executable fullpak
   hs-source-dirs:      app
   main-is:             fullpak.hs
   build-depends:       base < 5.0,
+                       bytestring,
+                       filepath,
                        external-stg,
                        optparse-applicative
   default-language:    Haskell2010
