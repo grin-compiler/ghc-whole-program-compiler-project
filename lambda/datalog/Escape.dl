@@ -7,7 +7,12 @@
 .decl CalledByOuterCode(v:symbol)
 .input CalledByOuterCode
 
-// Q: should we merge CalledByOuterCode and InitialReachable?
+/*
+ Q: should we merge CalledByOuterCode and InitialReachable?
+    maybe theres should be two kind of initially reachable set:
+      - functions that can get closures and contructors as arguments
+      - functions that can get only C-land values (i.e. int, float, realworld tokens)
+*/
 
 //////////////////////////
 // inferred facts
@@ -53,6 +58,14 @@ OuterOrigin(v) :-
   CalledByOuterCode(f),
   CodeParameter(f, _, v).
 
+//debug stats
+.decl InternalName(v:symbol)
+.output InternalName
+
+InternalName(v) :-
+  REACHABLE(v)
+  DefinedName(v),
+  !OuterOrigin(v).
 
 //////////////////////////
 // initially reachable functions
@@ -66,6 +79,7 @@ ReachableCode(f) :-
 //////////////////////////
 
 USED("Escape-call-return-value")
+Called(r, "outer-origin"), // TODO: track detailed origin
 OuterOrigin(r) :-
   REACHABLE(r)
   Call(r, f, _),
@@ -87,6 +101,7 @@ Escaped(arg) :-
 // scrutinee projection to alt value ; OuterOrigin
 USED("Escape-pattern-match-alt-value")
 MatchedAlt(case_result, alt_val),
+ReachableCode(alt_val),
 OuterOrigin(alt_val) :-
   REACHABLE(case_result)
   Case(case_result, scrut),

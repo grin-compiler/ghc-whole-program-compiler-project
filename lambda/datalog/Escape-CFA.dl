@@ -37,6 +37,7 @@ Escaped(arg) :-
 
 // return value
 USED("Escape-CFA-ApplyChain-return-value")
+Called(r, "outer-origin"), // TODO: track detailed origin
 PointsTo(r, "outer-origin") :-
   ApplyChain(_, r, fun, _, consumed, arg_count),
   consumed < arg_count,
@@ -53,6 +54,7 @@ Escaped(arg) :-
 
 // return value
 USED("Escape-CFA-ExecCall-return-value")
+Called(r, "outer-origin"), // TODO: track detailed origin
 PointsTo(r, "outer-origin") :-
   ExecCall(_, r, unknown_fun, _),
   OuterOrigin(unknown_fun).
@@ -69,6 +71,8 @@ Escaped(p) :-
 
 // return value: mark the function return value escaped
 USED("Escape-CFA-escaped-PNode-return-value")
+ReachableCode(fun),
+// ??? what does this mean?? ; Called(r, "outer-origin"), // TODO: track detailed origin
 Escaped(v) :-
   PNode(r, fun, _, _),
   OuterOrigin(r),
