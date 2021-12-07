@@ -46,6 +46,9 @@ Check the list of debugger commands.
 
 Use the `e` command to do step-by-step evaluation.
 
+## Presentation video
+- [Why and How the External STG Interpreter is Useful](https://www.youtube.com/watch?v=wt6iCgYmVGA) *([slides](https://docs.google.com/presentation/d/1Lmfpwtx_7TbIAGYnSE0HqkawRu75y2GGwbObuu0xYPY/edit#slide=id.p))* *([demo code](https://github.com/grin-compiler/ext-stg-interpreter-presentation-demos))*
+
 ## Readings
 - [External STG Interpreter](https://www.patreon.com/posts/external-stg-49857800)
 
