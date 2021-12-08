@@ -69,7 +69,7 @@ If you change the External STG IR, then GHC-WPC must be recompiled.
    ```
    git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
    ```
-   If you did non-recursive cloning then you'll need to init submodules
+   If you did non-recursive cloning (*when the `ghc-wpc` folder is empty*) then you'll need to init submodules
    ```
    git submodule update --init --recursive
    ```
