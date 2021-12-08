@@ -80,6 +80,7 @@ If you change the External STG IR, then GHC-WPC must be recompiled.
    ```
 3. Compile GHC-WPC in `./ghc-wpc` folder with Hadrian (see [ghc.dev](https://ghc.dev) for details).
    ```
+   cd ghc-wpc
    ./boot
    ./configure
    hadrian/build-stack -j
