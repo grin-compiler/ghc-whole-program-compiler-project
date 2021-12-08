@@ -71,8 +71,7 @@ If you change the External STG IR, then GHC-WPC must be recompiled.
    ```
    If you did non-recursive cloning then you'll need to init submodules
    ```
-   git submodule init
-   git submodule update
+   git submodule update --init --recursive
    ```
 2. Install modpak tooling
    ```
