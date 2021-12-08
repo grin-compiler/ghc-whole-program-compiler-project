@@ -69,6 +69,11 @@ If you change the External STG IR, then GHC-WPC must be recompiled.
    ```
    git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
    ```
+   If you did non-recursive cloning then you'll need to init submodules
+   ```
+   git submodule init
+   git submodule update
+   ```
 2. Install modpak tooling
    ```
    (cd mod-pak ; stack install)
