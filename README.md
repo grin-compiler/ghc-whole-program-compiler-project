@@ -59,6 +59,8 @@ I.e. `external-stg-compiler` is such an example.
 
 ## Usage
 
+**You'll need 15GB of free space** *(Sorry)* 
+
 If you change the External STG IR, then GHC-WPC must be recompiled.
 
 0. Install (exact version):
