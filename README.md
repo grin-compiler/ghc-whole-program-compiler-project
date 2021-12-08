@@ -89,7 +89,7 @@ If you change the External STG IR, then GHC-WPC must be recompiled.
 4. **At this point you have a working GHC-WPC.**  
    The next steps are about the compilation of GHC-WPC tooling and the usage of GHC-WPC.
 
-5. Set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
+5. Go back to the repository top folder and set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
    change the following line to your GHC-WPC build path:
    ```
    extra-path:
