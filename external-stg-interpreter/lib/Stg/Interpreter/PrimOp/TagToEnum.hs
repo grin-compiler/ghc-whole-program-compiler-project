@@ -19,11 +19,11 @@ dataToTagOp [whnf@HeapPtr{}] = do
     Just i  -> pure [IntV i]
 dataToTagOp result = stgErrorM $ "dataToTagOp expected [HeapPtr], got: " ++ show result
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
-  -- dataToTag# :: a -> Int#  -- Zero-indexed; the first constructor has tag zero
-  ( "dataToTag#", [ho@HeapPtr{}]) -> do
+      -- dataToTag# :: a -> Int#  -- Zero-indexed; the first constructor has tag zero
+  defOp "dataToTag#" $ \[ho@HeapPtr{}] -> do
     {-
       Q: how should it behave when the heap object is not a constructor?
       A: is should evaluate it to WHNF
@@ -44,11 +44,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
     stackPush $ Apply []
     pure [ho]
 
-  -- tagToEnum# :: Int# -> a
-  ( "tagToEnum#", [IntV i]) -> do
+      -- tagToEnum# :: Int# -> a
+  defSpecOp "tagToEnum#" $ \[IntV i] _t tc -> do
     Just tyc <- pure tc
     let dc = tcDataCons tyc !! i
     loc <- allocAndStore (Con False dc [])
     pure [HeapPtr loc]
-
-  _ -> fallback op args t tc

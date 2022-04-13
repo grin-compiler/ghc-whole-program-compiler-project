@@ -18,6 +18,7 @@ import Data.Maybe
 import Data.List (partition, isSuffixOf)
 import Data.Set (Set)
 import Data.Map (Map)
+import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.Map.Strict as StrictMap
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -44,7 +45,6 @@ import qualified Stg.Interpreter.ThreadScheduler as Scheduler
 import qualified Stg.Interpreter.Debugger        as Debugger
 import qualified Stg.Interpreter.Debugger.Region as Debugger
 import qualified Stg.Interpreter.GC as GC
-
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
 import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
 import qualified Stg.Interpreter.PrimOp.SmallArray    as PrimSmallArray
@@ -852,34 +852,45 @@ scheduleWaitThread (StgTSO* tso, /*[out]*/HaskellObj* ret, Capability **pcap)
 -}
 ---------------------- primops
 
+primOpMap :: HashMap.HashMap Name PrimOpFunDef
+primOpMap = HashMap.fromList primOpList
+
+primOpList :: [(Name, PrimOpFunDef)]
+primOpList = concat
+  [ PrimAddr.primOps
+  , PrimArray.primOps
+  , PrimSmallArray.primOps
+  , PrimArrayArray.primOps
+  , PrimByteArray.primOps
+  , PrimChar.primOps
+  , PrimConcurrency.primOps
+  , PrimDelayWait.primOps
+  , PrimParallelism.primOps
+  , PrimExceptions.primOps
+  , PrimFloat.primOps
+  , PrimDouble.primOps
+  , PrimInt16.primOps
+  , PrimInt8.primOps
+  , PrimInt.primOps
+  , PrimMutVar.primOps
+  , PrimMVar.primOps
+  , PrimNarrowings.primOps
+  , PrimPrefetch.primOps
+  , PrimStablePointer.primOps
+  , PrimWeakPointer.primOps
+  , PrimWord16.primOps
+  , PrimWord8.primOps
+  , PrimWord.primOps
+  , PrimTagToEnum.primOps
+  , PrimUnsafe.primOps
+  , PrimMiscEtc.primOps
+  ]
+
+dupPrimOps :: [(Name, Int)]
+dupPrimOps = Map.toList $ Map.filter (> 1) $ foldl (\m n-> Map.insertWith (+) n 1 m) Map.empty $ map fst primOpList
+
 evalPrimOp :: HasCallStack => Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp =
-  PrimAddr.evalPrimOp $
-  PrimArray.evalPrimOp $
-  PrimSmallArray.evalPrimOp $
-  PrimArrayArray.evalPrimOp $
-  PrimByteArray.evalPrimOp $
-  PrimChar.evalPrimOp $
-  PrimConcurrency.evalPrimOp $
-  PrimDelayWait.evalPrimOp $
-  PrimParallelism.evalPrimOp $
-  PrimExceptions.evalPrimOp $
-  PrimFloat.evalPrimOp $
-  PrimDouble.evalPrimOp $
-  PrimInt16.evalPrimOp $
-  PrimInt8.evalPrimOp $
-  PrimInt.evalPrimOp $
-  PrimMutVar.evalPrimOp $
-  PrimMVar.evalPrimOp $
-  PrimNarrowings.evalPrimOp $
-  PrimPrefetch.evalPrimOp $
-  PrimStablePointer.evalPrimOp $
-  PrimWeakPointer.evalPrimOp $
-  PrimWord16.evalPrimOp $
-  PrimWord8.evalPrimOp $
-  PrimWord.evalPrimOp $
-  PrimTagToEnum.evalPrimOp $
-  PrimUnsafe.evalPrimOp $
-  PrimMiscEtc.evalPrimOp $
-  unsupported where
-    unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args
+evalPrimOp op args t tc = case HashMap.lookup op primOpMap of
+  Just (NormalOp opEval)  -> opEval args
+  Just (SpecOp opEval)    -> opEval args t tc
+  Nothing                 -> stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args

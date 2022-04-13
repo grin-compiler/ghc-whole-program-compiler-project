@@ -17,11 +17,11 @@ pattern IntV i = IntAtom i
     this is an ugly design, needs to be fixed in the future!
 -}
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
-  -- delay# :: Int# -> State# s -> State# s
-  ( "delay#", [IntV usDelay, _s]) -> do
+      -- delay# :: Int# -> State# s -> State# s
+  defOp "delay#" $ \[IntV usDelay, _s] -> do
     -- safety check
     ts@ThreadState{..} <- getCurrentThreadState
     unless (tsStatus == ThreadRunning) $
@@ -41,8 +41,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     stackPush $ RunScheduler SR_ThreadBlocked
     pure []
 
-  -- waitRead# :: Int# -> State# s -> State# s
-  ( "waitRead#", [IntV fd, _s]) -> do
+      -- waitRead# :: Int# -> State# s -> State# s
+  defOp "waitRead#" $ \[IntV fd, _s] -> do
     -- safety check
     ts@ThreadState{..} <- getCurrentThreadState
     unless (tsStatus == ThreadRunning) $
@@ -57,8 +57,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     stackPush $ RunScheduler SR_ThreadBlocked
     pure []
 
-  -- waitWrite# :: Int# -> State# s -> State# s
-  ( "waitWrite#", [IntV fd, _s]) -> do
+      -- waitWrite# :: Int# -> State# s -> State# s
+  defOp "waitWrite#" $ \[IntV fd, _s] -> do
     -- safety check
     ts@ThreadState{..} <- getCurrentThreadState
     unless (tsStatus == ThreadRunning) $
@@ -72,5 +72,3 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- reschedule threads
     stackPush $ RunScheduler SR_ThreadBlocked
     pure []
-
-  _ -> fallback op args t tc

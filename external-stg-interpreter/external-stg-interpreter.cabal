@@ -74,6 +74,7 @@ library
                        text,
                        bytestring,
                        containers,
+                       unordered-containers,
                        primitive,
                        vector,
                        mtl,

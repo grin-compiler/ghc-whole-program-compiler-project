@@ -79,20 +79,18 @@ reportOp op args = do
   -}
   pure ()
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
-  -- newMVar# :: State# s -> (# State# s, MVar# s a #)
-  ( "newMVar#", [_s]) -> do
-    reportOp op args
+      -- newMVar# :: State# s -> (# State# s, MVar# s a #)
+  defOp "newMVar#" $ \[_s] -> do
     state (\s@StgState{..} ->
       let next  = ssNextMVar
           value = MVarDescriptor {mvdValue = Nothing, mvdQueue = []}
       in ([MVar next], s {ssMVars = IntMap.insert next value ssMVars, ssNextMVar = succ next}))
 
-  -- takeMVar# :: MVar# s a -> State# s -> (# State# s, a #)
-  ( "takeMVar#", [MVar m, _s]) -> do
-    reportOp op args
+      -- takeMVar# :: MVar# s a -> State# s -> (# State# s, a #)
+  defOp "takeMVar#" $ \[MVar m, _s] -> do
     mvd@MVarDescriptor{..} <- lookupMVar m
     --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
@@ -115,9 +113,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
         handleTakeMVar_ValueFullCase m mvd
         pure [a]
 
-  -- tryTakeMVar# :: MVar# s a -> State# s -> (# State# s, Int#, a #)
-  ( "tryTakeMVar#", [MVar m, _s]) -> do
-    reportOp op args
+      -- tryTakeMVar# :: MVar# s a -> State# s -> (# State# s, Int#, a #)
+  defOp "tryTakeMVar#" $ \[MVar m, _s] -> do
     mvd@MVarDescriptor{..} <- lookupMVar m
     --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
@@ -127,9 +124,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
         handleTakeMVar_ValueFullCase m mvd
         pure [IntV 1, a]
 
-  -- putMVar# :: MVar# s a -> a -> State# s -> State# s
-  ( "putMVar#", [MVar m, a, _s]) -> do
-    reportOp op args
+      -- putMVar# :: MVar# s a -> a -> State# s -> State# s
+  defOp "putMVar#" $ \[MVar m, a, _s] -> do
     mvd@MVarDescriptor{..} <- lookupMVar m
     --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
@@ -152,9 +148,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
         handlePutMVar_ValueEmptyCase m mvd a
         pure []
 
-  -- tryPutMVar# :: MVar# s a -> a -> State# s -> (# State# s, Int# #)
-  ( "tryPutMVar#", [MVar m, a, _s]) -> do
-    reportOp op args
+      -- tryPutMVar# :: MVar# s a -> a -> State# s -> (# State# s, Int# #)
+  defOp "tryPutMVar#" $ \[MVar m, a, _s] -> do
     mvd@MVarDescriptor{..} <- lookupMVar m
     --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
@@ -164,9 +159,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
       Just _  -> do
         pure [IntV 0]
 
-  -- readMVar# :: MVar# s a -> State# s -> (# State# s, a #)
-  ( "readMVar#", [MVar m, _s]) -> do
-    reportOp op args
+      -- readMVar# :: MVar# s a -> State# s -> (# State# s, a #)
+  defOp "readMVar#" $ \[MVar m, _s] -> do
     mvd@MVarDescriptor{..} <- lookupMVar m
     --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
@@ -187,27 +181,22 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
       Just a -> pure [a]
 
-  -- tryReadMVar# :: MVar# s a -> State# s -> (# State# s, Int#, a #)
-  ( "tryReadMVar#", [MVar m, _s]) -> do
-    reportOp op args
+      -- tryReadMVar# :: MVar# s a -> State# s -> (# State# s, Int#, a #)
+  defOp "tryReadMVar#" $ \[MVar m, _s] -> do
     MVarDescriptor{..} <- lookupMVar m
     --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Nothing -> pure [IntV 0, LiftedUndefined]
       Just a  -> pure [IntV 1, a]
 
-  -- sameMVar# :: MVar# s a -> MVar# s a -> Int#
-  ( "sameMVar#", [MVar a, MVar b]) -> do
-    reportOp op args
+      -- sameMVar# :: MVar# s a -> MVar# s a -> Int#
+  defOp "sameMVar#" $ \[MVar a, MVar b] -> do
     pure [IntV $ if a == b then 1 else 0]
 
-  -- isEmptyMVar# :: MVar# s a -> State# s -> (# State# s, Int# #)
-  ( "isEmptyMVar#", [MVar m, _s]) -> do
-    reportOp op args
+      -- isEmptyMVar# :: MVar# s a -> State# s -> (# State# s, Int# #)
+  defOp "isEmptyMVar#" $ \[MVar m, _s] -> do
     MVarDescriptor{..} <- lookupMVar m
     --liftIO $ putStrLn $ "mvdValue: " ++ show mvdValue
     case mvdValue of
       Nothing -> pure [IntV 1]
       Just _  -> pure [IntV 0]
-
-  _ -> fallback op args t tc

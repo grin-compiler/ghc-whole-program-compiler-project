@@ -4,8 +4,9 @@ module Stg.Interpreter.PrimOp.STM where
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
+  pure ()
 
   -- atomically# :: (State# RealWorld -> (# State# RealWorld, a #) )
   --             ->  State# RealWorld -> (# State# RealWorld, a #)
@@ -25,7 +26,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- writeTVar# :: TVar# s a -> a -> State# s -> State# s
   -- sameTVar# :: TVar# s a -> TVar# s a -> Int#
 
-  _ -> fallback op args t tc
 
 {-
 ------------------------------------------------------------------------

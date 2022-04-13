@@ -8,8 +8,8 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
   {-
     catch# :: (State# RealWorld -> (# State# RealWorld, a #) )
@@ -17,7 +17,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
            -> State# RealWorld
            -> (# State# RealWorld, a #)
   -}
-  ( "catch#", [f, h, w]) -> do
+  defOp "catch#" $ \[f, h, w] -> do
     -- get async exception masking state
     ThreadState{..} <- getCurrentThreadState
 
@@ -25,37 +25,37 @@ evalPrimOp fallback op args t tc = case (op, args) of
     stackPush $ Apply [w]
     pure [f]
 
-  -- raise# :: b -> o
-  ( "raise#", [ex]) -> do
+      -- raise# :: b -> o
+  defOp "raise#" $ \[ex] -> do
     -- for debug only
     --liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
 
     raiseEx ex -- implementation
 
-  -- raiseDivZero# :: Void# -> o
-  ( "raiseDivZero#", [_s]) -> do
+      -- raiseDivZero# :: Void# -> o
+  defOp "raiseDivZero#" $ \[_s] -> do
     Rts{..} <- gets ssRtsSupport
     raiseEx rtsDivZeroException
 
-  -- raiseUnderflow# :: Void# -> o
-  ( "raiseUnderflow#", [_s]) -> do
+      -- raiseUnderflow# :: Void# -> o
+  defOp "raiseUnderflow#" $ \[_s] -> do
     Rts{..} <- gets ssRtsSupport
     raiseEx rtsUnderflowException
 
-  -- raiseOverflow# :: Void# -> o
-  ( "raiseOverflow#", [_s]) -> do
+      -- raiseOverflow# :: Void# -> o
+  defOp "raiseOverflow#" $ \[_s] -> do
     Rts{..} <- gets ssRtsSupport
     raiseEx rtsOverflowException
 
-  -- raiseIO# :: a -> State# RealWorld -> (# State# RealWorld, b #)
-  ( "raiseIO#", [ex, s]) -> do
+      -- raiseIO# :: a -> State# RealWorld -> (# State# RealWorld, b #)
+  defOp "raiseIO#" $ \[ex, s] -> do
     -- for debug only
     --liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
 
     raiseEx ex -- implementation
 
-  -- maskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
-  ( "maskAsyncExceptions#", [f, w]) -> do
+      -- maskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
+  defOp "maskAsyncExceptions#" $ \[f, w] -> do
 
     -- get async exception masking state
     ts@ThreadState{..} <- getCurrentThreadState
@@ -70,8 +70,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     stackPush $ Apply [w]
     pure [f]
 
-  -- maskUninterruptible# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
-  ( "maskUninterruptible#", [f, w]) -> do
+      -- maskUninterruptible# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
+  defOp "maskUninterruptible#" $ \[f, w] -> do
 
     -- get async exception masking state
     ts@ThreadState{..} <- getCurrentThreadState
@@ -86,8 +86,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     stackPush $ Apply [w]
     pure [f]
 
-  -- unmaskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
-  ( "unmaskAsyncExceptions#", [f, w]) -> do
+      -- unmaskAsyncExceptions# :: (State# RealWorld -> (# State# RealWorld, a #)) -> State# RealWorld -> (# State# RealWorld, a #)
+  defOp "unmaskAsyncExceptions#" $ \[f, w] -> do
 
     -- get async exception masking state
     ts@ThreadState{..} <- getCurrentThreadState
@@ -112,8 +112,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     stackPush $ Apply [w]
     pure [f]
 
-  -- getMaskingState# :: State# RealWorld -> (# State# RealWorld, Int# #)
-  ( "getMaskingState#", [_s]) -> do
+      -- getMaskingState# :: State# RealWorld -> (# State# RealWorld, Int# #)
+  defOp "getMaskingState#" $ \[_s] -> do
     ThreadState{..} <- getCurrentThreadState
     {-
        returns: 0 == unmasked,
@@ -126,8 +126,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
           (True,  True)   -> 2
           (False, True)   -> error "impossible exception mask, tsBlockExceptions: False, tsInterruptible: True"
     pure [IntV status]
-
-  _ -> fallback op args t tc
 
 raiseEx :: Atom -> M [Atom]
 raiseEx ex = unwindStack where

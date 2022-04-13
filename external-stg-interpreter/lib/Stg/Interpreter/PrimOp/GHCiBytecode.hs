@@ -4,10 +4,9 @@ module Stg.Interpreter.PrimOp.GHCiBytecode where
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
-
-  _ -> fallback op args t tc
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
+  pure ()
 
 {-
 ------------------------------------------------------------------------

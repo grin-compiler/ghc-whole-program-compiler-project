@@ -4,8 +4,9 @@ module Stg.Interpreter.PrimOp.Compact where
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
+  pure ()
 
   -- compactNew# :: Word# -> State# RealWorld -> (# State# RealWorld, Compact# #)
   -- compactResize# :: Compact# -> Word# -> State# RealWorld -> State# RealWorld
@@ -18,8 +19,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- compactAdd# :: Compact# -> a -> State# RealWorld -> (# State# RealWorld, a #)
   -- compactAddWithSharing# :: Compact# -> a -> State# RealWorld -> (# State# RealWorld, a #)
   -- compactSize# :: Compact# -> State# RealWorld -> (# State# RealWorld, Word# #)
-
-  _ -> fallback op args t tc
 
 {-
 ------------------------------------------------------------------------

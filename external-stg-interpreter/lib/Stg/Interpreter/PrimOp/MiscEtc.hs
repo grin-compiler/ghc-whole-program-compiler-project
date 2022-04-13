@@ -8,20 +8,20 @@ import Foreign.Ptr
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
   -- getCCSOf# :: a -> State# s -> (# State# s, Addr# #)
 
-  -- getCurrentCCS# :: a -> State# s -> (# State# s, Addr# #)
-  ( "getCurrentCCS#", [_, _]) -> do
+      -- getCurrentCCS# :: a -> State# s -> (# State# s, Addr# #)
+  defOp "getCurrentCCS#" $ \[_, _] -> do
     -- HINT: follows the non profiling mode semantics
     pure [PtrAtom RawPtr nullPtr]
 
   -- clearCCS# :: (State# s -> (# State# s, a #)) -> State# s -> (# State# s, a #)
 
-  -- traceEvent# :: Addr# -> State# s -> State# s
-  ( "traceEvent#", [PtrAtom _ p, _s]) -> do
+      -- traceEvent# :: Addr# -> State# s -> State# s
+  defOp "traceEvent#" $ \[PtrAtom _ p, _s] -> do
     msg <- liftIO $ peekCString $ castPtr p
     addrState <- getAddressState
     modify' $ \s@StgState{..} -> s {ssTraceEvents = (msg, addrState) : ssTraceEvents}
@@ -29,16 +29,14 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- traceBinaryEvent# :: Addr# -> Int# -> State# s -> State# s
 
-  -- traceMarker# :: Addr# -> State# s -> State# s
-  ( "traceMarker#", [PtrAtom _ p, _s]) -> do
+      -- traceMarker# :: Addr# -> State# s -> State# s
+  defOp "traceMarker#" $ \[PtrAtom _ p, _s] -> do
     msg <- liftIO $ peekCString $ castPtr p
     addrState <- getAddressState
     modify' $ \s@StgState{..} -> s {ssTraceMarkers = (msg, addrState) : ssTraceMarkers}
     pure []
 
   -- setThreadAllocationCounter# :: INT64 -> State# RealWorld -> State# RealWorld
-
-  _ -> fallback op args t tc
 
 {-
 ------------------------------------------------------------------------

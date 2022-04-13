@@ -11,31 +11,31 @@ import Stg.Interpreter.Base
 
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
   -- Stable Pointer
 
-  -- makeStablePtr# :: a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
-  ( "makeStablePtr#", [a, _s]) -> do
+      -- makeStablePtr# :: a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
+  defOp "makeStablePtr#" $ \[a, _s] -> do
     stablePtrs <- gets ssStablePointers
     next <- gets ssNextStablePointer
     modify' $ \s -> s {ssStablePointers = IntMap.insert next a stablePtrs, ssNextStablePointer = succ next}
     pure [PtrAtom (StablePtr next) . intPtrToPtr $ IntPtr next]
 
-  -- deRefStablePtr# :: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
-  ( "deRefStablePtr#", [PtrAtom (StablePtr _index) p, _s]) -> do
+      -- deRefStablePtr# :: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
+  defOp "deRefStablePtr#" $ \[PtrAtom (StablePtr _index) p, _s] -> do
     pure <$> lookupStablePointerPtr p
 
-  -- eqStablePtr# :: StablePtr# a -> StablePtr# a -> Int#
-  ( "eqStablePtr#", [PtrAtom _ a, PtrAtom _ b]) -> do
+      -- eqStablePtr# :: StablePtr# a -> StablePtr# a -> Int#
+  defOp "eqStablePtr#" $ \[PtrAtom _ a, PtrAtom _ b] -> do
     pure [IntV $ if a == b then 1 else 0]
 
 
   -- Stable Name
 
-  -- makeStableName# :: a -> State# RealWorld -> (# State# RealWorld, StableName# a #)
-  ( "makeStableName#", [a, _s]) -> do
+      -- makeStableName# :: a -> State# RealWorld -> (# State# RealWorld, StableName# a #)
+  defOp "makeStableName#" $ \[a, _s] -> do
     snMap <- gets ssStableNameMap
     case Map.lookup a snMap of
       Just snId -> pure [StableName snId]
@@ -44,12 +44,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
         modify' $ \s -> s {ssStableNameMap = Map.insert a snId snMap, ssNextStableName = succ snId}
         pure [StableName snId]
 
-  -- eqStableName# :: StableName# a -> StableName# b -> Int#
-  ( "eqStableName#", [StableName a, StableName b]) -> do
+      -- eqStableName# :: StableName# a -> StableName# b -> Int#
+  defOp "eqStableName#" $ \[StableName a, StableName b] -> do
     pure [IntV $ if a == b then 1 else 0]
 
-  -- stableNameToInt# :: StableName# a -> Int#
-  ( "stableNameToInt#", [StableName snId]) -> do
+      -- stableNameToInt# :: StableName# a -> Int#
+  defOp "stableNameToInt#" $ \[StableName snId] -> do
     pure [IntV snId]
-
-  _ -> fallback op args t tc

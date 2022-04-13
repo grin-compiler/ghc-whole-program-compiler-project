@@ -6,13 +6,12 @@ import Stg.Interpreter.Base
 
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
-  -- reallyUnsafePtrEquality# :: a -> a -> Int#
-  ( "reallyUnsafePtrEquality#", [a, b]) -> do
-    pure [IntV $ if a == b then 1 else 0]
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
-  _ -> fallback op args t tc
+      -- reallyUnsafePtrEquality# :: a -> a -> Int#
+  defOp "reallyUnsafePtrEquality#" $ \[a, b] -> do
+    pure [IntV $ if a == b then 1 else 0]
 
 {-
 ------------------------------------------------------------------------

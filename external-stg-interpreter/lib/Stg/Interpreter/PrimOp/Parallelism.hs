@@ -13,29 +13,27 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
-  -- par# :: a -> Int#
-  -- DEPRECATED: Use 'spark#' instead
-  ( "par#", [_a]) -> do
+      -- par# :: a -> Int#
+      -- DEPRECATED: Use 'spark#' instead
+  defOp "par#" $ \[_a] -> do
     pure [IntV 1]
 
-  -- spark# :: a -> State# s -> (# State# s, a #)
-  ( "spark#", [a, _s]) -> do
+      -- spark# :: a -> State# s -> (# State# s, a #)
+  defOp "spark#" $ \[a, _s] -> do
     pure [a]
 
-  -- seq# :: a -> State# s -> (# State# s, a #)
-  ( "seq#", [a, _s]) -> do
+      -- seq# :: a -> State# s -> (# State# s, a #)
+  defOp "seq#" $ \[a, _s] -> do
     stackPush $ Apply []
     pure [a]
 
-  -- getSpark# :: State# s -> (# State# s, Int#, a #)
-  ( "getSpark#", [_s]) -> do
+      -- getSpark# :: State# s -> (# State# s, Int#, a #)
+  defOp "getSpark#" $ \[_s] -> do
     pure [IntV 0, LiftedUndefined]
 
-  -- numSparks# :: State# s -> (# State# s, Int# #)
-  ( "numSparks#", [_s]) -> do
+      -- numSparks# :: State# s -> (# State# s, Int# #)
+  defOp "numSparks#" $ \[_s] -> do
     pure [IntV 0]
-
-  _ -> fallback op args t tc

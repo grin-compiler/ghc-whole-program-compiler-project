@@ -13,108 +13,106 @@ pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
-  -- gtFloat# :: Float# -> Float# -> Int#
-  ( "gtFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a > b  then 1 else 0]
+      -- gtFloat# :: Float# -> Float# -> Int#
+  defOp "gtFloat#"      $ \[FloatV a, FloatV b] -> pure [IntV $ if a > b  then 1 else 0]
 
-  -- geFloat# :: Float# -> Float# -> Int#
-  ( "geFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a >= b then 1 else 0]
+      -- geFloat# :: Float# -> Float# -> Int#
+  defOp "geFloat#"      $ \[FloatV a, FloatV b] -> pure [IntV $ if a >= b then 1 else 0]
 
-  -- eqFloat# :: Float# -> Float# -> Int#
-  ( "eqFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a == b then 1 else 0]
+      -- eqFloat# :: Float# -> Float# -> Int#
+  defOp "eqFloat#"      $ \[FloatV a, FloatV b] -> pure [IntV $ if a == b then 1 else 0]
 
-  -- neFloat# :: Float# -> Float# -> Int#
-  ( "neFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a /= b then 1 else 0]
+      -- neFloat# :: Float# -> Float# -> Int#
+  defOp "neFloat#"      $ \[FloatV a, FloatV b] -> pure [IntV $ if a /= b then 1 else 0]
 
-  -- ltFloat# :: Float# -> Float# -> Int#
-  ( "ltFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a < b  then 1 else 0]
+      -- ltFloat# :: Float# -> Float# -> Int#
+  defOp "ltFloat#"      $ \[FloatV a, FloatV b] -> pure [IntV $ if a < b  then 1 else 0]
 
-  -- leFloat# :: Float# -> Float# -> Int#
-  ( "leFloat#",      [FloatV a, FloatV b]) -> pure [IntV $ if a <= b then 1 else 0]
+      -- leFloat# :: Float# -> Float# -> Int#
+  defOp "leFloat#"      $ \[FloatV a, FloatV b] -> pure [IntV $ if a <= b then 1 else 0]
 
-  -- plusFloat# :: Float# -> Float# -> Float#
-  ( "plusFloat#",    [FloatV a, FloatV b]) -> pure [FloatV $ a + b]
+      -- plusFloat# :: Float# -> Float# -> Float#
+  defOp "plusFloat#"    $ \[FloatV a, FloatV b] -> pure [FloatV $ a + b]
 
-  -- minusFloat# :: Float# -> Float# -> Float#
-  ( "minusFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ a - b]
+      -- minusFloat# :: Float# -> Float# -> Float#
+  defOp "minusFloat#"   $ \[FloatV a, FloatV b] -> pure [FloatV $ a - b]
 
-  -- timesFloat# :: Float# -> Float# -> Float#
-  ( "timesFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ a * b]
+      -- timesFloat# :: Float# -> Float# -> Float#
+  defOp "timesFloat#"   $ \[FloatV a, FloatV b] -> pure [FloatV $ a * b]
 
-  -- divideFloat# :: Float# -> Float# -> Float#
-  ( "divideFloat#",  [FloatV a, FloatV b]) -> pure [FloatV $ a / b]
+      -- divideFloat# :: Float# -> Float# -> Float#
+  defOp "divideFloat#"  $ \[FloatV a, FloatV b] -> pure [FloatV $ a / b]
 
-  -- negateFloat# :: Float# -> Float#
-  ( "negateFloat#",  [FloatV a]) -> pure [FloatV (-a)]
+      -- negateFloat# :: Float# -> Float#
+  defOp "negateFloat#"  $ \[FloatV a] -> pure [FloatV (-a)]
 
-  -- fabsFloat# :: Float# -> Float#
-  ( "fabsFloat#",    [FloatV a]) -> pure [FloatV (abs a)]
+      -- fabsFloat# :: Float# -> Float#
+  defOp "fabsFloat#"    $ \[FloatV a] -> pure [FloatV (abs a)]
 
-  -- float2Int# :: Float# -> Int#
-  ( "float2Int#",    [FloatV a]) -> pure [IntV $ truncate a]
+      -- float2Int# :: Float# -> Int#
+  defOp "float2Int#"    $ \[FloatV a] -> pure [IntV $ truncate a]
 
-  -- expFloat# :: Float# -> Float#
-  ( "expFloat#",     [FloatV a]) -> pure [FloatV $ exp a]
+      -- expFloat# :: Float# -> Float#
+  defOp "expFloat#"     $ \[FloatV a] -> pure [FloatV $ exp a]
 
-  -- expm1Float# :: Float# -> Float#
-  ( "expm1Float#",   [FloatV a]) -> pure [FloatV $ expm1Float a]
+      -- expm1Float# :: Float# -> Float#
+  defOp "expm1Float#"   $ \[FloatV a] -> pure [FloatV $ expm1Float a]
 
-  -- logFloat# :: Float# -> Float#
-  ( "logFloat#",     [FloatV a]) -> pure [FloatV $ log a]
+      -- logFloat# :: Float# -> Float#
+  defOp "logFloat#"     $ \[FloatV a] -> pure [FloatV $ log a]
 
-  -- log1pFloat# :: Float# -> Float#
-  ( "log1pFloat#",   [FloatV a]) -> pure [FloatV $ log1pFloat a]
+      -- log1pFloat# :: Float# -> Float#
+  defOp "log1pFloat#"   $ \[FloatV a] -> pure [FloatV $ log1pFloat a]
 
-  -- sqrtFloat# :: Float# -> Float#
-  ( "sqrtFloat#",    [FloatV a]) -> pure [FloatV $ sqrt a]
+      -- sqrtFloat# :: Float# -> Float#
+  defOp "sqrtFloat#"    $ \[FloatV a] -> pure [FloatV $ sqrt a]
 
-  -- sinFloat# :: Float# -> Float#
-  ( "sinFloat#",     [FloatV a]) -> pure [FloatV $ sin a]
+      -- sinFloat# :: Float# -> Float#
+  defOp "sinFloat#"     $ \[FloatV a] -> pure [FloatV $ sin a]
 
-  -- cosFloat# :: Float# -> Float#
-  ( "cosFloat#",     [FloatV a]) -> pure [FloatV $ cos a]
+      -- cosFloat# :: Float# -> Float#
+  defOp "cosFloat#"     $ \[FloatV a] -> pure [FloatV $ cos a]
 
-  -- tanFloat# :: Float# -> Float#
-  ( "tanFloat#",     [FloatV a]) -> pure [FloatV $ tan a]
+      -- tanFloat# :: Float# -> Float#
+  defOp "tanFloat#"     $ \[FloatV a] -> pure [FloatV $ tan a]
 
-  -- asinFloat# :: Float# -> Float#
-  ( "asinFloat#",    [FloatV a]) -> pure [FloatV $ asin a]
+      -- asinFloat# :: Float# -> Float#
+  defOp "asinFloat#"    $ \[FloatV a] -> pure [FloatV $ asin a]
 
-  -- acosFloat# :: Float# -> Float#
-  ( "acosFloat#",    [FloatV a]) -> pure [FloatV $ acos a]
+      -- acosFloat# :: Float# -> Float#
+  defOp "acosFloat#"    $ \[FloatV a] -> pure [FloatV $ acos a]
 
-  -- atanFloat# :: Float# -> Float#
-  ( "atanFloat#",    [FloatV a]) -> pure [FloatV $ atan a]
+      -- atanFloat# :: Float# -> Float#
+  defOp "atanFloat#"    $ \[FloatV a] -> pure [FloatV $ atan a]
 
-  -- sinhFloat# :: Float# -> Float#
-  ( "sinhFloat#",    [FloatV a]) -> pure [FloatV $ sinh a]
+      -- sinhFloat# :: Float# -> Float#
+  defOp "sinhFloat#"    $ \[FloatV a] -> pure [FloatV $ sinh a]
 
-  -- coshFloat# :: Float# -> Float#
-  ( "coshFloat#",    [FloatV a]) -> pure [FloatV $ cosh a]
+      -- coshFloat# :: Float# -> Float#
+  defOp "coshFloat#"    $ \[FloatV a] -> pure [FloatV $ cosh a]
 
-  -- tanhFloat# :: Float# -> Float#
-  ( "tanhFloat#",    [FloatV a]) -> pure [FloatV $ tanh a]
+      -- tanhFloat# :: Float# -> Float#
+  defOp "tanhFloat#"    $ \[FloatV a] -> pure [FloatV $ tanh a]
 
-  -- asinhFloat# :: Float# -> Float#
-  ( "asinhFloat#",   [FloatV a]) -> pure [FloatV $ asinhFloat a]
+      -- asinhFloat# :: Float# -> Float#
+  defOp "asinhFloat#"   $ \[FloatV a] -> pure [FloatV $ asinhFloat a]
 
-  -- acoshFloat# :: Float# -> Float#
-  ( "acoshFloat#",   [FloatV a]) -> pure [FloatV $ acoshFloat a]
+      -- acoshFloat# :: Float# -> Float#
+  defOp "acoshFloat#"   $ \[FloatV a] -> pure [FloatV $ acoshFloat a]
 
-  -- atanhFloat# :: Float# -> Float#
-  ( "atanhFloat#",   [FloatV a]) -> pure [FloatV $ atanhFloat a]
+      -- atanhFloat# :: Float# -> Float#
+  defOp "atanhFloat#"   $ \[FloatV a] -> pure [FloatV $ atanhFloat a]
 
-  -- powerFloat# :: Float# -> Float# -> Float#
-  ( "powerFloat#",   [FloatV a, FloatV b]) -> pure [FloatV $ powerFloat a b]
+      -- powerFloat# :: Float# -> Float# -> Float#
+  defOp "powerFloat#"   $ \[FloatV a, FloatV b] -> pure [FloatV $ powerFloat a b]
 
-  -- float2Double# ::  Float# -> Double#
-  ( "float2Double#", [FloatV a]) -> pure [DoubleV $ realToFrac a]
+      -- float2Double# ::  Float# -> Double#
+  defOp "float2Double#" $ \[FloatV a] -> pure [DoubleV $ realToFrac a]
 
-  -- decodeFloat_Int# :: Float# -> (# Int#, Int# #)
-  ( "decodeFloat_Int#", [FloatV (F# a)]) -> do
+      -- decodeFloat_Int# :: Float# -> (# Int#, Int# #)
+  defOp "decodeFloat_Int#" $ \[FloatV (F# a)] -> do
     let !(# mantissa, exponent #) = decodeFloat_Int# a
     pure [IntV (I# mantissa), IntV (I# exponent)]
-
-  _ -> fallback op args t tc

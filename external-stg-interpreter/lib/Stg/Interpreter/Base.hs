@@ -3,6 +3,7 @@ module Stg.Interpreter.Base where
 
 import Data.Word
 import Foreign.Ptr
+import Control.Monad.Writer (Writer, execWriter, tell)
 import Control.Monad.State.Strict
 import Data.List (foldl')
 import Data.Set (Set)
@@ -670,7 +671,23 @@ readHeapClosure a = readHeap a >>= \o -> case o of
 
 -- primop related
 
+data PrimOpFunDef
+  = NormalOp  ([Atom] -> M [Atom])
+  | SpecOp    ([Atom] -> Type -> Maybe TyCon -> M [Atom])
+
+type OpM = Writer [(Name, PrimOpFunDef)]
+
+getPrimOpList :: OpM () -> [(Name, PrimOpFunDef)]
+getPrimOpList = execWriter
+
+defOp :: Name -> ([Atom] -> M [Atom]) -> OpM ()
+defOp name eval = tell [(name, NormalOp eval)]
+
+defSpecOp :: Name -> ([Atom] -> Type -> Maybe TyCon -> M [Atom]) -> OpM ()
+defSpecOp name eval = tell [(name, SpecOp eval)]
+
 type PrimOpEval = Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+type PrimOpEvalFun = [Atom] -> Type -> Maybe TyCon -> M [Atom]
 
 --type BuiltinStgEval = Atom -> M [Atom]
 --type BuiltinStgApply = Atom -> [Atom] -> M [Atom]

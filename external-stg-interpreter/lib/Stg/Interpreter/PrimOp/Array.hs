@@ -21,57 +21,57 @@ updateArrIdx m v = do
     MutArrIdx n -> s { ssMutableArrays = IntMap.insert n v ssMutableArrays }
     ArrIdx    n -> s { ssArrays        = IntMap.insert n v ssArrays }
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
-  -- newArray# :: Int# -> a -> State# s -> (# State# s, MutableArray# s a #)
-  ( "newArray#", [IntV i, a, _s]) -> do
+      -- newArray# :: Int# -> a -> State# s -> (# State# s, MutableArray# s a #)
+  defOp "newArray#" $ \[IntV i, a, _s] -> do
     mutableArrays <- gets ssMutableArrays
     next <- gets ssNextMutableArray
     let v = V.replicate i a
     modify' $ \s -> s {ssMutableArrays = IntMap.insert next v mutableArrays, ssNextMutableArray = succ next}
     pure [MutableArray $ MutArrIdx next]
 
-  -- sameMutableArray# :: MutableArray# s a -> MutableArray# s a -> Int#
-  ( "sameMutableArray#", [MutableArray a, MutableArray b]) -> do
+      -- sameMutableArray# :: MutableArray# s a -> MutableArray# s a -> Int#
+  defOp "sameMutableArray#" $ \[MutableArray a, MutableArray b] -> do
     pure [IntV $ if a == b then 1 else 0]
 
-  -- readArray# :: MutableArray# s a -> Int# -> State# s -> (# State# s, a #)
-  ( "readArray#", [MutableArray a, IntV i, _s]) -> do
+      -- readArray# :: MutableArray# s a -> Int# -> State# s -> (# State# s, a #)
+  defOp "readArray#" $ \[MutableArray a, IntV i, _s] -> do
     v <- lookupArrIdx a
     pure [v V.! i]
 
-  -- writeArray# :: MutableArray# s a -> Int# -> a -> State# s -> State# s
-  ( "writeArray#", [MutableArray m, IntV i, a, _s]) -> do
+      -- writeArray# :: MutableArray# s a -> Int# -> a -> State# s -> State# s
+  defOp "writeArray#" $ \[MutableArray m, IntV i, a, _s] -> do
     v <- lookupArrIdx m
     updateArrIdx m (v V.// [(i, a)])
     pure []
 
-  -- sizeofArray# :: Array# a -> Int#
-  ( "sizeofArray#", [Array a]) -> do
+      -- sizeofArray# :: Array# a -> Int#
+  defOp "sizeofArray#" $ \[Array a] -> do
     v <- lookupArrIdx a
     pure [IntV $ V.length v]
 
-  -- sizeofMutableArray# :: MutableArray# s a -> Int#
-  ( "sizeofMutableArray#", [MutableArray a]) -> do
+      -- sizeofMutableArray# :: MutableArray# s a -> Int#
+  defOp "sizeofMutableArray#" $ \[MutableArray a] -> do
     v <- lookupArrIdx a
     pure [IntV $ V.length v]
 
-  -- indexArray# :: Array# a -> Int# -> (# a #)
-  ( "indexArray#", [Array a, IntV i]) -> do
+      -- indexArray# :: Array# a -> Int# -> (# a #)
+  defOp "indexArray#" $ \[Array a, IntV i] -> do
     v <- lookupArrIdx a
     pure [v V.! i]
 
-  -- unsafeFreezeArray# :: MutableArray# s a -> State# s -> (# State# s, Array# a #)
-  ( "unsafeFreezeArray#", [MutableArray v, _s]) -> do
+      -- unsafeFreezeArray# :: MutableArray# s a -> State# s -> (# State# s, Array# a #)
+  defOp "unsafeFreezeArray#" $ \[MutableArray v, _s] -> do
     pure [Array v]
 
-  -- unsafeThawArray# :: Array# a -> State# s -> (# State# s, MutableArray# s a #)
-  ( "unsafeThawArray#", [Array v, _s]) -> do
+      -- unsafeThawArray# :: Array# a -> State# s -> (# State# s, MutableArray# s a #)
+  defOp "unsafeThawArray#" $ \[Array v, _s] -> do
     pure [MutableArray v]
 
-  -- copyArray# :: Array# a -> Int# -> MutableArray# s a -> Int# -> Int# -> State# s -> State# s
-  ( "copyArray#", [Array src, IntV os, MutableArray dst, IntV od, IntV n, _s]) -> do
+      -- copyArray# :: Array# a -> Int# -> MutableArray# s a -> Int# -> Int# -> State# s -> State# s
+  defOp "copyArray#" $ \[Array src, IntV os, MutableArray dst, IntV od, IntV n, _s] -> do
     vsrc <- lookupArrIdx src
     vdst <- lookupArrIdx dst
     let vdst' = vdst V.// [ (di, v)
@@ -83,8 +83,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     updateArrIdx dst vdst'
     pure []
 
-  -- copyMutableArray# :: MutableArray# s a -> Int# -> MutableArray# s a -> Int# -> Int# -> State# s -> State# s
-  ( "copyMutableArray#", [ MutableArray src, IntV os, MutableArray dst, IntV od, IntV n, _s]) -> do
+      -- copyMutableArray# :: MutableArray# s a -> Int# -> MutableArray# s a -> Int# -> Int# -> State# s -> State# s
+  defOp "copyMutableArray#" $ \[ MutableArray src, IntV os, MutableArray dst, IntV od, IntV n, _s] -> do
     vsrc <- lookupArrIdx src
     vdst <- lookupArrIdx dst
     let vdst' = vdst V.// [ (di, v)
@@ -96,41 +96,41 @@ evalPrimOp fallback op args t tc = case (op, args) of
     updateArrIdx dst vdst'
     pure []
 
-  -- cloneArray# :: Array# a -> Int# -> Int# -> Array# a
-  ( "cloneArray#", [Array src, IntV o, IntV n]) -> do
+      -- cloneArray# :: Array# a -> Int# -> Int# -> Array# a
+  defOp "cloneArray#" $ \[Array src, IntV o, IntV n] -> do
     vsrc <- lookupArrIdx src
     let vdst = V.slice o n vsrc
     state $ \s'@StgState{..} ->
       let next = ssNextArray
       in ([Array $ ArrIdx next], s' {ssArrays = IntMap.insert next vdst ssArrays, ssNextArray = succ next})
 
-  -- cloneMutableArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
-  ( "cloneMutableArray#", [ MutableArray src, IntV o, IntV n, _s]) -> do
+      -- cloneMutableArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
+  defOp "cloneMutableArray#" $ \[ MutableArray src, IntV o, IntV n, _s] -> do
     vsrc <- lookupArrIdx src
     let vdst = V.slice o n vsrc
     state $ \s'@StgState{..} ->
       let next = ssNextMutableArray
       in ([MutableArray $ MutArrIdx next], s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays, ssNextMutableArray = succ next})
 
-  -- freezeArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, Array# a #)
-  ( "freezeArray#", [MutableArray src, IntV o, IntV n, _s]) -> do
+      -- freezeArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, Array# a #)
+  defOp "freezeArray#" $ \[MutableArray src, IntV o, IntV n, _s] -> do
     vsrc <- lookupArrIdx src
     let vdst = V.slice o n vsrc
     state $ \s'@StgState{..} ->
       let next = ssNextArray
       in ([Array $ ArrIdx next], s' {ssArrays = IntMap.insert next vdst ssArrays, ssNextArray = succ next})
 
-  -- thawArray# :: Array# a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
-  ( "thawArray#", [Array src, IntV o, IntV n, _s]) -> do
+      -- thawArray# :: Array# a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
+  defOp "thawArray#" $ \[Array src, IntV o, IntV n, _s] -> do
     vsrc <- lookupArrIdx src
     let vdst = V.slice o n vsrc
     state $ \s'@StgState{..} ->
       let next = ssNextMutableArray
       in ([MutableArray $ MutArrIdx next], s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays, ssNextMutableArray = succ next})
 
-  -- casArray# :: MutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
-  -- NOTE: CPU atomic
-  ( "casArray#", [MutableArray src, IntV o, old, new, _s]) -> do
+      -- casArray# :: MutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
+      -- NOTE: CPU atomic
+  defOp "casArray#" $ \[MutableArray src, IntV o, old, new, _s] -> do
     vsrc <- lookupArrIdx src
     let current = vsrc V.! o
     if current == old
@@ -139,5 +139,3 @@ evalPrimOp fallback op args t tc = case (op, args) of
         pure [IntV 0, new]
       else do
         pure [IntV 1, old]
-
-  _ -> fallback op args t tc

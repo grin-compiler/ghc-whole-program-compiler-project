@@ -11,11 +11,11 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+primOps :: [(Name, PrimOpFunDef)]
+primOps = getPrimOpList $ do
 
-  -- fork# :: a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
-  ( "fork#", [ioAction, _s]) -> do
+      -- fork# :: a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  defOp "fork#" $ \[ioAction, _s] -> do
     currentTS <- getCurrentThreadState
 
     (newTId, newTS) <- createThread
@@ -35,8 +35,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
     pure [ThreadId newTId]
 
-  -- forkOn# :: Int# -> a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
-  ( "forkOn#", [IntV capabilityNo, ioAction, _s]) -> do
+      -- forkOn# :: Int# -> a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  defOp "forkOn#" $ \[IntV capabilityNo, ioAction, _s] -> do
     currentTS <- getCurrentThreadState
 
     (newTId, newTS) <- createThread
@@ -60,8 +60,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
     pure [ThreadId newTId]
 
-  -- killThread# :: ThreadId# -> a -> State# RealWorld -> State# RealWorld
-  ( "killThread#", [ThreadId tidTarget, exception, _s]) -> do
+      -- killThread# :: ThreadId# -> a -> State# RealWorld -> State# RealWorld
+  defOp "killThread#" $ \[ThreadId tidTarget, exception, _s] -> do
     tid <- gets ssCurrentThreadId
     case tid == tidTarget of
       True -> do
@@ -124,35 +124,35 @@ evalPrimOp fallback op args t tc = case (op, args) of
             BlockedOnWrite{}        -> blockIfNotInterruptible_raiseOtherwise
             BlockedOnDelay{}        -> blockIfNotInterruptible_raiseOtherwise
 
-  -- yield# :: State# RealWorld -> State# RealWorld
-  ( "yield#", [_s]) -> do
+      -- yield# :: State# RealWorld -> State# RealWorld
+  defOp "yield#" $ \[_s] -> do
     stackPush $ RunScheduler SR_ThreadYield
     pure []
 
-  -- myThreadId# :: State# RealWorld -> (# State# RealWorld, ThreadId# #)
-  ( "myThreadId#", [_s]) -> do
+      -- myThreadId# :: State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  defOp "myThreadId#" $ \[_s] -> do
     tid <- gets ssCurrentThreadId
     pure [ThreadId tid]
 
-  -- labelThread# :: ThreadId# -> Addr# -> State# RealWorld -> State# RealWorld
-  ( "labelThread#", [ThreadId tid, PtrAtom _ p, _s]) -> do
+      -- labelThread# :: ThreadId# -> Addr# -> State# RealWorld -> State# RealWorld
+  defOp "labelThread#" $ \[ThreadId tid, PtrAtom _ p, _s] -> do
     threadLabel <- liftIO . BS8.packCString $ castPtr p
     let setLabel ts@ThreadState{..} = ts {tsLabel = Just threadLabel}
     modify' $ \s@StgState{..} -> s {ssThreads = IntMap.adjust setLabel tid ssThreads}
     pure []
 
-  -- isCurrentThreadBound# :: State# RealWorld -> (# State# RealWorld, Int# #)
-  ( "isCurrentThreadBound#", [_s]) -> do
+      -- isCurrentThreadBound# :: State# RealWorld -> (# State# RealWorld, Int# #)
+  defOp "isCurrentThreadBound#" $ \[_s] -> do
     ThreadState{..} <- getCurrentThreadState
     pure [IntV $ if tsBound then 1 else 0]
 
-  -- noDuplicate# :: State# s -> State# s
-  ( "noDuplicate#", [_s]) -> do
+      -- noDuplicate# :: State# s -> State# s
+  defOp "noDuplicate#" $ \[_s] -> do
     -- NOTE: the stg interpreter is not parallel, so this is a no-op
     pure []
 
-  -- threadStatus# :: ThreadId# -> State# RealWorld -> (# State# RealWorld, Int#, Int#, Int# #)
-  ( "threadStatus#", [ThreadId tid, _s]) -> do
+      -- threadStatus# :: ThreadId# -> State# RealWorld -> (# State# RealWorld, Int#, Int#, Int# #)
+  defOp "threadStatus#" $ \[ThreadId tid, _s] -> do
     ThreadState{..} <- getThreadState tid
     -- HINT:  includes/rts/Constants.h
     --        base:GHC.Conc.Sync.threadStatus
@@ -172,8 +172,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
             BlockedOnThrowAsyncEx{} -> 12
 
     pure [IntV statusCode, IntV tsCapability, IntV $ if tsLocked then 1 else 0]
-
-  _ -> fallback op args t tc
 
 
 raiseAsyncEx :: [Atom] -> Int -> Atom -> M ()
