@@ -857,7 +857,7 @@ primOpMap :: HashMap.HashMap Name PrimOpFunDef
 primOpMap = HashMap.fromList primOpList
 
 primOpList :: [(Name, PrimOpFunDef)]
-primOpList = concat
+primOpList = reportDuplicates $ concat
   [ PrimAddr.primOps
   , PrimArray.primOps
   , PrimSmallArray.primOps
@@ -887,8 +887,10 @@ primOpList = concat
   , PrimMiscEtc.primOps
   ]
 
-dupPrimOps :: [(Name, Int)]
-dupPrimOps = Map.toList $ Map.filter (> 1) $ foldl (\m n-> Map.insertWith (+) n 1 m) Map.empty $ map fst primOpList
+reportDuplicates :: [(Name, PrimOpFunDef)] -> [(Name, PrimOpFunDef)]
+reportDuplicates l = case Map.toList $ Map.filter (> 1) $ foldl (\m n-> Map.insertWith (+) n (1 :: Int) m) Map.empty $ map fst l of
+  []    -> l
+  dups  -> error $ "multiple definitions of primops: " ++ show dups
 
 evalPrimOp :: HasCallStack => Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp op args t tc = case HashMap.lookup op primOpMap of
