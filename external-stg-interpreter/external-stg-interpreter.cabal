@@ -75,6 +75,7 @@ library
                        bytestring,
                        containers,
                        unordered-containers,
+                       exceptions,
                        primitive,
                        vector,
                        mtl,

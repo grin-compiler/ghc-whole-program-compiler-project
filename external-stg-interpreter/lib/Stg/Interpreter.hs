@@ -11,7 +11,8 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 import Control.Monad.State.Strict
-import Control.Exception
+import Control.Exception (PatternMatchFail)
+import Control.Monad.Catch
 import qualified Data.Primitive.ByteArray as BA
 
 import Data.Maybe
@@ -708,7 +709,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
             hClose wpp
             hClose h
           _ -> pure ()
-  flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
+  flip catch (\e -> do {freeResources; throwM (e :: SomeException)}) $ do
     s@StgState{..} <- execStateT run (emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
@@ -891,6 +892,8 @@ dupPrimOps = Map.toList $ Map.filter (> 1) $ foldl (\m n-> Map.insertWith (+) n 
 
 evalPrimOp :: HasCallStack => Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp op args t tc = case HashMap.lookup op primOpMap of
-  Just (NormalOp opEval)  -> opEval args
-  Just (SpecOp opEval)    -> opEval args t tc
-  Nothing                 -> stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args
+  Just p -> handle (\e -> stgErrorM $ "unsupported arguments for primop: " ++ show op ++ " args: " ++ show args ++ "\n" ++ show (e :: PatternMatchFail)) $
+              case p of
+                NormalOp opEval -> opEval args
+                SpecOp opEval   -> opEval args t tc
+  Nothing -> stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args
