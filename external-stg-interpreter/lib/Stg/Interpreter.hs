@@ -25,6 +25,7 @@ import qualified Data.IntMap as IntMap
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Internal as BS
 import System.Posix.DynamicLinker
+import Codec.Archive.Zip
 
 import System.FilePath
 import System.IO
@@ -34,6 +35,7 @@ import Stg.Syntax
 import Stg.Program
 import Stg.JSON
 import Stg.Analysis.LiveVariable
+import Stg.Foreign.Linker
 
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimCall
@@ -103,6 +105,7 @@ data Lit
 
 evalLiteral :: HasCallStack => Lit -> M Atom
 evalLiteral = \case
+  LitLabel "RtsFlags" spec -> pure $ PtrAtom RawPtr nullPtr
   LitLabel name spec  -> getFFILabelPtrAtom name spec
   LitString str       -> getCStringConstantPtrAtom str
   LitFloat f    -> pure . FloatAtom $ realToFrac f
@@ -518,7 +521,13 @@ evalExpr localEnv = \case
       _ -> pure ()
 
     markFFI foreignCall
-    args <- mapM (evalArg localEnv) l
+    args <- case foreignCTarget foreignCall of
+      StaticTarget _ "createAdjustor" _ _
+        | [arg0, arg1, arg2, arg3, arg4, arg5] <- l
+        -> do
+            -- HINT: do not resolve the unused label pointer that comes from the stub code
+            mapM (evalArg localEnv) [arg0, arg1, StgLitArg LitNullAddr, arg3, arg4, arg5]
+      _ -> mapM (evalArg localEnv) l
     evalFCallOp evalOnNewThread foreignCall args t tc
 {-
   StgOpApp (StgPrimCallOp (PrimCall "stg_getThreadAllocationCounterzh" _)) _args t _tc -> do
@@ -634,18 +643,18 @@ declareTopBindings mods = do
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
 
-loadAndRunProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-loadAndRunProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
+loadAndRunProgram :: HasCallStack => Bool -> Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
+loadAndRunProgram isQuiet switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
 
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
     ".json"                             -> getJSONModules fullpak_name
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
-  runProgram switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing
+  runProgram isQuiet switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing
 
-runProgram :: HasCallStack => Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
+runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
+runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
   let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension progFilePath
 
@@ -657,7 +666,10 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
         declareTopBindings mods
         initRtsSupport progName progArgs mods
         env <- gets ssStaticGlobalEnv
-        let rootMain = unId $ head $ [i | i <- Map.keys env, show i == "main_:Main.main"]
+        let rootMain = unId $ case [i | i <- Map.keys env, show i == "main_:Main.main"] of
+              [mainId]  -> mainId
+              []        -> error "main_:Main.main not found"
+              _         -> error "multiple main_:Main.main have found"
         limit <- gets ssNextHeapAddr
         modify' $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
         modify' $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
@@ -697,9 +709,9 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
 
   stateStore <- PrintableMVar <$> newEmptyMVar
   (gcThreadId, gcIn', gcOut') <- GC.init
-  let gcIn  = PrintableMVar gcIn'
-      gcOut = PrintableMVar gcOut'
-  dl <- dlopen "./libHSbase-4.14.0.0.cbits.so" [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
+  let gcIn    = PrintableMVar gcIn'
+      gcOut   = PrintableMVar gcOut'
+  dl <- loadCbitsSO isQuiet progFilePath
   let freeResources = do
         dlclose dl
         killThread gcThreadId
@@ -709,19 +721,40 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
             hClose h
           _ -> pure ()
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut)
+    s@StgState{..} <- execStateT run (emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
-    putStrLn $ "ssHeapStartAddress: " ++ show ssHeapStartAddress
-    putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
-    putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
-    putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
-    putStrLn $ "call graph size: " ++ show (StrictMap.size . cgInterClosureCallGraph $ ssCallGraph)
+    unless isQuiet $ do
+      putStrLn $ "ssHeapStartAddress: " ++ show ssHeapStartAddress
+      putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
+      putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
+      putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
+      putStrLn $ "call graph size: " ++ show (StrictMap.size . cgInterClosureCallGraph $ ssCallGraph)
     --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
     --print ssNextHeapAddr
     --print $ head $ Map.toList ssEnv
     -- TODO: handle :Main.main properly ; currenlty it is in conflict with Main.main
+
+loadCbitsSO :: Bool -> FilePath -> IO DL
+loadCbitsSO isQuiet progFilePath = do
+  workDir <- getExtStgWorkDirectory progFilePath
+  createDirectoryIfMissing True workDir
+  let soName = workDir </> "cbits.so"
+  doesFileExist soName >>= \case
+    True  -> pure ()
+    False -> case takeExtension progFilePath of
+      ".fullpak" -> do
+        unless isQuiet $ putStrLn "unpacking cbits.so"
+        withArchive progFilePath $ do
+          s <- mkEntrySelector "cbits/cbits.so"
+          saveEntry s soName
+      _ -> do
+        unless isQuiet $ putStrLn "linking cbits.so"
+        linkForeignCbitsSharedLib progFilePath
+  dlopen soName [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
+  --dlmopen LM_ID_BASE soName [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
+  --dlmopen LM_ID_NEWLM "./libHSbase-4.14.0.0.cbits.so" [RTLD_NOW, RTLD_LOCAL]
 
 -------------------------
 
