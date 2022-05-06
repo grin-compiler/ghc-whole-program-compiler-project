@@ -71,6 +71,7 @@ library
                        filepath,
                        directory,
                        libffi,
+                       zip,
                        text,
                        bytestring,
                        containers,
