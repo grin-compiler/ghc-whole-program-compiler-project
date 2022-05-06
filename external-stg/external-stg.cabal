@@ -22,8 +22,11 @@ library
     Stg.IO
     Stg.GHC.Symbols
     Stg.JSON
-    Stg.Analysis.LiveVariable
     Stg.Analysis.Closure
+    Stg.Analysis.ForeignInfo
+    Stg.Analysis.LiveVariable
+    Stg.Foreign.Linker
+    Stg.Foreign.Stubs
   hs-source-dirs:      lib
   ghc-options:         -Wall
   cpp-options:         -DEXTERNAL_STG_PACKAGE
@@ -33,15 +36,18 @@ library
                        filemanip,
                        filepath,
                        directory,
+                       process,
                        binary,
                        containers,
                        transformers,
+                       mtl,
                        unordered-containers,
                        hashable,
                        ansi-wl-pprint,
                        zip,
                        text,
-                       aeson
+                       aeson,
+                       yaml
   default-language:    Haskell2010
 
 executable ext-stg
@@ -54,12 +60,17 @@ executable ext-stg
                        optparse-applicative
   default-language:    Haskell2010
 
-executable fullpak
+executable stgapp
   hs-source-dirs:      app
-  main-is:             fullpak.hs
+  main-is:             stgapp.hs
   build-depends:       base < 5.0,
-                       bytestring,
+                       containers,
                        filepath,
+                       directory,
+                       yaml,
+                       unix,
+                       process,
+                       bytestring,
                        external-stg,
                        optparse-applicative
   default-language:    Haskell2010
@@ -72,6 +83,7 @@ executable mkfullpak
                      , exceptions
                      , optparse-applicative
                      , filepath
+                     , directory
                      , bytestring
                      , zip
                      , external-stg
