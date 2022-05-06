@@ -299,7 +299,7 @@ cvtADTType t = \case
 cvtDataCon :: Ext.DataCon -> M DataCon
 cvtDataCon Ext.DataCon{..} = case dcRep of
   Ext.UnboxedTupleCon l -> do
-    pure $ tupleDataCon Unboxed (l `div` 2) -- TODO: make this accurate
+    pure $ tupleDataCon Unboxed l
   _ -> do
     gets envDataConMap >>= \m -> case Map.lookup dcId m of
       Nothing -> error $ "unknown DataCon: " ++ show dcName
