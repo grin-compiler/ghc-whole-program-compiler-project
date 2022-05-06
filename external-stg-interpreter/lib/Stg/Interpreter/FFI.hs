@@ -177,6 +177,14 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
         , UnboxedTuple [FloatRep] <- t
         -> pure [FloatV $ rts_wordEncodeFloat j e]
 
+      StaticTarget _ "stg_interp_constr1_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
+      StaticTarget _ "stg_interp_constr2_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
+      StaticTarget _ "stg_interp_constr3_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
+      StaticTarget _ "stg_interp_constr4_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
+      StaticTarget _ "stg_interp_constr5_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
+      StaticTarget _ "stg_interp_constr6_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
+      StaticTarget _ "stg_interp_constr7_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
+
       StaticTarget _ "freeHaskellFunctionPtr" _ _ -> pure [] -- TODO
       StaticTarget _ "performMajorGC" _ _ -> pure []
       StaticTarget _ "rts_setMainThread" _ _ -> pure [] -- TODO

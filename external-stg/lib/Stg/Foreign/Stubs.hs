@@ -20,6 +20,14 @@ genStubs ghcstgappFname = do
             , "keepCAFs"
             -- pandoc
             , "hslua_callhsfun"
+            -- ghc
+            , "stg_interp_constr1_entry"
+            , "stg_interp_constr2_entry"
+            , "stg_interp_constr3_entry"
+            , "stg_interp_constr4_entry"
+            , "stg_interp_constr5_entry"
+            , "stg_interp_constr6_entry"
+            , "stg_interp_constr7_entry"
             ]
         ]
   pure code
