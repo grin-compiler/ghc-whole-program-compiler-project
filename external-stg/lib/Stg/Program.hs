@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections, LambdaCase, RecordWildCards, OverloadedStrings #-}
 module Stg.Program where
 
 import Control.Monad.IO.Class
@@ -19,6 +20,9 @@ import System.FilePath
 import System.FilePath.Find
 import Codec.Archive.Zip
 
+import qualified Data.Yaml as Y
+import Data.Yaml (FromJSON(..), (.:), (.:?), (.!=))
+
 import Stg.Syntax
 import Stg.IO
 import Stg.JSON ()
@@ -31,121 +35,119 @@ moduleToModpak modpakExt moduleName = replaceEq '.' '/' moduleName ++ modpakExt
     replaceEq :: Eq a => a -> a -> [a] -> [a]
     replaceEq from to = map (\cur -> if cur == from then to else cur)
 
-printSection :: Show a => [a] -> String
-printSection l = unlines ["- " ++ x | x <- nubOrd $ map show l]
-
 parseSection :: [String] -> String -> [String]
 parseSection content n = map (read . tail) . takeWhile (isPrefixOf "-") . tail . dropWhile (not . isPrefixOf n) $ content
 
-parsePathSection :: FilePath -> [String] -> String -> [String]
-parsePathSection root content n = map (\p -> if isAbsolute p then p else root </> p) $ parseSection content n
-
-data StgAppInfo
-  = StgAppInfo
-  { appIncludePaths   :: [String]
-  , appLibPaths       :: [String]
-  , appLdOptions      :: [String]
-  , appCLikeObjFiles  :: [String]
-  , appNoHsMain       :: Bool
-  }
-  deriving (Eq, Ord, Show)
-
-getAppInfo :: FilePath -> IO StgAppInfo
-getAppInfo ghcStgAppFname = do
-  readFile ghcStgAppFname >>= getAppInfoFromString
-
-getAppInfoFromString :: String -> IO StgAppInfo
-getAppInfoFromString rawContent = do
-  let content     = lines rawContent
-      [root]      = parseSection content "root:"
-      [osuf]      = parseSection content "o_suffix:"
-      libPaths    = parsePathSection root content "pkg_lib_paths:"
-      incPaths    = parsePathSection root content "pkg_include_paths:"
-      extra_input = parsePathSection root content "extra_ld_inputs:"
-      ldFlags     = parseSection content "other_flags:"
-      extraLibs   = parseSection content "extra_libs:"
-      pkgLibs     = parseSection content "package_hs_libs:"
-      nonHsLibs   = filter (not . isPrefixOf "-lHS") pkgLibs
-      [noHsMain]  = parseSection content "no_hs_main:"
-
-  -- HINT: if there is no corresponding modpak then it is a C like obj
-  cObjFiles <- filterM (\n -> not <$> doesFileExist (n ++ "_modpak")) extra_input
-
-  archiveList <- concat <$> mapM (find always (extension ==? ".a")) libPaths
-  let archiveMap        = Map.fromList [(takeFileName n, takeDirectory n) | n <- archiveList]
-      libArName n kind  = "lib" ++ drop 2 n ++ "." ++ osuf ++ kind ++".a"
-      libLdOpt n kind   = n ++ "." ++ osuf ++ kind
-  let cbits   = [ (libLdOpt o "_cbits", arPath)
-                | o <- pkgLibs
-                , let arName = libArName o "_cbits"
-                , arPath <- maybeToList $ Map.lookup arName archiveMap
-                ]
-      stubs   = [ (libLdOpt o "_stubs", arPath)
-                | o <- pkgLibs
-                , let arName = libArName o "_stubs"
-                , arPath <- maybeToList $ Map.lookup arName archiveMap
-                ]
-      ldOpts  = concat [map fst stubs, map fst cbits, nonHsLibs, ldFlags, extraLibs]
-
-  pure StgAppInfo
-    { appIncludePaths   = incPaths
-    , appLibPaths       = libPaths ++ map snd stubs ++ map snd cbits
-    , appLdOptions      = ldOpts
-    , appCLikeObjFiles  = cObjFiles
-    , appNoHsMain       = "True" == noHsMain
-    }
+printSection :: Show a => [a] -> String
+printSection l = unlines ["- " ++ x | x <- nubOrd $ map show l]
 
 data StgModuleInfo
   = StgModuleInfo
-  { modModuleName   :: String
-  , modModpakPath   :: FilePath
-  , modPackageName  :: String
+  { modModuleName           :: String
+  , modModpakPath           :: FilePath
+  , modPackageName          :: String
+  , modPackageVersion       :: String
   }
   deriving (Eq, Ord, Show)
 
-getLibModuleMapping :: FilePath -> IO [StgModuleInfo]
-getLibModuleMapping stglibFname = do
-  -- HINT: the folder containing the .stglib is named after the package name
-  let packageName = takeFileName $ dropTrailingPathSeparator $ dropFileName stglibFname
-      stglibPath  = dropFileName stglibFname
-  content <- lines <$> readFile stglibFname
-  let modules   = parseSection content "modules:"
-      modpakExt = takeExtension . head $ parseSection content "modpaks:"
-  pure
-    [ StgModuleInfo
-        { modModuleName   = m
-        , modModpakPath   = stglibPath </> moduleToModpak modpakExt m
-        , modPackageName  = packageName
-        }
-    | m <- modules
-    ]
+data UnitLinkerInfo =
+  UnitLinkerInfo
+  { unitName            :: String
+  , unitVersion         :: String
+  , unitId              :: String
+  , unitImportDirs      :: [FilePath]
+  , unitLibraries       :: [String]
+  , unitLibDirs         :: [FilePath]
+  , unitExtraLibs       :: [String]
+  , unitLdOptions       :: [String]
+  , unitExposedModules  :: [String]
+  , unitHiddenModules   :: [String]
+  } deriving (Eq, Show)
+
+instance FromJSON UnitLinkerInfo where
+  parseJSON (Y.Object v) =
+    UnitLinkerInfo
+      <$> v .: "name"
+      <*> v .: "version"
+      <*> v .: "id"
+      <*> v .:? "unit-import-dirs" .!= []
+      <*> v .:? "unit-libraries" .!= []
+      <*> v .:? "library-dirs" .!= []
+      <*> v .:? "extra-libraries" .!= []
+      <*> v .:? "ld-options" .!= []
+      <*> v .:? "exposed-modules" .!= []
+      <*> v .:? "hidden-modules" .!= []
+  parseJSON _ = fail "Expected Object for UnitLinkerInfo value"
+
+data GhcStgApp
+  = GhcStgApp
+  { appWays           :: [String]
+  , appObjSuffix      :: String
+  , appNoHsMain       :: Bool
+  , appUnitDbPaths    :: [FilePath]
+  , appObjFiles       :: [FilePath]
+  , appExtraLdInputs  :: [FilePath]
+  , appExtraLibs      :: [String]
+  , appExtraLibDirs   :: [FilePath]
+  , appLdOptions      :: [String]
+  , appLibDeps        :: [UnitLinkerInfo]
+  } deriving (Eq, Show)
+
+instance FromJSON GhcStgApp where
+  parseJSON (Y.Object v) =
+    GhcStgApp
+      <$> v .:? "ways" .!= []
+      <*> v .: "o_suffix"
+      <*> v .: "no_hs_main"
+      <*> v .:? "unit_db_paths" .!= []
+      <*> v .:? "o_files" .!= []
+      <*> v .:? "extra_ld_inputs" .!= []
+      <*> v .:? "extra-libraries" .!= []
+      <*> v .:? "library-dirs" .!= []
+      <*> v .:? "ld-options" .!= []
+      <*> v .:? "app-deps" .!= []
+  parseJSON _ = fail "Expected Object for UnitLinkerInfo value"
 
 getAppModuleMapping :: FilePath -> IO [StgModuleInfo]
 getAppModuleMapping ghcStgAppFname = do
-  let packageName = "exe:" ++ takeBaseName ghcStgAppFname -- TODO: save package to .stgapp and .stglib
-  content <- lines <$> readFile ghcStgAppFname
-  let [root]      = parseSection content "root:"
-      [osuf]      = parseSection content "o_suffix:"
-      ways        = parseSection content "ways:"
-      libPaths    = parsePathSection root content "pkg_lib_paths:"
-      o_files     = parsePathSection root content "o_files:"
-      extra_input = parsePathSection root content "extra_ld_inputs:"
-      pkgLibs     = parseSection content "package_hs_libs:"
-      pkgHSLibs   = [drop 4 n | n <- pkgLibs, isPrefixOf "-lHS" n]
-  stglibs <- mapM (findStglibForHSLib ways osuf libPaths) pkgHSLibs
-  libModpaks <- mapM getLibModuleMapping stglibs
+  let packageName = "exe:" ++ takeBaseName ghcStgAppFname -- TODO: save package to .ghc_stgapp
+  GhcStgApp{..} <- Y.decodeFileThrow ghcStgAppFname
+  let modpakExt = "." ++ appObjSuffix ++ "_modpak"
+      check f = do
+        exist <- doesFileExist f
+        unless exist $ do
+          putStrLn $ "modpak does not exist: " ++ f
+        pure exist
+  libModules <- filterM (check . modModpakPath) $
+        [ StgModuleInfo
+          { modModuleName     = mod
+          , modModpakPath     = dir </> moduleToModpak modpakExt mod
+          , modPackageName    = unitName
+          , modPackageVersion = unitVersion
+          }
+        | UnitLinkerInfo{..} <- appLibDeps
+        , dir <- unitImportDirs
+        , mod <- unitExposedModules ++ unitHiddenModules
 
-  extraAppModpaks <- filterM doesFileExist $ map (++ "_modpak") extra_input
-  let appModpaks  = map (++ "_modpak") o_files
+        -- TODO: make this better somehow
+        -- HINT: this module does not exist, it's a GHC builtin for primops
+        , let builtin = mod == "GHC.Prim" && unitName == "ghc-prim"
+        , not builtin
+
+        ]
+
+  extraAppModpaks <- filterM check [oPath ++ "_modpak" | oPath <- appExtraLdInputs]
+  let appModpaks = [oPath ++ "_modpak" | oPath <- appObjFiles]
   -- load app module names from stgbins
   appModules <- forM (appModpaks ++ extraAppModpaks) $ \modpak -> do
     (_phase, _unitId, moduleName, _srcPath) <- readModpakL modpak modpakStgbinPath decodeStgbinModuleName
     pure StgModuleInfo
-          { modModuleName   = BS8.unpack $ getModuleName moduleName
-          , modModpakPath   = modpak
-          , modPackageName  = packageName
+          { modModuleName     = BS8.unpack $ getModuleName moduleName
+          , modModpakPath     = modpak
+          , modPackageName    = packageName
+          , modPackageVersion = ""
           }
-  pure $ appModules ++ concat libModpaks
+  pure $ appModules ++ libModules
 
 getAppModpaks :: FilePath -> IO [FilePath]
 getAppModpaks ghcStgAppFname = map modModpakPath <$> getAppModuleMapping ghcStgAppFname
@@ -207,24 +209,96 @@ getJSONModules filePath = do
     Left  err     -> error err
     Right smodule -> pure [reconModule smodule]
 
--- .stglib utility
-findStglibForHSLib :: [String] -> String -> [FilePath] -> String -> IO FilePath
-findStglibForHSLib ways osuf hsLibPaths libName = do
-  -- HINT: e.g. libHSghc-boot-8.11.0.20201112-ghc8.11.0.20201112.dyn_o_stglib
-  let waySet = Set.fromList ways
-      stglibName
-        | isPrefixOf "rts-1.0" libName  -- HACK!!
-        = "libHSrts-1.0.o_stglib"
+data StgLibLinkerInfo
+  = StgLibLinkerInfo
+  { stglibName          :: String
+  , stglibCbitsPaths    :: [FilePath]
+  , stglibStubsPaths    :: [FilePath]
+  , stglibExtraLibs     :: [String]
+  , stglibExtraLibDirs  :: [FilePath]
+  , stglibLdOptions     :: [String]
+  }
+  deriving (Eq, Ord, Show)
 
-        | Set.member "WayDyn" waySet
-        = "libHS" ++ libName ++ ".dyn_o_stglib"
+data StgAppLinkerInfo
+  = StgAppLinkerInfo
+  { stgappCObjects      :: [FilePath]
+  , stgappExtraLibs     :: [String]
+  , stgappExtraLibDirs  :: [FilePath]
+  , stgappLdOptions     :: [String]
+  }
+  deriving (Eq, Ord, Show)
 
-        | otherwise
-        = "libHS" ++ libName ++ ".o_stglib"
+getAppLinkerInfo :: FilePath -> IO (StgAppLinkerInfo, [StgLibLinkerInfo])
+getAppLinkerInfo ghcStgAppFname = do
+  GhcStgApp{..} <- Y.decodeFileThrow ghcStgAppFname
 
-  filesFound <- forM hsLibPaths $ \path -> do
-    find always (fileName ==? stglibName) path
-  case concat filesFound of
-    [stglibPath]  -> pure stglibPath
-    []            -> error $ "stglib not found: " ++ stglibName
-    l             -> error $ "multiple stglib found: " ++ stglibName ++ "\n" ++ show l
+  -- app info
+  appCbits <- flip filterM (appExtraLdInputs ++ appObjFiles) $ \objName -> do
+    -- ASSUMPTION: if there is no .modpak file then it must be a C like object file
+    let modpakFile = objName ++ "_modpak"
+    not <$> doesFileExist modpakFile
+  let appInfo = StgAppLinkerInfo
+        { stgappCObjects      = appCbits
+        , stgappExtraLibs     = appExtraLibs
+        , stgappExtraLibDirs  = appExtraLibDirs
+        , stgappLdOptions     = appLdOptions
+        }
+
+  -- lib info
+  libInfoList <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
+
+    let pathList = [path </> libName | path <- unitLibDirs, lib <- unitLibraries, let libName = "lib" ++ lib]
+
+    cbitsPathList <- forM pathList $ \path -> do
+      -- FIXME: make cbits and stubs name handling robust, this is a HACK!
+      let cbitsPath = path ++ "-ghc9.0.2.1000.dyn_o_cbits.a"
+      doesFileExist cbitsPath >>= \case
+        True  -> pure $ Just cbitsPath
+        False -> pure Nothing
+
+    stubsPathList <- forM pathList $ \path -> do
+      -- FIXME: make cbits and stubs name handling robust, this is a HACK!
+      let stubsPath = path ++ "-ghc9.0.2.1000.dyn_o_stubs.a"
+      doesFileExist stubsPath >>= \case
+        True  -> pure $ Just stubsPath
+        False -> pure Nothing
+
+    pure $ StgLibLinkerInfo
+      { stglibName          = unitId
+      , stglibCbitsPaths    = catMaybes cbitsPathList
+      , stglibStubsPaths    = catMaybes stubsPathList
+      , stglibExtraLibs     = unitExtraLibs
+      , stglibExtraLibDirs  = unitLibDirs
+      , stglibLdOptions     = unitLdOptions
+      }
+  pure (appInfo, libInfoList)
+
+data StgAppLicenseInfo
+  = StgAppLicenseInfo
+  { stgappUnitConfs :: [FilePath]
+  }
+  deriving (Eq, Ord, Show)
+
+getAppLicenseInfo :: FilePath -> IO StgAppLicenseInfo
+getAppLicenseInfo ghcStgAppFname = do
+  GhcStgApp{..} <- Y.decodeFileThrow ghcStgAppFname
+  confList <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
+    let possibleUnitConfs = nubOrd
+          [ confPath </> (confName ++ ".conf")
+          | confName <- unitId : [libName | 'H':'S':libName <- unitLibraries]
+          , confPath <- appUnitDbPaths
+          ]
+    unitConfs <- forM possibleUnitConfs $ \p -> do
+      doesFileExist p >>= \case
+        True  -> pure $ Just p
+        False -> pure Nothing
+    -- NOTE: report errors, but never fail.
+    case catMaybes unitConfs of
+      c : _ -> pure $ Just c -- HINT: pick the first match
+      [] -> do
+        putStrLn $ "no .conf file was found for " ++ unitId
+        pure Nothing
+  pure $ StgAppLicenseInfo
+    { stgappUnitConfs = catMaybes confList
+    }
