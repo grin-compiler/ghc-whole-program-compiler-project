@@ -19,7 +19,7 @@ import Stg.Syntax
 
 ppSrcSpan :: SrcSpan -> String
 ppSrcSpan = \case
-  UnhelpfulSpan s             -> BS8.unpack s
+  UnhelpfulSpan s             -> show s
   RealSrcSpan RealSrcSpan'{..} _
     | srcSpanSLine == srcSpanELine
     -> printf "%s:%d:%d-%d" (BS8.unpack srcSpanFile) srcSpanSLine srcSpanSCol srcSpanECol
@@ -43,7 +43,7 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript = do
 
 
   putStrLn $ "loading " ++ appPath
-  loadAndRunProgram switchCWD appPath appArgs dbgChan DbgStepByStep True
+  loadAndRunProgram False switchCWD appPath appArgs dbgChan DbgStepByStep True
   putStrLn "program finshed"
 
 startDebuggerReplUI :: Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> IO ()

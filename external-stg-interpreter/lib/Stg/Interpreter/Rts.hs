@@ -192,7 +192,7 @@ extStgRtsSupportModule = reconModule $ Module
                       , sbinderScope    = s
                       , sbinderDetails  = VanillaId
                       , sbinderInfo     = mempty
-                      , sbinderDefLoc   = UnhelpfulSpan ""
+                      , sbinderDefLoc   = UnhelpfulSpan $ UnhelpfulOther "ext-stg-interpreter-rts"
                       }
 
       localLiftedVanillaId :: Int -> Name -> (BinderId, SBinder)
@@ -207,14 +207,14 @@ extStgRtsSupportModule = reconModule $ Module
                         , sdcId     = tup2DCOcc
                         , sdcRep    = AlgDataCon [LiftedRep, LiftedRep]
                         , sdcWorker = exportedLiftedVanillaId 666 "fake ext-stg Tup2 worker"
-                        , sdcDefLoc = UnhelpfulSpan ""
+                        , sdcDefLoc = UnhelpfulSpan $ UnhelpfulOther "ext-stg-interpreter-rts"
                         }
       tup2TCOcc       = TyConId $ u 1
       tup2STyCon      = STyCon
                         { stcName     = "(,)"
                         , stcId       = tup2TCOcc
                         , stcDataCons = [tup2SDataCon]
-                        , stcDefLoc   = UnhelpfulSpan ""
+                        , stcDefLoc   = UnhelpfulSpan $ UnhelpfulOther "ext-stg-interpreter-rts"
                         }
 
       -- code for tuple2Proj0 = \t -> case t of GHC.Tuple.(,) a b -> a
