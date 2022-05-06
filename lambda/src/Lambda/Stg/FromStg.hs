@@ -430,7 +430,7 @@ mkConSpec tc C.DataCon{..}
   { csName    = mkPackageQualifiedName (BS8.unpack $ C.getUnitId dcUnitId) (BS8.unpack $ C.getModuleName dcModule) (BS8.unpack dcName)
   , csArgsRep = case dcRep of
       C.AlgDataCon l      -> map getPrimRep l
-      C.UnboxedTupleCon n -> replicate (n `div` 2) VoidRep -- TODO: make this better ; old code: error $ "impossible - unboxed type: " ++ show tc
+      C.UnboxedTupleCon n -> replicate n VoidRep
   }
 
 -- stg ast conversion
