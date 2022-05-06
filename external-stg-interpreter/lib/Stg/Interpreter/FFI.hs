@@ -45,6 +45,7 @@ import Control.Monad.State.Strict
 import Control.Concurrent.MVar
 
 import Stg.Syntax
+import Stg.GHC.Symbols
 import Stg.Interpreter.Base
 import Stg.Interpreter.Debug
 import Stg.Interpreter.Rts (globalStoreSymbols)
@@ -53,6 +54,8 @@ pattern CharV c = Literal (LitChar c)
 pattern IntV i  = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern FloatV f  = FloatAtom f
+pattern DoubleV d = DoubleAtom d
 
 {-
 data ForeignCall
@@ -71,10 +74,22 @@ data CCallTarget
 data CCallConv = CCallConv | CApiConv | StdCallConv | PrimCallConv | JavaScriptCallConv
 -}
 
+rtsSymbolSet :: Set Name
+rtsSymbolSet = Set.fromList $ map BS8.pack rtsSymbols
+
+getFFISymbol :: Name -> M (FunPtr a)
+getFFISymbol name = do
+  dl <- gets ssCBitsMap
+  funPtr <- liftIO . BS8.useAsCString name $ c_dlsym (packDL dl)
+  case funPtr == nullFunPtr of
+    False -> pure funPtr
+    True  -> if Set.member name rtsSymbolSet
+      then stgErrorM $ "this RTS symbol is not implemented yet: " ++ BS8.unpack name
+      else stgErrorM $ "unknown foreign symbol: " ++ BS8.unpack name
+
 getFFILabelPtrAtom :: Name -> LabelSpec -> M Atom
 getFFILabelPtrAtom labelName labelSpec = do
-  dl <- gets ssCBitsMap
-  funPtr <- liftIO . dlsym dl $ BS8.unpack labelName
+  funPtr <- getFFISymbol labelName
   pure $ PtrAtom (LabelPtr labelName labelSpec) $ castFunPtrToPtr funPtr
 
 mkFFIArg :: Atom -> M (Maybe FFI.Arg)
@@ -142,6 +157,25 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
       -}
 
       -- misc
+      StaticTarget _ "__int_encodeDouble" _ _
+        | [IntV j, IntV e, Void] <- args
+        , UnboxedTuple [DoubleRep] <- t
+        -> pure [DoubleV $ rts_intEncodeDouble j e]
+
+      StaticTarget _ "__word_encodeDouble" _ _
+        | [WordV j, IntV e, Void] <- args
+        , UnboxedTuple [DoubleRep] <- t
+        -> pure [DoubleV $ rts_wordEncodeDouble j e]
+
+      StaticTarget _ "__int_encodeFloat" _ _
+        | [IntV j, IntV e, Void] <- args
+        , UnboxedTuple [FloatRep] <- t
+        -> pure [FloatV $ rts_intEncodeFloat j e]
+
+      StaticTarget _ "__word_encodeFloat" _ _
+        | [WordV j, IntV e, Void] <- args
+        , UnboxedTuple [FloatRep] <- t
+        -> pure [FloatV $ rts_wordEncodeFloat j e]
 
       StaticTarget _ "freeHaskellFunctionPtr" _ _ -> pure [] -- TODO
       StaticTarget _ "performMajorGC" _ _ -> pure []
@@ -298,7 +332,7 @@ getProgArgv(int *argc, char **argv[])
         -> do
           --liftIO $ print foreignSymbol
           cArgs <- catMaybes <$> mapM mkFFIArg args
-          dl <- gets ssCBitsMap
+          funPtr <- getFFISymbol foreignSymbol
           liftIOAndBorrowStgState $ do
             {-
             when (False || "hs_OpenGLRaw_getProcAddress" == foreignSymbol) $ do
@@ -306,7 +340,6 @@ getProgArgv(int *argc, char **argv[])
               getLine
               pure ()
             -}
-            funPtr <- dlsym dl $ BS8.unpack foreignSymbol
             evalForeignCall funPtr cArgs t
 
       DynamicTarget
@@ -618,3 +651,8 @@ hsTyDescChar ty
   hs_type_string  = effect_char : (map hsTyDescChar $ res_hty : arg_htys)
   effect_char     = if is_IO_res_ty then 'e' else 'p' -- HINT: effectful or pure
 -}
+
+foreign import ccall unsafe "__int_encodeDouble"  rts_intEncodeDouble  :: Int  -> Int -> Double
+foreign import ccall unsafe "__word_encodeDouble" rts_wordEncodeDouble :: Word -> Int -> Double
+foreign import ccall unsafe "__int_encodeFloat"   rts_intEncodeFloat   :: Int  -> Int -> Float
+foreign import ccall unsafe "__word_encodeFloat"  rts_wordEncodeFloat  :: Word -> Int -> Float

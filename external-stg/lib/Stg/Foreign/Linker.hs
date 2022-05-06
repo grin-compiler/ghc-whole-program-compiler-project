@@ -62,10 +62,6 @@ linkForeignCbitsSharedLib ghcstgappFname = do
           , "set -e"
           , "gcc -o cbits.so -shared \\"
           , "  -Wl,--no-as-needed \\"
-
-          -- TODO: remove this
-          , "  `ls /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/data/cbits.so-script/rts.dyn_o/*` \\"
-
           ] ++
         intercalate " \\\n" (map ("  " ++) . filter (/= "") $ arList ++ cbitsOpts ++ stgappCObjects ++ [appOpts] ++ stubOpts) ++ "\n"
 
