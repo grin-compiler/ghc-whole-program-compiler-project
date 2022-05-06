@@ -18,6 +18,8 @@ data Modpak
   , infoPath    :: FilePath
   , hsSrcPath   :: Maybe FilePath
   , ghccorePath :: Maybe FilePath
+  , stubhPath   :: Maybe FilePath
+  , stubcPath   :: Maybe FilePath
   }
 
 modpak :: Parser Modpak
@@ -30,54 +32,31 @@ modpak = Modpak
   <*> strOption (long "info" <> metavar "FILENAME" <> help "Compilation info file to be added to the archive")
   <*> optional (strOption (long "hssrc" <> metavar "FILENAME" <> help "Haskell source file to be added to the archive"))
   <*> optional (strOption (long "ghccore" <> metavar "FILENAME" <> help "Pretty printed GHC Core file to be added to the archive"))
+  <*> optional (strOption (long "stubh" <> metavar "FILENAME" <> help "FFI stub C header file to be added to the archive"))
+  <*> optional (strOption (long "stubc" <> metavar "FILENAME" <> help "FFI stub C source file to be added to the archive"))
+
+add :: FilePath -> FilePath -> ZipArchive ()
+add zipPath srcPath = do
+  entry <- mkEntrySelector zipPath
+  loadEntry Zstd entry srcPath
+  setExternalFileAttrs (fromFileMode 0o0644) entry
+
+maybe_add :: FilePath -> Maybe FilePath -> ZipArchive ()
+maybe_add zipPath = mapM_ (add zipPath)
 
 main :: IO ()
 main = do
   let opts = info (modpak <**> helper) mempty
-  Modpak{..}  <- execParser opts
+  Modpak{..} <- execParser opts
 
-  stgbinData  <- BS.readFile stgbinPath
-  stgbinEntry <- mkEntrySelector "module.stgbin"
-
-  ghcstgData  <- BS.readFile ghcstgPath
-  ghcstgEntry <- mkEntrySelector "module.ghcstg"
-
-  cmmData  <- BS.readFile cmmPath
-  cmmEntry <- mkEntrySelector "module.cmm"
-
-  asmData  <- BS.readFile asmPath
-  asmEntry <- mkEntrySelector "module.s"
-
-  infoData  <- BS.readFile infoPath
-  infoEntry <- mkEntrySelector "module.info"
-
-  ghccoreEntry <- mkEntrySelector "module.ghccore"
-  hsEntry <- mkEntrySelector "module.hs"
   createArchive modpakName $ do
-    addEntry Zstd stgbinData stgbinEntry
-    setExternalFileAttrs (fromFileMode 0o0644) stgbinEntry
+    add "module.stgbin" stgbinPath
+    add "module.ghcstg" ghcstgPath
+    add "module.cmm"    cmmPath
+    add "module.s"      asmPath
+    add "module.info"   infoPath
 
-    addEntry Zstd ghcstgData ghcstgEntry
-    setExternalFileAttrs (fromFileMode 0o0644) ghcstgEntry
-
-    addEntry Zstd cmmData cmmEntry
-    setExternalFileAttrs (fromFileMode 0o0644) cmmEntry
-
-    addEntry Zstd asmData asmEntry
-    setExternalFileAttrs (fromFileMode 0o0644) asmEntry
-
-    addEntry Zstd infoData infoEntry
-    setExternalFileAttrs (fromFileMode 0o0644) infoEntry
-
-    case hsSrcPath of
-      Nothing -> pure ()
-      Just hs -> do
-        hsData <- liftIO $ BS.readFile hs
-        addEntry Zstd hsData hsEntry
-        setExternalFileAttrs (fromFileMode 0o0644) hsEntry
-    case ghccorePath of
-      Nothing -> pure ()
-      Just c -> do
-        coreData <- liftIO $ BS.readFile c
-        addEntry Zstd coreData ghccoreEntry
-        setExternalFileAttrs (fromFileMode 0o0644) ghccoreEntry
+    maybe_add "module.hs"       hsSrcPath
+    maybe_add "module.ghccore"  ghccorePath
+    maybe_add "module_stub.h"   stubhPath
+    maybe_add "module_stub.c"   stubcPath
