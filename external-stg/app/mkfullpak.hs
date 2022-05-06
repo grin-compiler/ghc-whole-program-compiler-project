@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, LambdaCase #-}
 
 import Control.Monad
 import Control.Monad.IO.Class
@@ -7,6 +7,7 @@ import Options.Applicative
 import Data.Semigroup ((<>))
 import qualified Data.ByteString.Char8 as BS8
 import System.FilePath
+import System.Directory
 import Codec.Archive.Zip
 import Codec.Archive.Zip.Unix
 import Text.Printf
@@ -14,6 +15,7 @@ import Text.Printf
 import qualified Data.Map as Map
 
 import Stg.Program
+import Stg.Foreign.Linker
 import qualified Stg.GHC.Symbols as GHCSymbols
 
 data Fullpak
@@ -51,6 +53,20 @@ main = do
       fullpakModules  = [modpakMap Map.! m | m <- appModpaks]
       fullpakName     = ghcstgappPath -<.> ".fullpak"
 
+  -- collect license info
+  StgAppLicenseInfo{..} <- getAppLicenseInfo ghcstgappPath
+
+
+  -- link cbits.so
+  workDir <- getExtStgWorkDirectory ghcstgappPath
+  let soName = workDir </> "cbits.so"
+  doesFileExist soName >>= \case
+    True  -> do
+      putStrLn "using existing cbits.so"
+    False -> do
+      putStrLn "linking cbits.so"
+      linkForeignCbitsSharedLib ghcstgappPath
+
   putStrLn $ "creating " ++ fullpakName
   createArchive fullpakName $ do
     -- top level info
@@ -66,6 +82,15 @@ main = do
     loadEntry Deflate app_ghcstgapp ghcstgappPath
     setExternalFileAttrs (fromFileMode 0o0644) app_ghcstgapp
 
+    -- copy license info
+    forM_ stgappUnitConfs $ \unitConf -> do
+      add (".package-db-and-license-info" </> takeFileName unitConf) unitConf
+
+    -- copy cbits.so and related files
+    add "cbits/cbits.so" soName
+    add "cbits/cbits.so.sh" (soName ++ ".sh")
+    add "cbits/stub.c" (workDir </> "stub.c")
+
     -- copy module content
     forM_ fullpakModules $ \StgModuleInfo{..} -> do
       let files =
@@ -77,10 +102,17 @@ main = do
             , "module.cmm"
             , "module.s"
             , "module.info"
+            , "module_stub.h"
+            , "module_stub.c"
             ]
-      forM_ files $ \fn -> do
-        (src, dst) <- liftIO $ do
-          (,) <$> mkEntrySelector fn <*> mkEntrySelector (modModuleName </> fn)
-        flip catch (\EntryDoesNotExist{} -> pure ()) $ do
-          copyEntry modModpakPath src dst
-          setExternalFileAttrs (fromFileMode 0o0644) dst
+      existingFiles <- withArchive modModpakPath $ mapM mkEntrySelector files >>= filterM doesEntryExist
+      forM_ existingFiles $ \src -> do
+        dst <- mkEntrySelector (modModuleName </> unEntrySelector src)
+        copyEntry modModpakPath src dst
+        setExternalFileAttrs (fromFileMode 0o0644) dst
+
+add :: FilePath -> FilePath -> ZipArchive ()
+add zipPath srcPath = do
+  entry <- mkEntrySelector zipPath
+  loadEntry Zstd entry srcPath
+  setExternalFileAttrs (fromFileMode 0o0644) entry
