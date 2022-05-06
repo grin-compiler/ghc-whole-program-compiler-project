@@ -320,6 +320,7 @@ data StgState
   , ssRtsSupport          :: Rts
 
   -- debug
+  , ssIsQuiet             :: Bool
   , ssCurrentClosureEnv   :: Env
   , ssCurrentClosure      :: Maybe Id
   , ssCurrentClosureAddr  :: Int
@@ -370,9 +371,10 @@ data StgState
 
 -- for the primop tests
 emptyUndefinedStgState :: StgState
-emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined DbgRunProgram NoTracing undefined undefined
+emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined undefined DbgRunProgram NoTracing undefined undefined
 
-emptyStgState :: PrintableMVar StgState
+emptyStgState :: Bool
+              -> PrintableMVar StgState
               -> DL
               -> DebuggerChan
               -> NextDebugCommand
@@ -381,7 +383,7 @@ emptyStgState :: PrintableMVar StgState
               -> PrintableMVar ([Atom], StgState)
               -> PrintableMVar RefSet
               -> StgState
-emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
+emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
 
@@ -438,6 +440,7 @@ emptyStgState stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut 
   , ssRtsSupport          = error "uninitialized ssRtsSupport"
 
   -- debug
+  , ssIsQuiet             = isQuiet
   , ssCurrentClosureEnv   = mempty
   , ssCurrentClosure      = Nothing
   , ssCurrentClosureAddr  = -1
@@ -625,27 +628,21 @@ addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so
 addManyBindersToEnv :: StaticOrigin -> [Binder] -> [Atom] -> Env -> Env
 addManyBindersToEnv so binders values = addZippedBindersToEnv so $ zip binders values
 
--- NOTE: for builtin uniques see: compiler/GHC/Builtin/Names.hs i.e. voidPrimIdKey
 lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, Atom)
-lookupEnvSO localEnv b
- | binderId b == BinderId (Unique '0' 124) -- coercionToken#
- = pure (SO_Builtin, Void)
- | binderId b == BinderId (Unique '0' 21) -- void#
- = pure (SO_Builtin, Void)
- | binderId b == BinderId (Unique '0' 15) -- realWorld#
- = pure (SO_Builtin, Void)
- | binderId b == BinderId (Unique '0' 502) -- proxy#
- = pure (SO_Builtin, Void)
- | binderId b == BinderId (Unique '8' 1) -- GHC.Prim.(##)
- = pure (SO_Builtin, Void)
- | otherwise
- = do
+lookupEnvSO localEnv b = do
   env <- if binderTopLevel b
           then gets ssStaticGlobalEnv
           else pure localEnv
   case Map.lookup (Id b) env of
-    Nothing -> stgErrorM $ "unknown variable: " ++ show b
     Just a  -> pure a
+    Nothing -> case binderUniqueName b of
+      -- HINT: GHC.Prim module does not exist it's a wired in module
+      "ghc-prim_GHC.Prim.void#"           -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.realWorld#"      -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.coercionToken#"  -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.proxy#"          -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.(##)"            -> pure (SO_Builtin, Void)
+      _ -> stgErrorM $ "unknown variable: " ++ show b
 
 lookupEnv :: HasCallStack => Env -> Binder -> M Atom
 lookupEnv localEnv b = snd <$> lookupEnvSO localEnv b

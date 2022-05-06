@@ -75,13 +75,15 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
       absFactPath <- liftIO $ makeAbsolute factPath
       liftIO $ do
         createDirectoryIfMissing True absFactPath
-        putStrLn $ "write gc facts to: " ++ absFactPath
+        unless (ssIsQuiet stgState) $ do
+          putStrLn $ "write gc facts to: " ++ absFactPath
       Souffle.writeFiles prog absFactPath
-      liftIO $ putStrLn "Souffle.writeFiles done"
+      unless (ssIsQuiet stgState) $ do
+        liftIO $ putStrLn "Souffle.writeFiles done"
 
       -- read back result
       --readbackDeadData prog
-      readbackLiveData
+      readbackLiveData (ssIsQuiet stgState)
 
 ---------------------------
 -- handle input facts
@@ -173,7 +175,7 @@ collectDead dd@RefSet{..} (Dead l) = do
     NS_StablePointer      -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
     _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
 
-readbackLiveData :: SouffleM RefSet
-readbackLiveData = do
-  liveSet <- liftIO $ Live.loadSet "Live.csv"
+readbackLiveData :: Bool -> SouffleM RefSet
+readbackLiveData isQuiet = do
+  liveSet <- liftIO $ Live.loadSet isQuiet "Live.csv"
   foldM (\dd i -> collectDead dd $ Dead i) emptyRefSet $ map fromIntegral $ IntSet.toList liveSet

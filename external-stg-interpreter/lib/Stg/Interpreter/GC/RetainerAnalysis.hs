@@ -19,11 +19,12 @@ loadMap fname = do
   refs <- map (map read . words) . lines <$> readFile absFactPath
   pure $ IntMap.fromListWith IntSet.union [(to, IntSet.singleton from) | [to, from] <- refs]
 
-loadSet :: String -> IO IntSet
-loadSet fname = do
+loadSet :: Bool -> String -> IO IntSet
+loadSet isQuiet fname = do
   let factPath = "./.gc-datalog-facts/" ++ fname
   absFactPath <- makeAbsolute factPath
-  putStrLn $ "loading: " ++ show absFactPath
+  unless isQuiet $ do
+    putStrLn $ "loading: " ++ show absFactPath
   IntSet.fromList . map read . lines <$> readFile absFactPath
 
 loadRetanerDb :: M ()
@@ -33,7 +34,8 @@ loadRetanerDb2 :: M ()
 loadRetanerDb2 = do
   refMap <- liftIO $ loadMap "Reference.csv"
   retMap <- liftIO $ loadMap "LiveReferredBy.csv"
-  gcRootSet <- liftIO $ loadSet "GCRoot.csv"
+  isQuiet <- gets ssIsQuiet
+  gcRootSet <- liftIO $ loadSet isQuiet "GCRoot.csv"
   modify' $ \s -> s {
       ssReferenceMap  = refMap
     , ssRetainerMap   = retMap
