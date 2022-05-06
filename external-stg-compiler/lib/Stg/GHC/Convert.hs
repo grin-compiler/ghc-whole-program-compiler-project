@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, TupleSections, OverloadedStrings, CPP #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, MultiWayIf, TupleSections, OverloadedStrings, CPP #-}
 
 #ifdef EXTERNAL_STG_COMPILER_PACKAGE
 module Stg.GHC.Convert where
@@ -11,11 +11,13 @@ import GHC.Prelude
 
 import qualified Data.ByteString.Char8 as BS8
 
+import qualified GHC.Hs.Decls           as GHC
 import qualified GHC.Builtin.PrimOps    as GHC
 import qualified GHC.Core               as GHC
 import qualified GHC.Core.DataCon       as GHC
 import qualified GHC.Core.TyCon         as GHC
 import qualified GHC.Core.TyCo.Ppr      as GHC
+import qualified GHC.Core.TyCo.Rep      as GHC
 import qualified GHC.Core.Type          as GHC
 import qualified GHC.Data.FastString    as GHC
 import qualified GHC.Driver.Session     as GHC
@@ -30,7 +32,8 @@ import qualified GHC.Types.Name         as GHC
 import qualified GHC.Types.SrcLoc       as GHC
 import qualified GHC.Types.RepType      as GHC
 import qualified GHC.Types.Unique       as GHC
-import qualified GHC.Types.Module       as GHC
+import qualified GHC.Unit.Types         as GHC
+import qualified GHC.Unit.Module.Name   as GHC
 import qualified GHC.Utils.Outputable   as GHC
 
 import Control.Monad
@@ -116,14 +119,14 @@ cvtUnique u = Unique a b
 cvtOccName :: GHC.OccName -> Name
 cvtOccName = GHC.bytesFS . GHC.occNameFS
 
-cvtUnitId :: GHC.UnitId -> UnitId
-cvtUnitId = UnitId . GHC.bytesFS . GHC.unitIdFS
+cvtUnitId :: GHC.Unit -> UnitId
+cvtUnitId = UnitId . GHC.bytesFS . GHC.unitIdFS . GHC.toUnitId
 
 cvtModuleName :: GHC.ModuleName -> ModuleName
 cvtModuleName = ModuleName . GHC.bytesFS . GHC.moduleNameFS
 
 cvtUnitIdAndModuleName :: GHC.Module -> (UnitId, ModuleName)
-cvtUnitIdAndModuleName m = (cvtUnitId $ GHC.moduleUnitId m, cvtModuleName $ GHC.moduleName m)
+cvtUnitIdAndModuleName m = (cvtUnitId $ GHC.moduleUnit m, cvtModuleName $ GHC.moduleName m)
 
 -- source location conversion
 
@@ -143,7 +146,15 @@ cvtRealSrcSpan rs =
 cvtSrcSpan :: GHC.SrcSpan -> SrcSpan
 cvtSrcSpan = \case
   GHC.RealSrcSpan s mb  -> RealSrcSpan (cvtRealSrcSpan s) (fmap cvtBufSpan mb)
-  GHC.UnhelpfulSpan s   -> UnhelpfulSpan $ GHC.bytesFS s
+  GHC.UnhelpfulSpan r   -> UnhelpfulSpan $ cvtUnhelpfulSpanReason r
+
+cvtUnhelpfulSpanReason :: GHC.UnhelpfulSpanReason -> UnhelpfulSpanReason
+cvtUnhelpfulSpanReason = \case
+  GHC.UnhelpfulNoLocationInfo -> UnhelpfulNoLocationInfo
+  GHC.UnhelpfulWiredIn        -> UnhelpfulWiredIn
+  GHC.UnhelpfulInteractive    -> UnhelpfulInteractive
+  GHC.UnhelpfulGenerated      -> UnhelpfulGenerated
+  GHC.UnhelpfulOther s        -> UnhelpfulOther $ GHC.bytesFS s
 
 -- tickish conversion
 
@@ -233,7 +244,7 @@ cvtType _ = cvtTypeNormal
 
 deepCheckType :: GHC.Type -> GHC.Type
 deepCheckType t = t -- TODO
-
+{-
 cvtType3 :: GHC.Type -> Type
 cvtType3 t
   | trpp "  isTypeLevPoly" GHC.isTypeLevPoly t
@@ -244,7 +255,7 @@ cvtType3 t
 
   | otherwise
   = SingleValue LiftedRep
-
+-}
 {-
 cvtType msg t = trace
   ( "cvtType - " ++ msg ++
@@ -273,11 +284,7 @@ cvtTypeNormal t
   | GHC.isTypeLevPoly t
   = PolymorphicRep
 
-  | GHC.isUnboxedSumType t
---  = cvtTypeNormal (unariseType t)
-  = error $ "unboxed sum are not supported yet! Use unarise stg pass to wanish them." ++ ppr t
-
-  | GHC.isUnboxedTupleType t
+  | GHC.isUnboxedSumType t || GHC.isUnboxedTupleType t
   = UnboxedTuple (map cvtPrimRep $ GHC.typePrimRep t)
 
   | [rep] <- GHC.typePrimRepArgs t
@@ -341,7 +348,7 @@ cvtLit = \case
   GHC.LitFloat x      -> LitFloat x
   GHC.LitDouble x     -> LitDouble x
   GHC.LitLabel x i d  -> LitLabel (GHC.bytesFS  x) (cvtLabelSpec i d)
-  GHC.LitNumber t i _ -> LitNumber (cvtLitNumType t) i
+  GHC.LitNumber t i   -> LitNumber (cvtLitNumType t) i
 
 -- Id conversion
 
@@ -500,7 +507,7 @@ cvtExpr = \case
 #ifdef EXT_STG_FOR_NON_PATCHED_GHC
   GHC.StgApp f ps           -> StgApp <$> cvtOccId f <*> mapM cvtArg ps <*> pure PolymorphicRep <*> pure mempty
 #else
-  GHC.StgApp f ps (tr,o)    -> StgApp <$> cvtOccId f <*> mapM cvtArg ps <*> pure ({-cvtType "StgApp" t-}debugCvtAppType f ps tr o) <*> pure (BS8.pack . ppr $ GHC.idType f, BS8.pack $ ppr tr, BS8.pack o)
+  GHC.StgApp f ps tr        -> StgApp <$> cvtOccId f <*> mapM cvtArg ps <*> pure ({-cvtType "StgApp" t-}debugCvtAppType f ps tr "") <*> pure (BS8.pack . ppr $ GHC.idType f, BS8.pack $ ppr tr, BS8.pack "")
 #endif
   GHC.StgLit l              -> pure $ StgLit (cvtLit l)
   GHC.StgConApp dc ps ts    -> StgConApp <$> cvtDataCon dc <*> mapM cvtArg ps <*> pure (map (cvtType "StgConApp") ts)
@@ -509,7 +516,7 @@ cvtExpr = \case
   GHC.StgLet _ b e          -> StgLet <$> cvtBind b <*> cvtExpr e
   GHC.StgLetNoEscape _ b e  -> StgLetNoEscape <$> cvtBind b <*> cvtExpr e
   GHC.StgTick t e           -> StgTick (cvtTickish t) <$> cvtExpr e
-  e                         -> error $ "invalid stg expression: " ++ ppr e
+  e                         -> error $ "invalid stg expression: " ++ ppr (GHC.pprStgExpr GHC.panicStgPprOpts e)
 
 -- stg rhs conversion (heap objects)
 
@@ -536,22 +543,51 @@ cvtTopBind = \case
   GHC.StgTopLifted b        -> StgTopLifted <$> cvtBind b
   GHC.StgTopStringLit b bs  -> StgTopStringLit <$> cvtBinderIdM "StgTopStringLit" b <*> pure bs
 
-cvtTopBinds :: [GHC.StgTopBinding] -> M ([STopBinding], [(UnitId, [(ModuleName, [SBinder])])])
-cvtTopBinds binds = do
+cvtTopBindsAndStubs :: [GHC.StgTopBinding] -> GHC.ForeignStubs -> M ([STopBinding], SForeignStubs, [(UnitId, [(ModuleName, [SBinder])])])
+cvtTopBindsAndStubs binds stubs = do
   b <- mapM cvtTopBind binds
+  s <- cvtForeignStubs stubs
 
   let stgTopIds = concatMap topBindIds binds
       topKeys   = IntSet.fromList $ map uniqueKey stgTopIds
   Env{..} <- get
   extItems <- sequence [mkExternalName e | (k,e) <- IntMap.toList envExternalIds, IntSet.notMember k topKeys]
-  pure (b, groupByUnitIdAndModule extItems)
+  pure (b, s, groupByUnitIdAndModule extItems)
 
 -- foreign stubs
 
-cvtForeignStubs :: GHC.ForeignStubs -> ForeignStubs
+cvtHeader :: GHC.Header -> Header
+cvtHeader (GHC.Header t n) = Header (cvtSourceText t) (GHC.bytesFS n)
+
+cvtCImportSpec :: GHC.CImportSpec -> CImportSpec
+cvtCImportSpec = \case
+  GHC.CLabel n    -> CLabel $ GHC.bytesFS n
+  GHC.CFunction t -> CFunction $ cvtCCallTarget t
+  GHC.CWrapper    -> CWrapper
+
+cvtCExportSpec :: GHC.CExportSpec -> CExportSpec
+cvtCExportSpec (GHC.CExportStatic t n cc) = CExportStatic (cvtSourceText t) (GHC.bytesFS n) (cvtCCallConv cc)
+
+cvtStubImpl :: GHC.StubImpl -> StubImpl
+cvtStubImpl = \case
+  GHC.StubImplImportCWrapper n m  -> StubImplImportCWrapper (GHC.bytesFS n) m
+  GHC.StubImplImportCApi n l      -> StubImplImportCApi (GHC.bytesFS n) [(fmap cvtHeader h, bs8SDoc d, c) | (h, d, c) <- l]
+
+cvtForeignImport :: GHC.ForeignImport -> ForeignImport
+cvtForeignImport (GHC.CImport cc s m is t) = CImport (cvtCCallConv $ GHC.unLoc cc) (cvtSafety $ GHC.unLoc s) (fmap cvtHeader m) (cvtCImportSpec is) (cvtSourceText $ GHC.unLoc t)
+
+cvtForeignExport :: GHC.ForeignExport -> ForeignExport
+cvtForeignExport (GHC.CExport s t) = CExport (cvtCExportSpec $ GHC.unLoc s) (cvtSourceText $ GHC.unLoc t)
+
+cvtStubDecl :: GHC.StubDecl -> M SStubDecl
+cvtStubDecl = \case
+  GHC.StubDeclImport fi m -> pure $ StubDeclImport (cvtForeignImport fi) (fmap cvtStubImpl m)
+  GHC.StubDeclExport fe idOcc n -> StubDeclExport (cvtForeignExport fe) <$> cvtOccId idOcc <*> pure (BS8.pack n)
+
+cvtForeignStubs :: GHC.ForeignStubs -> M SForeignStubs
 cvtForeignStubs = \case
-  GHC.NoStubs           -> NoStubs
-  GHC.ForeignStubs h c  -> ForeignStubs (bs8SDoc $ GHC.pprCode GHC.CStyle h) (bs8SDoc $ GHC.pprCode GHC.CStyle c)
+  GHC.NoStubs             -> pure NoStubs
+  GHC.ForeignStubs h c l  -> ForeignStubs (bs8SDoc $ GHC.pprCode GHC.CStyle h) (bs8SDoc $ GHC.pprCode GHC.CStyle c) <$> mapM cvtStubDecl [d | (_, _, d) <- l]
 
 cvtForeignSrcLang :: GHC.ForeignSrcLang -> ForeignSrcLang
 cvtForeignSrcLang = \case
@@ -563,14 +599,14 @@ cvtForeignSrcLang = \case
   GHC.RawObject   -> RawObject
 
 -- module conversion
-cvtModule :: String -> GHC.UnitId -> GHC.ModuleName -> Maybe FilePath -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
-cvtModule phase unitId' modName' mSrcPath binds foreignStubs foreignFiles =
+cvtModule :: String -> GHC.Unit -> GHC.ModuleName -> Maybe FilePath -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
+cvtModule phase unit' modName' mSrcPath binds foreignStubs foreignFiles =
   Module
   { modulePhase               = BS8.pack phase
   , moduleUnitId              = unitId
   , moduleName                = modName
   , moduleSourceFilePath      = fmap BS8.pack mSrcPath
-  , moduleForeignStubs        = cvtForeignStubs foreignStubs
+  , moduleForeignStubs        = stubs
   , moduleHasForeignExported  = any isForeignExportedId stgTopIds
   , moduleDependency          = dependencies
   , moduleExternalTopIds      = externalIds
@@ -578,12 +614,12 @@ cvtModule phase unitId' modName' mSrcPath binds foreignStubs foreignFiles =
   , moduleTopBindings         = topBinds
   , moduleForeignFiles        = [(cvtForeignSrcLang s, p) | (s, p) <- foreignFiles]
   } where
-      ((topBinds, externalIds), Env{..}) = runState (cvtTopBinds binds) initialEnv
+      ((topBinds, stubs, externalIds), Env{..}) = runState (cvtTopBindsAndStubs binds foreignStubs) initialEnv
 
       initialEnv          = emptyEnv
       stgTopIds           = concatMap topBindIds binds
       modName             = cvtModuleName modName'
-      unitId              = cvtUnitId unitId'
+      unitId              = cvtUnitId unit'
       tyCons              = groupByUnitIdAndModule . map mkTyCon $ IntMap.elems envTyCons
 
       -- calculate dependencies
@@ -616,9 +652,10 @@ mkSDataCon :: GHC.DataCon -> SDataCon
 mkSDataCon dc = SDataCon
   { sdcName   = cvtOccName $ GHC.getOccName n
   , sdcId     = dataConId
-  , sdcRep    = if GHC.isUnboxedTupleCon dc
-                  then UnboxedTupleCon . GHC.tyConArity $ GHC.dataConTyCon dc
-                  else AlgDataCon $ concatMap (getConArgRep . dcpp "3" GHC.typePrimRepArgs) $ dcpp "2" GHC.dataConRepArgTys $ dcpp "1" id $ dc
+  , sdcRep    = if
+      | GHC.isUnboxedSumCon dc    -> error "unboxed sum cons are not supported in STG!"
+      | GHC.isUnboxedTupleCon dc  -> UnboxedTupleCon $ GHC.dataConRepArity dc
+      | otherwise                 -> AlgDataCon $ concatMap (concatMap getConArgRep . dcpp "3" GHC.typePrimRep . GHC.scaledThing) $ dcpp "2" GHC.dataConRepArgTys $ dcpp "1" id $ dc
   , sdcWorker = cvtBinderId idDetails "dataConWorkId" workerId
   , sdcDefLoc = cvtSrcSpan $ GHC.nameSrcSpan n
   } where
@@ -636,9 +673,8 @@ mkSDataCon dc = SDataCon
       --dcpp msg f a = trace ("mkSDataCon " ++ msg ++ " : " ++ ppr a) $ f a
       n = GHC.getName dc
       getConArgRep = \case
-        [GHC.VoidRep] -> [] -- HINT: drop VoidRep arguments, the STG constructor builder code also ignores them
-        [r]           -> [cvtPrimRep r]
-        r             -> error $ "data con " ++ ppr n ++ "has invalid argument representation: " ++ ppr r
+        GHC.VoidRep -> [] -- HINT: drop VoidRep arguments, the STG constructor builder code also ignores them
+        r           -> [cvtPrimRep r]
 
 topBindIds :: GHC.StgTopBinding -> [GHC.Id]
 topBindIds = \case
