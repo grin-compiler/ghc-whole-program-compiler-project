@@ -54,10 +54,10 @@ decodeStgbin' = decode
 decodeStgbin :: BSL.ByteString -> Module
 decodeStgbin = reconModule . decodeStgbin'
 
-decodeStgbinInfo :: BSL.ByteString -> (Name, UnitId, ModuleName, Maybe Name, ForeignStubs, Bool, [(UnitId, [ModuleName])])
+decodeStgbinInfo :: BSL.ByteString -> (Name, UnitId, ModuleName, Maybe Name, SForeignStubs, Bool, [(UnitId, [ModuleName])])
 decodeStgbinInfo = decode
 
-decodeStgbinStubs :: BSL.ByteString -> (Name, UnitId, ModuleName, Maybe Name, ForeignStubs)
+decodeStgbinStubs :: BSL.ByteString -> (Name, UnitId, ModuleName, Maybe Name, SForeignStubs)
 decodeStgbinStubs = decode
 
 decodeStgbinModuleName :: BSL.ByteString -> (Name, UnitId, ModuleName, Maybe Name)
