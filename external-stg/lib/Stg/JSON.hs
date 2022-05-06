@@ -12,6 +12,7 @@ instance ToJSON BS8.ByteString where
 instance ToJSON Unique
 instance ToJSON RealSrcSpan
 instance ToJSON BufSpan
+instance ToJSON UnhelpfulSpanReason
 instance ToJSON SrcSpan
 instance ToJSON Tickish
 instance ToJSON PrimRep
@@ -47,7 +48,14 @@ instance ToJSON CCallTarget
 instance ToJSON ForeignCall
 instance ToJSON PrimCall
 instance ToJSON StgOp
-instance ToJSON ForeignStubs
+instance ToJSON Header
+instance ToJSON CImportSpec
+instance ToJSON CExportSpec
+instance ToJSON ForeignImport
+instance ToJSON ForeignExport
+instance ToJSON StubImpl
+instance (ToJSON idOcc) => ToJSON (StubDecl' idOcc)
+instance (ToJSON idOcc) => ToJSON (ForeignStubs' idOcc)
 instance ToJSON ForeignSrcLang
 instance (ToJSON a, ToJSON b, ToJSON c, ToJSON d, ToJSON e) => ToJSON (Module' a b c d e)
 
@@ -57,6 +65,7 @@ instance FromJSON BS8.ByteString where
 instance FromJSON Unique
 instance FromJSON RealSrcSpan
 instance FromJSON BufSpan
+instance FromJSON UnhelpfulSpanReason
 instance FromJSON SrcSpan
 instance FromJSON Tickish
 instance FromJSON PrimRep
@@ -93,6 +102,13 @@ instance FromJSON CCallTarget
 instance FromJSON ForeignCall
 instance FromJSON PrimCall
 instance FromJSON StgOp
-instance FromJSON ForeignStubs
+instance FromJSON Header
+instance FromJSON CImportSpec
+instance FromJSON CExportSpec
+instance FromJSON ForeignImport
+instance FromJSON ForeignExport
+instance FromJSON StubImpl
+instance (FromJSON idOcc) => FromJSON (StubDecl' idOcc)
+instance (FromJSON idOcc) => FromJSON (ForeignStubs' idOcc)
 instance FromJSON ForeignSrcLang
 instance (FromJSON a, FromJSON b, FromJSON c, FromJSON d, FromJSON e) => FromJSON (Module' a b c d e)

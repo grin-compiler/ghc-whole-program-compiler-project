@@ -10,7 +10,7 @@ deconModule Module{..} = smod where
     , moduleUnitId              = moduleUnitId
     , moduleName                = moduleName
     , moduleSourceFilePath      = moduleSourceFilePath
-    , moduleForeignStubs        = moduleForeignStubs
+    , moduleForeignStubs        = deconForeignStubs moduleForeignStubs
     , moduleHasForeignExported  = moduleHasForeignExported
     , moduleDependency          = moduleDependency
     , moduleExternalTopIds      = [(uid, [(m, map deconIdBnd ids) | (m, ids) <- mods]) | (uid, mods) <- moduleExternalTopIds]
@@ -106,3 +106,13 @@ deconAltCon = \case
   AltDataCon dcOcc  -> AltDataCon (deconDcOcc dcOcc)
   AltLit lit        -> AltLit lit
   AltDefault        -> AltDefault
+
+deconForeignStubs :: ForeignStubs -> SForeignStubs
+deconForeignStubs = \case
+  NoStubs             -> NoStubs
+  ForeignStubs h c l  -> ForeignStubs h c $ map deconStubDecl l
+
+deconStubDecl :: StubDecl -> SStubDecl
+deconStubDecl = \case
+  StubDeclImport f m    -> StubDeclImport f m
+  StubDeclExport f i s  -> StubDeclExport f (deconIdOcc i) s

@@ -111,7 +111,15 @@ data BufSpan
 
 data SrcSpan
   = RealSrcSpan   !RealSrcSpan !(Maybe BufSpan)
-  | UnhelpfulSpan !Name
+  | UnhelpfulSpan !UnhelpfulSpanReason
+  deriving (Eq, Ord, Generic, Show)
+
+data UnhelpfulSpanReason
+  = UnhelpfulNoLocationInfo
+  | UnhelpfulWiredIn
+  | UnhelpfulInteractive
+  | UnhelpfulGenerated
+  | UnhelpfulOther !Name
   deriving (Eq, Ord, Generic, Show)
 
 -- tickish related
@@ -266,12 +274,18 @@ data IdDetails
 -- stg expr related
 
 newtype UnitId
-  = UnitId { getUnitId :: Name }
+  = UnitId Name
   deriving (Eq, Ord, Binary, Generic, Show)
 
+getUnitId :: UnitId -> Name
+getUnitId (UnitId n) = n
+
 newtype ModuleName
-  = ModuleName { getModuleName :: Name }
+  = ModuleName Name
   deriving (Eq, Ord, Binary, Generic, Show)
+
+getModuleName :: ModuleName -> Name
+getModuleName (ModuleName n) = n
 
 newtype BinderId
   = BinderId Unique
@@ -470,7 +484,7 @@ data SourceText
   deriving (Eq, Ord, Generic, Show)
 
 data CCallTarget
-  = StaticTarget !SourceText !BS8.ByteString !(Maybe UnitId) !Bool
+  = StaticTarget !SourceText !BS8.ByteString !(Maybe UnitId) !Bool {- is function -}
   | DynamicTarget
   deriving (Eq, Ord, Generic, Show)
 
@@ -492,12 +506,40 @@ data StgOp
   deriving (Eq, Ord, Generic, Show)
 
 -- foreign export stubs
+data Header = Header !SourceText !Name
+  deriving (Eq, Ord, Generic, Show)
 
-data ForeignStubs
+data ForeignImport = CImport !CCallConv !Safety !(Maybe Header) !CImportSpec !SourceText
+  deriving (Eq, Ord, Generic, Show)
+
+data CImportSpec
+  = CLabel    !Name
+  | CFunction !CCallTarget
+  | CWrapper
+  deriving (Eq, Ord, Generic, Show)
+
+data ForeignExport = CExport !CExportSpec !SourceText
+  deriving (Eq, Ord, Generic, Show)
+
+data CExportSpec = CExportStatic !SourceText !Name !CCallConv
+  deriving (Eq, Ord, Generic, Show)
+
+data StubImpl
+  = StubImplImportCWrapper  !Name !(Maybe Int)
+  | StubImplImportCApi      !Name ![(Maybe Header, BS8.ByteString, Char)]
+  deriving (Eq, Ord, Generic, Show)
+
+data StubDecl' idOcc
+  = StubDeclImport !ForeignImport !(Maybe StubImpl)
+  | StubDeclExport !ForeignExport idOcc !BS8.ByteString
+  deriving (Eq, Ord, Generic, Show)
+
+data ForeignStubs' idOcc
   = NoStubs
   | ForeignStubs
     { fsCHeader :: !BS8.ByteString
     , fsCSource :: !BS8.ByteString
+    , fsDecls   :: ![StubDecl' idOcc]
     }
   deriving (Eq, Ord, Generic, Show)
 
@@ -518,7 +560,7 @@ data Module' idBnd idOcc dcOcc tcBnd tcOcc
   , moduleUnitId              :: !UnitId
   , moduleName                :: !ModuleName
   , moduleSourceFilePath      :: !(Maybe Name) -- HINT: RealSrcSpan's source file refers to this value
-  , moduleForeignStubs        :: !ForeignStubs
+  , moduleForeignStubs        :: !(ForeignStubs' idOcc)
   , moduleHasForeignExported  :: !Bool
   , moduleDependency          :: ![(UnitId, [ModuleName])]
   , moduleExternalTopIds      :: ![(UnitId, [(ModuleName, [idBnd])])]
@@ -531,26 +573,30 @@ data Module' idBnd idOcc dcOcc tcBnd tcOcc
 -- convenience layers: raw and user friendly
 
 -- raw - as it is serialized
-type SModule     = Module'      SBinder BinderId DataConId STyCon  TyConId
-type STopBinding = TopBinding'  SBinder BinderId DataConId TyConId
-type SBinding    = Binding'     SBinder BinderId DataConId TyConId
-type SExpr       = Expr'        SBinder BinderId DataConId TyConId
-type SRhs        = Rhs'         SBinder BinderId DataConId TyConId
-type SAlt        = Alt'         SBinder BinderId DataConId TyConId
-type SAltCon     = AltCon'      DataConId
-type SAltType    = AltType'     TyConId
-type SArg        = Arg'         BinderId
+type SModule        = Module'       SBinder BinderId DataConId STyCon  TyConId
+type STopBinding    = TopBinding'   SBinder BinderId DataConId TyConId
+type SBinding       = Binding'      SBinder BinderId DataConId TyConId
+type SExpr          = Expr'         SBinder BinderId DataConId TyConId
+type SRhs           = Rhs'          SBinder BinderId DataConId TyConId
+type SAlt           = Alt'          SBinder BinderId DataConId TyConId
+type SAltCon        = AltCon'       DataConId
+type SAltType       = AltType'      TyConId
+type SArg           = Arg'          BinderId
+type SStubDecl      = StubDecl'     BinderId
+type SForeignStubs  = ForeignStubs' BinderId
 
 -- user friendly - rich information
-type Module     = Module'      Binder Binder DataCon TyCon TyCon
-type TopBinding = TopBinding'  Binder Binder DataCon TyCon
-type Binding    = Binding'     Binder Binder DataCon TyCon
-type Expr       = Expr'        Binder Binder DataCon TyCon
-type Rhs        = Rhs'         Binder Binder DataCon TyCon
-type Alt        = Alt'         Binder Binder DataCon TyCon
-type AltCon     = AltCon'      DataCon
-type AltType    = AltType'     TyCon
-type Arg        = Arg'         Binder
+type Module       = Module'       Binder Binder DataCon TyCon TyCon
+type TopBinding   = TopBinding'   Binder Binder DataCon TyCon
+type Binding      = Binding'      Binder Binder DataCon TyCon
+type Expr         = Expr'         Binder Binder DataCon TyCon
+type Rhs          = Rhs'          Binder Binder DataCon TyCon
+type Alt          = Alt'          Binder Binder DataCon TyCon
+type AltCon       = AltCon'       DataCon
+type AltType      = AltType'      TyCon
+type Arg          = Arg'          Binder
+type StubDecl     = StubDecl'     Binder
+type ForeignStubs = ForeignStubs' Binder
 
 instance Binary Unique
 instance Binary PrimElemRep
@@ -574,12 +620,20 @@ instance Binary StgOp
 instance Binary DataConRep
 instance Binary SDataCon
 instance Binary STyCon
-instance Binary ForeignStubs
 instance Binary ForeignSrcLang
 instance Binary RealSrcSpan
 instance Binary BufSpan
+instance Binary UnhelpfulSpanReason
 instance Binary SrcSpan
 instance Binary Tickish
+instance Binary Header
+instance Binary CImportSpec
+instance Binary CExportSpec
+instance Binary ForeignImport
+instance Binary ForeignExport
+instance Binary StubImpl
+instance (Binary idOcc) => Binary (StubDecl' idOcc)
+instance (Binary idOcc) => Binary (ForeignStubs' idOcc)
 instance (Binary tcOcc) => Binary (AltType' tcOcc)
 instance (Binary dcOcc) => Binary (AltCon' dcOcc)
 instance (Binary idOcc) => Binary (Arg' idOcc)

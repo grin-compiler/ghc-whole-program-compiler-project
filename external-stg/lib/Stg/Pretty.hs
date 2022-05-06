@@ -226,6 +226,7 @@ pprForeignStubs = \case
   ForeignStubs{..}  -> vsep
                         [ text "foreign stub C header {" <$$> green (pretty fsCHeader) <$$> text "}"
                         , text "foreign stub C source {" <$$> green (pretty fsCSource) <$$> text "}"
+                        , text "foreign decls {" <$$> (indent 2 $ vsep $ map (text . show) fsDecls) <$$> text "}"
                         ]
 
 pprForeignFiles :: [(ForeignSrcLang, FilePath)] -> Doc

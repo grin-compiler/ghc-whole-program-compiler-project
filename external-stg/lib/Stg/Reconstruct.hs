@@ -135,7 +135,7 @@ reconModule Module{..} = mod where
     , moduleUnitId              = moduleUnitId
     , moduleName                = moduleName
     , moduleSourceFilePath      = moduleSourceFilePath
-    , moduleForeignStubs        = moduleForeignStubs
+    , moduleForeignStubs        = stubs
     , moduleHasForeignExported  = moduleHasForeignExported
     , moduleDependency          = moduleDependency
     , moduleExternalTopIds      = exts
@@ -161,6 +161,9 @@ reconModule Module{..} = mod where
   tyConList :: [(UnitId, [(ModuleName, [TyCon])])]
   tyConList = [(u, [(m, map (reconTyCon u m) l) | (m, l) <- ml]) | (u, ml) <- moduleTyCons]
 
+  stubs :: ForeignStubs
+  stubs = reconForeignStubs bm moduleForeignStubs
+
   binds :: [TopBinding]
   binds = map reconTopBinding moduleTopBindings
 
@@ -180,6 +183,16 @@ reconModule Module{..} = mod where
     StgTopStringLit b s           -> StgTopStringLit (reconTopBinder b) s
     StgTopLifted (StgNonRec b r)  -> StgTopLifted $ StgNonRec (reconTopBinder b) (reconRhs bm r)
     StgTopLifted (StgRec bs)      -> StgTopLifted $ StgRec [(reconTopBinder b, reconRhs bm r) | (b,r) <- bs]
+
+reconForeignStubs :: BinderMap -> SForeignStubs -> ForeignStubs
+reconForeignStubs bm = \case
+  NoStubs             -> NoStubs
+  ForeignStubs h c l  -> ForeignStubs h c $ map (reconStubDecl bm) l
+
+reconStubDecl :: BinderMap -> SStubDecl -> StubDecl
+reconStubDecl bm = \case
+  StubDeclImport f m    -> StubDeclImport f m
+  StubDeclExport f i s  -> StubDeclExport f (getBinder bm i) s
 
 topBindings :: TopBinding' idBnd idOcc dcOcc tcOcc -> [idBnd]
 topBindings = \case
