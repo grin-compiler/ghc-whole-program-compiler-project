@@ -249,9 +249,8 @@ getProgArgv(int *argc, char **argv[])
           liftIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
           pure []
 
-{-
       StaticTarget _ "hs_free_stable_ptr" _ _ -> pure []
--}
+
       -- support for exporting haskell function (GHC RTS specific)
       StaticTarget _ "createAdjustor" _ _
         | [ IntV 1

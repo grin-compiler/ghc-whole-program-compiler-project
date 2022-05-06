@@ -26,6 +26,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- deRefStablePtr# :: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
   ( "deRefStablePtr#", [PtrAtom (StablePtr _index) p, _s]) -> do
     pure <$> lookupStablePointerPtr p
+  -- TODO: handle this in a better and more uniform way
+  ( "deRefStablePtr#", [PtrAtom RawPtr p, _s]) -> do
+    pure <$> lookupStablePointerPtr p
 
   -- eqStablePtr# :: StablePtr# a -> StablePtr# a -> Int#
   ( "eqStablePtr#", [PtrAtom _ a, PtrAtom _ b]) -> do
