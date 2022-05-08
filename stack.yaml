@@ -1,22 +1,20 @@
-resolver: lts-16.13
-
-allow-newer: true
+resolver: lts-19.1
 
 packages:
   - 'external-stg-compiler'
   - 'external-stg'
 
-ghc-options:
-  "$everything": -fno-stgbin -fno-stgapp -optcxx-std=c++17
+#ghc-options:
+#  "$everything": -optcxx-std=c++17
 
 extra-deps:
-  - async-pool-0.9.1@sha256:4015140f896c3f1652b06a679b0ade2717d05557970c283ea2c372a71be2a6a1,1605
-  - souffle-haskell-1.1.0
-  - zip-1.7.0
+  - zip-1.7.2
+  - souffle-haskell-3.3.0
 
 
 # use custom ext-stg whole program compiler GHC
-compiler:     ghc-8.11.0.20200527
+compiler:     ghc-9.0.2.1000
+compiler-check: match-exact
 #ghc-variant:  ext-stg-whole-program-compiler
 
 #setup-info-locations: []
