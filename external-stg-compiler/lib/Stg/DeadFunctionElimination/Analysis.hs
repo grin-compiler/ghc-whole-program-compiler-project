@@ -3,8 +3,8 @@
 module Stg.DeadFunctionElimination.Analysis where
 
 import Control.Monad.IO.Class
-import qualified Language.Souffle.Class     as Souffle
-import qualified Language.Souffle.Compiled  as Souffle
+import qualified Language.Souffle.Compiled (SouffleM)
+import qualified Language.Souffle.Compiled as Souffle
 
 import Control.Monad
 import Data.Word
@@ -130,8 +130,7 @@ instance Souffle.Program Liveness where
   programName = const "ext_stg_liveness"
 
 execLiveness :: FilePath -> FilePath -> Word64 -> IO ()
-execLiveness inputDir outputDir threadCount = Souffle.runSouffle $ do
-  maybeProgram <- Souffle.init Liveness
+execLiveness inputDir outputDir threadCount = Souffle.runSouffle Liveness $ \maybeProgram -> do
   case maybeProgram of
     Nothing -> liftIO $ putStrLn "Failed to load program."
     Just prog -> do
