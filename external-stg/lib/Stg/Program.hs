@@ -84,6 +84,7 @@ data GhcStgApp
   { appWays           :: [String]
   , appObjSuffix      :: String
   , appNoHsMain       :: Bool
+  , appPlatformOS     :: String
   , appUnitDbPaths    :: [FilePath]
   , appObjFiles       :: [FilePath]
   , appExtraLdInputs  :: [FilePath]
@@ -99,6 +100,7 @@ instance FromJSON GhcStgApp where
       <$> v .:? "ways" .!= []
       <*> v .: "o_suffix"
       <*> v .: "no_hs_main"
+      <*> v .: "platform_os"
       <*> v .:? "unit_db_paths" .!= []
       <*> v .:? "o_files" .!= []
       <*> v .:? "extra_ld_inputs" .!= []
@@ -226,6 +228,7 @@ data StgAppLinkerInfo
   , stgappExtraLibs     :: [String]
   , stgappExtraLibDirs  :: [FilePath]
   , stgappLdOptions     :: [String]
+  , stgappPlatformOS    :: String
   }
   deriving (Eq, Ord, Show)
 
@@ -243,6 +246,7 @@ getAppLinkerInfo ghcStgAppFname = do
         , stgappExtraLibs     = appExtraLibs
         , stgappExtraLibDirs  = appExtraLibDirs
         , stgappLdOptions     = appLdOptions
+        , stgappPlatformOS    = appPlatformOS
         }
 
   -- lib info
@@ -302,3 +306,19 @@ getAppLicenseInfo ghcStgAppFname = do
   pure $ StgAppLicenseInfo
     { stgappUnitConfs = catMaybes confList
     }
+
+-- API for external-stg-compiler
+
+data StgAppInfo
+  = StgAppInfo
+  { _appIncludePaths   :: [String]
+  , _appLibPaths       :: [String]
+  , _appLdOptions      :: [String]
+  , _appCLikeObjFiles  :: [String]
+  , _appNoHsMain       :: Bool
+  }
+  deriving (Eq, Ord, Show)
+
+getAppInfo :: FilePath -> IO StgAppInfo
+getAppInfo ghcStgAppFname = do
+  pure undefined

@@ -43,7 +43,9 @@ linkForeignCbitsSharedLib ghcstgappFname = do
 
       arList = case cbitsArs ++ stubArs of
           []  -> []
-          l   -> ["-Wl,--whole-archive"] ++ l ++ ["-Wl,--no-whole-archive"]
+          l   -> case stgappPlatformOS of
+                  "darwin"  -> ["-Wl,-all_load"] ++ l
+                  _         -> ["-Wl,--whole-archive"] ++ l ++ ["-Wl,--no-whole-archive"]
 
       stubOpts =
           [ "-fPIC"
@@ -60,8 +62,9 @@ linkForeignCbitsSharedLib ghcstgappFname = do
         unlines
           [ "#!/usr/bin/env bash"
           , "set -e"
-          , "gcc -o cbits.so -shared \\"
-          , "  -Wl,--no-as-needed \\"
+          , case stgappPlatformOS of
+              "darwin"  -> "gcc -o cbits.so -shared \\"
+              _         -> "gcc -o cbits.so -shared -Wl,--no-as-needed \\"
           ] ++
         intercalate " \\\n" (map ("  " ++) . filter (/= "") $ arList ++ cbitsOpts ++ stgappCObjects ++ [appOpts] ++ stubOpts) ++ "\n"
 
