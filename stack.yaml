@@ -4,33 +4,13 @@ packages:
   - 'external-stg-compiler'
   - 'external-stg'
 
-#ghc-options:
-#  "$everything": -optcxx-std=c++17
-
 extra-deps:
   - zip-1.7.2
   - souffle-haskell-3.3.0
 
-
-# use custom ext-stg whole program compiler GHC
-compiler:     ghc-9.0.2.1000
+# use GHC-WPC (whole program compiler)
+compiler:       ghc-9.0.2.1000
 compiler-check: match-exact
-#ghc-variant:  ext-stg-whole-program-compiler
-
-#setup-info-locations: []
-#setup-info:
-#  ghc:
-#    linux64-custom-ext-stg-whole-program-compiler:
-#      8.11.0.20200527:
-#        url: "https://github.com/grin-compiler/ghc-wpc/releases/download/ghc-8.11.0.20200527-wpc/ghc-8.11.0.20200527.tar.xz"
-
-# use local GHC (for development)
-system-ghc: true
+system-ghc:     true
 extra-path:
   - /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin
-
-# DEBUG INFO
-#dump-logs: all
-#build:
-#  keep-tmp-files: true
-#  cabal-verbose: true
