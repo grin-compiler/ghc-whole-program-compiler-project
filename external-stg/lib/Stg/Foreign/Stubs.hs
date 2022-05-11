@@ -1,8 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 module Stg.Foreign.Stubs where
 
+import qualified Data.ByteString.Char8 as BS8
+
 import Stg.Program
 import Stg.Syntax
+import Stg.GHC.Symbols
 
 genStubs :: FilePath -> IO String
 genStubs ghcstgappFname = do
@@ -12,23 +15,7 @@ genStubs ghcstgappFname = do
       code          = unlines $ filter (not . null) $ fileIncludes ++ stubs ++ extraHack
       extraHack     =
         [ "char " ++ n ++ ";"
-        | n <-
-            [ "RtsFlags"
-            , "defaultRtsConfig"
-            , "ZCMain_main_closure"
-            , "n_capabilities"
-            , "keepCAFs"
-            -- pandoc
-            , "hslua_callhsfun"
-            -- ghc
-            , "stg_interp_constr1_entry"
-            , "stg_interp_constr2_entry"
-            , "stg_interp_constr3_entry"
-            , "stg_interp_constr4_entry"
-            , "stg_interp_constr5_entry"
-            , "stg_interp_constr6_entry"
-            , "stg_interp_constr7_entry"
-            ]
+        | n <- rtsSymbols
         ]
   pure code
 
@@ -62,4 +49,8 @@ genStubCode = \case
   StubDeclImport _ Nothing -> ""
 -}
   StubDeclImport{} -> ""
-  d -> "/*\nnot implemented: " ++ show d ++ "\n*/\n"
+  d@(StubDeclExport (CExport (CExportStatic _ name _) _) _ _) -> unlines
+    [ "// not implemented: " ++ show d
+    , "char " ++ BS8.unpack name ++ ";" -- FIXME: temporary hack
+    , ""
+    ]

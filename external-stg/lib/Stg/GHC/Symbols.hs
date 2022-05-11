@@ -5,12 +5,16 @@ import Stg.Syntax
 liveSymbols :: [(String, String, String)]
 liveSymbols =
   -- exceptions (top level CAFs that create an Exception data constructor that can passed to raise# or raiseIO#)
-  [ ("base", "Control.Exception.Base", "absentSumFieldError")
-  , ("base", "Control.Exception.Base", "nestedAtomically")
+  [ ("ghc-prim", "GHC.Prim.Panic", "absentSumFieldError")
+  , ("ghc-prim", "GHC.Prim.Exception", "raiseUnderflow")
+  , ("ghc-prim", "GHC.Prim.Exception", "raiseOverflow")
+  , ("ghc-prim", "GHC.Prim.Exception", "raiseDivZero")
   , ("base", "Control.Exception.Base", "nonTermination")
+  , ("base", "Control.Exception.Base", "nestedAtomically")
   , ("base", "GHC.Exception.Type", "divZeroException")
   , ("base", "GHC.Exception.Type", "overflowException")
   , ("base", "GHC.Exception.Type", "underflowException")
+
   , ("base", "GHC.IO.Exception", "allocationLimitExceeded")
   , ("base", "GHC.IO.Exception", "blockedIndefinitelyOnMVar")
   , ("base", "GHC.IO.Exception", "blockedIndefinitelyOnSTM")
@@ -19,6 +23,8 @@ liveSymbols =
   , ("base", "GHC.IO.Exception", "cannotCompactPinned")
   , ("base", "GHC.IO.Exception", "heapOverflow")
   , ("base", "GHC.IO.Exception", "stackOverflow")
+
+  , ("base", "GHC.IOPort", "doubleReadException")
   , ("base", "GHC.Event.Thread", "blockedOnBadFD")
 
   -- data constructors (corresponding top level closure)
@@ -44,6 +50,8 @@ liveSymbols =
   , ("ghc-prim", "GHC.Types", "W#")
 
   -- top level functions
+  , ("base", "GHC.Event.Windows", "processRemoteCompletion")
+  , ("base", "GHC.Conc.IO", "interruptIOManager")
   , ("base", "GHC.Conc.IO", "ensureIOManagerIsRunning")
   , ("base", "GHC.Conc.IO", "ioManagerCapabilitiesChanged")
   , ("base", "GHC.Conc.Signal", "runHandlersPtr")
@@ -172,6 +180,10 @@ rtsSymbols =
   , "hs_init_ghc"                       -- c fun
   , "hs_exit"                           -- c fun
   , "hs_exit_nowait"                    -- c fun
+  , "hs_main"                           -- c fun
+
+  -- referenced by GHC Cmm RTS
+  , "ZCMain_main_closure"               -- cmm fun
 
   -- RTS error reporting
   , "reportStackOverflow"               -- c fun
