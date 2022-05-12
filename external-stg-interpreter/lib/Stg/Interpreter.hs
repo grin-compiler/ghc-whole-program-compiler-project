@@ -182,7 +182,7 @@ builtinStgEval so a@HeapPtr{} = do
         -- check breakpoints and region entering
         let closureName = binderUniqueName $ unId hoName
         markClosure closureName -- HINT: this list can be deleted by a debugger command, so this is not the same as `markExecutedId`
-        Debugger.checkBreakpoint closureName
+        Debugger.checkBreakpoint extendedEnv closureName
         Debugger.checkRegion closureName
         GC.checkGC [a] -- HINT: add local env as GC root
 
@@ -269,13 +269,15 @@ assertWHNF [hp@HeapPtr{}] aty res = do
           liftIO $ do
             putStrLn "Thunk"
             putStrLn ""
+            putStrLn $ describeHeapObject o
+            putStrLn ""
             print aty
             putStrLn ""
             print res
             putStrLn ""
-          error "Thunk"
+          stgErrorM "Thunk"
       | otherwise         -> pure ()
-    BlackHole{} -> error "BlackHole"
+    BlackHole{} -> stgErrorM "BlackHole"
 assertWHNF _ _ _ = pure ()
 
 {-
@@ -356,7 +358,11 @@ evalStackContinuation result = \case
 
   -- HINT: STG IR uses 'case' expressions to chain instructions with strict evaluation
   CaseOf curClosureAddr curClosure localEnv resultBinder altType alts -> do
-    modify' $ \s -> s {ssCurrentClosure = Just curClosure, ssCurrentClosureAddr = curClosureAddr}
+    modify' $ \s -> s
+      { ssCurrentClosure     = Just curClosure
+      , ssCurrentClosureAddr = curClosureAddr
+      , ssCurrentClosureEnv  = localEnv
+      }
     assertWHNF result altType resultBinder
     let resultId = (Id resultBinder)
     case altType of
@@ -501,6 +507,9 @@ evalExpr localEnv expr = debugExpr localEnv expr >> case expr of
     r -> stgErrorM $ "unsupported app rep: " ++ show r -- unboxed: invalid
 
   StgCase e scrutineeResult altType alts -> do
+    let breakpointName = binderUniqueName scrutineeResult
+    Debugger.checkBreakpoint localEnv breakpointName
+    Debugger.checkRegion breakpointName
     Just curClosure <- gets ssCurrentClosure
     curClosureAddr <- gets ssCurrentClosureAddr
     stackPush (CaseOf curClosureAddr curClosure localEnv scrutineeResult altType alts)
@@ -508,7 +517,7 @@ evalExpr localEnv expr = debugExpr localEnv expr >> case expr of
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
-    Debugger.checkBreakpoint op
+    Debugger.checkBreakpoint localEnv op
     Debugger.checkRegion op
     markPrimOp op
     args <- mapM (evalArg localEnv) l
@@ -519,7 +528,7 @@ evalExpr localEnv expr = debugExpr localEnv expr >> case expr of
     -- check foreign target region and breakpoint
     case foreignCTarget foreignCall of
       StaticTarget _ targetName _ _ -> do
-        Debugger.checkBreakpoint targetName
+        Debugger.checkBreakpoint localEnv targetName
         Debugger.checkRegion targetName
       _ -> pure ()
 
@@ -568,7 +577,7 @@ convertAltLit = \case
 
 matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
 matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
-  []  -> stgErrorM $ "no matching alts for: " ++ show resultId
+  []  -> stgErrorM $ "no matching alts for: " ++ show (resultId, DC dc, "ALTS:\n", map altCon alts)
   Alt{..} : _ -> do
     let extendedEnv = addManyBindersToEnv SO_AltArg altBinders args localEnv
     setProgramPoint $ PP_Alt resultId altCon

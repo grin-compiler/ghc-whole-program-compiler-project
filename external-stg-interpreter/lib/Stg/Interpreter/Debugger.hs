@@ -6,6 +6,9 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.List as List
+import Text.Printf
 
 import Stg.Interpreter.Base
 import Stg.Syntax
@@ -98,8 +101,21 @@ processCommandsUntilExit = do
     then pure ()
     else processCommandsUntilExit
 
-checkBreakpoint :: Name -> M ()
-checkBreakpoint breakpointName = do
+printEnv :: Env -> IO ()
+printEnv env = do
+  let unBinderId (BinderId u) = u
+      l = maximum . map (\(Id Binder{..}) -> sum [BS8.length $ getModuleName binderModule, 2, BS8.length binderName, 1, length $ show $ unBinderId binderId]) $ Map.keys env
+
+      showItem (n@(Id Binder{..}), v) = printf ("  %-" ++ show l ++ "s  =  %s") (mod ++ "  " ++ name) (show v)
+        where
+          BinderId u  = binderId
+          name        = BS8.unpack binderName ++ ('_' : show u)
+          mod         = BS8.unpack $ getModuleName binderModule
+      str = List.sort $ map showItem $ Map.toList env
+  putStrLn $ unlines str
+
+checkBreakpoint :: Env -> Name -> M ()
+checkBreakpoint localEnv breakpointName = do
   dbgState <- gets ssDebugState
   exit <- processCommandsNonBlocking
   case dbgState of
@@ -117,6 +133,8 @@ checkBreakpoint breakpointName = do
 
           | otherwise -> do
               -- HINT: trigger breakpoint
+              liftIO $ putStrLn $ "Active breakpoint:" ++ BS8.unpack breakpointName
+              liftIO $ printEnv localEnv
               reportState
               modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
               unless exit processCommandsUntilExit

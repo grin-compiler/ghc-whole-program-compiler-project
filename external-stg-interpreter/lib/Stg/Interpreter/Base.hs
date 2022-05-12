@@ -609,7 +609,7 @@ store a o = do
 stgErrorM :: String -> M a
 stgErrorM msg = do
   tid <- gets ssCurrentThreadId
-  liftIO $ putStrLn $ " * stgErrorM: " ++ show msg
+  liftIO $ putStrLn $ " * stgErrorM: " ++ msg
   liftIO $ putStrLn $ "current thread id: " ++ show tid
   reportThread tid
   curClosure <- gets ssCurrentClosure
