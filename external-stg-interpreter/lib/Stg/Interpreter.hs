@@ -74,6 +74,8 @@ import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
 import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
 import qualified Stg.Interpreter.PrimOp.Idris         as PrimIdris
 
+import Text.PrettyPrint.ANSI.Leijen (plain, pretty)
+
 {-
   Q: what is the operational semantic of StgApp
   A: check slowCall :: CmmExpr -> [StgArg] -> FCode ReturnKind semantics
@@ -638,15 +640,25 @@ declareTopBindings mods = do
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
 
-loadAndRunProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-loadAndRunProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
+loadAndRunProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> Bool -> IO ()
+loadAndRunProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing showstg = do
 
   mods0 <- case takeExtension fullpak_name of
-    ".fullpak"                          -> getFullpakModules fullpak_name
+    ".fullpak"                          -> do
+        mods <- getFullpakModules fullpak_name
+        when showstg $ do
+          putStrLn "Printing fullpak modules."
+          print $ plain $ pretty mods
+        pure mods
     ".json"                             -> do
+      -- TODO: Add CLI arg to refer fullpaks to be loaded.
       baseMods <- getFullpakModules "./data/ghc-rts-base.fullpak"
+      idrisHaskellInterfaceMods <- getFullpakModules "./data/idris-haskell-interface.fullpak"
       jsonMods <- getJSONModules fullpak_name
-      pure $ baseMods ++ jsonMods
+      when showstg $ do
+        putStrLn "Printing JSON defined modules."
+        print $ plain $ pretty jsonMods
+      pure $ concat [baseMods, idrisHaskellInterfaceMods, jsonMods]
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
   runProgram switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing

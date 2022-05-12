@@ -43,7 +43,7 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript = do
 
 
   putStrLn $ "loading " ++ appPath
-  loadAndRunProgram switchCWD appPath appArgs dbgChan DbgStepByStep True
+  loadAndRunProgram switchCWD appPath appArgs dbgChan DbgStepByStep True False
   putStrLn "program finshed"
 
 startDebuggerReplUI :: Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> IO ()

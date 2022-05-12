@@ -14,6 +14,7 @@ data StgIOpts
   { switchCWD   :: Bool
   , runDebugger :: Bool
   , doTracing   :: Bool
+  , showSTG     :: Bool
   , dbgScript   :: Maybe String
   , appArgs1    :: String
   , appArgs2    :: [String]
@@ -26,6 +27,7 @@ stgi = StgIOpts
   <$> switch (long "cwd" <> help "Changes the working directory to where the APPFILE is located")
   <*> switch (short 'd' <> long "debug" <> help "Enable simple debugger")
   <*> switch (short 't' <> long "trace" <> help "Enable tracing")
+  <*> switch (short 's' <> long "stg" <> help "Show loaded STG definitions")
   <*> (optional $ strOption (long "debug-script" <> metavar "FILENAME" <> help "Run debug commands from file"))
   <*> strOption (long "args" <> value "" <> help "Space separated APPARGS")
   <*> many (strOption (short 'a' <> help "Single APPARG"))
@@ -45,4 +47,4 @@ main = do
 
   case runDebugger of
     True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript
-    False -> loadAndRunProgram switchCWD appPath appArgs dbgChan DbgRunProgram doTracing
+    False -> loadAndRunProgram switchCWD appPath appArgs dbgChan DbgRunProgram doTracing showSTG
