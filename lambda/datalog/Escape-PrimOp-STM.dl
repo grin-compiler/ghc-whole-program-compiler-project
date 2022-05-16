@@ -2,13 +2,13 @@
   HINT: is interpreted -/+
 
   primop effectful
-    + "atomically#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    - "retry#"      :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "catchRetry#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "catchSTM#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "newTVar#"    :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"TVar#" %s %a}}
-    + "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "atomically#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    - "retry#"      :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "catchRetry#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "catchSTM#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "newTVar#"    :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"TVar#" %s %a}}
+    + "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     + "writeTVar#"  :: {"TVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
@@ -16,8 +16,8 @@
 */
 
 
-// "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("Escape-PrimOp-STM-06")
 Called(r, op),
 TypeVarPointsTo(r, ty_node, "outer-origin") :-

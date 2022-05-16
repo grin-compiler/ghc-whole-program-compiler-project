@@ -2,9 +2,9 @@
   HINT: is interpreted -/+
 
   primop effectful
-    - "newByteArray#"              :: T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s}}
-    - "newPinnedByteArray#"        :: T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s}}
-    - "newAlignedPinnedByteArray#" :: T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s}}
+    - "newByteArray#"              :: T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s}}
+    - "newPinnedByteArray#"        :: T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s}}
+    - "newAlignedPinnedByteArray#" :: T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s}}
 
   primop pure
     - "isMutableByteArrayPinned#" :: {"MutableByteArray#" %s} -> T_Int64
@@ -14,13 +14,13 @@
 
   primop effectful
     - "shrinkMutableByteArray#" :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
-    - "resizeMutableByteArray#" :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s}}
-    - "unsafeFreezeByteArray#"  :: {"MutableByteArray#" %s} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"ByteArray#"}}
+    - "resizeMutableByteArray#" :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s}}
+    - "unsafeFreezeByteArray#"  :: {"MutableByteArray#" %s} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"ByteArray#"}}
 
   primop pure
     - "sizeofByteArray#"            :: {"ByteArray#"} -> T_Int64
     - "sizeofMutableByteArray#"     :: {"MutableByteArray#" %s} -> T_Int64
-    - "getSizeofMutableByteArray#"  :: {"MutableByteArray#" %s} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    - "getSizeofMutableByteArray#"  :: {"MutableByteArray#" %s} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
     - "indexCharArray#"             :: {"ByteArray#"} -> T_Int64 -> T_Char
     - "indexWideCharArray#"         :: {"ByteArray#"} -> T_Int64 -> T_Char
     - "indexIntArray#"              :: {"ByteArray#"} -> T_Int64 -> T_Int64
@@ -53,36 +53,36 @@
     - "indexWord8ArrayAsWord#"      :: {"ByteArray#"} -> T_Int64 -> T_Word64
 
   primop effectful
-    - "readCharArray#"              :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Char}
-    - "readWideCharArray#"          :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Char}
-    - "readIntArray#"               :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readWordArray#"              :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readAddrArray#"              :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Addr}
-    - "readFloatArray#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Float}
-    - "readDoubleArray#"            :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Double}
-    - "readStablePtrArray#"         :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a}}
-    - "readInt8Array#"              :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readInt16Array#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readInt32Array#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readInt64Array#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readWord8Array#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord16Array#"            :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord32Array#"            :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord64Array#"            :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord8ArrayAsChar#"       :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Char}
-    - "readWord8ArrayAsWideChar#"   :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Char}
-    - "readWord8ArrayAsAddr#"       :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Addr}
-    - "readWord8ArrayAsFloat#"      :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Float}
-    - "readWord8ArrayAsDouble#"     :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Double}
-    - "readWord8ArrayAsStablePtr#"  :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a}}
-    - "readWord8ArrayAsInt16#"      :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readWord8ArrayAsInt32#"      :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readWord8ArrayAsInt64#"      :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readWord8ArrayAsInt#"        :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readWord8ArrayAsWord16#"     :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord8ArrayAsWord32#"     :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord8ArrayAsWord64#"     :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord8ArrayAsWord#"       :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
+    - "readCharArray#"              :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Char}
+    - "readWideCharArray#"          :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Char}
+    - "readIntArray#"               :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readWordArray#"              :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readAddrArray#"              :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Addr}
+    - "readFloatArray#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Float}
+    - "readDoubleArray#"            :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Double}
+    - "readStablePtrArray#"         :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"StablePtr#" %a}}
+    - "readInt8Array#"              :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readInt16Array#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readInt32Array#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readInt64Array#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readWord8Array#"             :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord16Array#"            :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord32Array#"            :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord64Array#"            :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord8ArrayAsChar#"       :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Char}
+    - "readWord8ArrayAsWideChar#"   :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Char}
+    - "readWord8ArrayAsAddr#"       :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Addr}
+    - "readWord8ArrayAsFloat#"      :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Float}
+    - "readWord8ArrayAsDouble#"     :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Double}
+    - "readWord8ArrayAsStablePtr#"  :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"StablePtr#" %a}}
+    - "readWord8ArrayAsInt16#"      :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readWord8ArrayAsInt32#"      :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readWord8ArrayAsInt64#"      :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readWord8ArrayAsInt#"        :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readWord8ArrayAsWord16#"     :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord8ArrayAsWord32#"     :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord8ArrayAsWord64#"     :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord8ArrayAsWord#"       :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
     - "writeCharArray#"             :: {"MutableByteArray#" %s} -> T_Int64 -> T_Char -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "writeWideCharArray#"         :: {"MutableByteArray#" %s} -> T_Int64 -> T_Char -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "writeIntArray#"              :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
@@ -124,15 +124,15 @@
     - "copyMutableByteArrayToAddr#" :: {"MutableByteArray#" %s} -> T_Int64 -> T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "copyAddrToByteArray#"        :: T_Addr -> {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "setByteArray#"               :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
-    - "atomicReadIntArray#"         :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    - "atomicReadIntArray#"         :: {"MutableByteArray#" %s} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
     - "atomicWriteIntArray#"        :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
-    - "casIntArray#"                :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "fetchAddIntArray#"           :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "fetchSubIntArray#"           :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "fetchAndIntArray#"           :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "fetchNandIntArray#"          :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "fetchOrIntArray#"            :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "fetchXorIntArray#"           :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    - "casIntArray#"                :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "fetchAddIntArray#"           :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "fetchSubIntArray#"           :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "fetchAndIntArray#"           :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "fetchNandIntArray#"          :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "fetchOrIntArray#"            :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "fetchXorIntArray#"           :: {"MutableByteArray#" %s} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
 */
 
 /*

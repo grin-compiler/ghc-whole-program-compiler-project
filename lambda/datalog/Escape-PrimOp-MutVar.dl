@@ -2,22 +2,22 @@
   HINT: is interpreted -/+
 
   primop effectful
-    + "newMutVar#"   :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutVar#" %s %a}}
-    + "readMutVar#"  :: {"MutVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "newMutVar#"   :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutVar#" %s %a}}
+    + "readMutVar#"  :: {"MutVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     + "writeMutVar#" :: {"MutVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
     - "sameMutVar#" :: {"MutVar#" %s %a} -> {"MutVar#" %s %a} -> T_Int64
 
   primop effectful
-    deprecated: + "atomicModifyMutVar#"   :: {"MutVar#" %s %a} -> (%a -> %b) -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %c}
+    deprecated: + "atomicModifyMutVar#"   :: {"MutVar#" %s %a} -> (%a -> %b) -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %c}
     + "atomicModifyMutVar2#"  :: {"MutVar#" %s_163 %a_47} @ t_1630 -> (tf_1060 : %a_47 -> %c_0) -> {"State#" %s_163} @ t_1631 -> {"ghc-prim_GHC.Prim.(#,#)" %a_47 %c_0} @ t_1632
     + "atomicModifyMutVar_#"  :: {"MutVar#" %s_164 %a_48} @ t_1633 -> (tf_1064 : %a_48 -> %a_48) -> {"State#" %s_164} @ t_1634 -> {"ghc-prim_GHC.Prim.(#,#)" %a_48 %a_48} @ t_1635
     + "casMutVar#"            :: {"MutVar#" %s %a} -> %a -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 */
 
 
-// "readMutVar#" :: {"MutVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "readMutVar#" :: {"MutVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("Escape-PrimOp-MutVar-02")
 Called(r, op),
 TypeVarPointsTo(r, ty_node, "outer-origin") :-
@@ -45,7 +45,7 @@ Escaped(item) :-
   CallArgument(r, 0, mv),
   OuterOrigin(mv).
 
-// "atomicModifyMutVar#" :: {"MutVar#" %s %a} -> (%a -> %b) -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %c}
+// "atomicModifyMutVar#" :: {"MutVar#" %s %a} -> (%a -> %b) -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %c}
 // TODO: check how atomicModifyMutVar# works, this type signature does not reflect its semantics
 Error(r, cat("Unsupported (reachable) primop: ", op)) :-
   ( op = "atomicModifyMutVar#"

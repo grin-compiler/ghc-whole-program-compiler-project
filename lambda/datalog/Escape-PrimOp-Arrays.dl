@@ -4,59 +4,59 @@
   Arrays
 
   primop effectful
-    + "newArray#" :: T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+    + "newArray#" :: T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s %a}}
 
   primop pure
     - "sameMutableArray#" :: {"MutableArray#" %s %a} -> {"MutableArray#" %s %a} -> T_Int64
 
   primop effectful
-    + "readArray#"  :: {"MutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "readArray#"  :: {"MutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     + "writeArray#" :: {"MutableArray#" %s %a} -> T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
     - "sizeofArray#"        :: {"Array#" %a} -> T_Int64
     - "sizeofMutableArray#" :: {"MutableArray#" %s %a} -> T_Int64
-    + "indexArray#"         :: {"Array#" %a} -> T_Int64 -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "indexArray#"         :: {"Array#" %a} -> T_Int64 -> {"ghc-prim_GHC.Prim.Solo#" %a}
 
   primop effectful
-    + "unsafeFreezeArray#" :: {"MutableArray#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a}}
-    + "unsafeThawArray#"   :: {"Array#" %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+    + "unsafeFreezeArray#" :: {"MutableArray#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"Array#" %a}}
+    + "unsafeThawArray#"   :: {"Array#" %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s %a}}
     + "copyArray#"         :: {"Array#" %a} -> T_Int64 -> {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     + "copyMutableArray#"  :: {"MutableArray#" %s %a} -> T_Int64 -> {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     + "cloneArray#"        :: {"Array#" %a} -> T_Int64 -> T_Int64 -> {"Array#" %a}
-    + "cloneMutableArray#" :: {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
-    + "freezeArray#"       :: {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a}}
-    + "thawArray#"         :: {"Array#" %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
+    + "cloneMutableArray#" :: {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s %a}}
+    + "freezeArray#"       :: {"MutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"Array#" %a}}
+    + "thawArray#"         :: {"Array#" %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s %a}}
     + "casArray#"          :: {"MutableArray#" %s %a} -> T_Int64 -> %a -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 
   Small Arrays
 
   primop effectful
-    + "newSmallArray#" :: T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
+    + "newSmallArray#" :: T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s %a}}
 
   primop pure
     - "sameSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> {"SmallMutableArray#" %s %a} -> T_Int64
 
   primop effectful
     - "shrinkSmallMutableArray#" :: {"SmallMutableArray#" %s_15 %a_18} @ t_702 -> (T_Int64) @ t_703 -> {"State#" %s_15} @ t_704 -> {"ghc-prim_GHC.Prim.(##)"} @ t_705
-    + "readSmallArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "readSmallArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     + "writeSmallArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64 -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
     - "sizeofSmallArray#"        :: {"SmallArray#" %a} -> T_Int64
     - "sizeofSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64
-    - "getSizeofSmallMutableArray#" :: {"SmallMutableArray#" %s_19 %a_23} @ t_718 -> {"State#" %s_19} @ t_719 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_720} @ t_721
-    + "indexSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    - "getSizeofSmallMutableArray#" :: {"SmallMutableArray#" %s_19 %a_23} @ t_718 -> {"State#" %s_19} @ t_719 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_720} @ t_721
+    + "indexSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> {"ghc-prim_GHC.Prim.Solo#" %a}
 
   primop effectful
-    + "unsafeFreezeSmallArray#" :: {"SmallMutableArray#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallArray#" %a}}
-    + "unsafeThawSmallArray#"   :: {"SmallArray#" %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
+    + "unsafeFreezeSmallArray#" :: {"SmallMutableArray#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallArray#" %a}}
+    + "unsafeThawSmallArray#"   :: {"SmallArray#" %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s %a}}
     + "copySmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     + "copySmallMutableArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     + "cloneSmallArray#"        :: {"SmallArray#" %a} -> T_Int64 -> T_Int64 -> {"SmallArray#" %a}
-    + "cloneSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
-    + "freezeSmallArray#"       :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallArray#" %a}}
-    + "thawSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
+    + "cloneSmallMutableArray#" :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s %a}}
+    + "freezeSmallArray#"       :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallArray#" %a}}
+    + "thawSmallArray#"         :: {"SmallArray#" %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s %a}}
     + "casSmallArray#"          :: {"SmallMutableArray#" %s %a} -> T_Int64 -> %a -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 
 */
@@ -71,10 +71,10 @@
 */
 
 
-// "readArray#"       :: {"MutableArray#" %s %a}      -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "readSmallArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "indexArray#"      :: {"Array#" %a}                -> T_Int64 -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "indexSmallArray#" :: {"SmallArray#" %a}           -> T_Int64 -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "readArray#"       :: {"MutableArray#" %s %a}      -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "readSmallArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "indexArray#"      :: {"Array#" %a}                -> T_Int64 -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "indexSmallArray#" :: {"SmallArray#" %a}           -> T_Int64 -> {"ghc-prim_GHC.Prim.Solo#" %a}
 // NOTE: have common implementation because they use the first argument and set the return value with the same abstract type
 USED("Escape-PrimOp-Arrays-02")
 Called(r, op),
@@ -170,12 +170,12 @@ Array(r, arr_node, "outer-origin") :-
   ExternalReturnType(op, arr_node).
 
 
-// "cloneMutableArray#"       :: {"MutableArray#" %s %a}      -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
-// "cloneSmallMutableArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
-// "freezeArray#"             :: {"MutableArray#" %s %a}      -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a}}
-// "freezeSmallArray#"        :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallArray#" %a}}
-// "thawArray#"               :: {"Array#" %a}                -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s %a}}
-// "thawSmallArray#"          :: {"SmallArray#" %a}           -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s %a}}
+// "cloneMutableArray#"       :: {"MutableArray#" %s %a}      -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s %a}}
+// "cloneSmallMutableArray#"  :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s %a}}
+// "freezeArray#"             :: {"MutableArray#" %s %a}      -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"Array#" %a}}
+// "freezeSmallArray#"        :: {"SmallMutableArray#" %s %a} -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallArray#" %a}}
+// "thawArray#"               :: {"Array#" %a}                -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s %a}}
+// "thawSmallArray#"          :: {"SmallArray#" %a}           -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s %a}}
 // new array
 USED("Escape-PrimOp-Arrays-07")
 Called(r, op),

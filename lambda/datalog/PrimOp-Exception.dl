@@ -2,16 +2,16 @@
   HINT: is interpreted -/+
 
   primop effectful
-    + "catch#"                 :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "catch#"                 :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     + "raise#"                 :: %b -> %o
     - "raiseDivZero#"          :: {"Void#"} @ t_1649 -> %o_1
     - "raiseUnderflow#"        :: {"Void#"} @ t_1650 -> %o_2
     - "raiseOverflow#"         :: {"Void#"} @ t_1651 -> %o_3
-    + "raiseIO#"               :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %b}
-    + "maskAsyncExceptions#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "maskUninterruptible#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "unmaskAsyncExceptions#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    - "getMaskingState#"       :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    + "raiseIO#"               :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %b}
+    + "maskAsyncExceptions#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "maskUninterruptible#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "unmaskAsyncExceptions#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    - "getMaskingState#"       :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
 */
 
 /*
@@ -27,7 +27,7 @@
 .output RaisedEx
 
 // "raise#"   :: %b -> %o
-// "raiseIO#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %b}
+// "raiseIO#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %b}
 // collect raised exceptions
 USED("PrimOp-Exception-01")
 Called(r, op),
@@ -40,10 +40,10 @@ RaisedEx(ex) :-
   CallArgument(r, 0, ex).
   // CHECKED
 
-// "catch#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a})
-//          -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a})
+// "catch#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a})
+//          -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a})
 //          -> {"State#" {RealWorld}}
-//          -> {"ghc-prim_GHC.Prim.Unit#" %a}
+//          -> {"ghc-prim_GHC.Prim.Solo#" %a}
 // handle the wrapped function
 USED("PrimOp-Exception-02")
 Called(r, op),
@@ -73,9 +73,9 @@ CallPNode2("catch#-handler", r, v1, ex, v2_state) :-
   RaisedEx(ex).
   // CHECKED
 
-// "maskAsyncExceptions#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "maskUninterruptible#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "unmaskAsyncExceptions#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "maskAsyncExceptions#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "maskUninterruptible#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "unmaskAsyncExceptions#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("PrimOp-Exception-04")
 Called(r, op),
 CallPNode1("mask", r, v0, v1_state) :-

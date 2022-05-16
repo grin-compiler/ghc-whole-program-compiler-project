@@ -31,22 +31,22 @@
     - "indexWord64OffAddr#"    :: T_Addr -> T_Int64 -> T_Word64
 
   primop effectful
-    - "readCharOffAddr#"       :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Char}
-    - "readWideCharOffAddr#"   :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Char}
-    - "readIntOffAddr#"        :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readWordOffAddr#"       :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readAddrOffAddr#"       :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Addr}
-    - "readFloatOffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Float}
-    - "readDoubleOffAddr#"     :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Double}
-    - "readStablePtrOffAddr#"  :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a}}
-    - "readInt8OffAddr#"       :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readInt16OffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readInt32OffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readInt64OffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "readWord8OffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord16OffAddr#"     :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord32OffAddr#"     :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
-    - "readWord64OffAddr#"     :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
+    - "readCharOffAddr#"       :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Char}
+    - "readWideCharOffAddr#"   :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Char}
+    - "readIntOffAddr#"        :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readWordOffAddr#"       :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readAddrOffAddr#"       :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Addr}
+    - "readFloatOffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Float}
+    - "readDoubleOffAddr#"     :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Double}
+    - "readStablePtrOffAddr#"  :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"StablePtr#" %a}}
+    - "readInt8OffAddr#"       :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readInt16OffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readInt32OffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readInt64OffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "readWord8OffAddr#"      :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord16OffAddr#"     :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord32OffAddr#"     :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "readWord64OffAddr#"     :: T_Addr -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
     - "writeCharOffAddr#"      :: T_Addr -> T_Int64 -> T_Char -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "writeWideCharOffAddr#"  :: T_Addr -> T_Int64 -> T_Char -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "writeIntOffAddr#"       :: T_Addr -> T_Int64 -> T_Int64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
@@ -63,6 +63,10 @@
     - "writeWord16OffAddr#"    :: T_Addr -> T_Int64 -> T_Word64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "writeWord32OffAddr#"    :: T_Addr -> T_Int64 -> T_Word64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "writeWord64OffAddr#"    :: T_Addr -> T_Int64 -> T_Word64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
+    - "atomicExchangeAddrAddr#" :: T_Addr -> T_Addr   -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Addr}
+    - "atomicExchangeWordAddr#" :: T_Addr -> T_Word64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
+    - "atomicCasAddrAddr#"      :: T_Addr -> T_Addr   -> T_Addr   -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Addr}
+    - "atomicCasWordAddr#"      :: T_Addr -> T_Word64 -> T_Word64 -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
 */
 
 /*

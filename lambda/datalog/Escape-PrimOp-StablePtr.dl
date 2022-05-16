@@ -2,10 +2,10 @@
   HINT: is interpreted -/+
 
   primop effectful
-    + "makeStablePtr#"  :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a}}
-    + "deRefStablePtr#" :: {"StablePtr#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "makeStablePtr#"  :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" {"StablePtr#" %a}}
+    + "deRefStablePtr#" :: {"StablePtr#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     - "eqStablePtr#"    :: {"StablePtr#" %a} -> {"StablePtr#" %a} -> T_Int64
-    - "makeStableName#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"StableName#" %a}}
+    - "makeStableName#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" {"StableName#" %a}}
 
   primop pure
     - "eqStableName#"    :: {"StableName#" %a} -> {"StableName#" %b} -> T_Int64
@@ -14,7 +14,7 @@
 */
 
 
-// "deRefStablePtr#" :: {"StablePtr#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "deRefStablePtr#" :: {"StablePtr#" %a} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("Escape-PrimOp-StablePtr-02")
 Called(r, op),
 TypeVarPointsTo(r, ty_node, "outer-origin") :-

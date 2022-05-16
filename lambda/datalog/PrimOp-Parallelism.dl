@@ -3,14 +3,14 @@
 
   primop effectful
     + "par#"   :: %a -> T_Int64
-    + "spark#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "spark#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 
   primop pure
-    + "seq#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "seq#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 
   primop effectful
     + "getSpark#"  :: {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
-    - "numSparks#" :: {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    - "numSparks#" :: {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
 */
 
 .decl Spark(item:Variable)
@@ -25,7 +25,7 @@ Spark(item) :-
   // value
   CallArgument(r, 0, item).
 
-// "spark#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "spark#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("PrimOp-Parallelism-02")
 Called(r, op),
 TypeVarPointsTo(r, ty_node, item),
@@ -39,7 +39,7 @@ Spark(item) :-
   RetTup1Node0(op, ty_node).
 
 /*
-// "seq#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "seq#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 // TODO: ExecCall should support to emit TypeVarPointsTo relations
 //  ExecCall result can be: none, PointsTo, TypeVarPointsTo
 TypeVarPointsTo(r, ty_node, item),

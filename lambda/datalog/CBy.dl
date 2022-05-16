@@ -103,7 +103,7 @@ PointsTo(p, val) :-
   NodeArgument(node, i, val).
   // CHECKED
 
-// alt params from External (i.e. ... -> {"ghc-prim_GHC.Prim.Unit#" %a} or ... -> {"ghc-prim_GHC.Prim.Unit#" T_Int})
+// alt params from External (i.e. ... -> {"ghc-prim_GHC.Prim.Solo#" %a} or ... -> {"ghc-prim_GHC.Prim.Solo#" T_Int})
 USED("CBy-8")
 ExternalOrigin(p, ext_result, ty_var) :-
   ReachableCode(alt),

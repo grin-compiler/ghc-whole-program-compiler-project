@@ -2,13 +2,13 @@
   HINT: is interpreted -/+
 
   primop effectful
-    + "atomically#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    - "retry#"      :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "catchRetry#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "catchSTM#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "newTVar#"    :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"TVar#" %s %a}}
-    + "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "atomically#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    - "retry#"      :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "catchRetry#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "catchSTM#"   :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "newTVar#"    :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"TVar#" %s %a}}
+    + "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     + "writeTVar#"  :: {"TVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
@@ -18,7 +18,7 @@
 .decl TVar(ext_result:Variable, ty_node:Variable, item:Variable)
 .output TVar
 
-// "atomically#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "atomically#" :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}) -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("PrimOp-STM-01")
 RaisedEx("base_Control.Exception.Base.nestedAtomically"), // hardwired closure for GHC RTS
 Called(r, op),
@@ -31,10 +31,10 @@ CallPNode1("atomically#", r, v0, v1_state) :-
   CallArgument(r, 1, v1_state).
   // CHECKED
 
-// "catchRetry#"  :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a})
-//                -> ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a})
+// "catchRetry#"  :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a})
+//                -> ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a})
 //                -> {"State#" {RealWorld}}
-//                -> {"ghc-prim_GHC.Prim.Unit#" %a}
+//                -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("PrimOp-STM-02")
 Called(r, op),
 CallPNode1("catchRetry#-wrapped", r, v0, v2_state),
@@ -51,10 +51,10 @@ CallPNode1("catchRetry#-handler", r, v1, v2_state) :-
   CallArgument(r, 2, v2_state).
   // CHECKED
 
-// "catchSTM#"  :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a})
-//              -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a})
+// "catchSTM#"  :: ({"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a})
+//              -> (%b -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a})
 //              -> {"State#" {RealWorld}}
-//              -> {"ghc-prim_GHC.Prim.Unit#" %a}
+//              -> {"ghc-prim_GHC.Prim.Solo#" %a}
 // handle the wrapped function
 USED("PrimOp-STM-03")
 Called(r, op),
@@ -82,7 +82,7 @@ CallPNode2("catchSTM#-handler", r, v1, ex, v2_state) :-
   RaisedEx(ex).
   // CHECKED
 
-// "newTVar#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"TVar#" %s %a}}
+// "newTVar#" :: %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"TVar#" %s %a}}
 // new tvar
 USED("PrimOp-STM-05")
 Called(r, op),
@@ -96,8 +96,8 @@ TVar(r, ty_node, item) :-
   RetTup1Node0(op, ty_node).
   // CHECKED
 
-// "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "readTVar#"   :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "readTVarIO#" :: {"TVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("PrimOp-STM-06")
 Called(r, op),
 TypeVarPointsTo(r, ty_node, item) :-

@@ -2,13 +2,13 @@
   HINT: is interpreted -/+
 
   primop effectful
-    + "fork#"                 :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
-    + "forkOn#"               :: T_Int64 -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+    + "fork#"                 :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" {"ThreadId#"}}
+    + "forkOn#"               :: T_Int64 -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" {"ThreadId#"}}
     + "killThread#"           :: {"ThreadId#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
     - "yield#"                :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
-    - "myThreadId#"           :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+    - "myThreadId#"           :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" {"ThreadId#"}}
     - "labelThread#"          :: {"ThreadId#"} -> T_Addr -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
-    - "isCurrentThreadBound#" :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    - "isCurrentThreadBound#" :: {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
     - "noDuplicate#"          :: {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
     - "threadStatus#"         :: {"ThreadId#"} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(#,,#)" T_Int64 T_Int64 T_Int64}
 */
@@ -23,7 +23,7 @@ RaisedEx(ex) :-
   Call(r, "killThread#", _),
   CallArgument(r, 1, ex).
 
-// "fork#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+// "fork#" :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" {"ThreadId#"}}
 USED("PrimOp-Concurrency-02")
 Called(r, "fork#"),
 HasInst("fork#", "fork#-action-ignored-result"), // fix & workaround - TODO: come up with a better and simpler design, NOTE: this is needed to make CalledCode work
@@ -33,7 +33,7 @@ CallPNode1(r, "fork#-action-ignored-result", v0_io_action, v1_realworld) :-
   CallArgument(r, 0, v0_io_action),
   CallArgument(r, 1, v1_realworld).
 
-// "forkOn#" :: T_Int64 -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"}}
+// "forkOn#" :: T_Int64 -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" {"ThreadId#"}}
 USED("PrimOp-Concurrency-03")
 Called(r, "forkOn#"),
 HasInst("forkOn#", "forkOn#-action-ignored-result"), // fix & workaround - TODO: come up with a better and simpler design, NOTE: this is needed to make CalledCode work

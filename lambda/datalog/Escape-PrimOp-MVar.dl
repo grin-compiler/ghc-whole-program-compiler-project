@@ -2,23 +2,23 @@
   HINT: is interpreted -/+
 
   primop effectful
-    - "newMVar#"     :: {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" {"MVar#" %s %a}}
-    + "takeMVar#"    :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    - "newMVar#"     :: {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" {"MVar#" %s %a}}
+    + "takeMVar#"    :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     + "tryTakeMVar#" :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
     + "putMVar#"     :: {"MVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
-    + "tryPutMVar#"  :: {"MVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    + "readMVar#"    :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+    + "tryPutMVar#"  :: {"MVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    + "readMVar#"    :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
     + "tryReadMVar#" :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(#,#)" T_Int64 %a}
 
   primop pure
     - "sameMVar#" :: {"MVar#" %s %a} -> {"MVar#" %s %a} -> T_Int64
 
   primop effectful
-    - "isEmptyMVar#" :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    - "isEmptyMVar#" :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
 */
 
-// "takeMVar#" :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "readMVar#" :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "takeMVar#" :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "readMVar#" :: {"MVar#" %s %a} -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 USED("Escape-PrimOp-MVar-02")
 Called(r, op),
 TypeVarPointsTo(r, ty_node, "outer-origin") :-
@@ -52,7 +52,7 @@ TypeVarPointsTo(r, ty_node, "outer-origin") :-
 
 
 // "putMVar#"     :: {"MVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.(##)"}
-// "tryPutMVar#"  :: {"MVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+// "tryPutMVar#"  :: {"MVar#" %s %a} -> %a -> {"State#" %s} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
 // mark item with outer origin
 // Q: should we backpropagate the outer-origin property on the points-to chain? (TODO)
 USED("Escape-PrimOp-MVar-04")

@@ -2,25 +2,25 @@
   HINT: is interpreted -/+
 
   primop effectful
-    - "compactNew#"    :: T_Word64 -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" {"Compact#"}}
+    - "compactNew#"    :: T_Word64 -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" {"Compact#"}}
     - "compactResize#" :: {"Compact#"} -> T_Word64 -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(##)"}
 
   primop pure
-    - "compactContains#"      :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
-    - "compactContainsAny#"   :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Int64}
+    - "compactContains#"      :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
+    - "compactContainsAny#"   :: %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" T_Int64}
     - "compactGetFirstBlock#" :: {"Compact#"} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(#,#)" T_Addr T_Word64}
     - "compactGetNextBlock#"  :: {"Compact#"} -> T_Addr -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(#,#)" T_Addr T_Word64}
 
   primop effectful
-    - "compactAllocateBlock#"  :: T_Word64 -> T_Addr -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Addr}
+    - "compactAllocateBlock#"  :: T_Word64 -> T_Addr -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" T_Addr}
     - "compactFixupPointers#"  :: T_Addr -> T_Addr -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.(#,#)" {"Compact#"} T_Addr}
-    + "compactAdd#"            :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    + "compactAddWithSharing#" :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-    - "compactSize#"           :: {"Compact#"} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" T_Word64}
+    + "compactAdd#"            :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    + "compactAddWithSharing#" :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+    - "compactSize#"           :: {"Compact#"} -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" T_Word64}
 */
 
-// "compactAdd#"            :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
-// "compactAddWithSharing#" :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Unit#" %a}
+// "compactAdd#"            :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
+// "compactAddWithSharing#" :: {"Compact#"} -> %a -> {"State#" {RealWorld}} -> {"ghc-prim_GHC.Prim.Solo#" %a}
 // FIXME: should transitively evaluate the thunks
 // probably we should disable this primop (future work)
 /*
