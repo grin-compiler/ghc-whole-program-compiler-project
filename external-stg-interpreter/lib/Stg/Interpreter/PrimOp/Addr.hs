@@ -354,4 +354,34 @@ evalPrimOp fallback op args t tc = case (op, args) of
       pokeElemOff (castPtr p :: Ptr Word64) index (fromIntegral value)
     pure []
 
+  -- atomicExchangeAddrAddr# :: Addr# -> Addr# -> State# s -> (# State# s, Addr# #)
+  ( "atomicExchangeAddrAddr#", [PtrAtom _ p, PtrAtom _ value, _s]) -> do
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr (Ptr Word8))
+      poke (castPtr p :: Ptr (Ptr Word8)) value
+      pure [PtrAtom RawPtr oldValue]
+
+  -- atomicExchangeWordAddr# :: Addr# -> Word# -> State# s -> (# State# s, Word# #)
+  ( "atomicExchangeWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr Word)
+      poke (castPtr p :: Ptr Word) (fromIntegral value)
+      pure [WordV oldValue]
+
+  -- atomicCasAddrAddr# :: Addr# -> Addr# -> Addr# -> State# s -> (# State# s, Addr# #)
+  ( "atomicCasAddrAddr#", [PtrAtom _ p, PtrAtom _ expected, PtrAtom _ value, _s]) -> do
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr (Ptr Word8))
+      when (oldValue == expected) $ do
+        poke (castPtr p :: Ptr (Ptr Word8)) value
+      pure [PtrAtom RawPtr oldValue]
+
+  -- atomicCasWordAddr# :: Addr# -> Word# -> Word# -> State# s -> (# State# s, Word# #)
+  ( "atomicCasWordAddr#", [PtrAtom _ p, WordV expected, WordV value, _s]) -> do
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr Word)
+      when (oldValue == expected) $ do
+        poke (castPtr p :: Ptr Word) (fromIntegral value)
+      pure [WordV oldValue]
+
   _ -> fallback op args t tc
