@@ -8,8 +8,8 @@ rtsModel :: Program
 rtsModel = [prog|
 
     primop effectful
-      "newArray#" :: (T_Int64) @ t_624 -> %a_0 -> {"State#" %s_0} @ t_625 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s_0 %a_0} @ t_626} @ t_627
-      "unsafeFreezeArray#" :: {"MutableArray#" %s_5 %a_7} @ t_646 -> {"State#" %s_5} @ t_647 -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a_7} @ t_648} @ t_649
+      "newArray#" :: (T_Int64) @ t_624 -> %a_0 -> {"State#" %s_0} @ t_625 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s_0 %a_0} @ t_626} @ t_627
+      "unsafeFreezeArray#" :: {"MutableArray#" %s_5 %a_7} @ t_646 -> {"State#" %s_5} @ t_647 -> {"ghc-prim_GHC.Prim.Solo#" {"Array#" %a_7} @ t_648} @ t_649
       "raise#"    :: %b_1 -> %o_0
 
     constructors
@@ -30,7 +30,10 @@ rtsModel = [prog|
       letS
         -- raise all exceptions possible from RTS
 
-        r_ex00 = "raise#" $ base_Control.Exception.Base.absentSumFieldError
+        r_ex00 = "raise#" $ "ghc-prim_GHC.Prim.Panic.absentSumFieldError"
+        r_ex00 = "raise#" $ "ghc-prim_GHC.Prim.Exception.raiseUnderflow"
+        r_ex00 = "raise#" $ "ghc-prim_GHC.Prim.Exception.raiseOverflow"
+        r_ex00 = "raise#" $ "ghc-prim_GHC.Prim.Exception.raiseDivZero"
         r_ex01 = "raise#" $ base_Control.Exception.Base.nestedAtomically
         r_ex02 = "raise#" $ base_Control.Exception.Base.nonTermination
         r_ex03 = "raise#" $ base_GHC.Exception.Type.divZeroException
@@ -45,6 +48,7 @@ rtsModel = [prog|
         r_ex12 = "raise#" $ base_GHC.IO.Exception.heapOverflow
         r_ex13 = "raise#" $ base_GHC.IO.Exception.stackOverflow
         r_ex14 = "raise#" $ base_GHC.Event.Thread.blockedOnBadFD
+        r_ex14 = "raise#" $ base_GHC.IOPort.doubleReadException
 
         -- create all data constuctors possible from RTS
 
@@ -101,17 +105,19 @@ rtsModel = [prog|
         r_fun06 = "base_GHC.TopHandler.runIO" $ r_closure_io r_void
         r_fun07 = "base_GHC.TopHandler.runMainIO" $ r_closure_io r_void
         r_fun08 = "base_GHC.TopHandler.runNonIO"  $ r_closure_pure r_void
+        --r_fun90 = "base_GHC.Event.Windows.processRemoteCompletion" $ r_void
+        r_fun91 = "base_GHC.Conc.IO.interruptIOManager" $ r_void
 
         -- weak ptr related: needs more utility code
 
         r_realworld = #T_Token "ghc-prim_GHC.Prim.realWorld#"
         r_wp_arr01 = "newArray#" $ r_i64 r_closure_io_ret_utup0 r_realworld
         r_wp_res01 = case r_wp_arr01 of
-          ("ghc-prim_GHC.Prim.Unit#" r_wp_arr02) @ r_wp_alt01 ->
+          ("ghc-prim_GHC.Prim.Solo#" r_wp_arr02) @ r_wp_alt01 ->
             letS
               r_wp_arr03 = "unsafeFreezeArray#" $ r_wp_arr02 r_realworld
               r_wp_res02 = case r_wp_arr03 of
-                ("ghc-prim_GHC.Prim.Unit#" r_wp_arr04) @ r_wp_alt02 ->
+                ("ghc-prim_GHC.Prim.Solo#" r_wp_arr04) @ r_wp_alt02 ->
                   letS
                     r_fun09 = "base_GHC.Weak.runFinalizerBatch" $ r_boxed_int r_wp_arr04 r_void
                   r_fun09
@@ -129,4 +135,26 @@ rtsModel = [prog|
           ("ghc-prim_GHC.Tuple.(,)" p_tup_arg_0 p_tup_arg_1) @ p_alt00 ->
             p_tup_arg_0
       p_result00
+
+    -- top level values from ghc-prim_GHC.Prim module with VoidRep
+    "ghc-prim_GHC.Prim.void#" =
+      letS
+        x01 = #T_Token "ghc-prim_GHC.Prim.void#"
+      x01
+    "ghc-prim_GHC.Prim.realWorld#" =
+      letS
+        x02 = #T_Token "ghc-prim_GHC.Prim.realWorld#"
+      x02
+    "ghc-prim_GHC.Prim.coercionToken#" =
+      letS
+        x03 = #T_Token "ghc-prim_GHC.Prim.coercionToken#"
+      x03
+    "ghc-prim_GHC.Prim.proxy#" =
+      letS
+        x04 = #T_Token "ghc-prim_GHC.Prim.proxy#"
+      x04
+    "ghc-prim_GHC.Prim.(##)" =
+      letS
+        x05 = #T_Token "ghc-prim_GHC.Prim.(##)"
+      x05
   |]

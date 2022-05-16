@@ -289,69 +289,69 @@ primPrelude = [progConst|
     Arrays
   -}
   primop effectful
-    "newArray#" :: (T_Int64) @ t_624 -> %a_0 -> {"State#" %s_0} @ t_625 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s_0 %a_0} @ t_626} @ t_627
+    "newArray#" :: (T_Int64) @ t_624 -> %a_0 -> {"State#" %s_0} @ t_625 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s_0 %a_0} @ t_626} @ t_627
 
   primop pure
     "sameMutableArray#" :: {"MutableArray#" %s_1 %a_1} @ t_628 -> {"MutableArray#" %s_1 %a_1} @ t_629 -> (T_Int64) @ t_630
 
   primop effectful
-    "readArray#"  :: {"MutableArray#" %s_2 %a_2} @ t_631 -> (T_Int64) @ t_632 -> {"State#" %s_2} @ t_633 -> {"ghc-prim_GHC.Prim.Unit#" %a_2} @ t_634
+    "readArray#"  :: {"MutableArray#" %s_2 %a_2} @ t_631 -> (T_Int64) @ t_632 -> {"State#" %s_2} @ t_633 -> {"ghc-prim_GHC.Prim.Solo#" %a_2} @ t_634
     "writeArray#" :: {"MutableArray#" %s_3 %a_3} @ t_635 -> (T_Int64) @ t_636 -> %a_3 -> {"State#" %s_3} @ t_637 -> {"ghc-prim_GHC.Prim.(##)"} @ t_638
 
   primop pure
     "sizeofArray#"        :: {"Array#" %a_4} @ t_639 -> (T_Int64) @ t_640
     "sizeofMutableArray#" :: {"MutableArray#" %s_4 %a_5} @ t_641 -> (T_Int64) @ t_642
-    "indexArray#"         :: {"Array#" %a_6} @ t_643 -> (T_Int64) @ t_644 -> {"ghc-prim_GHC.Prim.Unit#" %a_6} @ t_645
+    "indexArray#"         :: {"Array#" %a_6} @ t_643 -> (T_Int64) @ t_644 -> {"ghc-prim_GHC.Prim.Solo#" %a_6} @ t_645
 
   primop effectful
-    "unsafeFreezeArray#" :: {"MutableArray#" %s_5 %a_7} @ t_646 -> {"State#" %s_5} @ t_647 -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a_7} @ t_648} @ t_649
-    "unsafeThawArray#"   :: {"Array#" %a_8} @ t_650 -> {"State#" %s_6} @ t_651 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s_6 %a_8} @ t_652} @ t_653
+    "unsafeFreezeArray#" :: {"MutableArray#" %s_5 %a_7} @ t_646 -> {"State#" %s_5} @ t_647 -> {"ghc-prim_GHC.Prim.Solo#" {"Array#" %a_7} @ t_648} @ t_649
+    "unsafeThawArray#"   :: {"Array#" %a_8} @ t_650 -> {"State#" %s_6} @ t_651 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s_6 %a_8} @ t_652} @ t_653
     "copyArray#"         :: {"Array#" %a_9} @ t_654 -> (T_Int64) @ t_655 -> {"MutableArray#" %s_7 %a_9} @ t_656 -> (T_Int64) @ t_657 -> (T_Int64) @ t_658 -> {"State#" %s_7} @ t_659 -> {"ghc-prim_GHC.Prim.(##)"} @ t_660
     "copyMutableArray#"  :: {"MutableArray#" %s_8 %a_10} @ t_661 -> (T_Int64) @ t_662 -> {"MutableArray#" %s_8 %a_10} @ t_663 -> (T_Int64) @ t_664 -> (T_Int64) @ t_665 -> {"State#" %s_8} @ t_666 -> {"ghc-prim_GHC.Prim.(##)"} @ t_667
     "cloneArray#"        :: {"Array#" %a_11} @ t_668 -> (T_Int64) @ t_669 -> (T_Int64) @ t_670 -> {"Array#" %a_11} @ t_671
-    "cloneMutableArray#" :: {"MutableArray#" %s_9 %a_12} @ t_672 -> (T_Int64) @ t_673 -> (T_Int64) @ t_674 -> {"State#" %s_9} @ t_675 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s_9 %a_12} @ t_676} @ t_677
-    "freezeArray#"       :: {"MutableArray#" %s_10 %a_13} @ t_678 -> (T_Int64) @ t_679 -> (T_Int64) @ t_680 -> {"State#" %s_10} @ t_681 -> {"ghc-prim_GHC.Prim.Unit#" {"Array#" %a_13} @ t_682} @ t_683
-    "thawArray#"         :: {"Array#" %a_14} @ t_684 -> (T_Int64) @ t_685 -> (T_Int64) @ t_686 -> {"State#" %s_11} @ t_687 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArray#" %s_11 %a_14} @ t_688} @ t_689
+    "cloneMutableArray#" :: {"MutableArray#" %s_9 %a_12} @ t_672 -> (T_Int64) @ t_673 -> (T_Int64) @ t_674 -> {"State#" %s_9} @ t_675 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s_9 %a_12} @ t_676} @ t_677
+    "freezeArray#"       :: {"MutableArray#" %s_10 %a_13} @ t_678 -> (T_Int64) @ t_679 -> (T_Int64) @ t_680 -> {"State#" %s_10} @ t_681 -> {"ghc-prim_GHC.Prim.Solo#" {"Array#" %a_13} @ t_682} @ t_683
+    "thawArray#"         :: {"Array#" %a_14} @ t_684 -> (T_Int64) @ t_685 -> (T_Int64) @ t_686 -> {"State#" %s_11} @ t_687 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArray#" %s_11 %a_14} @ t_688} @ t_689
     "casArray#"          :: {"MutableArray#" %s_12 %a_15} @ t_690 -> (T_Int64) @ t_691 -> %a_15 -> %a_15 -> {"State#" %s_12} @ t_692 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_693 %a_15} @ t_694
 
   {-
     Small Arrays
   -}
   primop effectful
-    "newSmallArray#" :: (T_Int64) @ t_695 -> %a_16 -> {"State#" %s_13} @ t_696 -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s_13 %a_16} @ t_697} @ t_698
+    "newSmallArray#" :: (T_Int64) @ t_695 -> %a_16 -> {"State#" %s_13} @ t_696 -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s_13 %a_16} @ t_697} @ t_698
 
   primop pure
     "sameSmallMutableArray#" :: {"SmallMutableArray#" %s_14 %a_17} @ t_699 -> {"SmallMutableArray#" %s_14 %a_17} @ t_700 -> (T_Int64) @ t_701
 
   primop effectful
     "shrinkSmallMutableArray#" :: {"SmallMutableArray#" %s_15 %a_18} @ t_702 -> (T_Int64) @ t_703 -> {"State#" %s_15} @ t_704 -> {"ghc-prim_GHC.Prim.(##)"} @ t_705
-    "readSmallArray#"          :: {"SmallMutableArray#" %s_16 %a_19} @ t_706 -> (T_Int64) @ t_707 -> {"State#" %s_16} @ t_708 -> {"ghc-prim_GHC.Prim.Unit#" %a_19} @ t_709
+    "readSmallArray#"          :: {"SmallMutableArray#" %s_16 %a_19} @ t_706 -> (T_Int64) @ t_707 -> {"State#" %s_16} @ t_708 -> {"ghc-prim_GHC.Prim.Solo#" %a_19} @ t_709
     "writeSmallArray#"         :: {"SmallMutableArray#" %s_17 %a_20} @ t_710 -> (T_Int64) @ t_711 -> %a_20 -> {"State#" %s_17} @ t_712 -> {"ghc-prim_GHC.Prim.(##)"} @ t_713
 
   primop pure
     "sizeofSmallArray#"           :: {"SmallArray#" %a_21} @ t_714 -> (T_Int64) @ t_715
     "sizeofSmallMutableArray#"    :: {"SmallMutableArray#" %s_18 %a_22} @ t_716 -> (T_Int64) @ t_717
-    "getSizeofSmallMutableArray#" :: {"SmallMutableArray#" %s_19 %a_23} @ t_718 -> {"State#" %s_19} @ t_719 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_720} @ t_721
-    "indexSmallArray#"            :: {"SmallArray#" %a_24} @ t_722 -> (T_Int64) @ t_723 -> {"ghc-prim_GHC.Prim.Unit#" %a_24} @ t_724
+    "getSizeofSmallMutableArray#" :: {"SmallMutableArray#" %s_19 %a_23} @ t_718 -> {"State#" %s_19} @ t_719 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_720} @ t_721
+    "indexSmallArray#"            :: {"SmallArray#" %a_24} @ t_722 -> (T_Int64) @ t_723 -> {"ghc-prim_GHC.Prim.Solo#" %a_24} @ t_724
 
   primop effectful
-    "unsafeFreezeSmallArray#" :: {"SmallMutableArray#" %s_20 %a_25} @ t_725 -> {"State#" %s_20} @ t_726 -> {"ghc-prim_GHC.Prim.Unit#" {"SmallArray#" %a_25} @ t_727} @ t_728
-    "unsafeThawSmallArray#"   :: {"SmallArray#" %a_26} @ t_729 -> {"State#" %s_21} @ t_730 -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s_21 %a_26} @ t_731} @ t_732
+    "unsafeFreezeSmallArray#" :: {"SmallMutableArray#" %s_20 %a_25} @ t_725 -> {"State#" %s_20} @ t_726 -> {"ghc-prim_GHC.Prim.Solo#" {"SmallArray#" %a_25} @ t_727} @ t_728
+    "unsafeThawSmallArray#"   :: {"SmallArray#" %a_26} @ t_729 -> {"State#" %s_21} @ t_730 -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s_21 %a_26} @ t_731} @ t_732
     "copySmallArray#"         :: {"SmallArray#" %a_27} @ t_733 -> (T_Int64) @ t_734 -> {"SmallMutableArray#" %s_22 %a_27} @ t_735 -> (T_Int64) @ t_736 -> (T_Int64) @ t_737 -> {"State#" %s_22} @ t_738 -> {"ghc-prim_GHC.Prim.(##)"} @ t_739
     "copySmallMutableArray#"  :: {"SmallMutableArray#" %s_23 %a_28} @ t_740 -> (T_Int64) @ t_741 -> {"SmallMutableArray#" %s_23 %a_28} @ t_742 -> (T_Int64) @ t_743 -> (T_Int64) @ t_744 -> {"State#" %s_23} @ t_745 -> {"ghc-prim_GHC.Prim.(##)"} @ t_746
     "cloneSmallArray#"        :: {"SmallArray#" %a_29} @ t_747 -> (T_Int64) @ t_748 -> (T_Int64) @ t_749 -> {"SmallArray#" %a_29} @ t_750
-    "cloneSmallMutableArray#" :: {"SmallMutableArray#" %s_24 %a_30} @ t_751 -> (T_Int64) @ t_752 -> (T_Int64) @ t_753 -> {"State#" %s_24} @ t_754 -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s_24 %a_30} @ t_755} @ t_756
-    "freezeSmallArray#"       :: {"SmallMutableArray#" %s_25 %a_31} @ t_757 -> (T_Int64) @ t_758 -> (T_Int64) @ t_759 -> {"State#" %s_25} @ t_760 -> {"ghc-prim_GHC.Prim.Unit#" {"SmallArray#" %a_31} @ t_761} @ t_762
-    "thawSmallArray#"         :: {"SmallArray#" %a_32} @ t_763 -> (T_Int64) @ t_764 -> (T_Int64) @ t_765 -> {"State#" %s_26} @ t_766 -> {"ghc-prim_GHC.Prim.Unit#" {"SmallMutableArray#" %s_26 %a_32} @ t_767} @ t_768
+    "cloneSmallMutableArray#" :: {"SmallMutableArray#" %s_24 %a_30} @ t_751 -> (T_Int64) @ t_752 -> (T_Int64) @ t_753 -> {"State#" %s_24} @ t_754 -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s_24 %a_30} @ t_755} @ t_756
+    "freezeSmallArray#"       :: {"SmallMutableArray#" %s_25 %a_31} @ t_757 -> (T_Int64) @ t_758 -> (T_Int64) @ t_759 -> {"State#" %s_25} @ t_760 -> {"ghc-prim_GHC.Prim.Solo#" {"SmallArray#" %a_31} @ t_761} @ t_762
+    "thawSmallArray#"         :: {"SmallArray#" %a_32} @ t_763 -> (T_Int64) @ t_764 -> (T_Int64) @ t_765 -> {"State#" %s_26} @ t_766 -> {"ghc-prim_GHC.Prim.Solo#" {"SmallMutableArray#" %s_26 %a_32} @ t_767} @ t_768
     "casSmallArray#"          :: {"SmallMutableArray#" %s_27 %a_33} @ t_769 -> (T_Int64) @ t_770 -> %a_33 -> %a_33 -> {"State#" %s_27} @ t_771 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_772 %a_33} @ t_773
 
   {-
     Byte Arrays
   -}
   primop effectful
-    "newByteArray#"              :: (T_Int64) @ t_774 -> {"State#" %s_28} @ t_775 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s_28} @ t_776} @ t_777
-    "newPinnedByteArray#"        :: (T_Int64) @ t_778 -> {"State#" %s_29} @ t_779 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s_29} @ t_780} @ t_781
-    "newAlignedPinnedByteArray#" :: (T_Int64) @ t_782 -> (T_Int64) @ t_783 -> {"State#" %s_30} @ t_784 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s_30} @ t_785} @ t_786
+    "newByteArray#"              :: (T_Int64) @ t_774 -> {"State#" %s_28} @ t_775 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s_28} @ t_776} @ t_777
+    "newPinnedByteArray#"        :: (T_Int64) @ t_778 -> {"State#" %s_29} @ t_779 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s_29} @ t_780} @ t_781
+    "newAlignedPinnedByteArray#" :: (T_Int64) @ t_782 -> (T_Int64) @ t_783 -> {"State#" %s_30} @ t_784 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s_30} @ t_785} @ t_786
 
   primop pure
     "isMutableByteArrayPinned#" :: {"MutableByteArray#" %s_31} @ t_787 -> (T_Int64) @ t_788
@@ -361,13 +361,13 @@ primPrelude = [progConst|
 
   primop effectful
     "shrinkMutableByteArray#" :: {"MutableByteArray#" %s_33} @ t_796 -> (T_Int64) @ t_797 -> {"State#" %s_33} @ t_798 -> {"ghc-prim_GHC.Prim.(##)"} @ t_799
-    "resizeMutableByteArray#" :: {"MutableByteArray#" %s_34} @ t_800 -> (T_Int64) @ t_801 -> {"State#" %s_34} @ t_802 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s_34} @ t_803} @ t_804
-    "unsafeFreezeByteArray#"  :: {"MutableByteArray#" %s_35} @ t_805 -> {"State#" %s_35} @ t_806 -> {"ghc-prim_GHC.Prim.Unit#" {"ByteArray#"} @ t_807} @ t_808
+    "resizeMutableByteArray#" :: {"MutableByteArray#" %s_34} @ t_800 -> (T_Int64) @ t_801 -> {"State#" %s_34} @ t_802 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s_34} @ t_803} @ t_804
+    "unsafeFreezeByteArray#"  :: {"MutableByteArray#" %s_35} @ t_805 -> {"State#" %s_35} @ t_806 -> {"ghc-prim_GHC.Prim.Solo#" {"ByteArray#"} @ t_807} @ t_808
 
   primop pure
     "sizeofByteArray#"            :: {"ByteArray#"} @ t_809 -> (T_Int64) @ t_810
     "sizeofMutableByteArray#"     :: {"MutableByteArray#" %s_36} @ t_811 -> (T_Int64) @ t_812
-    "getSizeofMutableByteArray#"  :: {"MutableByteArray#" %s_37} @ t_813 -> {"State#" %s_37} @ t_814 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_815} @ t_816
+    "getSizeofMutableByteArray#"  :: {"MutableByteArray#" %s_37} @ t_813 -> {"State#" %s_37} @ t_814 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_815} @ t_816
     "indexCharArray#"             :: {"ByteArray#"} @ t_817 -> (T_Int64) @ t_818 -> (T_Char) @ t_819
     "indexWideCharArray#"         :: {"ByteArray#"} @ t_820 -> (T_Int64) @ t_821 -> (T_Char) @ t_822
     "indexIntArray#"              :: {"ByteArray#"} @ t_823 -> (T_Int64) @ t_824 -> (T_Int64) @ t_825
@@ -400,36 +400,36 @@ primPrelude = [progConst|
     "indexWord8ArrayAsWord#"      :: {"ByteArray#"} @ t_904 -> (T_Int64) @ t_905 -> (T_Word64) @ t_906
 
   primop effectful
-    "readCharArray#"              :: {"MutableByteArray#" %s_38} @ t_907 -> (T_Int64) @ t_908 -> {"State#" %s_38} @ t_909 -> {"ghc-prim_GHC.Prim.Unit#" (T_Char) @ t_910} @ t_911
-    "readWideCharArray#"          :: {"MutableByteArray#" %s_39} @ t_912 -> (T_Int64) @ t_913 -> {"State#" %s_39} @ t_914 -> {"ghc-prim_GHC.Prim.Unit#" (T_Char) @ t_915} @ t_916
-    "readIntArray#"               :: {"MutableByteArray#" %s_40} @ t_917 -> (T_Int64) @ t_918 -> {"State#" %s_40} @ t_919 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_920} @ t_921
-    "readWordArray#"              :: {"MutableByteArray#" %s_41} @ t_922 -> (T_Int64) @ t_923 -> {"State#" %s_41} @ t_924 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_925} @ t_926
-    "readAddrArray#"              :: {"MutableByteArray#" %s_42} @ t_927 -> (T_Int64) @ t_928 -> {"State#" %s_42} @ t_929 -> {"ghc-prim_GHC.Prim.Unit#" (T_Addr) @ t_930} @ t_931
-    "readFloatArray#"             :: {"MutableByteArray#" %s_43} @ t_932 -> (T_Int64) @ t_933 -> {"State#" %s_43} @ t_934 -> {"ghc-prim_GHC.Prim.Unit#" (T_Float) @ t_935} @ t_936
-    "readDoubleArray#"            :: {"MutableByteArray#" %s_44} @ t_937 -> (T_Int64) @ t_938 -> {"State#" %s_44} @ t_939 -> {"ghc-prim_GHC.Prim.Unit#" (T_Double) @ t_940} @ t_941
-    "readStablePtrArray#"         :: {"MutableByteArray#" %s_45} @ t_942 -> (T_Int64) @ t_943 -> {"State#" %s_45} @ t_944 -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a_36} @ t_945} @ t_946
-    "readInt8Array#"              :: {"MutableByteArray#" %s_46} @ t_947 -> (T_Int64) @ t_948 -> {"State#" %s_46} @ t_949 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_950} @ t_951
-    "readInt16Array#"             :: {"MutableByteArray#" %s_47} @ t_952 -> (T_Int64) @ t_953 -> {"State#" %s_47} @ t_954 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_955} @ t_956
-    "readInt32Array#"             :: {"MutableByteArray#" %s_48} @ t_957 -> (T_Int64) @ t_958 -> {"State#" %s_48} @ t_959 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_960} @ t_961
-    "readInt64Array#"             :: {"MutableByteArray#" %s_49} @ t_962 -> (T_Int64) @ t_963 -> {"State#" %s_49} @ t_964 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_965} @ t_966
-    "readWord8Array#"             :: {"MutableByteArray#" %s_50} @ t_967 -> (T_Int64) @ t_968 -> {"State#" %s_50} @ t_969 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_970} @ t_971
-    "readWord16Array#"            :: {"MutableByteArray#" %s_51} @ t_972 -> (T_Int64) @ t_973 -> {"State#" %s_51} @ t_974 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_975} @ t_976
-    "readWord32Array#"            :: {"MutableByteArray#" %s_52} @ t_977 -> (T_Int64) @ t_978 -> {"State#" %s_52} @ t_979 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_980} @ t_981
-    "readWord64Array#"            :: {"MutableByteArray#" %s_53} @ t_982 -> (T_Int64) @ t_983 -> {"State#" %s_53} @ t_984 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_985} @ t_986
-    "readWord8ArrayAsChar#"       :: {"MutableByteArray#" %s_54} @ t_987 -> (T_Int64) @ t_988 -> {"State#" %s_54} @ t_989 -> {"ghc-prim_GHC.Prim.Unit#" (T_Char) @ t_990} @ t_991
-    "readWord8ArrayAsWideChar#"   :: {"MutableByteArray#" %s_55} @ t_992 -> (T_Int64) @ t_993 -> {"State#" %s_55} @ t_994 -> {"ghc-prim_GHC.Prim.Unit#" (T_Char) @ t_995} @ t_996
-    "readWord8ArrayAsAddr#"       :: {"MutableByteArray#" %s_56} @ t_997 -> (T_Int64) @ t_998 -> {"State#" %s_56} @ t_999 -> {"ghc-prim_GHC.Prim.Unit#" (T_Addr) @ t_1000} @ t_1001
-    "readWord8ArrayAsFloat#"      :: {"MutableByteArray#" %s_57} @ t_1002 -> (T_Int64) @ t_1003 -> {"State#" %s_57} @ t_1004 -> {"ghc-prim_GHC.Prim.Unit#" (T_Float) @ t_1005} @ t_1006
-    "readWord8ArrayAsDouble#"     :: {"MutableByteArray#" %s_58} @ t_1007 -> (T_Int64) @ t_1008 -> {"State#" %s_58} @ t_1009 -> {"ghc-prim_GHC.Prim.Unit#" (T_Double) @ t_1010} @ t_1011
-    "readWord8ArrayAsStablePtr#"  :: {"MutableByteArray#" %s_59} @ t_1012 -> (T_Int64) @ t_1013 -> {"State#" %s_59} @ t_1014 -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a_37} @ t_1015} @ t_1016
-    "readWord8ArrayAsInt16#"      :: {"MutableByteArray#" %s_60} @ t_1017 -> (T_Int64) @ t_1018 -> {"State#" %s_60} @ t_1019 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1020} @ t_1021
-    "readWord8ArrayAsInt32#"      :: {"MutableByteArray#" %s_61} @ t_1022 -> (T_Int64) @ t_1023 -> {"State#" %s_61} @ t_1024 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1025} @ t_1026
-    "readWord8ArrayAsInt64#"      :: {"MutableByteArray#" %s_62} @ t_1027 -> (T_Int64) @ t_1028 -> {"State#" %s_62} @ t_1029 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1030} @ t_1031
-    "readWord8ArrayAsInt#"        :: {"MutableByteArray#" %s_63} @ t_1032 -> (T_Int64) @ t_1033 -> {"State#" %s_63} @ t_1034 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1035} @ t_1036
-    "readWord8ArrayAsWord16#"     :: {"MutableByteArray#" %s_64} @ t_1037 -> (T_Int64) @ t_1038 -> {"State#" %s_64} @ t_1039 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1040} @ t_1041
-    "readWord8ArrayAsWord32#"     :: {"MutableByteArray#" %s_65} @ t_1042 -> (T_Int64) @ t_1043 -> {"State#" %s_65} @ t_1044 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1045} @ t_1046
-    "readWord8ArrayAsWord64#"     :: {"MutableByteArray#" %s_66} @ t_1047 -> (T_Int64) @ t_1048 -> {"State#" %s_66} @ t_1049 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1050} @ t_1051
-    "readWord8ArrayAsWord#"       :: {"MutableByteArray#" %s_67} @ t_1052 -> (T_Int64) @ t_1053 -> {"State#" %s_67} @ t_1054 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1055} @ t_1056
+    "readCharArray#"              :: {"MutableByteArray#" %s_38} @ t_907 -> (T_Int64) @ t_908 -> {"State#" %s_38} @ t_909 -> {"ghc-prim_GHC.Prim.Solo#" (T_Char) @ t_910} @ t_911
+    "readWideCharArray#"          :: {"MutableByteArray#" %s_39} @ t_912 -> (T_Int64) @ t_913 -> {"State#" %s_39} @ t_914 -> {"ghc-prim_GHC.Prim.Solo#" (T_Char) @ t_915} @ t_916
+    "readIntArray#"               :: {"MutableByteArray#" %s_40} @ t_917 -> (T_Int64) @ t_918 -> {"State#" %s_40} @ t_919 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_920} @ t_921
+    "readWordArray#"              :: {"MutableByteArray#" %s_41} @ t_922 -> (T_Int64) @ t_923 -> {"State#" %s_41} @ t_924 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_925} @ t_926
+    "readAddrArray#"              :: {"MutableByteArray#" %s_42} @ t_927 -> (T_Int64) @ t_928 -> {"State#" %s_42} @ t_929 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_930} @ t_931
+    "readFloatArray#"             :: {"MutableByteArray#" %s_43} @ t_932 -> (T_Int64) @ t_933 -> {"State#" %s_43} @ t_934 -> {"ghc-prim_GHC.Prim.Solo#" (T_Float) @ t_935} @ t_936
+    "readDoubleArray#"            :: {"MutableByteArray#" %s_44} @ t_937 -> (T_Int64) @ t_938 -> {"State#" %s_44} @ t_939 -> {"ghc-prim_GHC.Prim.Solo#" (T_Double) @ t_940} @ t_941
+    "readStablePtrArray#"         :: {"MutableByteArray#" %s_45} @ t_942 -> (T_Int64) @ t_943 -> {"State#" %s_45} @ t_944 -> {"ghc-prim_GHC.Prim.Solo#" {"StablePtr#" %a_36} @ t_945} @ t_946
+    "readInt8Array#"              :: {"MutableByteArray#" %s_46} @ t_947 -> (T_Int64) @ t_948 -> {"State#" %s_46} @ t_949 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_950} @ t_951
+    "readInt16Array#"             :: {"MutableByteArray#" %s_47} @ t_952 -> (T_Int64) @ t_953 -> {"State#" %s_47} @ t_954 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_955} @ t_956
+    "readInt32Array#"             :: {"MutableByteArray#" %s_48} @ t_957 -> (T_Int64) @ t_958 -> {"State#" %s_48} @ t_959 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_960} @ t_961
+    "readInt64Array#"             :: {"MutableByteArray#" %s_49} @ t_962 -> (T_Int64) @ t_963 -> {"State#" %s_49} @ t_964 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_965} @ t_966
+    "readWord8Array#"             :: {"MutableByteArray#" %s_50} @ t_967 -> (T_Int64) @ t_968 -> {"State#" %s_50} @ t_969 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_970} @ t_971
+    "readWord16Array#"            :: {"MutableByteArray#" %s_51} @ t_972 -> (T_Int64) @ t_973 -> {"State#" %s_51} @ t_974 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_975} @ t_976
+    "readWord32Array#"            :: {"MutableByteArray#" %s_52} @ t_977 -> (T_Int64) @ t_978 -> {"State#" %s_52} @ t_979 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_980} @ t_981
+    "readWord64Array#"            :: {"MutableByteArray#" %s_53} @ t_982 -> (T_Int64) @ t_983 -> {"State#" %s_53} @ t_984 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_985} @ t_986
+    "readWord8ArrayAsChar#"       :: {"MutableByteArray#" %s_54} @ t_987 -> (T_Int64) @ t_988 -> {"State#" %s_54} @ t_989 -> {"ghc-prim_GHC.Prim.Solo#" (T_Char) @ t_990} @ t_991
+    "readWord8ArrayAsWideChar#"   :: {"MutableByteArray#" %s_55} @ t_992 -> (T_Int64) @ t_993 -> {"State#" %s_55} @ t_994 -> {"ghc-prim_GHC.Prim.Solo#" (T_Char) @ t_995} @ t_996
+    "readWord8ArrayAsAddr#"       :: {"MutableByteArray#" %s_56} @ t_997 -> (T_Int64) @ t_998 -> {"State#" %s_56} @ t_999 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_1000} @ t_1001
+    "readWord8ArrayAsFloat#"      :: {"MutableByteArray#" %s_57} @ t_1002 -> (T_Int64) @ t_1003 -> {"State#" %s_57} @ t_1004 -> {"ghc-prim_GHC.Prim.Solo#" (T_Float) @ t_1005} @ t_1006
+    "readWord8ArrayAsDouble#"     :: {"MutableByteArray#" %s_58} @ t_1007 -> (T_Int64) @ t_1008 -> {"State#" %s_58} @ t_1009 -> {"ghc-prim_GHC.Prim.Solo#" (T_Double) @ t_1010} @ t_1011
+    "readWord8ArrayAsStablePtr#"  :: {"MutableByteArray#" %s_59} @ t_1012 -> (T_Int64) @ t_1013 -> {"State#" %s_59} @ t_1014 -> {"ghc-prim_GHC.Prim.Solo#" {"StablePtr#" %a_37} @ t_1015} @ t_1016
+    "readWord8ArrayAsInt16#"      :: {"MutableByteArray#" %s_60} @ t_1017 -> (T_Int64) @ t_1018 -> {"State#" %s_60} @ t_1019 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1020} @ t_1021
+    "readWord8ArrayAsInt32#"      :: {"MutableByteArray#" %s_61} @ t_1022 -> (T_Int64) @ t_1023 -> {"State#" %s_61} @ t_1024 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1025} @ t_1026
+    "readWord8ArrayAsInt64#"      :: {"MutableByteArray#" %s_62} @ t_1027 -> (T_Int64) @ t_1028 -> {"State#" %s_62} @ t_1029 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1030} @ t_1031
+    "readWord8ArrayAsInt#"        :: {"MutableByteArray#" %s_63} @ t_1032 -> (T_Int64) @ t_1033 -> {"State#" %s_63} @ t_1034 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1035} @ t_1036
+    "readWord8ArrayAsWord16#"     :: {"MutableByteArray#" %s_64} @ t_1037 -> (T_Int64) @ t_1038 -> {"State#" %s_64} @ t_1039 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1040} @ t_1041
+    "readWord8ArrayAsWord32#"     :: {"MutableByteArray#" %s_65} @ t_1042 -> (T_Int64) @ t_1043 -> {"State#" %s_65} @ t_1044 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1045} @ t_1046
+    "readWord8ArrayAsWord64#"     :: {"MutableByteArray#" %s_66} @ t_1047 -> (T_Int64) @ t_1048 -> {"State#" %s_66} @ t_1049 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1050} @ t_1051
+    "readWord8ArrayAsWord#"       :: {"MutableByteArray#" %s_67} @ t_1052 -> (T_Int64) @ t_1053 -> {"State#" %s_67} @ t_1054 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1055} @ t_1056
     "writeCharArray#"             :: {"MutableByteArray#" %s_68} @ t_1057 -> (T_Int64) @ t_1058 -> (T_Char) @ t_1059 -> {"State#" %s_68} @ t_1060 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1061
     "writeWideCharArray#"         :: {"MutableByteArray#" %s_69} @ t_1062 -> (T_Int64) @ t_1063 -> (T_Char) @ t_1064 -> {"State#" %s_69} @ t_1065 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1066
     "writeIntArray#"              :: {"MutableByteArray#" %s_70} @ t_1067 -> (T_Int64) @ t_1068 -> (T_Int64) @ t_1069 -> {"State#" %s_70} @ t_1070 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1071
@@ -471,27 +471,27 @@ primPrelude = [progConst|
     "copyMutableByteArrayToAddr#" :: {"MutableByteArray#" %s_101} @ t_1233 -> (T_Int64) @ t_1234 -> (T_Addr) @ t_1235 -> (T_Int64) @ t_1236 -> {"State#" %s_101} @ t_1237 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1238
     "copyAddrToByteArray#"        :: (T_Addr) @ t_1239 -> {"MutableByteArray#" %s_102} @ t_1240 -> (T_Int64) @ t_1241 -> (T_Int64) @ t_1242 -> {"State#" %s_102} @ t_1243 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1244
     "setByteArray#"               :: {"MutableByteArray#" %s_103} @ t_1245 -> (T_Int64) @ t_1246 -> (T_Int64) @ t_1247 -> (T_Int64) @ t_1248 -> {"State#" %s_103} @ t_1249 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1250
-    "atomicReadIntArray#"         :: {"MutableByteArray#" %s_104} @ t_1251 -> (T_Int64) @ t_1252 -> {"State#" %s_104} @ t_1253 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1254} @ t_1255
+    "atomicReadIntArray#"         :: {"MutableByteArray#" %s_104} @ t_1251 -> (T_Int64) @ t_1252 -> {"State#" %s_104} @ t_1253 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1254} @ t_1255
     "atomicWriteIntArray#"        :: {"MutableByteArray#" %s_105} @ t_1256 -> (T_Int64) @ t_1257 -> (T_Int64) @ t_1258 -> {"State#" %s_105} @ t_1259 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1260
-    "casIntArray#"                :: {"MutableByteArray#" %s_106} @ t_1261 -> (T_Int64) @ t_1262 -> (T_Int64) @ t_1263 -> (T_Int64) @ t_1264 -> {"State#" %s_106} @ t_1265 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1266} @ t_1267
-    "fetchAddIntArray#"           :: {"MutableByteArray#" %s_107} @ t_1268 -> (T_Int64) @ t_1269 -> (T_Int64) @ t_1270 -> {"State#" %s_107} @ t_1271 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1272} @ t_1273
-    "fetchSubIntArray#"           :: {"MutableByteArray#" %s_108} @ t_1274 -> (T_Int64) @ t_1275 -> (T_Int64) @ t_1276 -> {"State#" %s_108} @ t_1277 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1278} @ t_1279
-    "fetchAndIntArray#"           :: {"MutableByteArray#" %s_109} @ t_1280 -> (T_Int64) @ t_1281 -> (T_Int64) @ t_1282 -> {"State#" %s_109} @ t_1283 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1284} @ t_1285
-    "fetchNandIntArray#"          :: {"MutableByteArray#" %s_110} @ t_1286 -> (T_Int64) @ t_1287 -> (T_Int64) @ t_1288 -> {"State#" %s_110} @ t_1289 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1290} @ t_1291
-    "fetchOrIntArray#"            :: {"MutableByteArray#" %s_111} @ t_1292 -> (T_Int64) @ t_1293 -> (T_Int64) @ t_1294 -> {"State#" %s_111} @ t_1295 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1296} @ t_1297
-    "fetchXorIntArray#"           :: {"MutableByteArray#" %s_112} @ t_1298 -> (T_Int64) @ t_1299 -> (T_Int64) @ t_1300 -> {"State#" %s_112} @ t_1301 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1302} @ t_1303
+    "casIntArray#"                :: {"MutableByteArray#" %s_106} @ t_1261 -> (T_Int64) @ t_1262 -> (T_Int64) @ t_1263 -> (T_Int64) @ t_1264 -> {"State#" %s_106} @ t_1265 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1266} @ t_1267
+    "fetchAddIntArray#"           :: {"MutableByteArray#" %s_107} @ t_1268 -> (T_Int64) @ t_1269 -> (T_Int64) @ t_1270 -> {"State#" %s_107} @ t_1271 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1272} @ t_1273
+    "fetchSubIntArray#"           :: {"MutableByteArray#" %s_108} @ t_1274 -> (T_Int64) @ t_1275 -> (T_Int64) @ t_1276 -> {"State#" %s_108} @ t_1277 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1278} @ t_1279
+    "fetchAndIntArray#"           :: {"MutableByteArray#" %s_109} @ t_1280 -> (T_Int64) @ t_1281 -> (T_Int64) @ t_1282 -> {"State#" %s_109} @ t_1283 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1284} @ t_1285
+    "fetchNandIntArray#"          :: {"MutableByteArray#" %s_110} @ t_1286 -> (T_Int64) @ t_1287 -> (T_Int64) @ t_1288 -> {"State#" %s_110} @ t_1289 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1290} @ t_1291
+    "fetchOrIntArray#"            :: {"MutableByteArray#" %s_111} @ t_1292 -> (T_Int64) @ t_1293 -> (T_Int64) @ t_1294 -> {"State#" %s_111} @ t_1295 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1296} @ t_1297
+    "fetchXorIntArray#"           :: {"MutableByteArray#" %s_112} @ t_1298 -> (T_Int64) @ t_1299 -> (T_Int64) @ t_1300 -> {"State#" %s_112} @ t_1301 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1302} @ t_1303
 
   {-
     Arrays of arrays
   -}
   primop effectful
-    "newArrayArray#" :: (T_Int64) @ t_1304 -> {"State#" %s_113} @ t_1305 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArrayArray#" %s_113} @ t_1306} @ t_1307
+    "newArrayArray#" :: (T_Int64) @ t_1304 -> {"State#" %s_113} @ t_1305 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArrayArray#" %s_113} @ t_1306} @ t_1307
 
   primop pure
     "sameMutableArrayArray#" :: {"MutableArrayArray#" %s_114} @ t_1308 -> {"MutableArrayArray#" %s_114} @ t_1309 -> (T_Int64) @ t_1310
 
   primop effectful
-    "unsafeFreezeArrayArray#" :: {"MutableArrayArray#" %s_115} @ t_1311 -> {"State#" %s_115} @ t_1312 -> {"ghc-prim_GHC.Prim.Unit#" {"ArrayArray#"} @ t_1313} @ t_1314
+    "unsafeFreezeArrayArray#" :: {"MutableArrayArray#" %s_115} @ t_1311 -> {"State#" %s_115} @ t_1312 -> {"ghc-prim_GHC.Prim.Solo#" {"ArrayArray#"} @ t_1313} @ t_1314
 
   primop pure
     "sizeofArrayArray#"        :: {"ArrayArray#"} @ t_1315 -> (T_Int64) @ t_1316
@@ -500,10 +500,10 @@ primPrelude = [progConst|
     "indexArrayArrayArray#"    :: {"ArrayArray#"} @ t_1322 -> (T_Int64) @ t_1323 -> {"ArrayArray#"} @ t_1324
 
   primop effectful
-    "readByteArrayArray#"          :: {"MutableArrayArray#" %s_117} @ t_1325 -> (T_Int64) @ t_1326 -> {"State#" %s_117} @ t_1327 -> {"ghc-prim_GHC.Prim.Unit#" {"ByteArray#"} @ t_1328} @ t_1329
-    "readMutableByteArrayArray#"   :: {"MutableArrayArray#" %s_118} @ t_1330 -> (T_Int64) @ t_1331 -> {"State#" %s_118} @ t_1332 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableByteArray#" %s_118} @ t_1333} @ t_1334
-    "readArrayArrayArray#"         :: {"MutableArrayArray#" %s_119} @ t_1335 -> (T_Int64) @ t_1336 -> {"State#" %s_119} @ t_1337 -> {"ghc-prim_GHC.Prim.Unit#" {"ArrayArray#"} @ t_1338} @ t_1339
-    "readMutableArrayArrayArray#"  :: {"MutableArrayArray#" %s_120} @ t_1340 -> (T_Int64) @ t_1341 -> {"State#" %s_120} @ t_1342 -> {"ghc-prim_GHC.Prim.Unit#" {"MutableArrayArray#" %s_120} @ t_1343} @ t_1344
+    "readByteArrayArray#"          :: {"MutableArrayArray#" %s_117} @ t_1325 -> (T_Int64) @ t_1326 -> {"State#" %s_117} @ t_1327 -> {"ghc-prim_GHC.Prim.Solo#" {"ByteArray#"} @ t_1328} @ t_1329
+    "readMutableByteArrayArray#"   :: {"MutableArrayArray#" %s_118} @ t_1330 -> (T_Int64) @ t_1331 -> {"State#" %s_118} @ t_1332 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableByteArray#" %s_118} @ t_1333} @ t_1334
+    "readArrayArrayArray#"         :: {"MutableArrayArray#" %s_119} @ t_1335 -> (T_Int64) @ t_1336 -> {"State#" %s_119} @ t_1337 -> {"ghc-prim_GHC.Prim.Solo#" {"ArrayArray#"} @ t_1338} @ t_1339
+    "readMutableArrayArrayArray#"  :: {"MutableArrayArray#" %s_120} @ t_1340 -> (T_Int64) @ t_1341 -> {"State#" %s_120} @ t_1342 -> {"ghc-prim_GHC.Prim.Solo#" {"MutableArrayArray#" %s_120} @ t_1343} @ t_1344
     "writeByteArrayArray#"         :: {"MutableArrayArray#" %s_121} @ t_1345 -> (T_Int64) @ t_1346 -> {"ByteArray#"} @ t_1347 -> {"State#" %s_121} @ t_1348 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1349
     "writeMutableByteArrayArray#"  :: {"MutableArrayArray#" %s_122} @ t_1350 -> (T_Int64) @ t_1351 -> {"MutableByteArray#" %s_122} @ t_1352 -> {"State#" %s_122} @ t_1353 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1354
     "writeArrayArrayArray#"        :: {"MutableArrayArray#" %s_123} @ t_1355 -> (T_Int64) @ t_1356 -> {"ArrayArray#"} @ t_1357 -> {"State#" %s_123} @ t_1358 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1359
@@ -544,229 +544,251 @@ primPrelude = [progConst|
     "indexWord64OffAddr#"    :: (T_Addr) @ t_1455 -> (T_Int64) @ t_1456 -> (T_Word64) @ t_1457
 
   primop effectful
-    "readCharOffAddr#"       :: (T_Addr) @ t_1458 -> (T_Int64) @ t_1459 -> {"State#" %s_127} @ t_1460 -> {"ghc-prim_GHC.Prim.Unit#" (T_Char) @ t_1461} @ t_1462
-    "readWideCharOffAddr#"   :: (T_Addr) @ t_1463 -> (T_Int64) @ t_1464 -> {"State#" %s_128} @ t_1465 -> {"ghc-prim_GHC.Prim.Unit#" (T_Char) @ t_1466} @ t_1467
-    "readIntOffAddr#"        :: (T_Addr) @ t_1468 -> (T_Int64) @ t_1469 -> {"State#" %s_129} @ t_1470 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1471} @ t_1472
-    "readWordOffAddr#"       :: (T_Addr) @ t_1473 -> (T_Int64) @ t_1474 -> {"State#" %s_130} @ t_1475 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1476} @ t_1477
-    "readAddrOffAddr#"       :: (T_Addr) @ t_1478 -> (T_Int64) @ t_1479 -> {"State#" %s_131} @ t_1480 -> {"ghc-prim_GHC.Prim.Unit#" (T_Addr) @ t_1481} @ t_1482
-    "readFloatOffAddr#"      :: (T_Addr) @ t_1483 -> (T_Int64) @ t_1484 -> {"State#" %s_132} @ t_1485 -> {"ghc-prim_GHC.Prim.Unit#" (T_Float) @ t_1486} @ t_1487
-    "readDoubleOffAddr#"     :: (T_Addr) @ t_1488 -> (T_Int64) @ t_1489 -> {"State#" %s_133} @ t_1490 -> {"ghc-prim_GHC.Prim.Unit#" (T_Double) @ t_1491} @ t_1492
-    "readStablePtrOffAddr#"  :: (T_Addr) @ t_1493 -> (T_Int64) @ t_1494 -> {"State#" %s_134} @ t_1495 -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a_41} @ t_1496} @ t_1497
-    "readInt8OffAddr#"       :: (T_Addr) @ t_1498 -> (T_Int64) @ t_1499 -> {"State#" %s_135} @ t_1500 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1501} @ t_1502
-    "readInt16OffAddr#"      :: (T_Addr) @ t_1503 -> (T_Int64) @ t_1504 -> {"State#" %s_136} @ t_1505 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1506} @ t_1507
-    "readInt32OffAddr#"      :: (T_Addr) @ t_1508 -> (T_Int64) @ t_1509 -> {"State#" %s_137} @ t_1510 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1511} @ t_1512
-    "readInt64OffAddr#"      :: (T_Addr) @ t_1513 -> (T_Int64) @ t_1514 -> {"State#" %s_138} @ t_1515 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1516} @ t_1517
-    "readWord8OffAddr#"      :: (T_Addr) @ t_1518 -> (T_Int64) @ t_1519 -> {"State#" %s_139} @ t_1520 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1521} @ t_1522
-    "readWord16OffAddr#"     :: (T_Addr) @ t_1523 -> (T_Int64) @ t_1524 -> {"State#" %s_140} @ t_1525 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1526} @ t_1527
-    "readWord32OffAddr#"     :: (T_Addr) @ t_1528 -> (T_Int64) @ t_1529 -> {"State#" %s_141} @ t_1530 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1531} @ t_1532
-    "readWord64OffAddr#"     :: (T_Addr) @ t_1533 -> (T_Int64) @ t_1534 -> {"State#" %s_142} @ t_1535 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1536} @ t_1537
-    "writeCharOffAddr#"      :: (T_Addr) @ t_1538 -> (T_Int64) @ t_1539 -> (T_Char) @ t_1540 -> {"State#" %s_143} @ t_1541 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1542
-    "writeWideCharOffAddr#"  :: (T_Addr) @ t_1543 -> (T_Int64) @ t_1544 -> (T_Char) @ t_1545 -> {"State#" %s_144} @ t_1546 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1547
-    "writeIntOffAddr#"       :: (T_Addr) @ t_1548 -> (T_Int64) @ t_1549 -> (T_Int64) @ t_1550 -> {"State#" %s_145} @ t_1551 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1552
-    "writeWordOffAddr#"      :: (T_Addr) @ t_1553 -> (T_Int64) @ t_1554 -> (T_Word64) @ t_1555 -> {"State#" %s_146} @ t_1556 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1557
-    "writeAddrOffAddr#"      :: (T_Addr) @ t_1558 -> (T_Int64) @ t_1559 -> (T_Addr) @ t_1560 -> {"State#" %s_147} @ t_1561 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1562
-    "writeFloatOffAddr#"     :: (T_Addr) @ t_1563 -> (T_Int64) @ t_1564 -> (T_Float) @ t_1565 -> {"State#" %s_148} @ t_1566 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1567
-    "writeDoubleOffAddr#"    :: (T_Addr) @ t_1568 -> (T_Int64) @ t_1569 -> (T_Double) @ t_1570 -> {"State#" %s_149} @ t_1571 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1572
-    "writeStablePtrOffAddr#" :: (T_Addr) @ t_1573 -> (T_Int64) @ t_1574 -> {"StablePtr#" %a_42} @ t_1575 -> {"State#" %s_150} @ t_1576 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1577
-    "writeInt8OffAddr#"      :: (T_Addr) @ t_1578 -> (T_Int64) @ t_1579 -> (T_Int64) @ t_1580 -> {"State#" %s_151} @ t_1581 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1582
-    "writeInt16OffAddr#"     :: (T_Addr) @ t_1583 -> (T_Int64) @ t_1584 -> (T_Int64) @ t_1585 -> {"State#" %s_152} @ t_1586 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1587
-    "writeInt32OffAddr#"     :: (T_Addr) @ t_1588 -> (T_Int64) @ t_1589 -> (T_Int64) @ t_1590 -> {"State#" %s_153} @ t_1591 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1592
-    "writeInt64OffAddr#"     :: (T_Addr) @ t_1593 -> (T_Int64) @ t_1594 -> (T_Int64) @ t_1595 -> {"State#" %s_154} @ t_1596 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1597
-    "writeWord8OffAddr#"     :: (T_Addr) @ t_1598 -> (T_Int64) @ t_1599 -> (T_Word64) @ t_1600 -> {"State#" %s_155} @ t_1601 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1602
-    "writeWord16OffAddr#"    :: (T_Addr) @ t_1603 -> (T_Int64) @ t_1604 -> (T_Word64) @ t_1605 -> {"State#" %s_156} @ t_1606 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1607
-    "writeWord32OffAddr#"    :: (T_Addr) @ t_1608 -> (T_Int64) @ t_1609 -> (T_Word64) @ t_1610 -> {"State#" %s_157} @ t_1611 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1612
-    "writeWord64OffAddr#"    :: (T_Addr) @ t_1613 -> (T_Int64) @ t_1614 -> (T_Word64) @ t_1615 -> {"State#" %s_158} @ t_1616 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1617
+    "readCharOffAddr#"        :: (T_Addr) @ t_1458 -> (T_Int64) @ t_1459 -> {"State#" %s_127} @ t_1460 -> {"ghc-prim_GHC.Prim.Solo#" (T_Char) @ t_1461} @ t_1462
+    "readWideCharOffAddr#"    :: (T_Addr) @ t_1463 -> (T_Int64) @ t_1464 -> {"State#" %s_128} @ t_1465 -> {"ghc-prim_GHC.Prim.Solo#" (T_Char) @ t_1466} @ t_1467
+    "readIntOffAddr#"         :: (T_Addr) @ t_1468 -> (T_Int64) @ t_1469 -> {"State#" %s_129} @ t_1470 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1471} @ t_1472
+    "readWordOffAddr#"        :: (T_Addr) @ t_1473 -> (T_Int64) @ t_1474 -> {"State#" %s_130} @ t_1475 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1476} @ t_1477
+    "readAddrOffAddr#"        :: (T_Addr) @ t_1478 -> (T_Int64) @ t_1479 -> {"State#" %s_131} @ t_1480 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_1481} @ t_1482
+    "readFloatOffAddr#"       :: (T_Addr) @ t_1483 -> (T_Int64) @ t_1484 -> {"State#" %s_132} @ t_1485 -> {"ghc-prim_GHC.Prim.Solo#" (T_Float) @ t_1486} @ t_1487
+    "readDoubleOffAddr#"      :: (T_Addr) @ t_1488 -> (T_Int64) @ t_1489 -> {"State#" %s_133} @ t_1490 -> {"ghc-prim_GHC.Prim.Solo#" (T_Double) @ t_1491} @ t_1492
+    "readStablePtrOffAddr#"   :: (T_Addr) @ t_1493 -> (T_Int64) @ t_1494 -> {"State#" %s_134} @ t_1495 -> {"ghc-prim_GHC.Prim.Solo#" {"StablePtr#" %a_41} @ t_1496} @ t_1497
+    "readInt8OffAddr#"        :: (T_Addr) @ t_1498 -> (T_Int64) @ t_1499 -> {"State#" %s_135} @ t_1500 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1501} @ t_1502
+    "readInt16OffAddr#"       :: (T_Addr) @ t_1503 -> (T_Int64) @ t_1504 -> {"State#" %s_136} @ t_1505 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1506} @ t_1507
+    "readInt32OffAddr#"       :: (T_Addr) @ t_1508 -> (T_Int64) @ t_1509 -> {"State#" %s_137} @ t_1510 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1511} @ t_1512
+    "readInt64OffAddr#"       :: (T_Addr) @ t_1513 -> (T_Int64) @ t_1514 -> {"State#" %s_138} @ t_1515 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1516} @ t_1517
+    "readWord8OffAddr#"       :: (T_Addr) @ t_1518 -> (T_Int64) @ t_1519 -> {"State#" %s_139} @ t_1520 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1521} @ t_1522
+    "readWord16OffAddr#"      :: (T_Addr) @ t_1523 -> (T_Int64) @ t_1524 -> {"State#" %s_140} @ t_1525 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1526} @ t_1527
+    "readWord32OffAddr#"      :: (T_Addr) @ t_1528 -> (T_Int64) @ t_1529 -> {"State#" %s_141} @ t_1530 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1531} @ t_1532
+    "readWord64OffAddr#"      :: (T_Addr) @ t_1533 -> (T_Int64) @ t_1534 -> {"State#" %s_142} @ t_1535 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1536} @ t_1537
+    "writeCharOffAddr#"       :: (T_Addr) @ t_1538 -> (T_Int64) @ t_1539 -> (T_Char) @ t_1540 -> {"State#" %s_143} @ t_1541 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1542
+    "writeWideCharOffAddr#"   :: (T_Addr) @ t_1543 -> (T_Int64) @ t_1544 -> (T_Char) @ t_1545 -> {"State#" %s_144} @ t_1546 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1547
+    "writeIntOffAddr#"        :: (T_Addr) @ t_1548 -> (T_Int64) @ t_1549 -> (T_Int64) @ t_1550 -> {"State#" %s_145} @ t_1551 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1552
+    "writeWordOffAddr#"       :: (T_Addr) @ t_1553 -> (T_Int64) @ t_1554 -> (T_Word64) @ t_1555 -> {"State#" %s_146} @ t_1556 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1557
+    "writeAddrOffAddr#"       :: (T_Addr) @ t_1558 -> (T_Int64) @ t_1559 -> (T_Addr) @ t_1560 -> {"State#" %s_147} @ t_1561 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1562
+    "writeFloatOffAddr#"      :: (T_Addr) @ t_1563 -> (T_Int64) @ t_1564 -> (T_Float) @ t_1565 -> {"State#" %s_148} @ t_1566 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1567
+    "writeDoubleOffAddr#"     :: (T_Addr) @ t_1568 -> (T_Int64) @ t_1569 -> (T_Double) @ t_1570 -> {"State#" %s_149} @ t_1571 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1572
+    "writeStablePtrOffAddr#"  :: (T_Addr) @ t_1573 -> (T_Int64) @ t_1574 -> {"StablePtr#" %a_42} @ t_1575 -> {"State#" %s_150} @ t_1576 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1577
+    "writeInt8OffAddr#"       :: (T_Addr) @ t_1578 -> (T_Int64) @ t_1579 -> (T_Int64) @ t_1580 -> {"State#" %s_151} @ t_1581 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1582
+    "writeInt16OffAddr#"      :: (T_Addr) @ t_1583 -> (T_Int64) @ t_1584 -> (T_Int64) @ t_1585 -> {"State#" %s_152} @ t_1586 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1587
+    "writeInt32OffAddr#"      :: (T_Addr) @ t_1588 -> (T_Int64) @ t_1589 -> (T_Int64) @ t_1590 -> {"State#" %s_153} @ t_1591 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1592
+    "writeInt64OffAddr#"      :: (T_Addr) @ t_1593 -> (T_Int64) @ t_1594 -> (T_Int64) @ t_1595 -> {"State#" %s_154} @ t_1596 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1597
+    "writeWord8OffAddr#"      :: (T_Addr) @ t_1598 -> (T_Int64) @ t_1599 -> (T_Word64) @ t_1600 -> {"State#" %s_155} @ t_1601 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1602
+    "writeWord16OffAddr#"     :: (T_Addr) @ t_1603 -> (T_Int64) @ t_1604 -> (T_Word64) @ t_1605 -> {"State#" %s_156} @ t_1606 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1607
+    "writeWord32OffAddr#"     :: (T_Addr) @ t_1608 -> (T_Int64) @ t_1609 -> (T_Word64) @ t_1610 -> {"State#" %s_157} @ t_1611 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1612
+    "writeWord64OffAddr#"     :: (T_Addr) @ t_1613 -> (T_Int64) @ t_1614 -> (T_Word64) @ t_1615 -> {"State#" %s_158} @ t_1616 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1617
+    "atomicExchangeAddrAddr#" :: (T_Addr) @ t_1618 -> (T_Addr) @ t_1619 -> {"State#" %s_159} @ t_1620 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_1621} @ t_1622
+    "atomicExchangeWordAddr#" :: (T_Addr) @ t_1623 -> (T_Word64) @ t_1624 -> {"State#" %s_160} @ t_1625 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1626} @ t_1627
+    "atomicCasAddrAddr#"      :: (T_Addr) @ t_1628 -> (T_Addr) @ t_1629 -> (T_Addr) @ t_1630 -> {"State#" %s_161} @ t_1631 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_1632} @ t_1633
+    "atomicCasWordAddr#"      :: (T_Addr) @ t_1634 -> (T_Word64) @ t_1635 -> (T_Word64) @ t_1636 -> {"State#" %s_162} @ t_1637 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1638} @ t_1639
 
   {-
     Mutable variables
   -}
   primop effectful
-    "newMutVar#"   :: %a_43 -> {"State#" %s_159} @ t_1618 -> {"ghc-prim_GHC.Prim.Unit#" {"MutVar#" %s_159 %a_43} @ t_1619} @ t_1620
-    "readMutVar#"  :: {"MutVar#" %s_160 %a_44} @ t_1621 -> {"State#" %s_160} @ t_1622 -> {"ghc-prim_GHC.Prim.Unit#" %a_44} @ t_1623
-    "writeMutVar#" :: {"MutVar#" %s_161 %a_45} @ t_1624 -> %a_45 -> {"State#" %s_161} @ t_1625 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1626
+    "newMutVar#"   :: %a_43 -> {"State#" %s_163} @ t_1640 -> {"ghc-prim_GHC.Prim.Solo#" {"MutVar#" %s_163 %a_43} @ t_1641} @ t_1642
+    "readMutVar#"  :: {"MutVar#" %s_164 %a_44} @ t_1643 -> {"State#" %s_164} @ t_1644 -> {"ghc-prim_GHC.Prim.Solo#" %a_44} @ t_1645
+    "writeMutVar#" :: {"MutVar#" %s_165 %a_45} @ t_1646 -> %a_45 -> {"State#" %s_165} @ t_1647 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1648
 
   primop pure
-    "sameMutVar#" :: {"MutVar#" %s_162 %a_46} @ t_1627 -> {"MutVar#" %s_162 %a_46} @ t_1628 -> (T_Int64) @ t_1629
+    "sameMutVar#" :: {"MutVar#" %s_166 %a_46} @ t_1649 -> {"MutVar#" %s_166 %a_46} @ t_1650 -> (T_Int64) @ t_1651
 
   primop effectful
-    "atomicModifyMutVar2#" :: {"MutVar#" %s_163 %a_47} @ t_1630 -> (tf_1060 : %a_47 -> %c_0) -> {"State#" %s_163} @ t_1631 -> {"ghc-prim_GHC.Prim.(#,#)" %a_47 %c_0} @ t_1632
-    "atomicModifyMutVar_#" :: {"MutVar#" %s_164 %a_48} @ t_1633 -> (tf_1064 : %a_48 -> %a_48) -> {"State#" %s_164} @ t_1634 -> {"ghc-prim_GHC.Prim.(#,#)" %a_48 %a_48} @ t_1635
-    "casMutVar#"           :: {"MutVar#" %s_165 %a_49} @ t_1636 -> %a_49 -> %a_49 -> {"State#" %s_165} @ t_1637 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1638 %a_49} @ t_1639
+    "atomicModifyMutVar2#" :: {"MutVar#" %s_167 %a_47} @ t_1652 -> (tf_1074 : %a_47 -> %c_0) -> {"State#" %s_167} @ t_1653 -> {"ghc-prim_GHC.Prim.(#,#)" %a_47 %c_0} @ t_1654
+    "atomicModifyMutVar_#" :: {"MutVar#" %s_168 %a_48} @ t_1655 -> (tf_1078 : %a_48 -> %a_48) -> {"State#" %s_168} @ t_1656 -> {"ghc-prim_GHC.Prim.(#,#)" %a_48 %a_48} @ t_1657
+    "casMutVar#"           :: {"MutVar#" %s_169 %a_49} @ t_1658 -> %a_49 -> %a_49 -> {"State#" %s_169} @ t_1659 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1660 %a_49} @ t_1661
 
   {-
     Exceptions
   -}
   primop effectful
-    "catch#"                 :: (tf_1072 : {"State#" {RealWorld} @ t_1640} @ t_1641 -> {"ghc-prim_GHC.Prim.Unit#" %a_50} @ t_1642) -> (tf_1074 : %b_0 -> {"State#" {RealWorld} @ t_1643} @ t_1644 -> {"ghc-prim_GHC.Prim.Unit#" %a_50} @ t_1645) -> {"State#" {RealWorld} @ t_1646} @ t_1647 -> {"ghc-prim_GHC.Prim.Unit#" %a_50} @ t_1648
-    "raise#"                 :: %b_1 -> %o_0
-    "raiseDivZero#"          :: {"Void#"} @ t_1649 -> %o_1
-    "raiseUnderflow#"        :: {"Void#"} @ t_1650 -> %o_2
-    "raiseOverflow#"         :: {"Void#"} @ t_1651 -> %o_3
-    "raiseIO#"               :: %a_51 -> {"State#" {RealWorld} @ t_1652} @ t_1653 -> {"ghc-prim_GHC.Prim.Unit#" %b_2} @ t_1654
-    "maskAsyncExceptions#"   :: (tf_1084 : {"State#" {RealWorld} @ t_1655} @ t_1656 -> {"ghc-prim_GHC.Prim.Unit#" %a_52} @ t_1657) -> {"State#" {RealWorld} @ t_1658} @ t_1659 -> {"ghc-prim_GHC.Prim.Unit#" %a_52} @ t_1660
-    "maskUninterruptible#"   :: (tf_1087 : {"State#" {RealWorld} @ t_1661} @ t_1662 -> {"ghc-prim_GHC.Prim.Unit#" %a_53} @ t_1663) -> {"State#" {RealWorld} @ t_1664} @ t_1665 -> {"ghc-prim_GHC.Prim.Unit#" %a_53} @ t_1666
-    "unmaskAsyncExceptions#" :: (tf_1090 : {"State#" {RealWorld} @ t_1667} @ t_1668 -> {"ghc-prim_GHC.Prim.Unit#" %a_54} @ t_1669) -> {"State#" {RealWorld} @ t_1670} @ t_1671 -> {"ghc-prim_GHC.Prim.Unit#" %a_54} @ t_1672
-    "getMaskingState#"       :: {"State#" {RealWorld} @ t_1673} @ t_1674 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1675} @ t_1676
+    "catch#" :: (tf_1086 : {"State#" {RealWorld} @ t_1662} @ t_1663 -> {"ghc-prim_GHC.Prim.Solo#" %a_50} @ t_1664) -> (tf_1088 : %b_0 -> {"State#" {RealWorld} @ t_1665} @ t_1666 -> {"ghc-prim_GHC.Prim.Solo#" %a_50} @ t_1667) -> {"State#" {RealWorld} @ t_1668} @ t_1669 -> {"ghc-prim_GHC.Prim.Solo#" %a_50} @ t_1670
+
+  primop pure
+    "raise#" :: %b_1 -> %o_0
+
+  primop effectful
+    "raiseIO#"               :: %a_51 -> {"State#" {RealWorld} @ t_1671} @ t_1672 -> {"ghc-prim_GHC.Prim.Solo#" %b_2} @ t_1673
+    "maskAsyncExceptions#"   :: (tf_1095 : {"State#" {RealWorld} @ t_1674} @ t_1675 -> {"ghc-prim_GHC.Prim.Solo#" %a_52} @ t_1676) -> {"State#" {RealWorld} @ t_1677} @ t_1678 -> {"ghc-prim_GHC.Prim.Solo#" %a_52} @ t_1679
+    "maskUninterruptible#"   :: (tf_1098 : {"State#" {RealWorld} @ t_1680} @ t_1681 -> {"ghc-prim_GHC.Prim.Solo#" %a_53} @ t_1682) -> {"State#" {RealWorld} @ t_1683} @ t_1684 -> {"ghc-prim_GHC.Prim.Solo#" %a_53} @ t_1685
+    "unmaskAsyncExceptions#" :: (tf_1101 : {"State#" {RealWorld} @ t_1686} @ t_1687 -> {"ghc-prim_GHC.Prim.Solo#" %a_54} @ t_1688) -> {"State#" {RealWorld} @ t_1689} @ t_1690 -> {"ghc-prim_GHC.Prim.Solo#" %a_54} @ t_1691
+    "getMaskingState#"       :: {"State#" {RealWorld} @ t_1692} @ t_1693 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1694} @ t_1695
 
   {-
     STM-accessible Mutable Variables
   -}
   primop effectful
-    "atomically#" :: (tf_1094 : {"State#" {RealWorld} @ t_1677} @ t_1678 -> {"ghc-prim_GHC.Prim.Unit#" %a_55} @ t_1679) -> {"State#" {RealWorld} @ t_1680} @ t_1681 -> {"ghc-prim_GHC.Prim.Unit#" %a_55} @ t_1682
-    "retry#"      :: {"State#" {RealWorld} @ t_1683} @ t_1684 -> {"ghc-prim_GHC.Prim.Unit#" %a_56} @ t_1685
-    "catchRetry#" :: (tf_1098 : {"State#" {RealWorld} @ t_1686} @ t_1687 -> {"ghc-prim_GHC.Prim.Unit#" %a_57} @ t_1688) -> (tf_1099 : {"State#" {RealWorld} @ t_1689} @ t_1690 -> {"ghc-prim_GHC.Prim.Unit#" %a_57} @ t_1691) -> {"State#" {RealWorld} @ t_1692} @ t_1693 -> {"ghc-prim_GHC.Prim.Unit#" %a_57} @ t_1694
-    "catchSTM#"   :: (tf_1103 : {"State#" {RealWorld} @ t_1695} @ t_1696 -> {"ghc-prim_GHC.Prim.Unit#" %a_58} @ t_1697) -> (tf_1105 : %b_3 -> {"State#" {RealWorld} @ t_1698} @ t_1699 -> {"ghc-prim_GHC.Prim.Unit#" %a_58} @ t_1700) -> {"State#" {RealWorld} @ t_1701} @ t_1702 -> {"ghc-prim_GHC.Prim.Unit#" %a_58} @ t_1703
-    "newTVar#"    :: %a_59 -> {"State#" %s_166} @ t_1704 -> {"ghc-prim_GHC.Prim.Unit#" {"TVar#" %s_166 %a_59} @ t_1705} @ t_1706
-    "readTVar#"   :: {"TVar#" %s_167 %a_60} @ t_1707 -> {"State#" %s_167} @ t_1708 -> {"ghc-prim_GHC.Prim.Unit#" %a_60} @ t_1709
-    "readTVarIO#" :: {"TVar#" %s_168 %a_61} @ t_1710 -> {"State#" %s_168} @ t_1711 -> {"ghc-prim_GHC.Prim.Unit#" %a_61} @ t_1712
-    "writeTVar#"  :: {"TVar#" %s_169 %a_62} @ t_1713 -> %a_62 -> {"State#" %s_169} @ t_1714 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1715
+    "atomically#" :: (tf_1105 : {"State#" {RealWorld} @ t_1696} @ t_1697 -> {"ghc-prim_GHC.Prim.Solo#" %a_55} @ t_1698) -> {"State#" {RealWorld} @ t_1699} @ t_1700 -> {"ghc-prim_GHC.Prim.Solo#" %a_55} @ t_1701
+    "retry#"      :: {"State#" {RealWorld} @ t_1702} @ t_1703 -> {"ghc-prim_GHC.Prim.Solo#" %a_56} @ t_1704
+    "catchRetry#" :: (tf_1109 : {"State#" {RealWorld} @ t_1705} @ t_1706 -> {"ghc-prim_GHC.Prim.Solo#" %a_57} @ t_1707) -> (tf_1110 : {"State#" {RealWorld} @ t_1708} @ t_1709 -> {"ghc-prim_GHC.Prim.Solo#" %a_57} @ t_1710) -> {"State#" {RealWorld} @ t_1711} @ t_1712 -> {"ghc-prim_GHC.Prim.Solo#" %a_57} @ t_1713
+    "catchSTM#"   :: (tf_1114 : {"State#" {RealWorld} @ t_1714} @ t_1715 -> {"ghc-prim_GHC.Prim.Solo#" %a_58} @ t_1716) -> (tf_1116 : %b_3 -> {"State#" {RealWorld} @ t_1717} @ t_1718 -> {"ghc-prim_GHC.Prim.Solo#" %a_58} @ t_1719) -> {"State#" {RealWorld} @ t_1720} @ t_1721 -> {"ghc-prim_GHC.Prim.Solo#" %a_58} @ t_1722
+    "newTVar#"    :: %a_59 -> {"State#" %s_170} @ t_1723 -> {"ghc-prim_GHC.Prim.Solo#" {"TVar#" %s_170 %a_59} @ t_1724} @ t_1725
+    "readTVar#"   :: {"TVar#" %s_171 %a_60} @ t_1726 -> {"State#" %s_171} @ t_1727 -> {"ghc-prim_GHC.Prim.Solo#" %a_60} @ t_1728
+    "readTVarIO#" :: {"TVar#" %s_172 %a_61} @ t_1729 -> {"State#" %s_172} @ t_1730 -> {"ghc-prim_GHC.Prim.Solo#" %a_61} @ t_1731
+    "writeTVar#"  :: {"TVar#" %s_173 %a_62} @ t_1732 -> %a_62 -> {"State#" %s_173} @ t_1733 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1734
 
   primop pure
-    "sameTVar#" :: {"TVar#" %s_170 %a_63} @ t_1716 -> {"TVar#" %s_170 %a_63} @ t_1717 -> (T_Int64) @ t_1718
+    "sameTVar#" :: {"TVar#" %s_174 %a_63} @ t_1735 -> {"TVar#" %s_174 %a_63} @ t_1736 -> (T_Int64) @ t_1737
 
   {-
     Synchronized Mutable Variables
   -}
   primop effectful
-    "newMVar#"     :: {"State#" %s_171} @ t_1719 -> {"ghc-prim_GHC.Prim.Unit#" {"MVar#" %s_171 %a_64} @ t_1720} @ t_1721
-    "takeMVar#"    :: {"MVar#" %s_172 %a_65} @ t_1722 -> {"State#" %s_172} @ t_1723 -> {"ghc-prim_GHC.Prim.Unit#" %a_65} @ t_1724
-    "tryTakeMVar#" :: {"MVar#" %s_173 %a_66} @ t_1725 -> {"State#" %s_173} @ t_1726 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1727 %a_66} @ t_1728
-    "putMVar#"     :: {"MVar#" %s_174 %a_67} @ t_1729 -> %a_67 -> {"State#" %s_174} @ t_1730 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1731
-    "tryPutMVar#"  :: {"MVar#" %s_175 %a_68} @ t_1732 -> %a_68 -> {"State#" %s_175} @ t_1733 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1734} @ t_1735
-    "readMVar#"    :: {"MVar#" %s_176 %a_69} @ t_1736 -> {"State#" %s_176} @ t_1737 -> {"ghc-prim_GHC.Prim.Unit#" %a_69} @ t_1738
-    "tryReadMVar#" :: {"MVar#" %s_177 %a_70} @ t_1739 -> {"State#" %s_177} @ t_1740 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1741 %a_70} @ t_1742
+    "newMVar#"     :: {"State#" %s_175} @ t_1738 -> {"ghc-prim_GHC.Prim.Solo#" {"MVar#" %s_175 %a_64} @ t_1739} @ t_1740
+    "takeMVar#"    :: {"MVar#" %s_176 %a_65} @ t_1741 -> {"State#" %s_176} @ t_1742 -> {"ghc-prim_GHC.Prim.Solo#" %a_65} @ t_1743
+    "tryTakeMVar#" :: {"MVar#" %s_177 %a_66} @ t_1744 -> {"State#" %s_177} @ t_1745 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1746 %a_66} @ t_1747
+    "putMVar#"     :: {"MVar#" %s_178 %a_67} @ t_1748 -> %a_67 -> {"State#" %s_178} @ t_1749 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1750
+    "tryPutMVar#"  :: {"MVar#" %s_179 %a_68} @ t_1751 -> %a_68 -> {"State#" %s_179} @ t_1752 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1753} @ t_1754
+    "readMVar#"    :: {"MVar#" %s_180 %a_69} @ t_1755 -> {"State#" %s_180} @ t_1756 -> {"ghc-prim_GHC.Prim.Solo#" %a_69} @ t_1757
+    "tryReadMVar#" :: {"MVar#" %s_181 %a_70} @ t_1758 -> {"State#" %s_181} @ t_1759 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1760 %a_70} @ t_1761
 
   primop pure
-    "sameMVar#" :: {"MVar#" %s_178 %a_71} @ t_1743 -> {"MVar#" %s_178 %a_71} @ t_1744 -> (T_Int64) @ t_1745
+    "sameMVar#" :: {"MVar#" %s_182 %a_71} @ t_1762 -> {"MVar#" %s_182 %a_71} @ t_1763 -> (T_Int64) @ t_1764
 
   primop effectful
-    "isEmptyMVar#" :: {"MVar#" %s_179 %a_72} @ t_1746 -> {"State#" %s_179} @ t_1747 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1748} @ t_1749
+    "isEmptyMVar#" :: {"MVar#" %s_183 %a_72} @ t_1765 -> {"State#" %s_183} @ t_1766 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1767} @ t_1768
+
+  {-
+    Synchronized I/O Ports
+  -}
+  primop effectful
+    "newIOPort#"   :: {"State#" %s_184} @ t_1769 -> {"ghc-prim_GHC.Prim.Solo#" {"IOPort#" %s_184 %a_73} @ t_1770} @ t_1771
+    "readIOPort#"  :: {"IOPort#" %s_185 %a_74} @ t_1772 -> {"State#" %s_185} @ t_1773 -> {"ghc-prim_GHC.Prim.Solo#" %a_74} @ t_1774
+    "writeIOPort#" :: {"IOPort#" %s_186 %a_75} @ t_1775 -> %a_75 -> {"State#" %s_186} @ t_1776 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1777} @ t_1778
+
+  primop pure
+    "sameIOPort#" :: {"IOPort#" %s_187 %a_76} @ t_1779 -> {"IOPort#" %s_187 %a_76} @ t_1780 -> (T_Int64) @ t_1781
 
   {-
     Delay/wait operations
   -}
   primop effectful
-    "delay#"     :: (T_Int64) @ t_1750 -> {"State#" %s_180} @ t_1751 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1752
-    "waitRead#"  :: (T_Int64) @ t_1753 -> {"State#" %s_181} @ t_1754 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1755
-    "waitWrite#" :: (T_Int64) @ t_1756 -> {"State#" %s_182} @ t_1757 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1758
+    "delay#"     :: (T_Int64) @ t_1782 -> {"State#" %s_188} @ t_1783 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1784
+    "waitRead#"  :: (T_Int64) @ t_1785 -> {"State#" %s_189} @ t_1786 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1787
+    "waitWrite#" :: (T_Int64) @ t_1788 -> {"State#" %s_190} @ t_1789 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1790
 
   {-
     Concurrency primitives
   -}
   primop effectful
-    "fork#"                 :: %a_73 -> {"State#" {RealWorld} @ t_1759} @ t_1760 -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"} @ t_1761} @ t_1762
-    "forkOn#"               :: (T_Int64) @ t_1763 -> %a_74 -> {"State#" {RealWorld} @ t_1764} @ t_1765 -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"} @ t_1766} @ t_1767
-    "killThread#"           :: {"ThreadId#"} @ t_1768 -> %a_75 -> {"State#" {RealWorld} @ t_1769} @ t_1770 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1771
-    "yield#"                :: {"State#" {RealWorld} @ t_1772} @ t_1773 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1774
-    "myThreadId#"           :: {"State#" {RealWorld} @ t_1775} @ t_1776 -> {"ghc-prim_GHC.Prim.Unit#" {"ThreadId#"} @ t_1777} @ t_1778
-    "labelThread#"          :: {"ThreadId#"} @ t_1779 -> (T_Addr) @ t_1780 -> {"State#" {RealWorld} @ t_1781} @ t_1782 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1783
-    "isCurrentThreadBound#" :: {"State#" {RealWorld} @ t_1784} @ t_1785 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1786} @ t_1787
-    "noDuplicate#"          :: {"State#" %s_183} @ t_1788 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1789
-    "threadStatus#"         :: {"ThreadId#"} @ t_1790 -> {"State#" {RealWorld} @ t_1791} @ t_1792 -> {"ghc-prim_GHC.Prim.(#,,#)" (T_Int64) @ t_1793 (T_Int64) @ t_1794 (T_Int64) @ t_1795} @ t_1796
+    "fork#"                 :: %a_77 -> {"State#" {RealWorld} @ t_1791} @ t_1792 -> {"ghc-prim_GHC.Prim.Solo#" {"ThreadId#"} @ t_1793} @ t_1794
+    "forkOn#"               :: (T_Int64) @ t_1795 -> %a_78 -> {"State#" {RealWorld} @ t_1796} @ t_1797 -> {"ghc-prim_GHC.Prim.Solo#" {"ThreadId#"} @ t_1798} @ t_1799
+    "killThread#"           :: {"ThreadId#"} @ t_1800 -> %a_79 -> {"State#" {RealWorld} @ t_1801} @ t_1802 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1803
+    "yield#"                :: {"State#" {RealWorld} @ t_1804} @ t_1805 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1806
+    "myThreadId#"           :: {"State#" {RealWorld} @ t_1807} @ t_1808 -> {"ghc-prim_GHC.Prim.Solo#" {"ThreadId#"} @ t_1809} @ t_1810
+    "labelThread#"          :: {"ThreadId#"} @ t_1811 -> (T_Addr) @ t_1812 -> {"State#" {RealWorld} @ t_1813} @ t_1814 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1815
+    "isCurrentThreadBound#" :: {"State#" {RealWorld} @ t_1816} @ t_1817 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1818} @ t_1819
+    "noDuplicate#"          :: {"State#" %s_191} @ t_1820 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1821
+    "threadStatus#"         :: {"ThreadId#"} @ t_1822 -> {"State#" {RealWorld} @ t_1823} @ t_1824 -> {"ghc-prim_GHC.Prim.(#,,#)" (T_Int64) @ t_1825 (T_Int64) @ t_1826 (T_Int64) @ t_1827} @ t_1828
 
   {-
     Weak pointers
   -}
   primop effectful
-    "mkWeak#"              :: %o_4 -> %b_4 -> (tf_1162 : {"State#" {RealWorld} @ t_1797} @ t_1798 -> {"ghc-prim_GHC.Prim.Unit#" %c_1} @ t_1799) -> {"State#" {RealWorld} @ t_1800} @ t_1801 -> {"ghc-prim_GHC.Prim.Unit#" {"Weak#" %b_4} @ t_1802} @ t_1803
-    "mkWeakNoFinalizer#"   :: %o_5 -> %b_5 -> {"State#" {RealWorld} @ t_1804} @ t_1805 -> {"ghc-prim_GHC.Prim.Unit#" {"Weak#" %b_5} @ t_1806} @ t_1807
-    "addCFinalizerToWeak#" :: (T_Addr) @ t_1808 -> (T_Addr) @ t_1809 -> (T_Int64) @ t_1810 -> (T_Addr) @ t_1811 -> {"Weak#" %b_6} @ t_1812 -> {"State#" {RealWorld} @ t_1813} @ t_1814 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1815} @ t_1816
-    "deRefWeak#"           :: {"Weak#" %a_76} @ t_1817 -> {"State#" {RealWorld} @ t_1818} @ t_1819 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1820 %a_76} @ t_1821
-    "finalizeWeak#"        :: {"Weak#" %a_77} @ t_1822 -> {"State#" {RealWorld} @ t_1823} @ t_1824 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1825 (tf_1178 : {"State#" {RealWorld} @ t_1826} @ t_1827 -> {"ghc-prim_GHC.Prim.Unit#" %b_7} @ t_1828)} @ t_1829
-    "touch#"               :: %o_6 -> {"State#" {RealWorld} @ t_1830} @ t_1831 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1832
+    "mkWeak#"              :: %o_1 -> %b_4 -> (tf_1181 : {"State#" {RealWorld} @ t_1829} @ t_1830 -> {"ghc-prim_GHC.Prim.Solo#" %c_1} @ t_1831) -> {"State#" {RealWorld} @ t_1832} @ t_1833 -> {"ghc-prim_GHC.Prim.Solo#" {"Weak#" %b_4} @ t_1834} @ t_1835
+    "mkWeakNoFinalizer#"   :: %o_2 -> %b_5 -> {"State#" {RealWorld} @ t_1836} @ t_1837 -> {"ghc-prim_GHC.Prim.Solo#" {"Weak#" %b_5} @ t_1838} @ t_1839
+    "addCFinalizerToWeak#" :: (T_Addr) @ t_1840 -> (T_Addr) @ t_1841 -> (T_Int64) @ t_1842 -> (T_Addr) @ t_1843 -> {"Weak#" %b_6} @ t_1844 -> {"State#" {RealWorld} @ t_1845} @ t_1846 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1847} @ t_1848
+    "deRefWeak#"           :: {"Weak#" %a_80} @ t_1849 -> {"State#" {RealWorld} @ t_1850} @ t_1851 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1852 %a_80} @ t_1853
+    "finalizeWeak#"        :: {"Weak#" %a_81} @ t_1854 -> {"State#" {RealWorld} @ t_1855} @ t_1856 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1857 (tf_1197 : {"State#" {RealWorld} @ t_1858} @ t_1859 -> {"ghc-prim_GHC.Prim.Solo#" %b_7} @ t_1860)} @ t_1861
+    "touch#"               :: %o_3 -> {"State#" {RealWorld} @ t_1862} @ t_1863 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1864
 
   {-
     Stable pointers and names
   -}
   primop effectful
-    "makeStablePtr#"  :: %a_78 -> {"State#" {RealWorld} @ t_1833} @ t_1834 -> {"ghc-prim_GHC.Prim.Unit#" {"StablePtr#" %a_78} @ t_1835} @ t_1836
-    "deRefStablePtr#" :: {"StablePtr#" %a_79} @ t_1837 -> {"State#" {RealWorld} @ t_1838} @ t_1839 -> {"ghc-prim_GHC.Prim.Unit#" %a_79} @ t_1840
-    "eqStablePtr#"    :: {"StablePtr#" %a_80} @ t_1841 -> {"StablePtr#" %a_80} @ t_1842 -> (T_Int64) @ t_1843
-    "makeStableName#" :: %a_81 -> {"State#" {RealWorld} @ t_1844} @ t_1845 -> {"ghc-prim_GHC.Prim.Unit#" {"StableName#" %a_81} @ t_1846} @ t_1847
+    "makeStablePtr#"  :: %a_82 -> {"State#" {RealWorld} @ t_1865} @ t_1866 -> {"ghc-prim_GHC.Prim.Solo#" {"StablePtr#" %a_82} @ t_1867} @ t_1868
+    "deRefStablePtr#" :: {"StablePtr#" %a_83} @ t_1869 -> {"State#" {RealWorld} @ t_1870} @ t_1871 -> {"ghc-prim_GHC.Prim.Solo#" %a_83} @ t_1872
+    "eqStablePtr#"    :: {"StablePtr#" %a_84} @ t_1873 -> {"StablePtr#" %a_84} @ t_1874 -> (T_Int64) @ t_1875
+    "makeStableName#" :: %a_85 -> {"State#" {RealWorld} @ t_1876} @ t_1877 -> {"ghc-prim_GHC.Prim.Solo#" {"StableName#" %a_85} @ t_1878} @ t_1879
 
   primop pure
-    "eqStableName#"    :: {"StableName#" %a_82} @ t_1848 -> {"StableName#" %b_8} @ t_1849 -> (T_Int64) @ t_1850
-    "stableNameToInt#" :: {"StableName#" %a_83} @ t_1851 -> (T_Int64) @ t_1852
+    "eqStableName#"    :: {"StableName#" %a_86} @ t_1880 -> {"StableName#" %b_8} @ t_1881 -> (T_Int64) @ t_1882
+    "stableNameToInt#" :: {"StableName#" %a_87} @ t_1883 -> (T_Int64) @ t_1884
 
   {-
     Compact normal form
   -}
   primop effectful
-    "compactNew#"    :: (T_Word64) @ t_1853 -> {"State#" {RealWorld} @ t_1854} @ t_1855 -> {"ghc-prim_GHC.Prim.Unit#" {"Compact#"} @ t_1856} @ t_1857
-    "compactResize#" :: {"Compact#"} @ t_1858 -> (T_Word64) @ t_1859 -> {"State#" {RealWorld} @ t_1860} @ t_1861 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1862
+    "compactNew#"    :: (T_Word64) @ t_1885 -> {"State#" {RealWorld} @ t_1886} @ t_1887 -> {"ghc-prim_GHC.Prim.Solo#" {"Compact#"} @ t_1888} @ t_1889
+    "compactResize#" :: {"Compact#"} @ t_1890 -> (T_Word64) @ t_1891 -> {"State#" {RealWorld} @ t_1892} @ t_1893 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1894
 
   primop pure
-    "compactContains#"      :: {"Compact#"} @ t_1863 -> %a_84 -> {"State#" {RealWorld} @ t_1864} @ t_1865 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1866} @ t_1867
-    "compactContainsAny#"   :: %a_85 -> {"State#" {RealWorld} @ t_1868} @ t_1869 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1870} @ t_1871
-    "compactGetFirstBlock#" :: {"Compact#"} @ t_1872 -> {"State#" {RealWorld} @ t_1873} @ t_1874 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Addr) @ t_1875 (T_Word64) @ t_1876} @ t_1877
-    "compactGetNextBlock#"  :: {"Compact#"} @ t_1878 -> (T_Addr) @ t_1879 -> {"State#" {RealWorld} @ t_1880} @ t_1881 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Addr) @ t_1882 (T_Word64) @ t_1883} @ t_1884
+    "compactContains#"      :: {"Compact#"} @ t_1895 -> %a_88 -> {"State#" {RealWorld} @ t_1896} @ t_1897 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1898} @ t_1899
+    "compactContainsAny#"   :: %a_89 -> {"State#" {RealWorld} @ t_1900} @ t_1901 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1902} @ t_1903
+    "compactGetFirstBlock#" :: {"Compact#"} @ t_1904 -> {"State#" {RealWorld} @ t_1905} @ t_1906 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Addr) @ t_1907 (T_Word64) @ t_1908} @ t_1909
+    "compactGetNextBlock#"  :: {"Compact#"} @ t_1910 -> (T_Addr) @ t_1911 -> {"State#" {RealWorld} @ t_1912} @ t_1913 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Addr) @ t_1914 (T_Word64) @ t_1915} @ t_1916
 
   primop effectful
-    "compactAllocateBlock#"  :: (T_Word64) @ t_1885 -> (T_Addr) @ t_1886 -> {"State#" {RealWorld} @ t_1887} @ t_1888 -> {"ghc-prim_GHC.Prim.Unit#" (T_Addr) @ t_1889} @ t_1890
-    "compactFixupPointers#"  :: (T_Addr) @ t_1891 -> (T_Addr) @ t_1892 -> {"State#" {RealWorld} @ t_1893} @ t_1894 -> {"ghc-prim_GHC.Prim.(#,#)" {"Compact#"} @ t_1895 (T_Addr) @ t_1896} @ t_1897
-    "compactAdd#"            :: {"Compact#"} @ t_1898 -> %a_86 -> {"State#" {RealWorld} @ t_1899} @ t_1900 -> {"ghc-prim_GHC.Prim.Unit#" %a_86} @ t_1901
-    "compactAddWithSharing#" :: {"Compact#"} @ t_1902 -> %a_87 -> {"State#" {RealWorld} @ t_1903} @ t_1904 -> {"ghc-prim_GHC.Prim.Unit#" %a_87} @ t_1905
-    "compactSize#"           :: {"Compact#"} @ t_1906 -> {"State#" {RealWorld} @ t_1907} @ t_1908 -> {"ghc-prim_GHC.Prim.Unit#" (T_Word64) @ t_1909} @ t_1910
+    "compactAllocateBlock#"  :: (T_Word64) @ t_1917 -> (T_Addr) @ t_1918 -> {"State#" {RealWorld} @ t_1919} @ t_1920 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_1921} @ t_1922
+    "compactFixupPointers#"  :: (T_Addr) @ t_1923 -> (T_Addr) @ t_1924 -> {"State#" {RealWorld} @ t_1925} @ t_1926 -> {"ghc-prim_GHC.Prim.(#,#)" {"Compact#"} @ t_1927 (T_Addr) @ t_1928} @ t_1929
+    "compactAdd#"            :: {"Compact#"} @ t_1930 -> %a_90 -> {"State#" {RealWorld} @ t_1931} @ t_1932 -> {"ghc-prim_GHC.Prim.Solo#" %a_90} @ t_1933
+    "compactAddWithSharing#" :: {"Compact#"} @ t_1934 -> %a_91 -> {"State#" {RealWorld} @ t_1935} @ t_1936 -> {"ghc-prim_GHC.Prim.Solo#" %a_91} @ t_1937
+    "compactSize#"           :: {"Compact#"} @ t_1938 -> {"State#" {RealWorld} @ t_1939} @ t_1940 -> {"ghc-prim_GHC.Prim.Solo#" (T_Word64) @ t_1941} @ t_1942
 
   {-
     Unsafe pointer equality
   -}
   primop pure
-    "reallyUnsafePtrEquality#" :: %a_88 -> %a_88 -> (T_Int64) @ t_1911
+    "reallyUnsafePtrEquality#" :: %a_92 -> %a_92 -> (T_Int64) @ t_1943
 
   {-
     Parallelism
   -}
   primop effectful
-    "par#"   :: %a_89 -> (T_Int64) @ t_1912
-    "spark#" :: %a_90 -> {"State#" %s_184} @ t_1913 -> {"ghc-prim_GHC.Prim.Unit#" %a_90} @ t_1914
+    "par#"   :: %a_93 -> (T_Int64) @ t_1944
+    "spark#" :: %a_94 -> {"State#" %s_192} @ t_1945 -> {"ghc-prim_GHC.Prim.Solo#" %a_94} @ t_1946
 
   primop pure
-    "seq#" :: %a_91 -> {"State#" %s_185} @ t_1915 -> {"ghc-prim_GHC.Prim.Unit#" %a_91} @ t_1916
+    "seq#" :: %a_95 -> {"State#" %s_193} @ t_1947 -> {"ghc-prim_GHC.Prim.Solo#" %a_95} @ t_1948
 
   primop effectful
-    "getSpark#"  :: {"State#" %s_186} @ t_1917 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1918 %a_92} @ t_1919
-    "numSparks#" :: {"State#" %s_187} @ t_1920 -> {"ghc-prim_GHC.Prim.Unit#" (T_Int64) @ t_1921} @ t_1922
+    "getSpark#"  :: {"State#" %s_194} @ t_1949 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1950 %a_96} @ t_1951
+    "numSparks#" :: {"State#" %s_195} @ t_1952 -> {"ghc-prim_GHC.Prim.Solo#" (T_Int64) @ t_1953} @ t_1954
+
+  {-
+    Controlling object lifetime
+  -}
+  primop pure
+    "keepAlive#" :: %o_4 -> {"State#" {RealWorld} @ t_1955} @ t_1956 -> (tf_1251 : {"State#" {RealWorld} @ t_1957} @ t_1958 -> %p_0) -> %p_0
 
   {-
     Tag to enum stuff
   -}
   primop pure
-    "dataToTag#" :: %a_93 -> (T_Int64) @ t_1923
-    "tagToEnum#" :: (T_Int64) @ t_1924 -> %a_94
+    "dataToTag#" :: %a_97 -> (T_Int64) @ t_1959
+    "tagToEnum#" :: (T_Int64) @ t_1960 -> %a_98
 
   {-
     Bytecode operations
   -}
   primop pure
-    "addrToAny#" :: (T_Addr) @ t_1925 -> {"ghc-prim_GHC.Prim.Unit#" %a_95} @ t_1926
-    "anyToAddr#" :: %a_96 -> {"State#" {RealWorld} @ t_1927} @ t_1928 -> {"ghc-prim_GHC.Prim.Unit#" (T_Addr) @ t_1929} @ t_1930
-    "mkApUpd0#"  :: {BCO} @ t_1931 -> {"ghc-prim_GHC.Prim.Unit#" %a_97} @ t_1932
+    "addrToAny#" :: (T_Addr) @ t_1961 -> {"ghc-prim_GHC.Prim.Solo#" %a_99} @ t_1962
+    "anyToAddr#" :: %a_100 -> {"State#" {RealWorld} @ t_1963} @ t_1964 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_1965} @ t_1966
+    "mkApUpd0#"  :: {BCO} @ t_1967 -> {"ghc-prim_GHC.Prim.Solo#" %a_101} @ t_1968
 
   primop effectful
-    "newBCO#" :: {"ByteArray#"} @ t_1933 -> {"ByteArray#"} @ t_1934 -> {"Array#" %a_98} @ t_1935 -> (T_Int64) @ t_1936 -> {"ByteArray#"} @ t_1937 -> {"State#" %s_188} @ t_1938 -> {"ghc-prim_GHC.Prim.Unit#" {BCO} @ t_1939} @ t_1940
+    "newBCO#" :: {"ByteArray#"} @ t_1969 -> {"ByteArray#"} @ t_1970 -> {"Array#" %a_102} @ t_1971 -> (T_Int64) @ t_1972 -> {"ByteArray#"} @ t_1973 -> {"State#" %s_196} @ t_1974 -> {"ghc-prim_GHC.Prim.Solo#" {BCO} @ t_1975} @ t_1976
 
   primop pure
-    "unpackClosure#" :: %a_99 -> {"ghc-prim_GHC.Prim.(#,,#)" (T_Addr) @ t_1941 {"ByteArray#"} @ t_1942 {"Array#" %b_9} @ t_1943} @ t_1944
-    "closureSize#"   :: %a_100 -> (T_Int64) @ t_1945
-    "getApStackVal#" :: %a_101 -> (T_Int64) @ t_1946 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1947 %b_10} @ t_1948
+    "unpackClosure#" :: %a_103 -> {"ghc-prim_GHC.Prim.(#,,#)" (T_Addr) @ t_1977 {"ByteArray#"} @ t_1978 {"Array#" %b_9} @ t_1979} @ t_1980
+    "closureSize#"   :: %a_104 -> (T_Int64) @ t_1981
+    "getApStackVal#" :: %a_105 -> (T_Int64) @ t_1982 -> {"ghc-prim_GHC.Prim.(#,#)" (T_Int64) @ t_1983 %b_10} @ t_1984
 
   {-
     Misc
   -}
   primop pure
-    "getCCSOf#"      :: %a_102 -> {"State#" %s_189} @ t_1949 -> {"ghc-prim_GHC.Prim.Unit#" (T_Addr) @ t_1950} @ t_1951
-    "getCurrentCCS#" :: %a_103 -> {"State#" %s_190} @ t_1952 -> {"ghc-prim_GHC.Prim.Unit#" (T_Addr) @ t_1953} @ t_1954
-    "clearCCS#"      :: (tf_1252 : {"State#" %s_191} @ t_1955 -> {"ghc-prim_GHC.Prim.Unit#" %a_104} @ t_1956) -> {"State#" %s_191} @ t_1957 -> {"ghc-prim_GHC.Prim.Unit#" %a_104} @ t_1958
+    "getCCSOf#"      :: %a_106 -> {"State#" %s_197} @ t_1985 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_1986} @ t_1987
+    "getCurrentCCS#" :: %a_107 -> {"State#" %s_198} @ t_1988 -> {"ghc-prim_GHC.Prim.Solo#" (T_Addr) @ t_1989} @ t_1990
+    "clearCCS#"      :: (tf_1275 : {"State#" %s_199} @ t_1991 -> {"ghc-prim_GHC.Prim.Solo#" %a_108} @ t_1992) -> {"State#" %s_199} @ t_1993 -> {"ghc-prim_GHC.Prim.Solo#" %a_108} @ t_1994
 
   {-
     Etc
   -}
   primop effectful
-    "traceEvent#"                 :: (T_Addr) @ t_1959 -> {"State#" %s_192} @ t_1960 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1961
-    "traceBinaryEvent#"           :: (T_Addr) @ t_1962 -> (T_Int64) @ t_1963 -> {"State#" %s_193} @ t_1964 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1965
-    "traceMarker#"                :: (T_Addr) @ t_1966 -> {"State#" %s_194} @ t_1967 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1968
-    "setThreadAllocationCounter#" :: (T_Int64) @ t_1969 -> {"State#" {RealWorld} @ t_1970} @ t_1971 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1972
+    "traceEvent#"                 :: (T_Addr) @ t_1995 -> {"State#" %s_200} @ t_1996 -> {"ghc-prim_GHC.Prim.(##)"} @ t_1997
+    "traceBinaryEvent#"           :: (T_Addr) @ t_1998 -> (T_Int64) @ t_1999 -> {"State#" %s_201} @ t_2000 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2001
+    "traceMarker#"                :: (T_Addr) @ t_2002 -> {"State#" %s_202} @ t_2003 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2004
+    "setThreadAllocationCounter#" :: (T_Int64) @ t_2005 -> {"State#" {RealWorld} @ t_2006} @ t_2007 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2008
 
   {-
     Safe coercions
@@ -780,22 +802,22 @@ primPrelude = [progConst|
     Prefetch
   -}
   primop effectful
-    "prefetchByteArray3#"        :: {"ByteArray#"} @ t_2001 -> (T_Int64) @ t_2002 -> {"State#" %s_201} @ t_2003 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2004
-    "prefetchMutableByteArray3#" :: {"MutableByteArray#" %s_202} @ t_2005 -> (T_Int64) @ t_2006 -> {"State#" %s_202} @ t_2007 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2008
-    "prefetchAddr3#"             :: (T_Addr) @ t_2009 -> (T_Int64) @ t_2010 -> {"State#" %s_203} @ t_2011 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2012
-    "prefetchValue3#"            :: %a_105 -> {"State#" %s_204} @ t_2013 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2014
-    "prefetchByteArray2#"        :: {"ByteArray#"} @ t_2015 -> (T_Int64) @ t_2016 -> {"State#" %s_205} @ t_2017 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2018
-    "prefetchMutableByteArray2#" :: {"MutableByteArray#" %s_206} @ t_2019 -> (T_Int64) @ t_2020 -> {"State#" %s_206} @ t_2021 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2022
-    "prefetchAddr2#"             :: (T_Addr) @ t_2023 -> (T_Int64) @ t_2024 -> {"State#" %s_207} @ t_2025 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2026
-    "prefetchValue2#"            :: %a_106 -> {"State#" %s_208} @ t_2027 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2028
-    "prefetchByteArray1#"        :: {"ByteArray#"} @ t_2029 -> (T_Int64) @ t_2030 -> {"State#" %s_209} @ t_2031 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2032
-    "prefetchMutableByteArray1#" :: {"MutableByteArray#" %s_210} @ t_2033 -> (T_Int64) @ t_2034 -> {"State#" %s_210} @ t_2035 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2036
-    "prefetchAddr1#"             :: (T_Addr) @ t_2037 -> (T_Int64) @ t_2038 -> {"State#" %s_211} @ t_2039 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2040
-    "prefetchValue1#"            :: %a_107 -> {"State#" %s_212} @ t_2041 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2042
-    "prefetchByteArray0#"        :: {"ByteArray#"} @ t_2043 -> (T_Int64) @ t_2044 -> {"State#" %s_213} @ t_2045 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2046
-    "prefetchMutableByteArray0#" :: {"MutableByteArray#" %s_214} @ t_2047 -> (T_Int64) @ t_2048 -> {"State#" %s_214} @ t_2049 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2050
-    "prefetchAddr0#"             :: (T_Addr) @ t_2051 -> (T_Int64) @ t_2052 -> {"State#" %s_215} @ t_2053 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2054
-    "prefetchValue0#"            :: %a_108 -> {"State#" %s_216} @ t_2055 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2056
+    "prefetchByteArray3#"        :: {"ByteArray#"} @ t_2037 -> (T_Int64) @ t_2038 -> {"State#" %s_209} @ t_2039 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2040
+    "prefetchMutableByteArray3#" :: {"MutableByteArray#" %s_210} @ t_2041 -> (T_Int64) @ t_2042 -> {"State#" %s_210} @ t_2043 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2044
+    "prefetchAddr3#"             :: (T_Addr) @ t_2045 -> (T_Int64) @ t_2046 -> {"State#" %s_211} @ t_2047 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2048
+    "prefetchValue3#"            :: %a_109 -> {"State#" %s_212} @ t_2049 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2050
+    "prefetchByteArray2#"        :: {"ByteArray#"} @ t_2051 -> (T_Int64) @ t_2052 -> {"State#" %s_213} @ t_2053 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2054
+    "prefetchMutableByteArray2#" :: {"MutableByteArray#" %s_214} @ t_2055 -> (T_Int64) @ t_2056 -> {"State#" %s_214} @ t_2057 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2058
+    "prefetchAddr2#"             :: (T_Addr) @ t_2059 -> (T_Int64) @ t_2060 -> {"State#" %s_215} @ t_2061 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2062
+    "prefetchValue2#"            :: %a_110 -> {"State#" %s_216} @ t_2063 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2064
+    "prefetchByteArray1#"        :: {"ByteArray#"} @ t_2065 -> (T_Int64) @ t_2066 -> {"State#" %s_217} @ t_2067 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2068
+    "prefetchMutableByteArray1#" :: {"MutableByteArray#" %s_218} @ t_2069 -> (T_Int64) @ t_2070 -> {"State#" %s_218} @ t_2071 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2072
+    "prefetchAddr1#"             :: (T_Addr) @ t_2073 -> (T_Int64) @ t_2074 -> {"State#" %s_219} @ t_2075 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2076
+    "prefetchValue1#"            :: %a_111 -> {"State#" %s_220} @ t_2077 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2078
+    "prefetchByteArray0#"        :: {"ByteArray#"} @ t_2079 -> (T_Int64) @ t_2080 -> {"State#" %s_221} @ t_2081 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2082
+    "prefetchMutableByteArray0#" :: {"MutableByteArray#" %s_222} @ t_2083 -> (T_Int64) @ t_2084 -> {"State#" %s_222} @ t_2085 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2086
+    "prefetchAddr0#"             :: (T_Addr) @ t_2087 -> (T_Int64) @ t_2088 -> {"State#" %s_223} @ t_2089 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2090
+    "prefetchValue0#"            :: %a_112 -> {"State#" %s_224} @ t_2091 -> {"ghc-prim_GHC.Prim.(##)"} @ t_2092
 
   |]
 
