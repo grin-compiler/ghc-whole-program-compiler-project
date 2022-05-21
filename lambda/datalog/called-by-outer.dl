@@ -1,0 +1,9 @@
+
+#include "AST.dl"
+
+.decl CalledByOuterCode(v:symbol)
+.output CalledByOuterCode
+
+CalledByOuterCode(v) :-
+  UsedName(v),
+  !DefinedName(v).
