@@ -30,6 +30,7 @@ import Codec.Archive.Zip
 import System.FilePath
 import System.IO
 import System.Directory
+import System.Exit
 
 import Stg.Syntax
 import Stg.Program
@@ -159,7 +160,15 @@ builtinStgEval so a@HeapPtr{} = do
   case o of
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}       -> pure [a]
-    BlackHole t -> stgErrorM $ "blackhole ; loop in evaluation of : " ++ show t
+    {-
+    -- TODO: check how the cmm stg machine handles this case
+    BlackHole t -> do
+                    Rts{..} <- gets ssRtsSupport
+                    liftIO $ do
+                      hPutStrLn stderr $ takeBaseName rtsProgName ++ ": <<loop>>"
+                      exitWith ExitSuccess
+                    stgErrorM $ "blackhole ; loop in evaluation of : " ++ show t
+    -}
     Closure{..}
       | hoCloMissing /= 0
       -> pure [a]
@@ -276,6 +285,8 @@ assertWHNF [hp@HeapPtr{}] aty res = do
           error "Thunk"
       | otherwise         -> pure ()
     BlackHole{} -> error "BlackHole"
+    RaiseException{} -> pure ()
+    _ -> error $ "assertWHNF: " ++ show o
 assertWHNF _ _ _ = pure ()
 
 {-
