@@ -39,7 +39,7 @@ linkForeignCbitsSharedLib ghcstgappFname = do
 
       cbitsArs = concatMap stglibCbitsPaths linkerInfoList
 
-      stubArs = concatMap stglibStubsPaths linkerInfoList
+      stubArs = concatMap stglibCapiStubsPaths linkerInfoList
 
       arList = case cbitsArs ++ stubArs of
           []  -> []

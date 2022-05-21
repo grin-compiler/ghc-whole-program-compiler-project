@@ -112,12 +112,13 @@ instance FromJSON GhcStgApp where
 
 getAppModuleMapping :: FilePath -> IO [StgModuleInfo]
 getAppModuleMapping ghcStgAppFname = do
+  let showLog = False -- TODO: use RIO ???
   let packageName = "exe:" ++ takeBaseName ghcStgAppFname -- TODO: save package to .ghc_stgapp
   GhcStgApp{..} <- Y.decodeFileThrow ghcStgAppFname
   let modpakExt = "." ++ appObjSuffix ++ "_modpak"
       check f = do
         exist <- doesFileExist f
-        unless exist $ do
+        unless exist $ when showLog $ do
           putStrLn $ "modpak does not exist: " ++ f
         pure exist
   libModules <- filterM (check . modModpakPath) $
@@ -213,12 +214,13 @@ getJSONModules filePath = do
 
 data StgLibLinkerInfo
   = StgLibLinkerInfo
-  { stglibName          :: String
-  , stglibCbitsPaths    :: [FilePath]
-  , stglibStubsPaths    :: [FilePath]
-  , stglibExtraLibs     :: [String]
-  , stglibExtraLibDirs  :: [FilePath]
-  , stglibLdOptions     :: [String]
+  { stglibName            :: String
+  , stglibCbitsPaths      :: [FilePath]
+  , stglibCapiStubsPaths  :: [FilePath]
+  , stglibAllStubsPaths   :: [FilePath]
+  , stglibExtraLibs       :: [String]
+  , stglibExtraLibDirs    :: [FilePath]
+  , stglibLdOptions       :: [String]
   }
   deriving (Eq, Ord, Show)
 
@@ -229,6 +231,7 @@ data StgAppLinkerInfo
   , stgappExtraLibDirs  :: [FilePath]
   , stgappLdOptions     :: [String]
   , stgappPlatformOS    :: String
+  , stgappNoHsMain      :: Bool
   }
   deriving (Eq, Ord, Show)
 
@@ -247,34 +250,47 @@ getAppLinkerInfo ghcStgAppFname = do
         , stgappExtraLibDirs  = appExtraLibDirs
         , stgappLdOptions     = appLdOptions
         , stgappPlatformOS    = appPlatformOS
+        , stgappNoHsMain      = appNoHsMain
         }
 
   -- lib info
+  let forceDynamic = True
+      arExt n = if forceDynamic
+        then "-ghc9.0.2.1000.dyn_o" ++ n ++ ".a"
+        else "." ++ appObjSuffix ++ n ++ ".a"
   libInfoList <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
 
     let pathList = [path </> libName | path <- unitLibDirs, lib <- unitLibraries, let libName = "lib" ++ lib]
 
     cbitsPathList <- forM pathList $ \path -> do
       -- FIXME: make cbits and stubs name handling robust, this is a HACK!
-      let cbitsPath = path ++ "-ghc9.0.2.1000.dyn_o_cbits.a"
+      let cbitsPath = path ++ arExt "_cbits"
       doesFileExist cbitsPath >>= \case
         True  -> pure $ Just cbitsPath
         False -> pure Nothing
 
     stubsPathList <- forM pathList $ \path -> do
       -- FIXME: make cbits and stubs name handling robust, this is a HACK!
-      let stubsPath = path ++ "-ghc9.0.2.1000.dyn_o_stubs.a"
+      let stubsPath = path ++ arExt "_capi_stubs"
+      doesFileExist stubsPath >>= \case
+        True  -> pure $ Just stubsPath
+        False -> pure Nothing
+
+    allStubsPathList <- forM pathList $ \path -> do
+      -- FIXME: make cbits and stubs name handling robust, this is a HACK!
+      let stubsPath = path ++ arExt "_all_stubs"
       doesFileExist stubsPath >>= \case
         True  -> pure $ Just stubsPath
         False -> pure Nothing
 
     pure $ StgLibLinkerInfo
-      { stglibName          = unitId
-      , stglibCbitsPaths    = catMaybes cbitsPathList
-      , stglibStubsPaths    = catMaybes stubsPathList
-      , stglibExtraLibs     = unitExtraLibs
-      , stglibExtraLibDirs  = unitLibDirs
-      , stglibLdOptions     = unitLdOptions
+      { stglibName            = unitId
+      , stglibCbitsPaths      = catMaybes cbitsPathList
+      , stglibCapiStubsPaths  = catMaybes stubsPathList
+      , stglibAllStubsPaths   = catMaybes allStubsPathList
+      , stglibExtraLibs       = unitExtraLibs
+      , stglibExtraLibDirs    = unitLibDirs
+      , stglibLdOptions       = unitLdOptions
       }
   pure (appInfo, libInfoList)
 
