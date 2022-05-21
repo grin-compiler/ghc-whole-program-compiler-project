@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
+import Data.List
 import Data.List.Split
 import Control.Monad
 import Control.Concurrent.Async.Pool
@@ -8,6 +9,7 @@ import Control.Concurrent.Async.Pool
 import System.Directory
 import System.Environment
 import System.Process
+import GHC.Conc (getNumProcessors)
 
 import qualified Stg.GHC.Symbols as GHCSymbols
 import Stg.GHC.Backend
@@ -39,7 +41,8 @@ import qualified Data.ByteString as BS
 genProgramDfeFacts :: [FilePath] -> IO ()
 genProgramDfeFacts modpakFileNames = timeItNamed "fact collection run time" $ do
   putStrLn "generate datalog facts for whole stg program dead function elimination"
-  withTaskGroup 4 $ \g -> do
+  cpuCount <- getNumProcessors
+  withTaskGroup cpuCount $ \g -> do
     mapTasks g [readModpakL f modpakStgbinPath decodeStgbin >>= writeDfeFacts f | f <- modpakFileNames]
   pure ()
 
@@ -62,22 +65,58 @@ main = do
     fileExists <- doesFileExist obj
     when fileExists $ removeFile obj
 
+  cpuCount <- getNumProcessors
   timeItNamed "program objects codegen time" $ do
-    withTaskGroup 4 $ \g -> do
+    withTaskGroup cpuCount $ \g -> do
       mapTasks g [callProcess "gen-obj" f | f <- chunksOf 1 appModpaks]
 
   putStrLn $ "linking exe"
 
-  StgAppInfo{..} <- getAppInfo stgAppFname
+  (StgAppLinkerInfo{..}, libInfos) <- getAppLinkerInfo stgAppFname
+  let linkerInfoList = filter (\StgLibLinkerInfo{..} -> not (isPrefixOf "rts-1" stglibName)) libInfos
+
+      cbitsOpts = concat
+          [ concat
+            [ [ "-L" ++ dir | dir <- stglibExtraLibDirs]
+            , stglibLdOptions
+            , [ "-l" ++ lib | lib <- stglibExtraLibs]
+            ]
+          | StgLibLinkerInfo{..} <- linkerInfoList
+          ]
+
+      cbitsArs = concatMap stglibCbitsPaths linkerInfoList
+
+      stubArs = concatMap stglibAllStubsPaths linkerInfoList
+
+
+      appOpts = concat
+        [ [ "-L" ++ dir | dir <- stgappExtraLibDirs]
+        , stgappLdOptions
+        , [ "-l" ++ lib | lib <- stgappExtraLibs]
+        ]
+
+  let cLikeObjFiles = stgappCObjects
+      includePaths  = []
+      libPaths      = stgappExtraLibDirs ++ concatMap stglibExtraLibDirs linkerInfoList
+      ldOptions     = stgappLdOptions ++ concatMap stglibLdOptions linkerInfoList ++ appOpts ++ cbitsOpts ++ cbitsArs ++ stubArs
+
+  putStrLn "libPaths"
+  putStrLn $ unlines libPaths
+  putStrLn "ldOptions"
+  putStrLn $ unlines ldOptions
 
   let cg = NCG
 
-  print $ "appCLikeObjFiles: " ++ show appCLikeObjFiles
-  appCLikeObjFiles' <- forM appCLikeObjFiles $ \fname -> do
+  print $ "appCLikeObjFiles: " ++ show cLikeObjFiles
+  appCLikeObjFiles' <- forM cLikeObjFiles $ \fname -> do
     o <- BS.readFile fname
     let newObjName = fname ++ ".o"
     BS.writeFile newObjName o
     pure newObjName
   print $ "appCLikeObjFiles: " ++ show appCLikeObjFiles'
 
-  compileProgram cg appNoHsMain appIncludePaths appLibPaths appLdOptions (appCLikeObjFiles' ++ oStg) GHC.NoStubs [] []
+  let objs = appCLikeObjFiles' ++ oStg
+  putStrLn "objs"
+  putStrLn $ unlines objs
+
+  compileProgram cg stgappNoHsMain includePaths libPaths ldOptions objs GHC.NoStubs [] []

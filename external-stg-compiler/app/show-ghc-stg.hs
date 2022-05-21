@@ -27,4 +27,4 @@ main = runGhc (Just libdir) . liftIO $ do
     putStrLn $ "reading   " ++ modpakName
     extStgModule <- readModpakL modpakName modpakStgbinPath decodeStgbin
     let StgModule{..} = toStg extStgModule
-    putStrLn . showSDoc $ GHC.pprStgTopBindings stgTopBindings
+    putStrLn . showSDoc $ GHC.pprStgTopBindings GHC.panicStgPprOpts stgTopBindings
