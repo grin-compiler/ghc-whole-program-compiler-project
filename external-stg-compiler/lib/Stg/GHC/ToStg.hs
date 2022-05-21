@@ -10,7 +10,7 @@ import GHC.Driver.Types
 import GHC.Utils.Outputable
 
 -- Stg Types
-import GHC.Types.Module
+import GHC.Unit.Module
 import GHC.Types.Name
 import GHC.Types.Id
 import GHC.Types.Id.Info
@@ -68,7 +68,7 @@ simpleDataCon tc name args tag workerName = dataCon
   where
     dataCon       = mkDataCon
                       name False (error "TyConRepName") [] [] [] [] [] [] []
-                      (map primRepToType args) ({-error "Original result type"-}primRepToType LiftedRep) (error "RuntimeRepInfo")
+                      [tymult t | t <- map primRepToType args] ({-error "Original result type"-}primRepToType LiftedRep) (error "RuntimeRepInfo")
                       tc tag [] workerId NoDataConRep
     workerId      = mkDataConWorkId workerName dataCon
 
@@ -231,7 +231,7 @@ cvtNewId Ext.Binder{..} = do
   nameId <- case binderScope of
     s | s == Ext.LocalScope || s == Ext.GlobalScope -> do
       name <- getFreshName OccName.varName binderUnitId binderModule binderName
-      pure $ mkLocalId name (cvtPrimRepType binderType)
+      pure $ mkLocalId name Many (cvtPrimRepType binderType)
     _ -> do
       name <- getFreshExternalName OccName.varName binderUnitId binderModule binderName
       pure $ mkVanillaGlobal name (cvtPrimRepType binderType)
@@ -240,8 +240,8 @@ cvtNewId Ext.Binder{..} = do
 
   state $ \env@Env{..} -> (finalId, env {envIdMap = Map.insert binderId finalId envIdMap})
 
-cvtUnitId :: Ext.UnitId -> UnitId
-cvtUnitId = fsToUnitId . mkFastStringByteString . Ext.getUnitId
+cvtUnitId :: Ext.UnitId -> Unit
+cvtUnitId = fsToUnit . mkFastStringByteString . Ext.getUnitId
 
 cvtModuleName :: Ext.ModuleName -> ModuleName
 cvtModuleName = mkModuleNameFS . mkFastStringByteString . Ext.getModuleName
@@ -284,7 +284,7 @@ cvtPrimRepType = \case
   Ext.SingleValue Ext.VoidRep -> mkTupleTy Unboxed []
   Ext.SingleValue r   -> primRepToType $ cvtPrimRep r
   Ext.UnboxedTuple l  -> mkTupleTy Unboxed $ map (primRepToType . cvtPrimRep) l
-  Ext.PolymorphicRep  -> mkInvForAllTy runtimeRep2TyVar
+  Ext.PolymorphicRep  -> mkInfForAllTy runtimeRep2TyVar
                           $ mkSpecForAllTys [openBetaTyVar]
                           $ mkTyVarTy openBetaTyVar
                           -- HINT: forall (r :: RuntimeRep) (b :: TYPE r). b
@@ -343,7 +343,7 @@ cvtPrimCall (Ext.PrimCall lbl uid) = PrimCall (mkFastStringByteString lbl) (cvtU
 -- creates a function type for FFI cmm codegen
 --  the result type does not matter
 mkStgFArgType :: [Ext.Arg] -> Type
-mkStgFArgType args = mkVisFunTys (map getArgType args) intTy where
+mkStgFArgType args = mkVisFunTysMany (map getArgType args) intTy where
   getArgType :: Ext.Arg -> Type
   getArgType = \case
     Ext.StgLitArg{} -> intTy
@@ -366,12 +366,12 @@ cvtOp args = \case
   Ext.StgPrimCallOp c -> StgPrimCallOp (cvtPrimCall c)
   Ext.StgFCallOp f    -> StgFCallOp (cvtForeignCall f) (mkStgFArgType args)
 
-cvtLitNumType :: Ext.LitNumType -> (LitNumType, Type)
+cvtLitNumType :: Ext.LitNumType -> LitNumType
 cvtLitNumType = \case
-  Ext.LitNumInt     -> (LitNumInt   , intPrimTy)
-  Ext.LitNumInt64   -> (LitNumInt64 , int64PrimTy)
-  Ext.LitNumWord    -> (LitNumWord  , wordPrimTy)
-  Ext.LitNumWord64  -> (LitNumWord64, word64PrimTy)
+  Ext.LitNumInt     -> LitNumInt
+  Ext.LitNumInt64   -> LitNumInt64
+  Ext.LitNumWord    -> LitNumWord
+  Ext.LitNumWord64  -> LitNumWord64
 
 cvtLabelSpec :: Ext.LabelSpec -> (Maybe Int, FunctionOrData)
 cvtLabelSpec = \case
@@ -386,7 +386,7 @@ cvtLit = \case
   Ext.LitFloat x    -> LitFloat x
   Ext.LitDouble x   -> LitDouble x
   Ext.LitLabel x s  -> LitLabel (mkFastStringByteString x) i d where (i, d) = (cvtLabelSpec s)
-  Ext.LitNumber t i -> LitNumber numTy i ty where (numTy, ty) = cvtLitNumType t
+  Ext.LitNumber t i -> LitNumber (cvtLitNumType t) i
 
 cvtAltCon :: Ext.AltCon -> M AltCon
 cvtAltCon = \case
@@ -399,7 +399,7 @@ cvtAlt Ext.Alt{..} = (,,) <$> cvtAltCon altCon <*> mapM cvtIdDef altBinders <*> 
 
 cvtExpr :: Ext.Expr -> M StgExpr
 cvtExpr = \case
-  Ext.StgApp f args t (_,_,l) -> StgApp <$> cvtId f <*> cvtArgs args <*> pure (cvtPrimRepType t, BS8.unpack l)
+  Ext.StgApp f args t (_,_,l) -> StgApp <$> cvtId f <*> cvtArgs args <*> pure (cvtPrimRepType t)
   Ext.StgLit l                -> pure $ StgLit (cvtLit l)
   Ext.StgConApp dc args t     -> StgConApp <$> cvtDataCon dc <*> cvtArgs args <*> pure (map cvtPrimRepType t)
   Ext.StgOpApp op args t tc   -> StgOpApp (cvtOp args op) <$> cvtArgs args <*> cvtADTType t tc
@@ -445,7 +445,7 @@ cvtTopBinding = \case
 cvtForeignStubs :: Ext.ForeignStubs -> ForeignStubs
 cvtForeignStubs = \case
   Ext.NoStubs           -> NoStubs
-  Ext.ForeignStubs{..}  -> ForeignStubs (ftext $ mkFastStringByteString fsCHeader) (ftext $ mkFastStringByteString fsCSource)
+  Ext.ForeignStubs{..}  -> ForeignStubs (ftext $ mkFastStringByteString fsCHeader) (ftext $ mkFastStringByteString fsCSource) []
 
 cvtForeignSrcLang :: Ext.ForeignSrcLang -> ForeignSrcLang
 cvtForeignSrcLang = \case
@@ -460,7 +460,7 @@ cvtForeignSrcLang = \case
 
 data StgModule
   = StgModule
-  { stgUnitId       :: UnitId
+  { stgUnitId       :: Unit
   , stgModuleName   :: ModuleName
   , stgModuleTyCons :: [TyCon]
   , stgTopBindings  :: [StgTopBinding]

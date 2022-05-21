@@ -65,7 +65,7 @@ mkUnboxedTuple args = do
   ut <- deriveNewName "t"
   pure $ case length args of
     0 -> L.TyCon ut (packName "ghc-prim_GHC.Prim.(##)") []
-    1 -> L.TyCon ut (packName "ghc-prim_GHC.Prim.Unit#") args
+    1 -> L.TyCon ut (packName "ghc-prim_GHC.Prim.Solo#") args
     n -> L.TyCon ut (packName $ "ghc-prim_GHC.Prim.(#" ++ replicate (max 0 $ n-1) ',' ++ "#)") args
 
 isStateTy :: Ty -> Bool

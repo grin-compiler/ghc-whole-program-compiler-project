@@ -13,6 +13,8 @@ import GHC.Driver.Session
 import GHC.Driver.Types
 import GHC.Utils.Error
 import GHC.Utils.Outputable
+import GHC.Builtin.Names (rOOT_MAIN)
+import GHC.Unit.State
 
 -- Stg Types
 import GHC.Data.FastString
@@ -21,7 +23,7 @@ import GHC.Stg.Lint
 import GHC.Stg.Syntax
 import GHC.Stg.Unarise
 import GHC.Types.CostCentre
-import GHC.Types.Module
+import GHC.Unit.Types
 import GHC.Types.Name.Set
 import GHC.Data.Stream (Stream)
 import qualified GHC.Data.Stream as Stream
@@ -31,6 +33,7 @@ import GHC.Cmm
 import GHC.Cmm.Info (cmmToRawCmm )
 import GHC.StgToCmm (codeGen)
 import GHC.Types.Unique.Supply ( mkSplitUniqSupply, initUs_ )
+import GHC.StgToCmm.Types (CgInfos (..))
 
 import Control.Monad.Trans
 import Control.Monad
@@ -49,7 +52,7 @@ import System.FilePath
 -------------------------------------------------------------------------------
 
 modl :: Module
-modl = mkModule mainUnitId (mkModuleName ":Main")
+modl = rOOT_MAIN
 
 -------------------------------------------------------------------------------
 -- Compilation
@@ -58,11 +61,11 @@ modl = mkModule mainUnitId (mkModuleName ":Main")
 data Backend = NCG | LLVM
 
 
-compileToObject :: Backend -> UnitId -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> IO ()
+compileToObject :: Backend -> Unit -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> IO ()
 compileToObject backend unitId modName stubs tyCons topBinds_simple outputName = do
   runGhc (Just libdir) $ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName
 
-compileToObjectM :: Backend -> UnitId -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> Ghc ()
+compileToObjectM :: Backend -> Unit -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> Ghc ()
 compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName = do
   dflags <- getSessionDynFlags
 
@@ -83,7 +86,7 @@ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName 
     pure ()
 {-
     putStrLn "==== Writing before unarise STG ===="
-    encodeFile beforeStgbinFName $ C.cvtModule [] [] "whole program stg before unarise" mainUnitId (mkModuleName ":Main") topBinds_simple NoStubs []
+    encodeFile beforeStgbinFName $ C.cvtModule [] [] "whole program stg before unarise" mainUnit (mkModuleName ":Main") topBinds_simple NoStubs []
 -}
 {-
     putStrLn "==== Lint STG ===="
@@ -95,7 +98,7 @@ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName 
 {-
   liftIO $ do
     putStrLn "==== Writing after unarise STG ===="
-    encodeFile afterStgbinFName $ C.cvtModule [] [] "whole program stg after unarise" mainUnitId (mkModuleName ":Main") topBinds NoStubs []
+    encodeFile afterStgbinFName $ C.cvtModule [] [] "whole program stg after unarise" mainUnit (mkModuleName ":Main") topBinds NoStubs []
 -}
   -- Compile
   dflags <- getSessionDynFlags
@@ -112,8 +115,8 @@ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName 
     `gopt_set`  Opt_DoCmmLinting
 -}
     `gopt_set`  Opt_SplitSections -- HINT: linker based dead code elimination
-    `gopt_set`  Opt_NoStgbin
-    `gopt_set`  Opt_NoStgapp
+    `gopt_set`  Opt_NoModpak
+    `gopt_set`  Opt_NoGhcStgapp
 
   env <- getSession
   liftIO $ do
@@ -131,7 +134,7 @@ compileProgram backend noHsMain incPaths libPaths ldOpts clikeFiles stubs tyCons
     -- save exported external STG
     let stgFName = "whole_program_original.stgbin"
     putStrLn $ "writing " ++ stgFName
-    encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnitId (mkModuleName ":Main") Nothing topBinds_simple NoStubs []
+    encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnit (mkModuleName ":Main") Nothing topBinds_simple NoStubs []
 
     putStrLn "==== STG ===="
 --    putStrLn $ showSDoc dflags $ pprStgTopBindings topBinds_simple
@@ -144,7 +147,7 @@ compileProgram backend noHsMain incPaths libPaths ldOpts clikeFiles stubs tyCons
   liftIO $ do
     let stgFName = "whole_program_unarised.stgbin"
     putStrLn $ "writing " ++ stgFName
-    encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnitId (mkModuleName ":Main") Nothing topBinds NoStubs []
+    encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnit (mkModuleName ":Main") Nothing topBinds NoStubs []
 
   -- construct STG program manually
   -- TODO: specify the following properly
@@ -170,10 +173,14 @@ type CollectedCCs
 
   -- Compile & Link
   dflags <- getSessionDynFlags
-  pkgs <- setSessionDynFlags $
+  setSessionDynFlags $
     (if noHsMain then flip gopt_set Opt_NoHsMain else id) $
-    dflags { hscTarget = target, ghcLink = LinkBinary, libraryPaths = libraryPaths dflags ++ libPaths, ldInputs = ldInputs dflags ++ map Option ldOpts
-      , includePaths = addQuoteInclude (includePaths dflags) incPathsFixed
+    dflags
+      { hscTarget     = target
+      , ghcLink       = LinkBinary
+      , libraryPaths  = libraryPaths dflags ++ libPaths
+      , ldInputs      = ldInputs dflags ++ map Option ldOpts
+      , includePaths  = addQuoteInclude (includePaths dflags) incPathsFixed
       }
     `gopt_set`  Opt_KeepSFiles
     `gopt_set`  Opt_KeepLlvmFiles
@@ -184,12 +191,14 @@ type CollectedCCs
     `gopt_set`  Opt_DoStgLinting
     `gopt_set`  Opt_DoCmmLinting
     `gopt_set`  Opt_SplitSections -- HINT: linker based dead code elimination
-    `gopt_set`  Opt_NoStgbin
-    `gopt_set`  Opt_NoStgapp
+    `gopt_set`  Opt_NoModpak
+    `gopt_set`  Opt_NoGhcStgapp
+  dflags <- getSessionDynFlags
+  let pkgs = preloadUnits (unitState dflags)
 
   let libSet = Set.fromList ["rts"] -- "rts", "ghc-prim-cbits", "base-cbits", "integer-gmp-cbits"]
   dflags <- getSessionDynFlags
-  let ignored_pkgs  = [IgnorePackage p |  p <- map (unpackFS . installedUnitIdFS) pkgs, Set.notMember p libSet]
+  let ignored_pkgs  = [IgnorePackage p |  p <- map (unpackFS . unitIdFS) pkgs, Set.notMember p libSet]
       my_pkgs       = [ExposePackage p (PackageArg p)  (ModRenaming True []) | p <- Set.toList libSet]
   setSessionDynFlags $ dflags { ignorePackageFlags = ignored_pkgs, packageFlags = my_pkgs }
   dflags <- getSessionDynFlags
@@ -216,7 +225,7 @@ newGen :: DynFlags
        -> CollectedCCs
        -> [StgTopBinding]
        -> HpcInfo
-       -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], NameSet)
+       -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], CgInfos)
 newGen dflags hsc_env output_filename this_mod foreign_stubs data_tycons cost_centre_info stg_binds hpc_info = do
   -- TODO: add these to parameters
   let location = ModLocation
@@ -235,7 +244,7 @@ newGen dflags hsc_env output_filename this_mod foreign_stubs data_tycons cost_ce
 
   ------------------  Code output -----------------------
   rawcmms0 <- {-# SCC "cmmToRawCmm" #-}
-            lookupHook cmmToRawCmmHook
+            lookupHook (\x -> cmmToRawCmmHook x)
               (\dflg _ -> cmmToRawCmm dflg) dflags dflags (Just this_mod) cmms
 
   let dump a = do
@@ -244,8 +253,8 @@ newGen dflags hsc_env output_filename this_mod foreign_stubs data_tycons cost_ce
         return a
       rawcmms1 = Stream.mapM dump rawcmms0
 
-  (output_filename, (_stub_h_exists, stub_c_exists), foreign_fps, caf_infos)
+  (output_filename, (stub_h_exists, stub_c_exists), stub_groups, foreign_fps, cg_infos)
       <- {-# SCC "codeOutput" #-}
         codeOutput dflags this_mod output_filename location
         foreign_stubs foreign_files dependencies rawcmms1
-  return (output_filename, stub_c_exists, foreign_fps, caf_infos)
+  return (output_filename, stub_c_exists, foreign_fps, cg_infos)
