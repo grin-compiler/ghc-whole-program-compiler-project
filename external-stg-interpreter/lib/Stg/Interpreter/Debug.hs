@@ -173,14 +173,15 @@ writeCallGraph fname CallGraph{..} = do
 writeCallGraphSummary :: FilePath -> CallGraph -> IO ()
 writeCallGraphSummary fname CallGraph{..} = do
   let cgFrequencyList = StrictMap.elems cgInterClosureCallGraph ++ StrictMap.elems cgIntraClosureCallGraph
-      cgMin   = minimum cgFrequencyList
-      cgMax   = maximum cgFrequencyList
-      cgSum   = sum cgFrequencyList
-      cgSize  = StrictMap.size cgInterClosureCallGraph + StrictMap.size cgIntraClosureCallGraph
-  withFile fname WriteMode $ \h -> do
-    hPutStrLn h $ unlines
-      [ printf "min: %d" cgMin
-      , printf "max: %d" cgMax
-      , printf "sum: %d" cgSum
-      , printf "size (edge count): %d" cgSize
-      ]
+  unless (null cgFrequencyList) $ do
+    let cgMin   = minimum cgFrequencyList
+        cgMax   = maximum cgFrequencyList
+        cgSum   = sum cgFrequencyList
+        cgSize  = StrictMap.size cgInterClosureCallGraph + StrictMap.size cgIntraClosureCallGraph
+    withFile fname WriteMode $ \h -> do
+      hPutStrLn h $ unlines
+        [ printf "min: %d" cgMin
+        , printf "max: %d" cgMax
+        , printf "sum: %d" cgSum
+        , printf "size (edge count): %d" cgSize
+        ]

@@ -157,8 +157,10 @@ handleBlockedDelayWait = do
       delays      = map snd delaysT
       readFDs     = map snd readFDsT
       writeFDs    = map snd writeFDsT
-      maxFD       = maximum $ readFDs ++ writeFDs
-  if maxDelay == 0 then pure () else do
+      fdList      = readFDs ++ writeFDs
+      maxFD       = maximum fdList
+  -- TODO: detect deadlocks
+  if maxDelay == 0 then pure () else unless (null fdList) $ do
     -- query file descriptors
     (selectResult, errorNo) <- liftIO $ waitForFDs (V.fromList readFDs) (V.fromList writeFDs) maxFD
     when (selectResult < 0) $ error $ "select error, errno: " ++ show errorNo
