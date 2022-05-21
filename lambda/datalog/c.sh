@@ -2,4 +2,4 @@
 
 set -x -e
 
-souffle -c -j6 -o lambda-cfa main.dl
+souffle -c -j`nproc --all` -o lambda-cfa main.dl
