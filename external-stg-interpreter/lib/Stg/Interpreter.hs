@@ -540,11 +540,7 @@ evalExpr localEnv = \case
             mapM (evalArg localEnv) [arg0, arg1, StgLitArg LitNullAddr, arg3, arg4, arg5]
       _ -> mapM (evalArg localEnv) l
     evalFCallOp evalOnNewThread foreignCall args t tc
-{-
-  StgOpApp (StgPrimCallOp (PrimCall "stg_getThreadAllocationCounterzh" _)) _args t _tc -> do
-    i <- gets ssNextHeapAddr
-    pure [IntAtom (-i)]
--}
+
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
     markPrimCall primCall
     args <- mapM (evalArg localEnv) l
