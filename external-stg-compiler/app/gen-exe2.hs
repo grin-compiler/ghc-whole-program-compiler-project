@@ -54,20 +54,21 @@ main = do
   -}
   -- HINT: `readModpakS` reads from zip files, so it works for .fullpak also
   ghcstgappContent <- readModpakS fullpakPath "app.ghc_stgapp" BS8.unpack
+  let getAppInfoFromString = undefined :: String -> IO StgAppInfo
   StgAppInfo{..} <- getAppInfoFromString ghcstgappContent
 
-  putStrLn $ unlines $ "appIncludePaths:" : appIncludePaths
-  putStrLn $ unlines $ "appLibPaths:" : appLibPaths
-  putStrLn $ unlines $ "appLdOptions:" : appLdOptions
+  putStrLn $ unlines $ "appIncludePaths:" : _appIncludePaths
+  putStrLn $ unlines $ "appLibPaths:" : _appLibPaths
+  putStrLn $ unlines $ "appLdOptions:" : _appLdOptions
 
   let cg = NCG
 
-  print $ "appCLikeObjFiles: " ++ show appCLikeObjFiles
-  appCLikeObjFiles' <- forM appCLikeObjFiles $ \fname -> do
+  print $ "appCLikeObjFiles: " ++ show _appCLikeObjFiles
+  appCLikeObjFiles' <- forM _appCLikeObjFiles $ \fname -> do
     o <- BS8.readFile fname
     let newObjName = fname ++ ".o"
     BS8.writeFile newObjName o
     pure newObjName
   print $ "appCLikeObjFiles: " ++ show appCLikeObjFiles'
 
-  compileProgram cg appNoHsMain appIncludePaths appLibPaths appLdOptions (appCLikeObjFiles' ++ oStg) GHC.NoStubs [] []
+  compileProgram cg _appNoHsMain _appIncludePaths _appLibPaths _appLdOptions (appCLikeObjFiles' ++ oStg) GHC.NoStubs [] []
