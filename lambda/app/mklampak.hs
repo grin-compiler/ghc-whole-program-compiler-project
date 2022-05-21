@@ -74,6 +74,9 @@ main = do
         unless (null cgMessages) $ do
           addZstdEntry (modName </> "messages.info") . BS8.pack $ unlines cgMessages
 
+        unless (null cgWarnings) $ do
+          addZstdEntry (modName </> "warnings.info") . BS8.pack $ unlines cgWarnings
+
         unless (null cgErrors) $ do
           addZstdEntry (modName </> "errors.info") . BS8.pack $ unlines cgErrors
 
@@ -91,7 +94,7 @@ main = do
         exportDatalogFacts tmpDir modName prg
 
         -- write out data
-        when (idx `mod` 50 == 0) commit
+        --when (idx `mod` 50 == 0) commit
 
 addZstdEntry :: FilePath -> BS8.ByteString -> ZipArchive ()
 addZstdEntry path content = do

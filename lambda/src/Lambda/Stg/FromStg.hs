@@ -25,6 +25,7 @@ import qualified Text.PrettyPrint.ANSI.Leijen as P
 
 -- Lambda
 import Lambda.Syntax
+import Lambda.Pretty
 import Lambda.Util
 import Lambda.Name
 
@@ -52,6 +53,7 @@ data Env
 
   -- logging
   , errors        :: [String]
+  , warnings      :: [String]
   , messages      :: [String]
 
   -- current module info
@@ -78,6 +80,7 @@ emptyEnv = Env
   , nameSet       = mempty
   , conGroupMap   = mempty
   , errors        = mempty
+  , warnings      = mempty
   , messages      = mempty
   , thisUnitId    = ""
   , thisModule    = ""
@@ -237,7 +240,7 @@ defName b = do
 -- rep type conversion
 
 isUnboxedTuple :: BS8.ByteString -> Bool
-isUnboxedTuple "ghc-prim_GHC.Prim.Unit#" = True
+isUnboxedTuple "ghc-prim_GHC.Prim.Solo#" = True
 isUnboxedTuple name = BS8.isPrefixOf "ghc-prim_GHC.Prim.(#" name
 
 convertType :: C.Type -> RepType
@@ -293,6 +296,11 @@ showArgType = \case
   C.StgLitArg l -> show $ getLitType l
   C.StgVarArg b -> show $ C.binderType b
 
+showArgHSType :: C.Arg -> String
+showArgHSType = \case
+  C.StgLitArg l -> show $ getLitType l
+  C.StgVarArg b -> BS8.unpack $ C.binderTypeSig b
+
 ffiArgType :: C.Arg -> MaybeT CG Ty
 ffiArgType = \case
   C.StgLitArg l -> TySimple <$> lift (deriveNewQualifiedName "t") <*> pure (getLitType l)
@@ -320,6 +328,21 @@ ffiArgType = \case
           n0 <- lift (deriveNewQualifiedName "t")
           pure $ TyCon n0 "ThreadId#" []
 
+        ["BigNat#"] -> do
+          n0 <- lift (deriveNewQualifiedName "t")
+          pure $ TyCon n0 "BigNat#" []
+
+        -- FIXME: why are these type synonyms not removed?
+        ["MutableWordArray#", varA] -> do
+          n0 <- lift (deriveNewQualifiedName "t")
+          n1 <- lift (deriveNewQualifiedName "t")
+          pure $ TyCon n0 "MutableWordArray#" [TyCon n1 (cvtName varA) []]
+
+        ["WordArray#"] -> do
+          n0 <- lift (deriveNewQualifiedName "t")
+          pure $ TyCon n0 "WordArray#" []
+
+
         _ -> fail ""
 
       C.SingleValue t -> do
@@ -334,6 +357,13 @@ ffiArgType = \case
           pure $ TyCon n0 name []
 
       _ -> fail ""
+{-
+      "ghc-prim_GHC.Prim.void#"           -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.realWorld#"      -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.coercionToken#"  -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.proxy#"          -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.(##)"            -> pure (SO_Builtin, Void)
+-}
 
 ffiRetType :: C.Type -> MaybeT CG Ty
 ffiRetType = \case
@@ -351,7 +381,7 @@ mkUnboxedTuple args = do
   n0 <- deriveNewQualifiedName "t"
   pure $ case length args of
     0 -> TyCon n0 "ghc-prim_GHC.Prim.(##)" []
-    1 -> TyCon n0 "ghc-prim_GHC.Prim.Unit#" args
+    1 -> TyCon n0 "ghc-prim_GHC.Prim.Solo#" args
     n -> TyCon n0 (packName $ "ghc-prim_GHC.Prim.(#" ++ replicate (max 0 $ n-1) ',' ++ "#)") args
 
 -- literal conversion
@@ -539,6 +569,11 @@ reportError msg = do
   modify' $ \env@Env{..} -> env {errors = msg : errors}
   liftIO . P.putDoc $ P.dullred (P.text msg) P.<+> P.hardline
 
+reportWarning :: String -> CG ()
+reportWarning msg = do
+  modify' $ \env@Env{..} -> env {warnings = msg : warnings}
+  liftIO . P.putDoc $ P.dullgreen (P.text msg) P.<+> P.hardline
+
 reportMessage :: String -> CG ()
 reportMessage msg = do
   modify' $ \env@Env{..} -> env {messages = msg : messages}
@@ -572,6 +607,7 @@ visitOpApp resultName op args ty mtc = do
           emitCmd $ S (resultName, resultRepType, App name args2)
 
     C.StgPrimCallOp p@(C.PrimCall labelName uid) -> case ffiTys of
+      -- TODO: allow any argument type for prim calls, they are staying in the managed RTS area
       Just (retTy, argsTy) -> do
         let name = mkPackageQualifiedName (BS8.unpack $ C.getUnitId uid) "" (BS8.unpack labelName)
         addExternal External
@@ -585,20 +621,28 @@ visitOpApp resultName op args ty mtc = do
         emitCmd $ S (resultName, resultRepType, App name args2)
 
       _ -> do
-        let name    = BS8.unpack labelName
-            argsTy  = map showArgType args
-            retTy   = show ty
-            errMsg  = "Unsupported foreign primitive type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
-            errLit  = Lit . LError . BS8.pack $ errMsg
+        let name      = BS8.unpack labelName
+            argsTy    = map showArgType args
+            argsHSTy  = map showArgHSType args
+            retTy     = show ty
+            errMsg    = unlines
+                          [ "Unsupported foreign primitive type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
+                          , "Unsupported foreign primitive type: " ++ name ++ " :: " ++ intercalate " -> " (argsHSTy ++ [retTy])
+                          ]
+            errLit    = Lit . LError . BS8.pack $ errMsg
         reportError errMsg
         emitCmd $ S (resultName, resultRepType, errLit)
 
     C.StgFCallOp f@C.ForeignCall{..} -> case foreignCTarget of
       C.DynamicTarget -> do
-        let (fnTy:argsTy) = map showArgType args
-            retTy         = show ty
-            errMsg        = "DynamicTarget is not supported: (" ++ fnTy ++ ") :: " ++ intercalate " -> " (argsTy ++ [retTy])
-            errLit        =  Lit . LError . BS8.pack $ errMsg
+        let (fnTy:argsTy)     = map showArgType args
+            (fnHSTy:argsHSTy) = map showArgHSType args
+            retTy             = show ty
+            errMsg            = unlines
+                                  [ "DynamicTarget is not supported: (" ++ fnTy ++ ") :: " ++ intercalate " -> " (argsTy ++ [retTy])
+                                  , "DynamicTarget is not supported: (" ++ fnHSTy ++ ") :: " ++ intercalate " -> " (argsHSTy ++ [retTy])
+                                  ]
+            errLit            =  Lit . LError . BS8.pack $ errMsg
         reportError errMsg
         emitCmd $ S (resultName, resultRepType, errLit)
 
@@ -616,11 +660,15 @@ visitOpApp resultName op args ty mtc = do
           emitCmd $ S (resultName, resultRepType, App name args2)
 
         _ -> do
-          let name    = BS8.unpack labelName
-              argsTy  = map showArgType args
-              retTy   = show ty
-              errMsg  = "Unsupported foreign function type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
-              errLit  = Lit . LError . BS8.pack $ errMsg
+          let name      = BS8.unpack labelName
+              argsTy    = map showArgType args
+              argsHSTy  = map showArgHSType args
+              retTy     = show ty
+              errMsg    = unlines
+                            [ "Unsupported foreign function type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
+                            , "Unsupported foreign function type: " ++ name ++ " :: " ++ intercalate " -> " (argsHSTy ++ [retTy])
+                            ]
+              errLit    = Lit . LError . BS8.pack $ errMsg
           reportError errMsg
           emitCmd $ S (resultName, resultRepType, errLit)
 
@@ -649,7 +697,7 @@ visitExpr mname expr = case expr of
       _ | C.JoinId x <- C.binderDetails var
         -> do
           unless (x == 0) $ do
-            reportError $ "join-id var arity error, expected 0, got: " ++ show x ++ " id: " ++ show var
+            reportWarning $ "join-id var arity error, expected 0, got: " ++ show x ++ " id: " ++ show var
           -- HINT: call join id
           emitCmd $ S (name, t, App n [])
 
@@ -709,7 +757,13 @@ visitExpr mname expr = case expr of
           visitAlt altName alt
         let (altResultRepTypes, alts2) = unzip lamAlts
         name <- genResultName mname
-        emitCmd $ S (name, joinRepTypes ("case scrut: " ++ show (P.pretty scrutResult)) altResultRepTypes, Case scrutName alts2)
+        ty <- case joinRepTypes ("case scrut: " ++ show (PP scrutResult)) altResultRepTypes of
+          Right ty  -> pure ty
+          Left err  -> do
+            reportWarning err
+            pure Auto
+        emitCmd $ S (name, ty, Case scrutName alts2)
+
 
   ---------------------------
   -- IMPORTANT: let binder is a Con or Closure, so it does not affect the current bind chain!!!!!
@@ -773,14 +827,14 @@ visitAlt altName (C.Alt altCon argIds body) = do
     (rt, body2) <- closeBindChain
     pure (rt, Alt altName cpat body2)
 
-joinRepTypes :: String -> [RepType] -> RepType
-joinRepTypes msg = foldr1 f where
-  f (SingleValue LiftedRep) (SingleValue UnliftedRep) = SingleValue LiftedRep
-  f (SingleValue UnliftedRep) (SingleValue LiftedRep) = SingleValue LiftedRep
+joinRepTypes :: String -> [RepType] -> Either String RepType
+joinRepTypes msg = foldM f Auto where
+  f (SingleValue LiftedRep) (SingleValue UnliftedRep) = pure $ SingleValue LiftedRep
+  f (SingleValue UnliftedRep) (SingleValue LiftedRep) = pure $ SingleValue LiftedRep
   f (SingleValue a) (UnboxedTuple [b])                = f (SingleValue a) (SingleValue b) -- Q: why do we need this?
   f (UnboxedTuple [a]) (SingleValue b)                = f (SingleValue a) (SingleValue b) -- Q: why do we need this?
-  f (UnboxedTuple []) (UnboxedTuple [VoidRep])        = UnboxedTuple []
-  f (UnboxedTuple [VoidRep]) (UnboxedTuple [])        = UnboxedTuple []
+  f (UnboxedTuple []) (UnboxedTuple [VoidRep])        = pure $ UnboxedTuple []
+  f (UnboxedTuple [VoidRep]) (UnboxedTuple [])        = pure $ UnboxedTuple []
 {-
   f (UnboxedTuple a) (UnboxedTuple b)
     | fa <- filter (/=VoidRep) a
@@ -788,11 +842,11 @@ joinRepTypes msg = foldr1 f where
     , fa == fb
     = UnboxedTuple fa
 -}
-  f Auto b = b
-  f a Auto = a
+  f Auto b = pure b
+  f a Auto = pure a
   f a b
-    | a == b    = a
-    | otherwise = error $ "can not join RepType: " ++ show (a, b) ++ "\n" ++ msg
+    | a == b    = pure a
+    | otherwise = Left $ "can not join RepType: " ++ show (PP a, PP b) ++ "\n" ++ msg
 
 visitRhs :: C.Rhs -> CG (RepType, SimpleExp)
 visitRhs = \case
@@ -902,6 +956,7 @@ codegenLambda mod = do
         }
       cgStat = CGStat
         { cgMessages  = messages
+        , cgWarnings  = warnings
         , cgErrors    = errors
         , cgNameMap   = codeNameMap
         }
@@ -910,6 +965,7 @@ codegenLambda mod = do
 data CGStat
   = CGStat
   { cgMessages  :: [String]
+  , cgWarnings  :: [String]
   , cgErrors    :: [String]
   , cgNameMap   :: [String]
   }
