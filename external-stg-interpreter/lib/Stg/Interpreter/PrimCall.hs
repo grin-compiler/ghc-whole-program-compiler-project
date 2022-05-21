@@ -6,6 +6,7 @@ import Foreign
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+import Stg.Interpreter.PrimOp.Exceptions
 
 pattern WordV i   = WordAtom i
 pattern FloatV f  = FloatAtom f
@@ -20,6 +21,27 @@ pattern DoubleV d = DoubleAtom d
 evalPrimCallOp :: PrimCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
   case primCallTarget of
+  -- stg_raiseDivZZerozh :: State# RealWorld -> (# State# RealWorld, Void# #)
+    "stg_raiseDivZZerozh"
+      | [Void] <- args
+      -> do
+        Rts{..} <- gets ssRtsSupport
+        raiseEx rtsDivZeroException
+
+  -- stg_raiseUnderflowzh :: State# RealWorld -> (# State# RealWorld, Void# #)
+    "stg_raiseUnderflowzh"
+      | [Void] <- args
+      -> do
+        Rts{..} <- gets ssRtsSupport
+        raiseEx rtsUnderflowException
+
+  -- stg_raiseOverflowzh :: State# RealWorld -> (# State# RealWorld, Void# #)
+    "stg_raiseOverflowzh"
+      | [Void] <- args
+      -> do
+        Rts{..} <- gets ssRtsSupport
+        raiseEx rtsOverflowException
+
   -- stg_getThreadAllocationCounterzh :: State# RealWorld -> (# State# RealWorld, INT64 #)
     "stg_getThreadAllocationCounterzh"
       | [Void] <- args
