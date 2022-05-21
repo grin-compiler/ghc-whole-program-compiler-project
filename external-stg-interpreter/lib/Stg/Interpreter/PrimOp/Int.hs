@@ -120,7 +120,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "<=#", [IntV a, IntV b]) -> pure [IntV $ if a <= b then 1 else 0]
 
   -- chr# :: Int# -> Char#
-  ( "chr#",                [IntV a]) -> pure [CharV . chr $ fromIntegral a] -- HINT: noop ; same bit level representation
+  ( "chr#",                [IntV (I# a)]) -> pure [CharV (C# (chr# a))] -- HINT: noop ; same bit level representation
 
   -- int2Word# :: Int# -> Word#
   ( "int2Word#",           [IntV a]) -> pure [WordV $ fromIntegral a] -- HINT: noop ; same bit level representation
