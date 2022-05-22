@@ -106,7 +106,7 @@ data Lit
 
 evalLiteral :: HasCallStack => Lit -> M Atom
 evalLiteral = \case
-  LitLabel "RtsFlags" spec -> pure $ PtrAtom RawPtr nullPtr
+  LitLabel "RtsFlags" spec -> pure $ PtrAtom RawPtr nullPtr -- TODO: needs proper implementation
   LitLabel name spec  -> getFFILabelPtrAtom name spec
   LitString str       -> getCStringConstantPtrAtom str
   LitFloat f    -> pure . FloatAtom $ realToFrac f
@@ -347,7 +347,6 @@ evalOnThread isMainThread setupAction = do
 
 evalStackMachine :: [Atom] -> M [Atom]
 evalStackMachine result = do
-  tid <- gets ssCurrentThreadId
   stackPop >>= \case
     Nothing         -> pure result
     Just stackCont  -> evalStackContinuation result stackCont >>= evalStackMachine
@@ -553,11 +552,10 @@ matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [Atom]
 matchFirstLit resultId localEnv a [Alt AltDefault _ rhs] = do
   setProgramPoint $ PP_Alt resultId AltDefault
   evalExpr localEnv rhs
-matchFirstLit resultId localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (atom, map altCon alts)) of
+matchFirstLit resultId localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, map altCon alts)) of
   Alt{..} -> do
     setProgramPoint $ PP_Alt resultId altCon
     evalExpr localEnv altRHS
-matchFirstLit resultId localEnv l alts = error $ "no lit match" ++ show (resultId, localEnv, l, map altCon alts)
 
 matchLit :: HasCallStack => Atom -> AltCon -> Bool
 matchLit a = \case
@@ -566,7 +564,7 @@ matchLit a = \case
   AltDefault    -> True
 
 convertAltLit :: Lit -> Atom
-convertAltLit = \case
+convertAltLit lit = case lit of
   LitFloat f                -> FloatAtom $ realToFrac f
   LitDouble d               -> DoubleAtom $ realToFrac d
   LitNullAddr               -> PtrAtom RawPtr nullPtr
@@ -574,6 +572,8 @@ convertAltLit = \case
   LitNumber LitNumInt64 n   -> IntAtom $ fromIntegral n
   LitNumber LitNumWord n    -> WordAtom $ fromIntegral n
   LitNumber LitNumWord64 n  -> WordAtom $ fromIntegral n
+  LitLabel{}                -> error $ "invalid alt pattern: " ++ show lit
+  LitString{}               -> error $ "invalid alt pattern: " ++ show lit
   l -> Literal l
 
 matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
