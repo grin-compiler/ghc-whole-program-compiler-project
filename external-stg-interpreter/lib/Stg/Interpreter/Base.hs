@@ -559,7 +559,10 @@ stackPush sc = do
 stackPop :: M (Maybe StackContinuation)
 stackPop = do
   let tailFun ts@ThreadState{..} = ts {tsStack = drop 1 tsStack}
-  Just ts@ThreadState{..} <- state $ \s@StgState{..} -> (IntMap.lookup ssCurrentThreadId ssThreads, s {ssThreads = IntMap.adjust tailFun ssCurrentThreadId ssThreads})
+  Just ts@ThreadState{..} <- state $ \s@StgState{..} ->
+    ( IntMap.lookup ssCurrentThreadId ssThreads
+    , s {ssThreads = IntMap.adjust tailFun ssCurrentThreadId ssThreads}
+    )
   pure $ case tsStack of
     []    -> Nothing
     c : _ -> Just c

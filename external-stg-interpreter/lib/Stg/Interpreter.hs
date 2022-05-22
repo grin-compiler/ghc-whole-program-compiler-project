@@ -106,7 +106,6 @@ data Lit
 
 evalLiteral :: HasCallStack => Lit -> M Atom
 evalLiteral = \case
-  LitLabel "RtsFlags" spec -> pure $ PtrAtom RawPtr nullPtr -- TODO: needs proper implementation
   LitLabel name spec  -> getFFILabelPtrAtom name spec
   LitString str       -> getCStringConstantPtrAtom str
   LitFloat f    -> pure . FloatAtom $ realToFrac f
