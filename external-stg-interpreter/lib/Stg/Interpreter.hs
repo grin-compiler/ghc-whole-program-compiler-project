@@ -480,7 +480,7 @@ evalExpr localEnv = \case
       pure [v]
 
     UnboxedTuple []
-      | binderId i == BinderId (Unique '0' 124) -- wired in coercion token
+      | binderUniqueName i == "ghc-prim_GHC.Prim.coercionToken#" -- wired in coercion token ; FIXME: handle wired-in names with a better design
       -> do
         pure []
 
