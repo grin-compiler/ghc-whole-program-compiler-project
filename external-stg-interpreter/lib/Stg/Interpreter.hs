@@ -18,6 +18,7 @@ import Data.Maybe
 import Data.List (partition, isSuffixOf)
 import Data.Set (Set)
 import Data.Map (Map)
+import Data.Foldable (traverse_)
 import qualified Data.Map.Strict as StrictMap
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -279,6 +280,22 @@ assertWHNF [hp@HeapPtr{}] aty res = do
       | otherwise         -> pure ()
     BlackHole{} -> stgErrorM "BlackHole"
 assertWHNF _ _ _ = pure ()
+
+assertWHNFAtom :: HasCallStack => String -> Atom -> M ()
+assertWHNFAtom opkind hp@HeapPtr{} = do
+  o <- readHeap hp
+  case o of
+    Con _ dc args
+      -> pure ()
+    Closure{..}
+      | hoCloMissing == 0
+          -> stgErrorM $ "assertWHNFAtom: Thunk " ++ opkind
+      | otherwise
+          -> pure ()
+    BlackHole{}
+      -> stgErrorM $ "assertWHNFAtom: BlackHole " ++ opkind
+assertWHNFAtom _ _ = pure ()
+
 
 {-
   machine state:
@@ -649,31 +666,42 @@ declareTopBindings mods = do
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
 
-loadAndRunProgram :: HasCallStack => Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> Bool -> IO ()
-loadAndRunProgram switchCWD fullpak_name progArgs dbgChan dbgState tracing showstg = do
+data Context = Context {
+    baseFullPaks :: [FilePath]
+  , libBasePath  :: FilePath
+  }
 
-  mods0 <- case takeExtension fullpak_name of
-    ".fullpak"                          -> do
+loadAndRunProgram :: HasCallStack => Context -> Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> Bool -> IO ()
+loadAndRunProgram ctx switchCWD fullpak_name progArgs dbgChan dbgState tracing showstg = do
+
+  -- baseMods <- getFullpakModules "./data/ghc-rts-base.fullpak"
+  -- idrisHaskellInterfaceMods <- getFullpakModules "./data/idris-haskell-interface.fullpak"
+  mods0 <- traverse getFullpakModules (baseFullPaks ctx)
+
+  mods1 <- case takeExtension fullpak_name of
+    ".fullpak" -> do
         mods <- getFullpakModules fullpak_name
         when showstg $ do
           putStrLn "Printing fullpak modules."
           print $ plain $ pretty mods
         pure mods
-    ".json"                             -> do
+    ".json" -> do
       -- TODO: Add CLI arg to refer fullpaks to be loaded.
-      baseMods <- getFullpakModules "./data/ghc-rts-base.fullpak"
-      idrisHaskellInterfaceMods <- getFullpakModules "./data/idris-haskell-interface.fullpak"
-      jsonMods <- getJSONModules fullpak_name
+      mods <- getJSONModules fullpak_name
       when showstg $ do
         putStrLn "Printing JSON defined modules."
-        print $ plain $ pretty jsonMods
-      pure $ concat [baseMods, idrisHaskellInterfaceMods, jsonMods]
+        print $ plain $ pretty mods
+      pure mods -- $ concat [baseMods, idrisHaskellInterfaceMods, jsonMods]
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
-  runProgram switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing
+  let mods = concat $ mods0 ++ [mods1]
+  runProgram ctx switchCWD fullpak_name mods progArgs dbgChan dbgState tracing
 
-runProgram :: HasCallStack => Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
+runProgram
+  :: HasCallStack
+  => Context -> Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool
+  -> IO ()
+runProgram ctx switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
   let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension progFilePath
 
@@ -727,7 +755,7 @@ runProgram switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
   (gcThreadId, gcIn', gcOut') <- GC.init
   let gcIn  = PrintableMVar gcIn'
       gcOut = PrintableMVar gcOut'
-  dl <- dlopen "./libHSbase-4.14.0.0.cbits.so" [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
+  dl <- dlopen (libBasePath ctx) [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
   let freeResources = do
         dlclose dl
         killThread gcThreadId

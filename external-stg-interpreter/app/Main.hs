@@ -3,6 +3,7 @@
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 
 import Options.Applicative
+import Data.Maybe (fromMaybe)
 import Data.Semigroup ((<>))
 
 import Stg.Interpreter.Debugger.UI
@@ -16,6 +17,8 @@ data StgIOpts
   , doTracing   :: Bool
   , showSTG     :: Bool
   , dbgScript   :: Maybe String
+  , basePaks    :: [String]
+  , hsBaseLib   :: Maybe String
   , appArgs1    :: String
   , appArgs2    :: [String]
   , appPath     :: FilePath
@@ -29,6 +32,8 @@ stgi = StgIOpts
   <*> switch (short 't' <> long "trace" <> help "Enable tracing")
   <*> switch (short 's' <> long "stg" <> help "Show loaded STG definitions")
   <*> (optional $ strOption (long "debug-script" <> metavar "FILENAME" <> help "Run debug commands from file"))
+  <*> many (strOption (short 'p' <> help "Dependency .fullpaks to be loaded"))
+  <*> (optional $ strOption (long "libhsbase-path" <> help "Path of libHSbase-4.14.0.0.cbits.so"))
   <*> strOption (long "args" <> value "" <> help "Space separated APPARGS")
   <*> many (strOption (short 'a' <> help "Single APPARG"))
   <*> argument str (metavar "APPFILE" <> help "The .ghc_stgapp or .fullpak file to run")
@@ -45,6 +50,14 @@ main = do
   (dbgOutI, dbgOutO) <- Unagi.newChan 100
   let dbgChan = DebuggerChan (dbgCmdO, dbgOutI)
 
+  let ctx = Context
+              { baseFullPaks = basePaks
+                  -- [ "./data/ghc-rts-base.fullpak"
+                  -- , "./data/idris-haskell-interface.fullpak"
+                  -- ]
+              , libBasePath = fromMaybe "./libHSbase-4.14.0.0.cbits.so" hsBaseLib
+              }
+
   case runDebugger of
-    True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript
-    False -> loadAndRunProgram switchCWD appPath appArgs dbgChan DbgRunProgram doTracing showSTG
+    True  -> debugProgram ctx switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript
+    False -> loadAndRunProgram ctx switchCWD appPath appArgs dbgChan DbgRunProgram doTracing showSTG
