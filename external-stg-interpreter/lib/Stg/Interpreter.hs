@@ -42,11 +42,7 @@ import Stg.Interpreter.Base
 import Stg.Interpreter.PrimCall
 import Stg.Interpreter.FFI
 import Stg.Interpreter.Rts
-import Stg.Interpreter.Debug
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
-import qualified Stg.Interpreter.Debugger        as Debugger
-import qualified Stg.Interpreter.Debugger.Region as Debugger
-import qualified Stg.Interpreter.GC as GC
 
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
 import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
@@ -130,28 +126,6 @@ evalArg localEnv = \case
     }
 -}
 
-stackPushRestoreProgramPoint :: Int -> M ()
-stackPushRestoreProgramPoint argCount = do
-  progPoint <- gets ssCurrentProgramPoint
-  currentClosure <- gets ssCurrentClosure
-  stackPush $ DebugFrame (RestoreProgramPoint currentClosure $ PP_Apply argCount progPoint)
-
-buildCallGraph :: StaticOrigin -> Id -> M ()
-buildCallGraph so hoName = do
-  progPoint <- gets ssCurrentProgramPoint
-  addInterClosureCallGraphEdge so progPoint $ PP_Closure hoName
-  setProgramPoint $ PP_Closure hoName
-  -- connect call sites to parent closure
-  currentClosure <- gets ssCurrentClosure
-  case progPoint of
-    PP_Global -> pure ()
-    _ -> case currentClosure of
-      Just cloId  -> addIntraClosureCallGraphEdge (PP_Closure cloId) so progPoint
-      _           -> pure ()
-  -- write whole program path entry
-  gets ssTracingState >>= \case
-    NoTracing     -> pure ()
-    DoTracing{..} -> liftIO $ hPutStrLn thWholeProgramPath $ maybe "<global>" show currentClosure ++ "\t" ++ show progPoint ++ "\t" ++ show hoName
 
 builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
 builtinStgEval so a@HeapPtr{} = do
@@ -178,21 +152,6 @@ builtinStgEval so a@HeapPtr{} = do
         let StgRhsClosure _ uf params e = hoCloBody
             HeapPtr l = a
             extendedEnv = addManyBindersToEnv SO_CloArg params hoCloArgs hoEnv
-
-        modify' $ \s@StgState{..} -> s {ssClosureCallCounter = succ ssClosureCallCounter}
-        markExecuted l
-        markExecutedId hoName
-
-        -- build call graph
-        buildCallGraph so hoName
-
-        modify' $ \s -> s {ssCurrentClosure = Just hoName, ssCurrentClosureEnv = extendedEnv, ssCurrentClosureAddr = l}
-        -- check breakpoints and region entering
-        let closureName = binderUniqueName $ unId hoName
-        markClosure closureName -- HINT: this list can be deleted by a debugger command, so this is not the same as `markExecutedId`
-        Debugger.checkBreakpoint closureName
-        Debugger.checkRegion closureName
-        GC.checkGC [a] -- HINT: add local env as GC root
 
         -- TODO: env or free var handling
         case uf of
@@ -234,7 +193,6 @@ builtinStgApply so a@HeapPtr{} args = do
       -> do
         let (satArgs, remArgs) = splitAt hoCloMissing args
         stackPush (Apply remArgs)
-        stackPushRestoreProgramPoint $ length remArgs -- HINT: for call-graph builder ; use the current closure as call origin
         builtinStgApply so a satArgs
 
       -- saturation
@@ -364,8 +322,7 @@ evalStackContinuation result = \case
       pure result
 
   -- HINT: STG IR uses 'case' expressions to chain instructions with strict evaluation
-  CaseOf curClosureAddr curClosure localEnv resultBinder altType alts -> do
-    modify' $ \s -> s {ssCurrentClosure = Just curClosure, ssCurrentClosureAddr = curClosureAddr}
+  CaseOf localEnv resultBinder altType alts -> do
     assertWHNF result altType resultBinder
     let resultId = (Id resultBinder)
     case altType of
@@ -393,7 +350,6 @@ evalStackContinuation result = \case
         let [Alt{..}] = alts
             extendedEnv = addManyBindersToEnv SO_Scrut altBinders result localEnv
 
-        setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
 
       PolyAlt -> do
@@ -402,7 +358,6 @@ evalStackContinuation result = \case
             extendedEnv = addBinderToEnv SO_Scrut resultBinder v $                 -- HINT: bind the result
                           addManyBindersToEnv SO_AltArg altBinders result localEnv  -- HINT: bind alt params
 
-        setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
 
   RestoreExMask b i -> do
@@ -418,18 +373,7 @@ evalStackContinuation result = \case
   -- HINT: dataToTag# has an eval call in the middle, that's why we need this continuation, it is the post-returning part of the op implementation
   DataToTagOp -> PrimTagToEnum.dataToTagOp result
 
-  DebugFrame df -> evalDebugFrame result df
-
   x -> error $ "unsupported continuation: " ++ show x ++ ", result: " ++ show result
-
-evalDebugFrame :: [Atom] -> DebugFrame -> M [Atom]
-evalDebugFrame result = \case
-  RestoreProgramPoint currentClosure progPoint -> do
-    modify' $ \s -> s {ssCurrentClosure = currentClosure}
-    setProgramPoint progPoint
-    pure result
-
-  x -> error $ "unsupported debug-frame: " ++ show x ++ ", result: " ++ show result
 
 evalExpr :: HasCallStack => Env -> Expr -> M [Atom]
 evalExpr localEnv = \case
@@ -507,29 +451,17 @@ evalExpr localEnv = \case
     r -> stgErrorM $ "unsupported app rep: " ++ show r -- unboxed: invalid
 
   StgCase e scrutineeResult altType alts -> do
-    Just curClosure <- gets ssCurrentClosure
-    curClosureAddr <- gets ssCurrentClosureAddr
-    stackPush (CaseOf curClosureAddr curClosure localEnv scrutineeResult altType alts)
-    setProgramPoint . PP_Scrutinee $ Id scrutineeResult
+    stackPush (CaseOf localEnv scrutineeResult altType alts)
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
-    Debugger.checkBreakpoint op
-    Debugger.checkRegion op
-    markPrimOp op
+    --Debugger.checkBreakpoint op
+    --Debugger.checkRegion op
     args <- mapM (evalArg localEnv) l
     tid <- gets ssCurrentThreadId
     evalPrimOp op args t tc
 
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
-    -- check foreign target region and breakpoint
-    case foreignCTarget foreignCall of
-      StaticTarget _ targetName _ _ -> do
-        Debugger.checkBreakpoint targetName
-        Debugger.checkRegion targetName
-      _ -> pure ()
-
-    markFFI foreignCall
     args <- case foreignCTarget foreignCall of
       StaticTarget _ "createAdjustor" _ _
         | [arg0, arg1, arg2, arg3, arg4, arg5] <- l
@@ -540,7 +472,6 @@ evalExpr localEnv = \case
     evalFCallOp evalOnNewThread foreignCall args t tc
 
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
-    markPrimCall primCall
     args <- mapM (evalArg localEnv) l
     evalPrimCallOp primCall args t tc
 
@@ -549,11 +480,9 @@ evalExpr localEnv = \case
 
 matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [Atom]
 matchFirstLit resultId localEnv a [Alt AltDefault _ rhs] = do
-  setProgramPoint $ PP_Alt resultId AltDefault
   evalExpr localEnv rhs
 matchFirstLit resultId localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, map altCon alts)) of
   Alt{..} -> do
-    setProgramPoint $ PP_Alt resultId altCon
     evalExpr localEnv altRHS
 
 matchLit :: HasCallStack => Atom -> AltCon -> Bool
@@ -580,7 +509,6 @@ matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- al
   []  -> stgErrorM $ "no matching alts for: " ++ show resultId
   Alt{..} : _ -> do
     let extendedEnv = addManyBindersToEnv SO_AltArg altBinders args localEnv
-    setProgramPoint $ PP_Alt resultId altCon
     evalExpr extendedEnv altRHS
 
 matchCon :: HasCallStack => DataCon -> AltCon -> Bool
@@ -594,8 +522,6 @@ declareBinding isLetNoEscape localEnv = \case
   StgNonRec b rhs -> do
     addr <- freshHeapAddress
     storeRhs isLetNoEscape localEnv b addr rhs
-    when isLetNoEscape $ do
-      markLNE [addr]
     pure $ addBinderToEnv SO_Let b (HeapPtr addr) localEnv
 
   StgRec l -> do
@@ -605,8 +531,6 @@ declareBinding isLetNoEscape localEnv = \case
     let extendedEnv = addZippedBindersToEnv SO_Let newEnvItems localEnv
     forM_ (zip ls l) $ \(addr, (b, rhs)) -> do
       storeRhs isLetNoEscape extendedEnv b addr rhs
-    when isLetNoEscape $ do
-      markLNE ls
     pure extendedEnv
 
 storeRhs :: HasCallStack => Bool -> Env -> Binder -> Addr -> Rhs -> M ()
@@ -649,18 +573,18 @@ declareTopBindings mods = do
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
 
-loadAndRunProgram :: HasCallStack => Bool -> Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-loadAndRunProgram isQuiet switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
+loadAndRunProgram :: HasCallStack => Bool -> String -> [String] -> IO ()
+loadAndRunProgram switchCWD fullpak_name progArgs = do
 
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
     ".json"                             -> getJSONModules fullpak_name
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
-  runProgram isQuiet switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing
+  runProgram switchCWD fullpak_name mods0 progArgs
 
-runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
+runProgram :: HasCallStack => Bool -> String -> [Module] -> [String] -> IO ()
+runProgram switchCWD progFilePath mods0 progArgs = do
   let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension progFilePath
 
@@ -677,8 +601,8 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
               []        -> error "main_:Main.main not found"
               _         -> error "multiple main_:Main.main have found"
         limit <- gets ssNextHeapAddr
-        modify' $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
-        modify' $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
+        --modify' $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
+        --modify' $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
 
         -- TODO: check how it is done in the native RTS: call hs_main
         mainAtom <- lookupEnv mempty rootMain
@@ -696,50 +620,25 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
         --showDebug evalOnNewThread
         -- TODO: do everything that 'hs_exit_' does
 
-        exportCallGraph
-
+        --exportCallGraph
+        {-
         -- HINT: start debugger REPL in debug mode
         when (dbgState == DbgStepByStep) $ do
           Debugger.processCommandsUntilExit
+        -}
 
-  let (dbgCmdO, _) = getDebuggerChan dbgChan
-  nextDbgCmd <- NextDebugCommand <$> Unagi.tryReadChan dbgCmdO
-
-  tracingState <- case tracing of
-    False -> pure NoTracing
-    True  -> do
-      let tracePath = ".extstg-trace" </> takeFileName progName
-      createDirectoryIfMissing True tracePath
-      DoTracing <$> openFile (tracePath </> "originDB.tsv") WriteMode
-                <*> openFile (progName ++ ".whole-program-path.tsv") WriteMode
 
   stateStore <- PrintableMVar <$> newEmptyMVar
-  (gcThreadId, gcIn', gcOut') <- GC.init
-  let gcIn    = PrintableMVar gcIn'
-      gcOut   = PrintableMVar gcOut'
-  dl <- loadCbitsSO isQuiet progFilePath
+
+  dl <- loadCbitsSO False progFilePath
   let freeResources = do
         dlclose dl
-        killThread gcThreadId
-        case tracingState of
-          DoTracing h wpp -> do
-            hClose wpp
-            hClose h
-          _ -> pure ()
+        --killThread gcThreadId
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut)
+    s@StgState{..} <- execStateT run (emptyStgState stateStore dl)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
-    unless isQuiet $ do
-      putStrLn $ "ssHeapStartAddress: " ++ show ssHeapStartAddress
-      putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
-      putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
-      putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
-      putStrLn $ "call graph size: " ++ show (StrictMap.size . cgInterClosureCallGraph $ ssCallGraph)
-    --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
-    --print ssNextHeapAddr
-    --print $ head $ Map.toList ssEnv
     -- TODO: handle :Main.main properly ; currenlty it is in conflict with Main.main
 
 loadCbitsSO :: Bool -> FilePath -> IO DL

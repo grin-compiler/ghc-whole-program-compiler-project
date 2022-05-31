@@ -20,18 +20,8 @@ library
     Stg.Interpreter.FFI
     Stg.Interpreter.PrimCall
     Stg.Interpreter.Rts
-    Stg.Interpreter.Debug
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
-    Stg.Interpreter.Debugger
-    Stg.Interpreter.Debugger.Datalog
-    Stg.Interpreter.Debugger.Internal
-    Stg.Interpreter.Debugger.Region
-    Stg.Interpreter.Debugger.UI
-    Stg.Interpreter.GC
-    Stg.Interpreter.GC.GCRef
-    Stg.Interpreter.GC.LiveDataAnalysis
-    Stg.Interpreter.GC.RetainerAnalysis
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array
@@ -85,19 +75,19 @@ library
                        external-stg
   default-language:    Haskell2010
 
-  include-dirs:         datalog
+--  include-dirs:         datalog
 
 
-  cxx-sources:          datalog/ext-stg-gc.cpp
-  cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
-  if os(darwin)
-    ld-options:           "-Wl,-all_load"
-    extra-libraries:      omp stdc++
-  else
-    ld-options:           "-Wl,-u,__factory_Sf_ext_stg_gc_instance"
-    extra-libraries:      gomp
+--  cxx-sources:          datalog/ext-stg-gc.cpp
+--  cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
+--  if os(darwin)
+--    ld-options:           "-Wl,-all_load"
+--    extra-libraries:      omp stdc++
+--  else
+--    ld-options:           "-Wl,-u,__factory_Sf_ext_stg_gc_instance"
+--    extra-libraries:      gomp
 
-executable ext-stg-interpreter
+executable abs-stgi
   default-language:    Haskell2010
   hs-source-dirs:      app
   main-is:             ExtStgInterpreter.hs
@@ -113,46 +103,46 @@ executable ext-stg-interpreter
 
   ghc-options: -rtsopts -threaded
 
-executable run-stgi-testsuite
-  default-language:    Haskell2010
-  hs-source-dirs:      app
-  main-is:             RunStgiTestsuite.hs
-  build-depends:       base < 5.0,
-                       containers,
-                       filepath,
-                       directory,
-                       bytestring,
-                       ansi-wl-pprint,
-                       timeit,
-                       filemanip,
-                       async-pool,
-                       process
+--executable run-stgi-testsuite
+--  default-language:    Haskell2010
+--  hs-source-dirs:      app
+--  main-is:             RunStgiTestsuite.hs
+--  build-depends:       base < 5.0,
+--                       containers,
+--                       filepath,
+--                       directory,
+--                       bytestring,
+--                       ansi-wl-pprint,
+--                       timeit,
+--                       filemanip,
+--                       async-pool,
+--                       process
 
-  ghc-options: -rtsopts -threaded
+--  ghc-options: -rtsopts -threaded
 
-test-suite primop-test
-  default-language:    Haskell2010
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             Spec.hs
-  default-extensions:  OverloadedStrings
-  build-depends:       base >=4.11
-                     , mtl
-                     , external-stg
-                     , external-stg-interpreter
-                     , hspec
-                     , hspec-core
-                     , hspec-discover
-                     , QuickCheck
+--test-suite primop-test
+--  default-language:    Haskell2010
+--  type:                exitcode-stdio-1.0
+--  hs-source-dirs:      test
+--  main-is:             Spec.hs
+--  default-extensions:  OverloadedStrings
+--  build-depends:       base >=4.11
+--                     , mtl
+--                     , external-stg
+--                     , external-stg-interpreter
+--                     , hspec
+--                     , hspec-core
+--                     , hspec-discover
+--                     , QuickCheck
 
-  other-modules:       PrimOp.Word8Spec
-                       PrimOp.Word16Spec
-                       PrimOp.IntSpec
-                       PrimOp.Int8Spec
-                       PrimOp.Int16Spec
-                       PrimOp.CharSpec
-                       PrimOp.NarrowingsSpec
-                       PrimOp.FloatSpec
-                       PrimOp.DoubleSpec
-                       PrimOp.WordSpec
-                       PrimOp.AddrSpec
+--  other-modules:       PrimOp.Word8Spec
+--                       PrimOp.Word16Spec
+--                       PrimOp.IntSpec
+--                       PrimOp.Int8Spec
+--                       PrimOp.Int16Spec
+--                       PrimOp.CharSpec
+--                       PrimOp.NarrowingsSpec
+--                       PrimOp.FloatSpec
+--                       PrimOp.DoubleSpec
+--                       PrimOp.WordSpec
+--                       PrimOp.AddrSpec

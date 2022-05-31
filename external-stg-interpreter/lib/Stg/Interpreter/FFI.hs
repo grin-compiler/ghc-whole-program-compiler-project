@@ -47,7 +47,6 @@ import Control.Concurrent.MVar
 import Stg.Syntax
 import Stg.GHC.Symbols
 import Stg.Interpreter.Base
-import Stg.Interpreter.Debug
 import Stg.Interpreter.Rts (globalStoreSymbols)
 
 pattern CharV c = Literal (LitChar c)
@@ -256,7 +255,7 @@ getProgArgv(int *argc, char **argv[])
         -> do
           --showDebug evalOnNewThread
           --error $ "shutdownHaskellAndExit exit code:  " ++ show retCode ++ ", fast exit: " ++ show fastExit
-          exportCallGraph
+          --exportCallGraph
           liftIO . exitWith $ case retCode of
             0 -> ExitSuccess
             n -> ExitFailure n

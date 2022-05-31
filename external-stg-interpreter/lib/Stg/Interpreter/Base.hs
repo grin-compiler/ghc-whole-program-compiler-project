@@ -100,16 +100,16 @@ data MVarDescriptor
 
 -- TODO: detect coercions during the evaluation
 data Atom     -- Q: should atom fit into a cpu register? A: yes
-  = HeapPtr       !Addr
-  | Literal       !Lit  -- TODO: remove this
+  = HeapPtr           !Addr
+  | Literal           !Lit  -- TODO: remove this
   | Void
-  | PtrAtom       !PtrOrigin !(Ptr Word8)
-  | IntAtom       !Int
-  | WordAtom      !Word
-  | FloatAtom     !Float
-  | DoubleAtom    !Double
-  | MVar          !Int
-  | MutVar        !Int
+  | PtrAtom           !PtrOrigin !(Ptr Word8)
+  | IntAtom           !Int
+  | WordAtom          !Word
+  | FloatAtom         !Float
+  | DoubleAtom        !Double
+  | MVar              !Int
+  | MutVar            !Int
   | Array             !ArrIdx
   | MutableArray      !ArrIdx
   | SmallArray        !SmallArrIdx
@@ -149,18 +149,13 @@ data HeapObject
   deriving (Show, Eq, Ord)
 
 data StackContinuation
-  = CaseOf  !Int !Id !Env !Binder !AltType ![Alt]  -- closure addr & name (debug) ; pattern match on the result ; carries the closure's local environment
-  | Update  !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
-  | Apply   ![Atom]                       -- apply args on the result heap object
-  | Catch   !Atom !Bool !Bool             -- catch frame ; exception handler, block async exceptions, interruptible
-  | RestoreExMask !Bool !Bool             -- saved: block async exceptions, interruptible
+  = CaseOf        !Env !Binder !AltType ![Alt]  -- pattern match on the result ; carries the closure's local environment
+  | Update        !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
+  | Apply         ![Atom]                       -- apply args on the result heap object
+  | Catch         !Atom !Bool !Bool             -- catch frame ; exception handler, block async exceptions, interruptible
+  | RestoreExMask !Bool !Bool                   -- saved: block async exceptions, interruptible
   | RunScheduler  !ScheduleReason
   | DataToTagOp
-  | DebugFrame    !DebugFrame             -- for debug purposes, it does not required for STG evaluation
-  deriving (Show, Eq, Ord)
-
-data DebugFrame
-  = RestoreProgramPoint !(Maybe Id) !ProgramPoint
   deriving (Show, Eq, Ord)
 
 data ScheduleReason
@@ -181,67 +176,6 @@ newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
 instance Show (PrintableMVar a) where
   show _ = "MVar"
 
-newtype DebuggerChan = DebuggerChan {getDebuggerChan :: (OutChan DebugCommand, InChan DebugOutput)} deriving Eq
-instance Show DebuggerChan where
-  show _ = "DebuggerChan"
-
-newtype NextDebugCommand = NextDebugCommand (Element DebugCommand, IO DebugCommand)
-instance Show NextDebugCommand where
-  show _ = "NextDebugCommand"
-instance Eq NextDebugCommand where
-   _ == _ = True
-instance Ord NextDebugCommand where
-   compare _ _ = EQ
-
-data DebugCommand
-  = CmdListClosures
-  | CmdClearClosureList
-  | CmdCurrentClosure
-  | CmdAddBreakpoint    Name Int
-  | CmdRemoveBreakpoint Name
-  | CmdStep
-  | CmdContinue
-  | CmdPeekHeap         Addr
-  | CmdStop
-  | CmdInternal         String -- HINT: non-reified commands for quick experimentation
-  deriving (Show)
-
-data DebugOutput
-  = DbgOutCurrentClosure  !(Maybe Id) !Addr !Env
-  | DbgOutClosureList     ![Name]
-  | DbgOutThreadReport    !Int !ThreadState !Name !Addr
-  | DbgOutHeapObject      !Addr !HeapObject
-  deriving (Show)
-
-data DebugState
-  = DbgRunProgram
-  | DbgStepByStep
-  deriving (Show, Eq, Ord)
-
-data TracingState
-  = NoTracing
-  | DoTracing
-    { thOriginDB          :: Handle
-    , thWholeProgramPath  :: Handle
-    }
-  deriving (Show)
-
-data CallGraph
-  = CallGraph
-  { cgInterClosureCallGraph :: !(StrictMap.Map (StaticOrigin, ProgramPoint, ProgramPoint) Int)
-  , cgIntraClosureCallGraph :: !(StrictMap.Map (ProgramPoint, StaticOrigin, ProgramPoint) Int)
-  }
-  deriving (Show)
-
-joinCallGraph :: CallGraph -> CallGraph -> CallGraph
-joinCallGraph (CallGraph a1 b1) (CallGraph a2 b2) = CallGraph (StrictMap.unionWith (+) a1 a2) (StrictMap.unionWith (+) b1 b2)
-
-emptyCallGraph :: CallGraph
-emptyCallGraph = CallGraph
-  { cgInterClosureCallGraph = mempty
-  , cgIntraClosureCallGraph = mempty
-  }
-
 type Addr   = Int
 type Heap   = IntMap HeapObject
 type Env    = Map Id (StaticOrigin, Atom)   -- NOTE: must contain only the defined local variables
@@ -261,15 +195,6 @@ data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
-
-  -- GC
-  , ssLastGCAddr          :: !Int
-  , ssGCInput             :: PrintableMVar ([Atom], StgState)
-  , ssGCOutput            :: PrintableMVar RefSet
-  , ssGCIsRunning         :: Bool
-
-  -- let-no-escape support
-  , ssTotalLNECount       :: !Int
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
@@ -319,82 +244,20 @@ data StgState
   -- RTS related
   , ssRtsSupport          :: Rts
 
-  -- debug
-  , ssIsQuiet             :: Bool
-  , ssCurrentClosureEnv   :: Env
-  , ssCurrentClosure      :: Maybe Id
-  , ssCurrentClosureAddr  :: Int
-  , ssExecutedClosures    :: !(Set Int)
-  , ssExecutedClosureIds  :: !(Set Id)
-  , ssExecutedPrimOps     :: !(Set Name)
-  , ssExecutedFFI         :: !(Set ForeignCall)
-  , ssExecutedPrimCalls   :: !(Set PrimCall)
-  , ssHeapStartAddress    :: !Int
-  , ssClosureCallCounter  :: !Int
-
-  -- call graph
-  , ssCallGraph           :: !CallGraph
-  , ssCurrentProgramPoint :: !ProgramPoint
-
-  -- debugger API
-  , ssDebuggerChan        :: DebuggerChan
-  , ssNextDebugCommand    :: NextDebugCommand
-
-  , ssEvaluatedClosures   :: !(Set Name)
-  , ssBreakpoints         :: !(Map Name Int)
-  , ssDebugState          :: DebugState
   , ssStgErrorAction      :: Printable (M ())
-
-  -- region tracker
-  , ssMarkers             :: !(Map Name (Set Region))
-  , ssRegions             :: !(Map Region (Maybe AddressState, CallGraph, [(AddressState, AddressState)]) )
-
-  -- retainer db
-  , ssReferenceMap        :: !(IntMap IntSet)
-  , ssRetainerMap         :: !(IntMap IntSet)
-  , ssGCRootSet           :: !IntSet
-
-  -- tracing
-  , ssTracingState        :: TracingState
-
-  -- origin db
-  , ssOrigin              :: !(IntMap (Id, Int, Int)) -- HINT: closure, closure address, thread id
-
-  -- GC marker
-  , ssGCMarkers           :: ![AddressState]
-
-  -- tracing primops
-  , ssTraceEvents         :: ![(String, AddressState)]
-  , ssTraceMarkers        :: ![(String, AddressState)]
   }
   deriving (Show)
 
 -- for the primop tests
 emptyUndefinedStgState :: StgState
-emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined undefined DbgRunProgram NoTracing undefined undefined
+emptyUndefinedStgState = emptyStgState undefined undefined
 
-emptyStgState :: Bool
-              -> PrintableMVar StgState
+emptyStgState :: PrintableMVar StgState
               -> DL
-              -> DebuggerChan
-              -> NextDebugCommand
-              -> DebugState
-              -> TracingState
-              -> PrintableMVar ([Atom], StgState)
-              -> PrintableMVar RefSet
               -> StgState
-emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
+emptyStgState stateStore dl = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
-
-  -- GC
-  , ssLastGCAddr          = 0
-  , ssGCInput             = gcIn
-  , ssGCOutput            = gcOut
-  , ssGCIsRunning         = False
-
-  -- let-no-escape support
-  , ssTotalLNECount       = 0
 
   , ssCStringConstants    = mempty
 
@@ -438,54 +301,6 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   , ssStateStore          = stateStore
 
   , ssRtsSupport          = error "uninitialized ssRtsSupport"
-
-  -- debug
-  , ssIsQuiet             = isQuiet
-  , ssCurrentClosureEnv   = mempty
-  , ssCurrentClosure      = Nothing
-  , ssCurrentClosureAddr  = -1
-  , ssExecutedClosures    = Set.empty
-  , ssExecutedClosureIds  = Set.empty
-  , ssExecutedPrimOps     = Set.empty
-  , ssExecutedFFI         = Set.empty
-  , ssExecutedPrimCalls   = Set.empty
-  , ssHeapStartAddress    = 0
-  , ssClosureCallCounter  = 0
-
-  -- call graph
-  , ssCallGraph           = emptyCallGraph
-  , ssCurrentProgramPoint = PP_Global
-
-  -- debugger api
-  , ssDebuggerChan        = dbgChan
-  , ssNextDebugCommand    = nextDbgCmd
-
-  , ssEvaluatedClosures   = Set.empty
-  , ssBreakpoints         = mempty
-  , ssDebugState          = dbgState
-  , ssStgErrorAction      = Printable $ pure ()
-
-  -- region tracker
-  , ssMarkers             = mempty
-  , ssRegions             = mempty
-
-  -- retainer db
-  , ssReferenceMap        = mempty
-  , ssRetainerMap         = mempty
-  , ssGCRootSet           = IntSet.empty
-
-  -- tracing
-  , ssTracingState        = tracingState
-
-  -- origin db
-  , ssOrigin              = mempty
-
-  -- GC marker
-  , ssGCMarkers           = []
-
-  -- tracing primops
-  , ssTraceEvents         = []
-  , ssTraceMarkers        = []
   }
 
 data Rts
@@ -539,18 +354,6 @@ type M = StateT StgState IO
 
 -- stack operations
 
-{-
-  , ssThreads             :: IntMap ThreadState
-  , ssCurrentThreadId     :: Int
-
-  = ThreadState
-  { tsCurrentResult   :: [Atom] -- Q: do we need this?
-  , tsStack           :: ![StackContinuation]
-  , tsStatus          :: !ThreadStatus
-  , tsBlockExceptions :: !Bool
-  , tsInterruptible   :: !Bool
-  }
--}
 stackPush :: StackContinuation -> M ()
 stackPush sc = do
   let pushFun ts@ThreadState{..} = ts {tsStack = sc : tsStack}
@@ -571,7 +374,6 @@ stackPop = do
 
 freshHeapAddress :: HasCallStack => M Addr
 freshHeapAddress = do
-  limit <- gets ssNextHeapAddr
   state $ \s@StgState{..} -> (ssNextHeapAddr, s {ssNextHeapAddr = succ ssNextHeapAddr})
 
 allocAndStore :: HasCallStack => HeapObject -> M Addr
@@ -584,14 +386,6 @@ store :: HasCallStack => Addr -> HeapObject -> M ()
 store a o = do
   modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
 
-  do
-    m <- gets ssCurrentClosure
-    case m of
-      Nothing       -> pure ()
-      Just originId -> do
-        originAddr <- gets ssCurrentClosureAddr
-        tid <- gets ssCurrentThreadId
-        modify' $ \s@StgState{..} -> s { ssOrigin = IntMap.insert a (originId, originAddr, tid) ssOrigin }
   {-
   gets ssTracingState >>= \case
     NoTracing   -> pure ()
@@ -616,8 +410,6 @@ stgErrorM msg = do
   liftIO $ putStrLn $ " * stgErrorM: " ++ show msg
   liftIO $ putStrLn $ "current thread id: " ++ show tid
   reportThread tid
-  curClosure <- gets ssCurrentClosure
-  liftIO $ putStrLn $ "current closure: " ++ show curClosure
   action <- unPrintable <$> gets ssStgErrorAction
   action
   error "stgErrorM"
@@ -771,58 +563,6 @@ liftIOAndBorrowStgState action = do
   switchToThread myThread
   pure result
 
--- debug
-setInsert :: Ord a => a -> Set a -> Set a
-setInsert a s
-  | Set.member a s  = s
-  | otherwise       = Set.insert a s
-
-markClosure :: Name -> M ()
-markClosure n = modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = setInsert n ssEvaluatedClosures}
-
-markExecuted :: Int -> M ()
-markExecuted i = pure () -- modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
-
-markExecutedId :: Id -> M ()
-markExecutedId i = modify' $ \s@StgState{..} -> s {ssExecutedClosureIds = setInsert i ssExecutedClosureIds}
-
-markPrimOp :: Name -> M ()
-markPrimOp i = modify' $ \s@StgState{..} -> s {ssExecutedPrimOps = setInsert i ssExecutedPrimOps}
-
-markFFI :: ForeignCall -> M ()
-markFFI i = modify' $ \s@StgState{..} -> s {ssExecutedFFI = setInsert i ssExecutedFFI}
-
-markPrimCall :: PrimCall -> M ()
-markPrimCall i = modify' $ \s@StgState{..} -> s {ssExecutedPrimCalls = setInsert i ssExecutedPrimCalls}
-
--- call graph
--- HINT: build separate call graph for each region
-
-addInterClosureCallGraphEdge :: StaticOrigin -> ProgramPoint -> ProgramPoint -> M ()
-addInterClosureCallGraphEdge so from to = do
-  let addEdge g@CallGraph{..} = g {cgInterClosureCallGraph = StrictMap.insertWith (+) (so, from, to) 1 cgInterClosureCallGraph}
-      updateRegion = \case
-        (a@Just{}, regionCallGraph, l) -> (a, addEdge regionCallGraph, l)
-        r -> r
-  modify' $ \s@StgState{..} -> s
-    { ssCallGraph = addEdge ssCallGraph
-    , ssRegions   = fmap updateRegion ssRegions
-    }
-
-addIntraClosureCallGraphEdge :: ProgramPoint -> StaticOrigin -> ProgramPoint -> M ()
-addIntraClosureCallGraphEdge from so to = do
-  let addEdge g@CallGraph{..} = g {cgIntraClosureCallGraph = StrictMap.insertWith (+) (from, so, to) 1 cgIntraClosureCallGraph}
-      updateRegion = \case
-        (a@Just{}, regionCallGraph, l) -> (a, addEdge regionCallGraph, l)
-        r -> r
-  modify' $ \s@StgState{..} -> s
-    { ssCallGraph = addEdge ssCallGraph
-    , ssRegions   = fmap updateRegion ssRegions
-    }
-
-setProgramPoint :: ProgramPoint -> M ()
-setProgramPoint pp = modify' $ \s@StgState{..} -> s {ssCurrentProgramPoint = pp}
-
 -- string constants
 -- NOTE: the string gets extended with a null terminator
 getCStringConstantPtrAtom :: ByteString -> M Atom
@@ -849,6 +589,7 @@ data ThreadState
   = ThreadState
   { tsCurrentResult     :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
   , tsStack             :: ![StackContinuation]
+  , tsStackTop          :: !Int
   , tsStatus            :: !ThreadStatus
   , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
   , tsBlockExceptions   :: !Bool  -- block async exceptions
@@ -868,6 +609,7 @@ createThread = do
   let ts = ThreadState
         { tsCurrentResult     = []
         , tsStack             = []
+        , tsStackTop          = -1 -- TODO
         , tsStatus            = ThreadRunning
         , tsBlockedExceptions = []
         , tsBlockExceptions   = False
@@ -1083,137 +825,5 @@ reportThreadIO tid endTS = do
 
 showStackCont :: StackContinuation -> String
 showStackCont = \case
-  CaseOf clAddr clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", addr: " ++ show clAddr ++ ", result var: " ++ show (Id b)
+  CaseOf _ b _ _ -> "CaseOf, result var: " ++ show (Id b)
   c -> show c
-
--------------------------
--- GC
-
-data RefSet
-  = RefSet
-  { rsHeap                :: !IntSet
-  , rsWeakPointers        :: !IntSet
-  , rsMVars               :: !IntSet
-  , rsMutVars             :: !IntSet
-  , rsArrays              :: !IntSet
-  , rsMutableArrays       :: !IntSet
-  , rsSmallArrays         :: !IntSet
-  , rsSmallMutableArrays  :: !IntSet
-  , rsArrayArrays         :: !IntSet
-  , rsMutableArrayArrays  :: !IntSet
-  , rsMutableByteArrays   :: !IntSet
-  , rsStableNames         :: !IntSet
-  , rsStablePointers      :: !IntSet
-  }
-
-emptyRefSet :: RefSet
-emptyRefSet = RefSet
-  { rsHeap                = IntSet.empty
-  , rsWeakPointers        = IntSet.empty
-  , rsMVars               = IntSet.empty
-  , rsMutVars             = IntSet.empty
-  , rsArrays              = IntSet.empty
-  , rsMutableArrays       = IntSet.empty
-  , rsSmallArrays         = IntSet.empty
-  , rsSmallMutableArrays  = IntSet.empty
-  , rsArrayArrays         = IntSet.empty
-  , rsMutableArrayArrays  = IntSet.empty
-  , rsMutableByteArrays   = IntSet.empty
-  , rsStableNames         = IntSet.empty
-  , rsStablePointers      = IntSet.empty
-  }
-
--- Debugger
-data AddressState
-  = AddressState
-  { asNextThreadId          :: !Int
-  , asNextHeapAddr          :: !Int
-  , asNextStableName        :: !Int
-  , asNextWeakPointer       :: !Int
-  , asNextStablePointer     :: !Int
-  , asNextMutableByteArray  :: !Int
-  , asNextMVar              :: !Int
-  , asNextMutVar            :: !Int
-  , asNextArray             :: !Int
-  , asNextMutableArray      :: !Int
-  , asNextSmallArray        :: !Int
-  , asNextSmallMutableArray :: !Int
-  , asNextArrayArray        :: !Int
-  , asNextMutableArrayArray :: !Int
-  }
-  deriving (Eq, Ord, Show)
-
-emptyAddressState :: AddressState
-emptyAddressState = AddressState
-  { asNextThreadId          = 0
-  , asNextHeapAddr          = 0
-  , asNextStableName        = 0
-  , asNextWeakPointer       = 0
-  , asNextStablePointer     = 0
-  , asNextMutableByteArray  = 0
-  , asNextMVar              = 0
-  , asNextMutVar            = 0
-  , asNextArray             = 0
-  , asNextMutableArray      = 0
-  , asNextSmallArray        = 0
-  , asNextSmallMutableArray = 0
-  , asNextArrayArray        = 0
-  , asNextMutableArrayArray = 0
-  }
-
-getAddressState :: M AddressState
-getAddressState = do
-  convertAddressState <$> get
-
-convertAddressState :: StgState -> AddressState
-convertAddressState StgState{..} = AddressState
-  { asNextThreadId          = ssNextThreadId
-  , asNextHeapAddr          = ssNextHeapAddr
-  , asNextStableName        = ssNextStableName
-  , asNextWeakPointer       = ssNextWeakPointer
-  , asNextStablePointer     = ssNextStablePointer
-  , asNextMutableByteArray  = ssNextMutableByteArray
-  , asNextMVar              = ssNextMVar
-  , asNextMutVar            = ssNextMutVar
-  , asNextArray             = ssNextArray
-  , asNextMutableArray      = ssNextMutableArray
-  , asNextSmallArray        = ssNextSmallArray
-  , asNextSmallMutableArray = ssNextSmallMutableArray
-  , asNextArrayArray        = ssNextArrayArray
-  , asNextMutableArrayArray = ssNextMutableArrayArray
-  }
-
-data Region
-  = Region
-  { regionStart :: Name
-  , regionEnd   :: Name
-  }
-  deriving (Eq, Ord, Show)
-
--- let-no-escape statistics
-markLNE :: [Addr] -> M ()
-markLNE lneAddrs = do
-  let count = length lneAddrs
-  modify' $ \s@StgState{..} -> s { ssTotalLNECount = count + ssTotalLNECount}
-
--- program point
-
-data ProgramPoint
-  = PP_Global
-  | PP_Closure    Id          -- closure name
-  | PP_Scrutinee  Id          -- qualified scrutinee result name
-  | PP_Alt        Id AltCon   -- qualified scrutinee result name, alternative pattern
-  | PP_Apply      Int ProgramPoint
-  deriving (Eq, Ord)
-
-instance Show ProgramPoint where show = showProgramPoint
-
-showProgramPoint :: ProgramPoint -> String
-showProgramPoint = \case
-  PP_Global       -> "<global>"
-  PP_Closure n    -> show n
-  PP_Scrutinee v  -> "scrut: " ++ show v
-  PP_Alt v pat    -> "alt: " ++ show v ++ " " ++ case pat of
-    AltDataCon dc -> "AltDataCon " ++ show (DC dc)
-    _             -> show pat
-  PP_Apply i p    -> "apply " ++ show i ++ ": " ++ show p

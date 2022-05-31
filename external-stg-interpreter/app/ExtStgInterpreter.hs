@@ -6,7 +6,7 @@ import Options.Applicative
 import Data.Semigroup ((<>))
 import qualified ShellWords
 
-import Stg.Interpreter.Debugger.UI
+--import Stg.Interpreter.Debugger.UI
 import Stg.Interpreter.Base
 import Stg.Interpreter
 
@@ -51,10 +51,7 @@ main = do
         Right l   -> pure l
   let appArgs = argsFromFile ++ words appArgs1 ++ appArgs2 ++ appArgs3
 
-  (dbgCmdI, dbgCmdO) <- Unagi.newChan 100
-  (dbgOutI, dbgOutO) <- Unagi.newChan 100
-  let dbgChan = DebuggerChan (dbgCmdO, dbgOutI)
 
   case runDebugger of
-    True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript
-    False -> loadAndRunProgram isQuiet switchCWD appPath appArgs dbgChan DbgRunProgram doTracing
+    True  -> fail "debugger is not supported yet"--debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript
+    False -> loadAndRunProgram switchCWD appPath appArgs

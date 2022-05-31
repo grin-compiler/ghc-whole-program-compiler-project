@@ -22,18 +22,18 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- traceEvent# :: Addr# -> State# s -> State# s
   ( "traceEvent#", [PtrAtom _ p, _s]) -> do
-    msg <- liftIO $ peekCString $ castPtr p
-    addrState <- getAddressState
-    modify' $ \s@StgState{..} -> s {ssTraceEvents = (msg, addrState) : ssTraceEvents}
+    --msg <- liftIO $ peekCString $ castPtr p
+    --addrState <- getAddressState
+    --modify' $ \s@StgState{..} -> s {ssTraceEvents = (msg, addrState) : ssTraceEvents}
     pure []
 
   -- traceBinaryEvent# :: Addr# -> Int# -> State# s -> State# s
 
   -- traceMarker# :: Addr# -> State# s -> State# s
   ( "traceMarker#", [PtrAtom _ p, _s]) -> do
-    msg <- liftIO $ peekCString $ castPtr p
-    addrState <- getAddressState
-    modify' $ \s@StgState{..} -> s {ssTraceMarkers = (msg, addrState) : ssTraceMarkers}
+    --msg <- liftIO $ peekCString $ castPtr p
+    --addrState <- getAddressState
+    --modify' $ \s@StgState{..} -> s {ssTraceMarkers = (msg, addrState) : ssTraceMarkers}
     pure []
 
   -- setThreadAllocationCounter# :: INT64 -> State# RealWorld -> State# RealWorld
