@@ -19,9 +19,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     currentTS <- getCurrentThreadState
 
     (newTId, newTS) <- createThread
+    stackTop <- mkStack Nothing [Apply [Void], RunScheduler SR_ThreadFinished]
     updateThreadState newTId $ newTS
       { tsCurrentResult   = [ioAction]
-      , tsStack           = [Apply [Void], RunScheduler SR_ThreadFinished]
+      , tsStackTop        = stackTop
 
       -- NOTE: start blocked if the current thread is blocked
       , tsBlockExceptions = tsBlockExceptions currentTS
@@ -40,9 +41,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     currentTS <- getCurrentThreadState
 
     (newTId, newTS) <- createThread
+    stackTop <- mkStack Nothing [Apply [Void], RunScheduler SR_ThreadFinished]
     updateThreadState newTId $ newTS
       { tsCurrentResult   = [ioAction]
-      , tsStack           = [Apply [Void], RunScheduler SR_ThreadFinished]
+      , tsStackTop        = stackTop
 
       -- NOTE: start blocked if the current thread is blocked
       , tsBlockExceptions = tsBlockExceptions currentTS
@@ -181,36 +183,39 @@ raiseAsyncEx lastResult tid exception = do
   ts@ThreadState{..} <- getThreadState tid
   let unwindStack result stackPiece = \case
         -- no Catch stack frame is found, kill thread
-        [] -> do
-          updateThreadState tid (ts {tsStack = [], tsStatus = ThreadDied})
+        Nothing -> do
+          updateThreadState tid (ts {tsStackTop = Nothing, tsStatus = ThreadDied})
           -- TODO: reschedule continuation??
           --stackPush $ RunScheduler SR_ThreadBlocked
-
-        -- the thread continues with the excaption handler, also wakes up the thread if necessary
-        exStack@(Catch exHandler bEx iEx : _) -> do
-          updateThreadState tid $ ts
-            { tsCurrentResult   = [exception]
-            , tsStack           = Apply [] : exStack -- TODO: restore the catch frames exception mask, sync exceptions do it, and according the async ex pape it should be done here also
-            , tsStatus          = ThreadRunning -- HINT: whatever blocked this thread now that operation got cancelled by the async exception
-            -- NOTE: Ensure that async exceptions are blocked now, so we don't get a surprise exception before we get around to executing the handler.
-            , tsBlockExceptions = True
-            , tsInterruptible   = iEx
-            }
-
-        -- replace Update with ApStack
-        Update addr : stackTail -> do
-          let apStack = ApStack
-                { hoResult  = result
-                , hoStack   = reverse stackPiece
+        currentFrameAddr@(Just stackAddr) -> do
+          (stackCont, prevStackAddr) <- getStackFrame stackAddr
+          case stackCont of
+            -- the thread continues with the excaption handler, also wakes up the thread if necessary
+            Catch exHandler bEx iEx -> do
+              stackTop <- mkStack currentFrameAddr [Apply []]
+              updateThreadState tid $ ts
+                { tsCurrentResult   = [exception]
+                , tsStackTop        = stackTop -- TODO: restore the catch frames exception mask, sync exceptions do it, and according the async ex pape it should be done here also
+                , tsStatus          = ThreadRunning -- HINT: whatever blocked this thread now that operation got cancelled by the async exception
+                -- NOTE: Ensure that async exceptions are blocked now, so we don't get a surprise exception before we get around to executing the handler.
+                , tsBlockExceptions = True
+                , tsInterruptible   = iEx
                 }
-          store addr apStack
-          let newResult = [HeapPtr addr]
-          unwindStack newResult [Apply []] stackTail
 
-        -- collect stack frames for ApStack
-        stackHead : stackTail -> unwindStack result (stackHead : stackPiece) stackTail
+            -- replace Update with ApStack
+            Update addr -> do
+              let apStack = ApStack
+                    { hoResult  = result
+                    , hoStack   = reverse stackPiece
+                    }
+              store addr apStack
+              let newResult = [HeapPtr addr]
+              unwindStack newResult [Apply []] prevStackAddr
 
-  unwindStack lastResult [] tsStack
+            -- collect stack frames for ApStack
+            _ -> unwindStack result (stackCont : stackPiece) prevStackAddr
+
+  unwindStack lastResult [] tsStackTop
 
 removeFromQueues :: Int -> M ()
 removeFromQueues tid = do

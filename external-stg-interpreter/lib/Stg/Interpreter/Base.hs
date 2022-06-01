@@ -4,6 +4,8 @@ module Stg.Interpreter.Base where
 import Data.Word
 import Foreign.Ptr
 import Control.Monad.State.Strict
+import Control.Monad.Loops
+import Data.Foldable
 import Data.List (foldl')
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -179,7 +181,7 @@ instance Show (PrintableMVar a) where
 type Addr   = Int
 type Heap   = IntMap HeapObject
 type Env    = Map Id (StaticOrigin, Atom)   -- NOTE: must contain only the defined local variables
-type Stack  = [StackContinuation]
+type Stack  = IntMap (StackContinuation, Maybe Int)
 
 data StaticOrigin
   = SO_CloArg
@@ -195,6 +197,7 @@ data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
+  , ssStack               :: !Stack
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
@@ -222,6 +225,7 @@ data StgState
   , ssArrayArrays         :: IntMap (Vector Atom)
   , ssMutableArrayArrays  :: IntMap (Vector Atom)
 
+  , ssNextStackAddr         :: {-# UNPACK #-} !Int
   , ssNextThreadId          :: !Int
   , ssNextHeapAddr          :: {-# UNPACK #-} !Int
   , ssNextStableName        :: !Int
@@ -258,6 +262,7 @@ emptyStgState :: PrintableMVar StgState
 emptyStgState stateStore dl = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
+  , ssStack               = mempty
 
   , ssCStringConstants    = mempty
 
@@ -281,6 +286,7 @@ emptyStgState stateStore dl = StgState
   , ssArrayArrays         = mempty
   , ssMutableArrayArrays  = mempty
 
+  , ssNextStackAddr         = 0
   , ssNextThreadId          = 0
   , ssNextHeapAddr          = 0
   , ssNextStableName        = 0
@@ -354,21 +360,48 @@ type M = StateT StgState IO
 
 -- stack operations
 
+freshStackAddress :: HasCallStack => M Addr
+freshStackAddress = do
+  state $ \s@StgState{..} -> (ssNextStackAddr, s {ssNextStackAddr = succ ssNextStackAddr})
+
+getStackFrame :: Addr -> M (StackContinuation, Maybe Addr)
+getStackFrame stackAddr = do
+  gets (IntMap.lookup stackAddr . ssStack) >>= \case
+    Nothing     -> stgErrorM $ "missing stack frame at address: " ++ show stackAddr
+    Just frame  -> pure frame
+
 stackPush :: StackContinuation -> M ()
 stackPush sc = do
-  let pushFun ts@ThreadState{..} = ts {tsStack = sc : tsStack}
-  modify' $ \s@StgState{..} -> s {ssThreads = IntMap.adjust pushFun ssCurrentThreadId ssThreads}
+  a <- freshStackAddress
+  cts <- getCurrentThreadState
+  let pushFun ts@ThreadState{..} = ts {tsStackTop = Just a}
+      stackFrame = (sc, tsStackTop cts)
+  modify' $ \s@StgState{..} -> s
+    { ssThreads = IntMap.adjust pushFun ssCurrentThreadId ssThreads
+    , ssStack = IntMap.insert a stackFrame ssStack
+    }
 
 stackPop :: M (Maybe StackContinuation)
 stackPop = do
-  let tailFun ts@ThreadState{..} = ts {tsStack = drop 1 tsStack}
-  Just ts@ThreadState{..} <- state $ \s@StgState{..} ->
-    ( IntMap.lookup ssCurrentThreadId ssThreads
-    , s {ssThreads = IntMap.adjust tailFun ssCurrentThreadId ssThreads}
-    )
-  pure $ case tsStack of
-    []    -> Nothing
-    c : _ -> Just c
+  cts <- getCurrentThreadState
+  case tsStackTop cts of
+    Nothing -> pure Nothing
+    Just oldStackTop -> do
+      (sc, newStackTop) <- getStackFrame oldStackTop
+      let popFun ts@ThreadState{..} = ts {tsStackTop = newStackTop}
+      modify' $ \s@StgState{..} -> s
+        { ssThreads = IntMap.adjust popFun ssCurrentThreadId ssThreads
+        }
+      pure $ Just sc
+
+mkStack :: Maybe Addr -> [StackContinuation] -> M (Maybe Addr)
+mkStack prevFrameAddr frames = do
+  let pushFrame stackTop sc = do
+        a <- freshStackAddress
+        let stackFrame = (sc, stackTop)
+        modify' $ \s@StgState{..} -> s {ssStack = IntMap.insert a stackFrame ssStack}
+        pure $ Just a
+  foldlM pushFrame prevFrameAddr frames
 
 -- heap operations
 
@@ -588,8 +621,7 @@ data AsyncExceptionMask
 data ThreadState
   = ThreadState
   { tsCurrentResult     :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
-  , tsStack             :: ![StackContinuation]
-  , tsStackTop          :: !Int
+  , tsStackTop          :: Maybe Int
   , tsStatus            :: !ThreadStatus
   , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
   , tsBlockExceptions   :: !Bool  -- block async exceptions
@@ -608,8 +640,7 @@ createThread :: M (Int, ThreadState)
 createThread = do
   let ts = ThreadState
         { tsCurrentResult     = []
-        , tsStack             = []
-        , tsStackTop          = -1 -- TODO
+        , tsStackTop          = Nothing
         , tsStatus            = ThreadRunning
         , tsBlockedExceptions = []
         , tsBlockExceptions   = False
@@ -813,14 +844,22 @@ reportThreads = do
 reportThread :: Int -> M ()
 reportThread tid = do
   endTS <- getThreadState tid
-  liftIO $ reportThreadIO tid endTS
+  tsStack <- getThreadStack tid
+  liftIO $ reportThreadIO tid endTS tsStack
 
-reportThreadIO :: Int -> ThreadState -> IO ()
-reportThreadIO tid endTS = do
+getThreadStack :: Int -> M [StackContinuation]
+getThreadStack tid = do
+  ThreadState{..} <- getThreadState tid
+  flip unfoldrM tsStackTop $ \case
+    Nothing       -> pure Nothing
+    Just stackTop -> Just <$> getStackFrame stackTop
+
+reportThreadIO :: Int -> ThreadState -> [StackContinuation] -> IO ()
+reportThreadIO tid endTS tsStack = do
     putStrLn ""
     putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
     putStrLn "stack:"
-    putStrLn $ unlines $ map show $ zip [0..] $ map showStackCont $ tsStack endTS
+    putStrLn $ unlines $ map show $ zip [0..] $ map showStackCont tsStack
     putStrLn ""
 
 showStackCont :: StackContinuation -> String
