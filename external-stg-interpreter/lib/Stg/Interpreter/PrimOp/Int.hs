@@ -21,20 +21,22 @@ pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp fallback op argsAddr t tc = do
+ args <- getAtoms argsAddr
+ case (op, args) of
 
   -- +# :: Int# -> Int# -> Int#
-  ( "+#", [IntV a, IntV b]) -> pure [IntV $ a + b]
+  ( "+#", [IntV a, IntV b]) -> allocAtoms [IntV $ a + b]
 
   -- -# :: Int# -> Int# -> Int#
-  ( "-#", [IntV a, IntV b]) -> pure [IntV $ a - b]
+  ( "-#", [IntV a, IntV b]) -> allocAtoms [IntV $ a - b]
 
   -- *# :: Int# -> Int# -> Int#
-  ( "*#", [IntV a, IntV b]) -> pure [IntV $ a * b]
+  ( "*#", [IntV a, IntV b]) -> allocAtoms [IntV $ a * b]
 
   -- timesInt2# :: Int# -> Int# -> (# Int#, Int#, Int# #)
-  ( "timesInt2#", [IntV a, IntV b]) -> pure [IntV isHighNeeded, IntV hi, IntV lo] where
+  ( "timesInt2#", [IntV a, IntV b]) -> allocAtoms [IntV isHighNeeded, IntV hi, IntV lo] where
     (isHighNeeded, hi, lo) = genericIMul2 a b
 
     -- HINT: this code is from suite/tests/codeGen/should_run/cgrun079.hs
@@ -59,34 +61,34 @@ evalPrimOp fallback op args t tc = case (op, args) of
        (# h, l #) -> (I# (word2Int# h), I# (word2Int# l))
 
   -- mulIntMayOflo# :: Int# -> Int# -> Int#
-  ( "mulIntMayOflo#",  [IntV a, IntV b]) -> pure [IntV $ if fromIntegral a * (fromIntegral b :: Integer) > fromIntegral (maxBound :: PrimInt) then 1 else 0]
+  ( "mulIntMayOflo#",  [IntV a, IntV b]) -> allocAtoms [IntV $ if fromIntegral a * (fromIntegral b :: Integer) > fromIntegral (maxBound :: PrimInt) then 1 else 0]
 
   -- quotInt# :: Int# -> Int# -> Int#
-  ( "quotInt#",        [IntV a, IntV b]) -> pure [IntV $ a `quot` b]  -- NOTE: int / int in C
+  ( "quotInt#",        [IntV a, IntV b]) -> allocAtoms [IntV $ a `quot` b]  -- NOTE: int / int in C
 
   -- remInt# :: Int# -> Int# -> Int#
-  ( "remInt#",         [IntV a, IntV b]) -> pure [IntV $ a `rem` b]   -- NOTE: int % int in C
+  ( "remInt#",         [IntV a, IntV b]) -> allocAtoms [IntV $ a `rem` b]   -- NOTE: int % int in C
 
   -- quotRemInt# :: Int# -> Int# -> (# Int#, Int# #)
-  ( "quotRemInt#",     [IntV a, IntV b]) -> pure [IntV $ a `quot` b, IntV $ a `rem` b]
+  ( "quotRemInt#",     [IntV a, IntV b]) -> allocAtoms [IntV $ a `quot` b, IntV $ a `rem` b]
 
   -- andI# :: Int# -> Int# -> Int#
-  ( "andI#",           [IntV a, IntV b]) -> pure [IntV $ a .&. b]
+  ( "andI#",           [IntV a, IntV b]) -> allocAtoms [IntV $ a .&. b]
 
   -- orI# :: Int# -> Int# -> Int#
-  ( "orI#",            [IntV a, IntV b]) -> pure [IntV $ a .|. b]
+  ( "orI#",            [IntV a, IntV b]) -> allocAtoms [IntV $ a .|. b]
 
   -- xorI# :: Int# -> Int# -> Int#
-  ( "xorI#",           [IntV a, IntV b]) -> pure [IntV $ a `xor` b]
+  ( "xorI#",           [IntV a, IntV b]) -> allocAtoms [IntV $ a `xor` b]
 
   -- notI# :: Int# -> Int#
-  ( "notI#",           [IntV a]) -> pure [IntV $ complement a]
+  ( "notI#",           [IntV a]) -> allocAtoms [IntV $ complement a]
 
   -- negateInt# :: Int# -> Int#
-  ( "negateInt#",      [IntV a]) -> pure [IntV (-a)]
+  ( "negateInt#",      [IntV a]) -> allocAtoms [IntV (-a)]
 
   -- addIntC# :: Int# -> Int# -> (# Int#, Int# #)
-  ( "addIntC#",        [IntV a, IntV b]) -> pure
+  ( "addIntC#",        [IntV a, IntV b]) -> allocAtoms
                                         [ IntV $ a + b
                                         , IntV . carry $ fromIntegral a + fromIntegral b
                                         ] where
@@ -94,7 +96,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
                                             carry x = if x < fromIntegral (minBound :: PrimInt) || x > fromIntegral (maxBound :: PrimInt) then 1 else 0
 
   -- subIntC# :: Int# -> Int# -> (# Int#, Int# #)
-  ( "subIntC#",        [IntV a, IntV b]) -> pure
+  ( "subIntC#",        [IntV a, IntV b]) -> allocAtoms
                                         [ IntV $ a - b
                                         , IntV . carry $ fromIntegral a - fromIntegral b
                                         ] where
@@ -102,48 +104,48 @@ evalPrimOp fallback op args t tc = case (op, args) of
                                             carry x = if x < fromIntegral (minBound :: PrimInt) || x > fromIntegral (maxBound :: PrimInt) then 1 else 0
 
   -- ># :: Int# -> Int# -> Int#
-  ( ">#",  [IntV a, IntV b]) -> pure [IntV $ if a > b  then 1 else 0]
+  ( ">#",  [IntV a, IntV b]) -> allocAtoms [IntV $ if a > b  then 1 else 0]
 
   -- >=# :: Int# -> Int# -> Int#
-  ( ">=#", [IntV a, IntV b]) -> pure [IntV $ if a >= b then 1 else 0]
+  ( ">=#", [IntV a, IntV b]) -> allocAtoms [IntV $ if a >= b then 1 else 0]
 
   -- ==# :: Int# -> Int# -> Int#
-  ( "==#", [IntV a, IntV b]) -> pure [IntV $ if a == b then 1 else 0]
+  ( "==#", [IntV a, IntV b]) -> allocAtoms [IntV $ if a == b then 1 else 0]
 
   -- /=# :: Int# -> Int# -> Int#
-  ( "/=#", [IntV a, IntV b]) -> pure [IntV $ if a /= b then 1 else 0]
+  ( "/=#", [IntV a, IntV b]) -> allocAtoms [IntV $ if a /= b then 1 else 0]
 
   -- <# :: Int# -> Int# -> Int#
-  ( "<#",  [IntV a, IntV b]) -> pure [IntV $ if a < b  then 1 else 0]
+  ( "<#",  [IntV a, IntV b]) -> allocAtoms [IntV $ if a < b  then 1 else 0]
 
   -- <=# :: Int# -> Int# -> Int#
-  ( "<=#", [IntV a, IntV b]) -> pure [IntV $ if a <= b then 1 else 0]
+  ( "<=#", [IntV a, IntV b]) -> allocAtoms [IntV $ if a <= b then 1 else 0]
 
   -- chr# :: Int# -> Char#
-  ( "chr#",                [IntV (I# a)]) -> pure [CharV (C# (chr# a))] -- HINT: noop ; same bit level representation
+  ( "chr#",                [IntV (I# a)]) -> allocAtoms [CharV (C# (chr# a))] -- HINT: noop ; same bit level representation
 
   -- int2Word# :: Int# -> Word#
-  ( "int2Word#",           [IntV a]) -> pure [WordV $ fromIntegral a] -- HINT: noop ; same bit level representation
+  ( "int2Word#",           [IntV a]) -> allocAtoms [WordV $ fromIntegral a] -- HINT: noop ; same bit level representation
 
   -- int2Float# :: Int# -> Float#
-  ( "int2Float#",          [IntV a] ) -> pure [FloatV $ fromIntegral a]
+  ( "int2Float#",          [IntV a] ) -> allocAtoms [FloatV $ fromIntegral a]
 
   -- int2Double# :: Int# -> Double#
-  ( "int2Double#",         [IntV a] ) -> pure [DoubleV $ fromIntegral a]
+  ( "int2Double#",         [IntV a] ) -> allocAtoms [DoubleV $ fromIntegral a]
 
   -- word2Float# :: Word# -> Float#
-  ( "word2Float#",         [WordV a]) -> pure [FloatV $ fromIntegral a]
+  ( "word2Float#",         [WordV a]) -> allocAtoms [FloatV $ fromIntegral a]
 
   -- word2Double# :: Word# -> Double#
-  ( "word2Double#",        [WordV a]) -> pure [DoubleV $ fromIntegral a]
+  ( "word2Double#",        [WordV a]) -> allocAtoms [DoubleV $ fromIntegral a]
 
   -- uncheckedIShiftL# :: Int# -> Int# -> Int#
-  ( "uncheckedIShiftL#",   [IntV a, IntV b]) -> pure [IntV $ unsafeShiftL a (fromIntegral b)]
+  ( "uncheckedIShiftL#",   [IntV a, IntV b]) -> allocAtoms [IntV $ unsafeShiftL a (fromIntegral b)]
 
   -- uncheckedIShiftRA# :: Int# -> Int# -> Int#
-  ( "uncheckedIShiftRA#",  [IntV a, IntV b]) -> pure [IntV $ unsafeShiftR a (fromIntegral b)] -- Shift right arithmetic
+  ( "uncheckedIShiftRA#",  [IntV a, IntV b]) -> allocAtoms [IntV $ unsafeShiftR a (fromIntegral b)] -- Shift right arithmetic
 
   -- uncheckedIShiftRL# :: Int# -> Int# -> Int#
-  ( "uncheckedIShiftRL#",  [IntV a, IntV b]) -> pure [IntV $ fromIntegral $ unsafeShiftR (fromIntegral a :: PrimWord) (fromIntegral b)] -- Shift right logical
+  ( "uncheckedIShiftRL#",  [IntV a, IntV b]) -> allocAtoms [IntV $ fromIntegral $ unsafeShiftR (fromIntegral a :: PrimWord) (fromIntegral b)] -- Shift right logical
 
-  _ -> fallback op args t tc
+  _ -> fallback op argsAddr t tc

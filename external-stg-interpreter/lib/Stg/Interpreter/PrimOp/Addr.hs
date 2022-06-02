@@ -19,239 +19,241 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp fallback op argsAddr t tc = do
+ args <- getAtoms argsAddr
+ case (op, args) of
 
   -- plusAddr# :: Addr# -> Int# -> Addr#
-  ( "plusAddr#", [PtrAtom origin p, IntV offset])  -> pure [PtrAtom origin $ plusPtr p offset]
+  ( "plusAddr#", [PtrAtom origin p, IntV offset])  -> allocAtoms [PtrAtom origin $ plusPtr p offset]
 
   -- minusAddr# :: Addr# -> Addr# -> Int#
-  ( "minusAddr#", [PtrAtom _ p1, PtrAtom _ p2])    -> pure [IntV $ minusPtr p1 p2]
+  ( "minusAddr#", [PtrAtom _ p1, PtrAtom _ p2])    -> allocAtoms [IntV $ minusPtr p1 p2]
 
   -- remAddr# :: Addr# -> Int# -> Int#
   ( "remAddr#", [PtrAtom _ a, IntV b]) -> do
     -- NOTE: the GHC codegen semantics is: word % word
     -- see: https://gitlab.haskell.org/ghc/ghc/-/issues/19332
-    pure [IntV $ fromIntegral (ptrToWordPtr a `rem` fromIntegral b)]
+    allocAtoms [IntV $ fromIntegral (ptrToWordPtr a `rem` fromIntegral b)]
 
   -- addr2Int# :: Addr# -> Int#
   -- DEPRECATED: This operation is strongly deprecated.
-  ( "addr2Int#", [PtrAtom _ a])                    -> pure [IntV . fromIntegral $ ptrToIntPtr a]
+  ( "addr2Int#", [PtrAtom _ a])                    -> allocAtoms [IntV . fromIntegral $ ptrToIntPtr a]
 
   -- int2Addr# :: Int# -> Addr#
   -- DEPRECATED: This operation is strongly deprecated.
-  ( "int2Addr#", [IntV i])                         -> pure [PtrAtom RawPtr . intPtrToPtr $ IntPtr i]
+  ( "int2Addr#", [IntV i])                         -> allocAtoms [PtrAtom RawPtr . intPtrToPtr $ IntPtr i]
 
   -- gtAddr# :: Addr# -> Addr# -> Int#
-  ( "gtAddr#", [PtrAtom _ a, PtrAtom _ b])         -> pure [IntV $ if a > b then 1 else 0]
+  ( "gtAddr#", [PtrAtom _ a, PtrAtom _ b])         -> allocAtoms [IntV $ if a > b then 1 else 0]
 
   -- geAddr# :: Addr# -> Addr# -> Int#
-  ( "geAddr#", [PtrAtom _ a, PtrAtom _ b])         -> pure [IntV $ if a >= b then 1 else 0]
+  ( "geAddr#", [PtrAtom _ a, PtrAtom _ b])         -> allocAtoms [IntV $ if a >= b then 1 else 0]
 
   -- eqAddr# :: Addr# -> Addr# -> Int#
-  ( "eqAddr#", [PtrAtom _ a, PtrAtom _ b])         -> pure [IntV $ if a == b then 1 else 0]
+  ( "eqAddr#", [PtrAtom _ a, PtrAtom _ b])         -> allocAtoms [IntV $ if a == b then 1 else 0]
 
   -- neAddr# :: Addr# -> Addr# -> Int#
-  ( "neAddr#", [PtrAtom _ a, PtrAtom _ b])         -> pure [IntV $ if a /= b then 1 else 0]
+  ( "neAddr#", [PtrAtom _ a, PtrAtom _ b])         -> allocAtoms [IntV $ if a /= b then 1 else 0]
 
   -- ltAddr# :: Addr# -> Addr# -> Int#
-  ( "ltAddr#", [PtrAtom _ a, PtrAtom _ b])         -> pure [IntV $ if a < b then 1 else 0]
+  ( "ltAddr#", [PtrAtom _ a, PtrAtom _ b])         -> allocAtoms [IntV $ if a < b then 1 else 0]
 
   -- leAddr# :: Addr# -> Addr# -> Int#
-  ( "leAddr#", [PtrAtom _ a, PtrAtom _ b])         -> pure [IntV $ if a <= b then 1 else 0]
+  ( "leAddr#", [PtrAtom _ a, PtrAtom _ b])         -> allocAtoms [IntV $ if a <= b then 1 else 0]
 
   -- indexCharOffAddr# :: Addr# -> Int# -> Char#
-  ( "indexCharOffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexCharOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     -- 8 bit char
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word8) index
       pure [CharV . chr $ fromIntegral v]
 
   -- indexWideCharOffAddr# :: Addr# -> Int# -> Char#
-  ( "indexWideCharOffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexWideCharOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     -- 32 bit unicode char
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Char) index
       pure [CharV v]
 
   -- indexIntOffAddr# :: Addr# -> Int# -> Int#
-  ( "indexIntOffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexIntOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int) index
       pure [IntV v]
 
   -- indexWordOffAddr# :: Addr# -> Int# -> Word#
-  ( "indexWordOffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexWordOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word) index
       pure [WordV v]
 
   -- indexAddrOffAddr# :: Addr# -> Int# -> Addr#
-  ( "indexAddrOffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexAddrOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
       pure [PtrAtom RawPtr v]
 
   -- indexFloatOffAddr# :: Addr# -> Int# -> Float#
-  ( "indexFloatOffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexFloatOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Float) index
       pure [FloatAtom v]
 
   -- indexDoubleOffAddr# :: Addr# -> Int# -> Double#
-  ( "indexDoubleOffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexDoubleOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Double) index
       pure [DoubleAtom v]
 
   -- indexStablePtrOffAddr# :: Addr# -> Int# -> StablePtr# a
-  ( "indexStablePtrOffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexStablePtrOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
       pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr v) v]
 
   -- indexInt8OffAddr# :: Addr# -> Int# -> Int#
-  ( "indexInt8OffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexInt8OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int8) index
       pure [IntV $ fromIntegral v]
 
   -- indexInt16OffAddr# :: Addr# -> Int# -> Int#
-  ( "indexInt16OffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexInt16OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int16) index
       pure [IntV $ fromIntegral v]
 
   -- indexInt32OffAddr# :: Addr# -> Int# -> INT32
-  ( "indexInt32OffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexInt32OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int32) index
       pure [IntV $ fromIntegral v]
 
   -- indexInt64OffAddr# :: Addr# -> Int# -> INT64
-  ( "indexInt64OffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexInt64OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int64) index
       pure [IntV $ fromIntegral v]
 
   -- indexWord8OffAddr# :: Addr# -> Int# -> Word#
-  ( "indexWord8OffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexWord8OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word8) index
       pure [WordV $ fromIntegral v]
 
   -- indexWord16OffAddr# :: Addr# -> Int# -> Word#
-  ( "indexWord16OffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexWord16OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word16) index
       pure [WordV $ fromIntegral v]
 
   -- indexWord32OffAddr# :: Addr# -> Int# -> WORD32
-  ( "indexWord32OffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexWord32OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word32) index
       pure [WordV $ fromIntegral v]
 
   -- indexWord64OffAddr# :: Addr# -> Int# -> WORD64
-  ( "indexWord64OffAddr#", [PtrAtom _ p, IntV index]) -> do
+  ( "indexWord64OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word64) index
       pure [WordV $ fromIntegral v]
 
   -- readCharOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Char# #)
-  ( "readCharOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readCharOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     -- 8 bit char
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word8) index
       pure [CharV . chr $ fromIntegral v]
 
   -- readWideCharOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Char# #)
-  ( "readWideCharOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readWideCharOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     -- 32 bit unicode char
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Char) index
       pure [CharV v]
 
   -- readIntOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
-  ( "readIntOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readIntOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int) index
       pure [IntV v]
 
   -- readWordOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
-  ( "readWordOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readWordOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word) index
       pure [WordV v]
 
   -- readAddrOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Addr# #)
-  ( "readAddrOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readAddrOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
       pure [PtrAtom RawPtr v]
 
   -- readFloatOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Float# #)
-  ( "readFloatOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readFloatOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Float) index
       pure [FloatAtom v]
 
   -- readDoubleOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Double# #)
-  ( "readDoubleOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readDoubleOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Double) index
       pure [DoubleAtom v]
 
   -- readStablePtrOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, StablePtr# a #)
-  ( "readStablePtrOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readStablePtrOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
       pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr v) v]
 
   -- readInt8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
-  ( "readInt8OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readInt8OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int8) index
       pure [IntV $ fromIntegral v]
 
   -- readInt16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
-  ( "readInt16OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readInt16OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int16) index
       pure [IntV $ fromIntegral v]
 
   -- readInt32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, INT32 #)
-  ( "readInt32OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readInt32OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int32) index
       pure [IntV $ fromIntegral v]
 
   -- readInt64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, INT64 #)
-  ( "readInt64OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readInt64OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int64) index
       pure [IntV $ fromIntegral v]
 
   -- readWord8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
-  ( "readWord8OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readWord8OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word8) index
       pure [WordV $ fromIntegral v]
 
   -- readWord16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
-  ( "readWord16OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readWord16OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word16) index
       pure [WordV $ fromIntegral v]
 
   -- readWord32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, WORD32 #)
-  ( "readWord32OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readWord32OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word32) index
       pure [WordV $ fromIntegral v]
 
   -- readWord64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, WORD64 #)
-  ( "readWord64OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
+  ( "readWord64OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word64) index
       pure [WordV $ fromIntegral v]
@@ -355,21 +357,21 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- atomicExchangeAddrAddr# :: Addr# -> Addr# -> State# s -> (# State# s, Addr# #)
-  ( "atomicExchangeAddrAddr#", [PtrAtom _ p, PtrAtom _ value, _s]) -> do
+  ( "atomicExchangeAddrAddr#", [PtrAtom _ p, PtrAtom _ value, _s]) -> allocAtoms =<< do
     liftIO $ do
       oldValue <- peek (castPtr p :: Ptr (Ptr Word8))
       poke (castPtr p :: Ptr (Ptr Word8)) value
       pure [PtrAtom RawPtr oldValue]
 
   -- atomicExchangeWordAddr# :: Addr# -> Word# -> State# s -> (# State# s, Word# #)
-  ( "atomicExchangeWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+  ( "atomicExchangeWordAddr#", [PtrAtom _ p, WordV value, _s]) -> allocAtoms =<< do
     liftIO $ do
       oldValue <- peek (castPtr p :: Ptr Word)
       poke (castPtr p :: Ptr Word) (fromIntegral value)
       pure [WordV oldValue]
 
   -- atomicCasAddrAddr# :: Addr# -> Addr# -> Addr# -> State# s -> (# State# s, Addr# #)
-  ( "atomicCasAddrAddr#", [PtrAtom _ p, PtrAtom _ expected, PtrAtom _ value, _s]) -> do
+  ( "atomicCasAddrAddr#", [PtrAtom _ p, PtrAtom _ expected, PtrAtom _ value, _s]) -> allocAtoms =<< do
     liftIO $ do
       oldValue <- peek (castPtr p :: Ptr (Ptr Word8))
       when (oldValue == expected) $ do
@@ -377,11 +379,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
       pure [PtrAtom RawPtr oldValue]
 
   -- atomicCasWordAddr# :: Addr# -> Word# -> Word# -> State# s -> (# State# s, Word# #)
-  ( "atomicCasWordAddr#", [PtrAtom _ p, WordV expected, WordV value, _s]) -> do
+  ( "atomicCasWordAddr#", [PtrAtom _ p, WordV expected, WordV value, _s]) -> allocAtoms =<< do
     liftIO $ do
       oldValue <- peek (castPtr p :: Ptr Word)
       when (oldValue == expected) $ do
         poke (castPtr p :: Ptr Word) (fromIntegral value)
       pure [WordV oldValue]
 
-  _ -> fallback op args t tc
+  _ -> fallback op argsAddr t tc

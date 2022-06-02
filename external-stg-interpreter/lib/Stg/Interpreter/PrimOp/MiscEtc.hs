@@ -8,15 +8,17 @@ import Foreign.Ptr
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp fallback op argsAddr t tc = do
+ args <- getAtoms argsAddr
+ case (op, args) of
 
   -- getCCSOf# :: a -> State# s -> (# State# s, Addr# #)
 
   -- getCurrentCCS# :: a -> State# s -> (# State# s, Addr# #)
   ( "getCurrentCCS#", [_, _]) -> do
     -- HINT: follows the non profiling mode semantics
-    pure [PtrAtom RawPtr nullPtr]
+    allocAtoms [PtrAtom RawPtr nullPtr]
 
   -- clearCCS# :: (State# s -> (# State# s, a #)) -> State# s -> (# State# s, a #)
 
@@ -38,7 +40,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- setThreadAllocationCounter# :: INT64 -> State# RealWorld -> State# RealWorld
 
-  _ -> fallback op args t tc
+  _ -> fallback op argsAddr t tc
 
 {-
 ------------------------------------------------------------------------

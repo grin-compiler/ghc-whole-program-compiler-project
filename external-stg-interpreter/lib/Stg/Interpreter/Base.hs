@@ -126,7 +126,7 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | LiftedUndefined
   deriving (Show, Eq, Ord)
 
-type ReturnValue = [Atom]
+type ReturnValue = [AtomAddr]
 
 data HeapObject
   = Con
@@ -528,7 +528,6 @@ readHeapClosure a = readHeap a >>= \o -> case o of
 -- primop related
 
 type PrimOpEval = Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
-
 type EvalOnNewThread = M [AtomAddr] -> M [AtomAddr]
 
 lookupWeakPointerDescriptor :: HasCallStack => Int -> M WeakPtrDescriptor
