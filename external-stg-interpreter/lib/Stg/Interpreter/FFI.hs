@@ -86,10 +86,10 @@ getFFISymbol name = do
       then stgErrorM $ "this RTS symbol is not implemented yet: " ++ BS8.unpack name
       else stgErrorM $ "unknown foreign symbol: " ++ BS8.unpack name
 
-getFFILabelPtrAtom :: Name -> LabelSpec -> M Atom
+getFFILabelPtrAtom :: Name -> LabelSpec -> M AtomAddr
 getFFILabelPtrAtom labelName labelSpec = do
   funPtr <- getFFISymbol labelName
-  pure $ PtrAtom (LabelPtr labelName labelSpec) $ castFunPtrToPtr funPtr
+  storeNewAtom $ PtrAtom (LabelPtr labelName labelSpec) $ castFunPtrToPtr funPtr
 
 mkFFIArg :: Atom -> M (Maybe FFI.Arg)
 mkFFIArg = \case
@@ -136,8 +136,9 @@ evalForeignCall funPtr cArgs retType = case retType of
     pure [DoubleAtom result]
 
 {-# NOINLINE evalFCallOp #-}
-evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
+evalFCallOp :: EvalOnNewThread -> ForeignCall -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalFCallOp evalOnNewThread fCall@ForeignCall{..} argsAddr t _tc = do
+    args <- getAtoms argsAddr
     --liftIO $ putStrLn $ "  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
 
@@ -159,22 +160,22 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
       StaticTarget _ "__int_encodeDouble" _ _
         | [IntV j, IntV e, Void] <- args
         , UnboxedTuple [DoubleRep] <- t
-        -> pure [DoubleV $ rts_intEncodeDouble j e]
+        -> allocAtoms [DoubleV $ rts_intEncodeDouble j e]
 
       StaticTarget _ "__word_encodeDouble" _ _
         | [WordV j, IntV e, Void] <- args
         , UnboxedTuple [DoubleRep] <- t
-        -> pure [DoubleV $ rts_wordEncodeDouble j e]
+        -> allocAtoms [DoubleV $ rts_wordEncodeDouble j e]
 
       StaticTarget _ "__int_encodeFloat" _ _
         | [IntV j, IntV e, Void] <- args
         , UnboxedTuple [FloatRep] <- t
-        -> pure [FloatV $ rts_intEncodeFloat j e]
+        -> allocAtoms [FloatV $ rts_intEncodeFloat j e]
 
       StaticTarget _ "__word_encodeFloat" _ _
         | [WordV j, IntV e, Void] <- args
         , UnboxedTuple [FloatRep] <- t
-        -> pure [FloatV $ rts_wordEncodeFloat j e]
+        -> allocAtoms [FloatV $ rts_wordEncodeFloat j e]
 
       StaticTarget _ "stg_interp_constr1_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
       StaticTarget _ "stg_interp_constr2_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
@@ -188,11 +189,11 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
       StaticTarget _ "performMajorGC" _ _ -> pure []
       StaticTarget _ "rts_setMainThread" _ _ -> pure [] -- TODO
 
-      StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]                          -- TODO: for testsuite
+      StaticTarget _ "stg_sig_install" _ _ -> allocAtoms [IntV (-1)]                          -- TODO: for testsuite
 
-      StaticTarget _ "lockFile" _ _ -> pure [IntV 0]
-      StaticTarget _ "unlockFile" _ _ -> pure [IntV 0]
-      StaticTarget _ "rtsSupportsBoundThreads" _ _ -> pure [IntV 0]
+      StaticTarget _ "lockFile" _ _ -> allocAtoms [IntV 0]
+      StaticTarget _ "unlockFile" _ _ -> allocAtoms [IntV 0]
+      StaticTarget _ "rtsSupportsBoundThreads" _ _ -> allocAtoms [IntV 0]
 {-
       StaticTarget _ "getMonotonicNSec" _ _
         | [Void] <- args
@@ -303,7 +304,8 @@ getProgArgv(int *argc, char **argv[])
           ] <- args
         , UnboxedTuple [AddrRep] <- t
         -> do
-          fun@HeapPtr{} <- lookupStablePointerPtr sp
+          funAddr <- lookupStablePointerPtr sp
+          fun@HeapPtr{} <- getAtom funAddr
           {-
           unsupported StgFCallOp: StgFCallOp
             (ForeignCall {foreignCTarget = StaticTarget NoSourceText "createAdjustor" Nothing True, foreignCConv = CCallConv, foreignCSafety = PlayRisky})
@@ -319,18 +321,21 @@ getProgArgv(int *argc, char **argv[])
           -- FIXME: _freeWrapper needs to be called otherwise it will leak the memory!!!!
           let Just (typeString, _)    = BS8.unsnoc typeCString
               Just (hsTypeString, _)  = BS8.unsnoc hsTypeCString
-          (funPtr, _freeWrapper) <- createAdjustor evalOnNewThread fun (BS8.unpack typeString) (BS8.unpack hsTypeString)
-          pure [PtrAtom RawPtr $ castFunPtrToPtr funPtr]
+          (funPtr, _freeWrapper) <- createAdjustor evalOnNewThread funAddr (BS8.unpack typeString) (BS8.unpack hsTypeString)
+          allocAtoms [PtrAtom RawPtr $ castFunPtrToPtr funPtr]
 
       -- GHC RTS global store getOrSet function implementation
       StaticTarget _ foreignSymbol _ _
         | Set.member foreignSymbol globalStoreSymbols
         , [value, Void] <- args
+        , [valueAddr, _] <- argsAddr
         -> do
             -- HINT: set once with the first value, then return it always, only for the globalStoreSymbols
             store <- gets $ rtsGlobalStore . ssRtsSupport
             case Map.lookup foreignSymbol store of
-              Nothing -> state $ \s@StgState{..} -> ([value], s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol value store}})
+              Nothing -> do
+                modify' $ \s@StgState{..} -> s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol valueAddr store}}
+                pure [valueAddr]
               Just v  -> pure [v]
 
 ------------------------------------------
@@ -340,7 +345,7 @@ getProgArgv(int *argc, char **argv[])
           --liftIO $ print foreignSymbol
           cArgs <- catMaybes <$> mapM mkFFIArg args
           funPtr <- getFFISymbol foreignSymbol
-          liftIOAndBorrowStgState $ do
+          result <- liftIOAndBorrowStgState $ do
             {-
             when (False || "hs_OpenGLRaw_getProcAddress" == foreignSymbol) $ do
               print args
@@ -348,13 +353,15 @@ getProgArgv(int *argc, char **argv[])
               pure ()
             -}
             evalForeignCall funPtr cArgs t
+          allocAtoms result
 
       DynamicTarget
         | (PtrAtom RawPtr funPtr) : funArgs <- args
         -> do
           cArgs <- catMaybes <$> mapM mkFFIArg funArgs
-          liftIOAndBorrowStgState $ do
+          result <- liftIOAndBorrowStgState $ do
             evalForeignCall (castPtrToFunPtr funPtr) cArgs t
+          allocAtoms result
 
 ------------------------------------------
 
@@ -495,7 +502,7 @@ INFO_TABLE_RET(stg_forceIO, RET_SMALL, P_ info_ptr)
 -}
 
 {-# NOINLINE ffiCallbackBridge #-}
-ffiCallbackBridge :: HasCallStack => EvalOnNewThread -> MVar StgState -> Atom -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
+ffiCallbackBridge :: HasCallStack => EvalOnNewThread -> MVar StgState -> AtomAddr -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
 ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif retStorage argsStoragePtr _userData = do
   let (retType : argsType) = typeString
       ('e' : hsRetType : hsArgsType) = hsTypeString
@@ -519,7 +526,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
     scheduleToTheEnd tidFFI
     switchToThread tidFFI
     -}
-    evalOnNewThread $ do
+    resultAddress <- evalOnNewThread $ do
       -- TODO: box FFI arg atoms
       --  i.e. rts_mkWord8
       -- TODO: check how the stubs are generated and what types are need to be boxed
@@ -528,8 +535,10 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
       -- Q: what stack shall we use here?
       -- !!!!!!!!!!!!!!!!!!!!!!!!!!
       stackPush $ Apply [] -- force result to WHNF
-      stackPush $ Apply $ boxedArgs ++ [Void]
+      boxedArgsAddr <- allocAtoms $ boxedArgs ++ [Void]
+      stackPush $ Apply boxedArgsAddr
       pure [fun]
+    getAtoms resultAddress
 {-
 --=============================================================================
     -- force result to WHNF
@@ -553,7 +562,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
       -- NOTE: only single result is supported
       charToSetter retType retStorage retAtom
 
-createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> String -> String -> M (FunPtr a, IO ())
+createAdjustor :: HasCallStack => EvalOnNewThread -> AtomAddr -> String -> String -> M (FunPtr a, IO ())
 createAdjustor evalOnNewThread fun typeString hsTypeString = do
   --liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show typeString ++ " " ++ show hsTypeString
 
@@ -593,9 +602,11 @@ boxFFIAtom c a = case (c, a) of
 
 mkWiredInCon :: (Rts -> DataCon) -> [Atom] -> M Atom
 mkWiredInCon conFun args = do
+  argsAddr <- allocAtoms args
   dc <- gets $ conFun . ssRtsSupport
-  HeapPtr <$> allocAndStore (Con False dc args)
+  HeapPtr <$> allocAndStore (Con False dc argsAddr)
 
+{- dead code
 unboxFFIAtom :: Char -> Atom -> M Atom
 unboxFFIAtom c heapObj = do
   (Con _ dc args) <- readHeapCon heapObj
@@ -628,7 +639,7 @@ unboxFFIAtom c heapObj = do
     ('b', []) -> do
       trueCon <- gets $ rtsTrueCon . ssRtsSupport
       pure . IntV $ if dc == trueCon then 1 else 0
-
+-}
 {-
 hsTyDescChar :: Type -> Char
 hsTyDescChar ty

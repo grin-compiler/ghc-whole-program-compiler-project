@@ -40,7 +40,7 @@ import Stg.Foreign.Linker
 
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimCall
---import Stg.Interpreter.FFI
+import Stg.Interpreter.FFI
 import Stg.Interpreter.Rts
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
 
@@ -102,7 +102,7 @@ data Lit
 
 evalLiteral :: HasCallStack => Lit -> M AtomAddr
 evalLiteral = \case
-  --LitLabel name spec  -> getFFILabelPtrAtom name spec
+  LitLabel name spec  -> getFFILabelPtrAtom name spec
   LitString str       -> getCStringConstantPtrAtom str
   LitFloat f    -> storeNewAtom . FloatAtom $ realToFrac f
   LitDouble d   -> storeNewAtom . DoubleAtom $ realToFrac d
@@ -477,7 +477,6 @@ evalExpr localEnv = \case
     tid <- gets ssCurrentThreadId
     evalPrimOp op args t tc
 
-{- TODO
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
     args <- case foreignCTarget foreignCall of
       StaticTarget _ "createAdjustor" _ _
@@ -487,7 +486,7 @@ evalExpr localEnv = \case
             mapM (evalArg localEnv) [arg0, arg1, StgLitArg LitNullAddr, arg3, arg4, arg5]
       _ -> mapM (evalArg localEnv) l
     evalFCallOp evalOnNewThread foreignCall args t tc
--}
+
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
     args <- mapM (evalArg localEnv) l
     evalPrimCallOp primCall args t tc

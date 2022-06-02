@@ -17,7 +17,7 @@ library
 
     Stg.Interpreter
     Stg.Interpreter.Base
---    Stg.Interpreter.FFI
+    Stg.Interpreter.FFI
     Stg.Interpreter.PrimCall
     Stg.Interpreter.Rts
     Stg.Interpreter.IOManager
