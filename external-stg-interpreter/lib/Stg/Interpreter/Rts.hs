@@ -124,7 +124,7 @@ wiredInCons =
   TODO:
     bind wired in closures when allocating static top level closures
 -}
-wiredInClosures :: [(Name, Name, Name, Rts -> Atom -> Rts)]
+wiredInClosures :: [(Name, Name, Name, Rts -> AtomAddr -> Rts)]
 wiredInClosures =
   -- unit-id,     module,                   binder,                         closure setter
   [ ("base",      "GHC.TopHandler",         "runIO",                        \s cl -> s {rtsTopHandlerRunIO            = cl})

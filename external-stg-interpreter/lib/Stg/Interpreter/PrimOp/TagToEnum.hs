@@ -9,21 +9,23 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-dataToTagOp :: [Atom] -> M [Atom]
+dataToTagOp :: [Atom] -> M [AtomAddr]
 dataToTagOp [whnf@HeapPtr{}] = do
   -- NOTE: the GHC dataToTag# primop works for any Data Con regardless its arity
   (Con _ dataCon _) <- readHeapCon whnf
 
   case findIndex (\d -> dcId d == dcId dataCon) (tcDataCons (uncutTyCon $ dcTyCon dataCon)) of
     Nothing -> stgErrorM $ "Data constructor tag is not found for " ++ show (dcUniqueName dataCon)
-    Just i  -> pure [IntV i]
+    Just i  -> allocAtoms [IntV i]
 dataToTagOp result = stgErrorM $ "dataToTagOp expected [HeapPtr], got: " ++ show result
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp fallback op argsAddr t tc = do
+ args <- getAtoms argsAddr
+ case (op, args, argsAddr) of
 
   -- dataToTag# :: a -> Int#  -- Zero-indexed; the first constructor has tag zero
-  ( "dataToTag#", [ho@HeapPtr{}]) -> do
+  ( "dataToTag#", [ho@HeapPtr{}], [hoAddr]) -> do
     {-
       Q: how should it behave when the heap object is not a constructor?
       A: is should evaluate it to WHNF
@@ -42,13 +44,13 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
      -- HINT: force thunks
     stackPush $ Apply []
-    pure [ho]
+    pure [hoAddr]
 
   -- tagToEnum# :: Int# -> a
-  ( "tagToEnum#", [IntV i]) -> do
+  ( "tagToEnum#", [IntV i], _) -> do
     Just tyc <- pure tc
     let dc = tcDataCons tyc !! i
     loc <- allocAndStore (Con False dc [])
-    pure [HeapPtr loc]
+    allocAtoms [HeapPtr loc]
 
-  _ -> fallback op args t tc
+  _ -> fallback op argsAddr t tc

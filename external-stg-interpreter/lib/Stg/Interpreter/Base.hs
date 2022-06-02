@@ -86,16 +86,16 @@ data PtrOrigin
 
 data WeakPtrDescriptor
   = WeakPtrDescriptor
-  { wpdKey          :: Atom
-  , wpdValue        :: Maybe Atom -- live or dead
-  , wpdFinalizer    :: Maybe Atom -- closure
-  , wpdCFinalizers  :: [(Atom, Maybe Atom, Atom)] -- fun, env ptr, data ptr
+  { wpdKey          :: AtomAddr
+  , wpdValue        :: Maybe AtomAddr -- live or dead
+  , wpdFinalizer    :: Maybe AtomAddr -- closure
+  , wpdCFinalizers  :: [(AtomAddr, Maybe AtomAddr, AtomAddr)] -- fun, env ptr, data ptr
   }
   deriving (Show, Eq, Ord)
 
 data MVarDescriptor
   = MVarDescriptor
-  { mvdValue    :: Maybe Atom
+  { mvdValue    :: Maybe AtomAddr
   , mvdQueue    :: [Int] -- thread id, blocking in this mvar ; this is required only for the fairness ; INVARIANT: BlockedOnReads are present at the beginning of the queue
   }
   deriving (Show, Eq, Ord)
@@ -132,29 +132,29 @@ data HeapObject
   = Con
     { hoIsLNE       :: Bool
     , hoCon         :: DataCon
-    , hoConArgs     :: [Atom]
+    , hoConArgs     :: [AtomAddr]
     }
   | Closure
     { hoIsLNE       :: Bool
     , hoName        :: Id
     , hoCloBody     :: StgRhsClosure
     , hoEnv         :: Env    -- local environment ; with live variables only, everything else is pruned
-    , hoCloArgs     :: [Atom]
+    , hoCloArgs     :: [AtomAddr]
     , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
     }
   | BlackHole HeapObject
   | ApStack                   -- HINT: needed for the async exceptions
-    { hoResult      :: [Atom]
+    { hoResult      :: [AtomAddr]
     , hoStack       :: [StackContinuation]
     }
-  | RaiseException Atom
+  | RaiseException AtomAddr
   deriving (Show, Eq, Ord)
 
 data StackContinuation
   = CaseOf        !Env !Binder !AltType ![Alt]  -- pattern match on the result ; carries the closure's local environment
   | Update        !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
-  | Apply         ![Atom]                       -- apply args on the result heap object
-  | Catch         !Atom !Bool !Bool             -- catch frame ; exception handler, block async exceptions, interruptible
+  | Apply         ![AtomAddr]                   -- apply args on the result heap object
+  | Catch         !AtomAddr !Bool !Bool         -- catch frame ; exception handler, block async exceptions, interruptible
   | RestoreExMask !Bool !Bool                   -- saved: block async exceptions, interruptible
   | RunScheduler  !ScheduleReason
   | DataToTagOp
@@ -180,8 +180,11 @@ instance Show (PrintableMVar a) where
 
 type Addr   = Int
 type Heap   = IntMap HeapObject
-type Env    = Map Id (StaticOrigin, Atom)   -- NOTE: must contain only the defined local variables
+type Env    = Map Id (StaticOrigin, AtomAddr)   -- NOTE: must contain only the defined local variables
 type Stack  = IntMap (StackContinuation, Maybe Int)
+
+type AtomAddr   = Int
+type AtomStore  = IntMap Atom
 
 data StaticOrigin
   = SO_CloArg
@@ -198,10 +201,11 @@ data StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
   , ssStack               :: !Stack
+  , ssAtomStore           :: !AtomStore
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
-  , ssCStringConstants    :: Map ByteString Atom
+  , ssCStringConstants    :: Map ByteString AtomAddr
 
   -- threading
   , ssThreads             :: IntMap ThreadState
@@ -212,19 +216,20 @@ data StgState
 
   -- primop related
 
-  , ssStableNameMap       :: Map Atom Int
+  , ssStableNameMap       :: Map AtomAddr Int
   , ssWeakPointers        :: IntMap WeakPtrDescriptor
-  , ssStablePointers      :: IntMap Atom
+  , ssStablePointers      :: IntMap AtomAddr
   , ssMutableByteArrays   :: IntMap ByteArrayDescriptor
   , ssMVars               :: IntMap MVarDescriptor
-  , ssMutVars             :: IntMap Atom
-  , ssArrays              :: IntMap (Vector Atom)
-  , ssMutableArrays       :: IntMap (Vector Atom)
-  , ssSmallArrays         :: IntMap (Vector Atom)
-  , ssSmallMutableArrays  :: IntMap (Vector Atom)
-  , ssArrayArrays         :: IntMap (Vector Atom)
-  , ssMutableArrayArrays  :: IntMap (Vector Atom)
+  , ssMutVars             :: IntMap AtomAddr
+  , ssArrays              :: IntMap (Vector AtomAddr)
+  , ssMutableArrays       :: IntMap (Vector AtomAddr)
+  , ssSmallArrays         :: IntMap (Vector AtomAddr)
+  , ssSmallMutableArrays  :: IntMap (Vector AtomAddr)
+  , ssArrayArrays         :: IntMap (Vector AtomAddr)
+  , ssMutableArrayArrays  :: IntMap (Vector AtomAddr)
 
+  , ssNextAtomAddr          :: {-# UNPACK #-} !Int
   , ssNextStackAddr         :: {-# UNPACK #-} !Int
   , ssNextThreadId          :: !Int
   , ssNextHeapAddr          :: {-# UNPACK #-} !Int
@@ -263,6 +268,7 @@ emptyStgState stateStore dl = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
   , ssStack               = mempty
+  , ssAtomStore           = mempty
 
   , ssCStringConstants    = mempty
 
@@ -286,6 +292,7 @@ emptyStgState stateStore dl = StgState
   , ssArrayArrays         = mempty
   , ssMutableArrayArrays  = mempty
 
+  , ssNextAtomAddr          = 0
   , ssNextStackAddr         = 0
   , ssNextThreadId          = 0
   , ssNextHeapAddr          = 0
@@ -332,22 +339,22 @@ data Rts
   , rtsFalseCon     :: DataCon
 
   -- closures used by FFI wrapper code ; heap address of the closure
-  , rtsUnpackCString              :: Atom
-  , rtsTopHandlerRunIO            :: Atom
-  , rtsTopHandlerRunNonIO         :: Atom
-  , rtsTopHandlerFlushStdHandles  :: Atom
+  , rtsUnpackCString              :: AtomAddr
+  , rtsTopHandlerRunIO            :: AtomAddr
+  , rtsTopHandlerRunNonIO         :: AtomAddr
+  , rtsTopHandlerFlushStdHandles  :: AtomAddr
 
   -- closures used by the exception primitives
-  , rtsDivZeroException   :: Atom
-  , rtsUnderflowException :: Atom
-  , rtsOverflowException  :: Atom
+  , rtsDivZeroException   :: AtomAddr
+  , rtsUnderflowException :: AtomAddr
+  , rtsOverflowException  :: AtomAddr
 
   -- rts helper custom closures
-  , rtsApplyFun1Arg :: Atom
-  , rtsTuple2Proj0  :: Atom
+  , rtsApplyFun1Arg :: AtomAddr
+  , rtsTuple2Proj0  :: AtomAddr
 
   -- builtin special store, see FFI (i.e. getOrSetGHCConcSignalSignalHandlerStore)
-  , rtsGlobalStore  :: Map Name Atom
+  , rtsGlobalStore  :: Map Name AtomAddr
 
   -- program contants
   , rtsProgName     :: String
@@ -357,6 +364,29 @@ data Rts
 
 type M = StateT StgState IO
 
+-- atom operations
+
+freshAtomAddress :: HasCallStack => M AtomAddr
+freshAtomAddress = do
+  state $ \s@StgState{..} -> (ssNextAtomAddr, s {ssNextAtomAddr = succ ssNextAtomAddr})
+
+storeNewAtom :: Atom -> M AtomAddr
+storeNewAtom a = do
+  addr <- freshAtomAddress
+  modify' $ \s@StgState{..} -> s {ssAtomStore = IntMap.insert addr a ssAtomStore}
+  pure addr
+
+getAtom :: AtomAddr -> M Atom
+getAtom atomAddr = do
+  gets (IntMap.lookup atomAddr . ssAtomStore) >>= \case
+    Nothing   -> stgErrorM $ "missing atom at address: " ++ show atomAddr
+    Just atom -> pure atom
+
+getAtoms :: [AtomAddr] -> M [Atom]
+getAtoms = mapM getAtom
+
+allocAtoms :: [Atom] -> M [AtomAddr]
+allocAtoms = mapM storeNewAtom
 
 -- stack operations
 
@@ -447,16 +477,16 @@ stgErrorM msg = do
   action
   error "stgErrorM"
 
-addBinderToEnv :: StaticOrigin -> Binder -> Atom -> Env -> Env
+addBinderToEnv :: StaticOrigin -> Binder -> AtomAddr -> Env -> Env
 addBinderToEnv so b a = Map.insert (Id b) (so, a)
 
-addZippedBindersToEnv :: StaticOrigin -> [(Binder, Atom)] -> Env -> Env
+addZippedBindersToEnv :: StaticOrigin -> [(Binder, AtomAddr)] -> Env -> Env
 addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so, v) e) env bvList
 
-addManyBindersToEnv :: StaticOrigin -> [Binder] -> [Atom] -> Env -> Env
+addManyBindersToEnv :: StaticOrigin -> [Binder] -> [AtomAddr] -> Env -> Env
 addManyBindersToEnv so binders values = addZippedBindersToEnv so $ zip binders values
 
-lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, Atom)
+lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, Addr)
 lookupEnvSO localEnv b = do
   env <- if binderTopLevel b
           then gets ssStaticGlobalEnv
@@ -465,14 +495,16 @@ lookupEnvSO localEnv b = do
     Just a  -> pure a
     Nothing -> case binderUniqueName b of
       -- HINT: GHC.Prim module does not exist it's a wired in module
+{- TODO
       "ghc-prim_GHC.Prim.void#"           -> pure (SO_Builtin, Void)
       "ghc-prim_GHC.Prim.realWorld#"      -> pure (SO_Builtin, Void)
       "ghc-prim_GHC.Prim.coercionToken#"  -> pure (SO_Builtin, Void)
       "ghc-prim_GHC.Prim.proxy#"          -> pure (SO_Builtin, Void)
       "ghc-prim_GHC.Prim.(##)"            -> pure (SO_Builtin, Void)
+-}
       _ -> stgErrorM $ "unknown variable: " ++ show b
 
-lookupEnv :: HasCallStack => Env -> Binder -> M Atom
+lookupEnv :: HasCallStack => Env -> Binder -> M AtomAddr
 lookupEnv localEnv b = snd <$> lookupEnvSO localEnv b
 
 readHeap :: HasCallStack => Atom -> M HeapObject
@@ -495,11 +527,9 @@ readHeapClosure a = readHeap a >>= \o -> case o of
 
 -- primop related
 
-type PrimOpEval = Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+type PrimOpEval = Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
 
---type BuiltinStgEval = Atom -> M [Atom]
---type BuiltinStgApply = Atom -> [Atom] -> M [Atom]
-type EvalOnNewThread = M [Atom] -> M [Atom]
+type EvalOnNewThread = M [AtomAddr] -> M [AtomAddr]
 
 lookupWeakPointerDescriptor :: HasCallStack => Int -> M WeakPtrDescriptor
 lookupWeakPointerDescriptor wpId = do
@@ -507,18 +537,18 @@ lookupWeakPointerDescriptor wpId = do
     Nothing -> stgErrorM $ "unknown WeakPointer: " ++ show wpId
     Just a  -> pure a
 
-lookupStablePointerPtr :: HasCallStack => Ptr Word8 -> M Atom
+lookupStablePointerPtr :: HasCallStack => Ptr Word8 -> M AtomAddr
 lookupStablePointerPtr sp = do
   let IntPtr spId = ptrToIntPtr sp
   lookupStablePointer spId
 
-lookupStablePointer :: HasCallStack => Int -> M Atom
+lookupStablePointer :: HasCallStack => Int -> M AtomAddr
 lookupStablePointer spId = do
   IntMap.lookup spId <$> gets ssStablePointers >>= \case
     Nothing -> stgErrorM $ "unknown StablePointer: " ++ show spId
     Just a  -> pure a
 
-lookupMutVar :: HasCallStack => Int -> M Atom
+lookupMutVar :: HasCallStack => Int -> M AtomAddr
 lookupMutVar m = do
   IntMap.lookup m <$> gets ssMutVars >>= \case
     Nothing -> stgErrorM $ "unknown MutVar: " ++ show m
@@ -530,37 +560,37 @@ lookupMVar m = do
     Nothing -> stgErrorM $ "unknown MVar: " ++ show m
     Just a  -> pure a
 
-lookupArray :: HasCallStack => Int -> M (Vector Atom)
+lookupArray :: HasCallStack => Int -> M (Vector AtomAddr)
 lookupArray m = do
   IntMap.lookup m <$> gets ssArrays >>= \case
     Nothing -> stgErrorM $ "unknown Array: " ++ show m
     Just a  -> pure a
 
-lookupMutableArray :: HasCallStack => Int -> M (Vector Atom)
+lookupMutableArray :: HasCallStack => Int -> M (Vector AtomAddr)
 lookupMutableArray m = do
   IntMap.lookup m <$> gets ssMutableArrays >>= \case
     Nothing -> stgErrorM $ "unknown MutableArray: " ++ show m
     Just a  -> pure a
 
-lookupSmallArray :: HasCallStack => Int -> M (Vector Atom)
+lookupSmallArray :: HasCallStack => Int -> M (Vector AtomAddr)
 lookupSmallArray m = do
   IntMap.lookup m <$> gets ssSmallArrays >>= \case
     Nothing -> stgErrorM $ "unknown SmallArray: " ++ show m
     Just a  -> pure a
 
-lookupSmallMutableArray :: HasCallStack => Int -> M (Vector Atom)
+lookupSmallMutableArray :: HasCallStack => Int -> M (Vector AtomAddr)
 lookupSmallMutableArray m = do
   IntMap.lookup m <$> gets ssSmallMutableArrays >>= \case
     Nothing -> stgErrorM $ "unknown SmallMutableArray: " ++ show m
     Just a  -> pure a
 
-lookupArrayArray :: HasCallStack => Int -> M (Vector Atom)
+lookupArrayArray :: HasCallStack => Int -> M (Vector AtomAddr)
 lookupArrayArray m = do
   IntMap.lookup m <$> gets ssArrayArrays >>= \case
     Nothing -> stgErrorM $ "unknown ArrayArray: " ++ show m
     Just a  -> pure a
 
-lookupMutableArrayArray :: HasCallStack => Int -> M (Vector Atom)
+lookupMutableArrayArray :: HasCallStack => Int -> M (Vector AtomAddr)
 lookupMutableArrayArray m = do
   IntMap.lookup m <$> gets ssMutableArrayArrays >>= \case
     Nothing -> stgErrorM $ "unknown MutableArrayArray: " ++ show m
@@ -598,7 +628,7 @@ liftIOAndBorrowStgState action = do
 
 -- string constants
 -- NOTE: the string gets extended with a null terminator
-getCStringConstantPtrAtom :: ByteString -> M Atom
+getCStringConstantPtrAtom :: ByteString -> M AtomAddr
 getCStringConstantPtrAtom key = do
   strMap <- gets ssCStringConstants
   case Map.lookup key strMap of
@@ -607,8 +637,9 @@ getCStringConstantPtrAtom key = do
       let bsCString = BS8.snoc key '\0'
           (bsFPtr, bsOffset, _bsLen) = BS.toForeignPtr bsCString
           a = PtrAtom (CStringPtr bsCString) $ plusPtr (unsafeForeignPtrToPtr bsFPtr) bsOffset
-      modify' $ \s -> s {ssCStringConstants = Map.insert key a strMap}
-      pure a
+      addr <- storeNewAtom a
+      modify' $ \s -> s {ssCStringConstants = Map.insert key addr strMap}
+      pure addr
 
 ---------------------------------------------
 -- threading
@@ -620,7 +651,7 @@ data AsyncExceptionMask
 
 data ThreadState
   = ThreadState
-  { tsCurrentResult     :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
+  { tsCurrentResult     :: [AtomAddr] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
   , tsStackTop          :: Maybe Int
   , tsStatus            :: !ThreadStatus
   , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
@@ -732,10 +763,10 @@ NOTE:
 
 -- NOTE: the BlockReason data type is some kind of reification of the blocked operation
 data BlockReason
-  = BlockedOnMVar         Int (Maybe Atom) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
+  = BlockedOnMVar         Int (Maybe AtomAddr) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
   | BlockedOnMVarRead     Int       -- mvar id
   | BlockedOnBlackHole
-  | BlockedOnThrowAsyncEx Int Atom  -- target thread id, exception
+  | BlockedOnThrowAsyncEx Int AtomAddr  -- target thread id, exception
   | BlockedOnSTM
   | BlockedOnForeignCall            -- RTS name: BlockedOnCCall
   | BlockedOnRead         Int       -- file descriptor

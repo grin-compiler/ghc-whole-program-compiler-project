@@ -8,7 +8,7 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   {-
@@ -125,11 +125,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
           (True,  False)  -> 1
           (True,  True)   -> 2
           (False, True)   -> error "impossible exception mask, tsBlockExceptions: False, tsInterruptible: True"
-    pure [IntV status]
+    allocAtoms [IntV status]
 
   _ -> fallback op args t tc
 
-raiseEx :: Atom -> M [Atom]
+raiseEx :: AtomAddr -> M [AtomAddr]
 raiseEx ex = unwindStack where
   unwindStack = do
     stackPop >>= \case
@@ -150,7 +150,8 @@ raiseEx ex = unwindStack where
           stackPush $ RestoreExMask bEx iEx
 
         -- run the exception handler
-        stackPush $ Apply [ex, Void]
+        [voidAddr] <- allocAtoms [Void]
+        stackPush $ Apply [ex, voidAddr]
         pure [exHandler]
 
       Just (Update addr) -> do

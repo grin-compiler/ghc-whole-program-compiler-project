@@ -18,8 +18,9 @@ pattern DoubleV d = DoubleAtom d
 
 -- NOTE: the WordV should contain a 64 bit wide value
 
-evalPrimCallOp :: PrimCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
+evalPrimCallOp :: PrimCall -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = do
+  args <- getAtoms argsAddr
   case primCallTarget of
   -- stg_raiseDivZZerozh :: State# RealWorld -> (# State# RealWorld, Void# #)
     "stg_raiseDivZZerozh"
@@ -47,7 +48,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
       | [Void] <- args
       -> do
         i <- gets ssNextHeapAddr
-        pure [IntAtom (-i)]
+        allocAtoms [IntAtom (-i)]
 
   -- stg_doubleToWord64zh :: Double# -> Word#
     "stg_doubleToWord64zh"
@@ -55,7 +56,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
       -> do
         -- HINT: bit-conversion
         w <- liftIO $ with a $ \p -> peek (castPtr p :: Ptr Word64)
-        pure [WordV $ fromIntegral w]
+        allocAtoms [WordV $ fromIntegral w]
 
   -- stg_floatToWord32zh :: Float# -> Word#
     "stg_floatToWord32zh"
@@ -63,7 +64,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
       -> do
         -- HINT: bit-conversion
         w <- liftIO $ with a $ \p -> peek (castPtr p :: Ptr Word32)
-        pure [WordV $ fromIntegral w]
+        allocAtoms [WordV $ fromIntegral w]
 
   -- stg_word32ToFloatzh :: Word# -> Float#
     "stg_word32ToFloatzh"
@@ -71,7 +72,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
       -> do
         -- HINT: bit-conversion
         f <- liftIO $ with (fromIntegral a :: Word32) $ \p -> peek (castPtr p :: Ptr Float)
-        pure [FloatV f]
+        allocAtoms [FloatV f]
 
   -- stg_word64ToDoublezh :: Word# -> Double#
     "stg_word64ToDoublezh"
@@ -79,7 +80,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
       -> do
         -- HINT: bit-conversion
         d <- liftIO $ with (fromIntegral a :: Word64) $ \p -> peek (castPtr p :: Ptr Double)
-        pure [DoubleV d]
+        allocAtoms [DoubleV d]
 
 
     _ -> stgErrorM $ "unsupported StgPrimCallOp: " ++ show pCall ++ " :: " ++ show t ++ "\n args: " ++ show args

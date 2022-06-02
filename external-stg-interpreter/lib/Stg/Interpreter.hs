@@ -40,37 +40,37 @@ import Stg.Foreign.Linker
 
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimCall
-import Stg.Interpreter.FFI
+--import Stg.Interpreter.FFI
 import Stg.Interpreter.Rts
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
 
-import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
-import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
-import qualified Stg.Interpreter.PrimOp.SmallArray    as PrimSmallArray
-import qualified Stg.Interpreter.PrimOp.ArrayArray    as PrimArrayArray
-import qualified Stg.Interpreter.PrimOp.ByteArray     as PrimByteArray
-import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
-import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
-import qualified Stg.Interpreter.PrimOp.DelayWait     as PrimDelayWait
-import qualified Stg.Interpreter.PrimOp.Parallelism   as PrimParallelism
+--import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
+--import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
+--import qualified Stg.Interpreter.PrimOp.SmallArray    as PrimSmallArray
+--import qualified Stg.Interpreter.PrimOp.ArrayArray    as PrimArrayArray
+--import qualified Stg.Interpreter.PrimOp.ByteArray     as PrimByteArray
+--import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
+--import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
+--import qualified Stg.Interpreter.PrimOp.DelayWait     as PrimDelayWait
+--import qualified Stg.Interpreter.PrimOp.Parallelism   as PrimParallelism
 import qualified Stg.Interpreter.PrimOp.Exceptions    as PrimExceptions
-import qualified Stg.Interpreter.PrimOp.Float         as PrimFloat
-import qualified Stg.Interpreter.PrimOp.Double        as PrimDouble
-import qualified Stg.Interpreter.PrimOp.Word          as PrimWord
-import qualified Stg.Interpreter.PrimOp.Word8         as PrimWord8
-import qualified Stg.Interpreter.PrimOp.Word16        as PrimWord16
-import qualified Stg.Interpreter.PrimOp.Int           as PrimInt
-import qualified Stg.Interpreter.PrimOp.Int8          as PrimInt8
-import qualified Stg.Interpreter.PrimOp.Int16         as PrimInt16
-import qualified Stg.Interpreter.PrimOp.MutVar        as PrimMutVar
-import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
-import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
-import qualified Stg.Interpreter.PrimOp.Prefetch      as PrimPrefetch
-import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
-import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
+--import qualified Stg.Interpreter.PrimOp.Float         as PrimFloat
+--import qualified Stg.Interpreter.PrimOp.Double        as PrimDouble
+--import qualified Stg.Interpreter.PrimOp.Word          as PrimWord
+--import qualified Stg.Interpreter.PrimOp.Word8         as PrimWord8
+--import qualified Stg.Interpreter.PrimOp.Word16        as PrimWord16
+--import qualified Stg.Interpreter.PrimOp.Int           as PrimInt
+--import qualified Stg.Interpreter.PrimOp.Int8          as PrimInt8
+--import qualified Stg.Interpreter.PrimOp.Int16         as PrimInt16
+--import qualified Stg.Interpreter.PrimOp.MutVar        as PrimMutVar
+--import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
+--import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
+--import qualified Stg.Interpreter.PrimOp.Prefetch      as PrimPrefetch
+--import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
+--import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
 import qualified Stg.Interpreter.PrimOp.TagToEnum     as PrimTagToEnum
-import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
-import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
+--import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
+--import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
 
 {-
   Q: what is the operational semantic of StgApp
@@ -100,20 +100,20 @@ data Lit
   | LitNumber   !LitNumType !Integer
 -}
 
-evalLiteral :: HasCallStack => Lit -> M Atom
+evalLiteral :: HasCallStack => Lit -> M AtomAddr
 evalLiteral = \case
-  LitLabel name spec  -> getFFILabelPtrAtom name spec
+  --LitLabel name spec  -> getFFILabelPtrAtom name spec
   LitString str       -> getCStringConstantPtrAtom str
-  LitFloat f    -> pure . FloatAtom $ realToFrac f
-  LitDouble d   -> pure . DoubleAtom $ realToFrac d
-  LitNullAddr   -> pure $ PtrAtom RawPtr nullPtr
-  LitNumber LitNumInt n     -> pure . IntAtom $ fromIntegral n
-  LitNumber LitNumInt64 n   -> pure . IntAtom $ fromIntegral n
-  LitNumber LitNumWord n    -> pure . WordAtom $ fromIntegral n
-  LitNumber LitNumWord64 n  -> pure . WordAtom $ fromIntegral n
-  l -> pure $ Literal l
+  LitFloat f    -> storeNewAtom . FloatAtom $ realToFrac f
+  LitDouble d   -> storeNewAtom . DoubleAtom $ realToFrac d
+  LitNullAddr   -> storeNewAtom $ PtrAtom RawPtr nullPtr
+  LitNumber LitNumInt n     -> storeNewAtom . IntAtom $ fromIntegral n
+  LitNumber LitNumInt64 n   -> storeNewAtom . IntAtom $ fromIntegral n
+  LitNumber LitNumWord n    -> storeNewAtom . WordAtom $ fromIntegral n
+  LitNumber LitNumWord64 n  -> storeNewAtom . WordAtom $ fromIntegral n
+  l -> storeNewAtom $ Literal l
 
-evalArg :: HasCallStack => Env -> Arg -> M Atom
+evalArg :: HasCallStack => Env -> Arg -> M AtomAddr
 evalArg localEnv = \case
   StgLitArg l -> evalLiteral l
   StgVarArg b -> lookupEnv localEnv b
@@ -127,12 +127,15 @@ evalArg localEnv = \case
 -}
 
 
-builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
-builtinStgEval so a@HeapPtr{} = do
-  o <- readHeap a
+builtinStgEval :: HasCallStack => StaticOrigin -> AtomAddr -> M [AtomAddr]
+builtinStgEval so atomAddr = do
+  atom <- getAtom atomAddr >>= \case
+    v@HeapPtr{} -> pure v
+    v           -> stgErrorM $ "expected a thunk, got: " ++ show v ++ ", static-origin: " ++ show so
+  o <- readHeap atom
   case o of
     RaiseException ex -> PrimExceptions.raiseEx ex
-    Con{}       -> pure [a]
+    Con{}             -> pure [atomAddr]
     {-
     -- TODO: check how the cmm stg machine handles this case
     BlackHole t -> do
@@ -144,13 +147,13 @@ builtinStgEval so a@HeapPtr{} = do
     -}
     Closure{..}
       | hoCloMissing /= 0
-      -> pure [a]
+      -> pure [atomAddr]
 
       | otherwise
       -> do
 
         let StgRhsClosure _ uf params e = hoCloBody
-            HeapPtr l = a
+            HeapPtr l = atom
             extendedEnv = addManyBindersToEnv SO_CloArg params hoCloArgs hoEnv
 
         -- TODO: env or free var handling
@@ -168,14 +171,20 @@ builtinStgEval so a@HeapPtr{} = do
             store l (BlackHole o)
             evalExpr extendedEnv e
     _ -> stgErrorM $ "expected heap object: " ++ show o
-builtinStgEval so a = stgErrorM $ "expected a thunk, got: " ++ show a ++ ", static-origin: " ++ show so
 
-builtinStgApply :: HasCallStack => StaticOrigin -> Atom -> [Atom] -> M [Atom]
+builtinStgApply :: HasCallStack => StaticOrigin -> AtomAddr -> [AtomAddr] -> M [AtomAddr]
 builtinStgApply so a [] = builtinStgEval so a
-builtinStgApply so a@HeapPtr{} args = do
-  let argCount      = length args
-      HeapPtr addr  = a
-  o <- readHeap a
+--builtinStgApply so a@HeapPtr{} args = do
+builtinStgApply so atomAddr argsAddr = do
+  atom <- getAtom atomAddr >>= \case
+    v@HeapPtr{} -> pure v
+    v -> do
+      args <- getAtoms argsAddr
+      stgErrorM $ "builtinStgApply - expected a closure (ptr), got: " ++ show v ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
+
+  let argCount      = length argsAddr
+      HeapPtr addr  = atom
+  o <- readHeap atom
   case o of
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}             -> stgErrorM $ "unexpexted con at apply: "-- ++ show o
@@ -185,25 +194,23 @@ builtinStgApply so a@HeapPtr{} args = do
       | hoCloMissing - argCount > 0
       -> do
         newAp <- freshHeapAddress
-        store newAp (o {hoCloArgs = hoCloArgs ++ args, hoCloMissing = hoCloMissing - argCount})
-        pure [HeapPtr newAp]
+        store newAp (o {hoCloArgs = hoCloArgs ++ argsAddr, hoCloMissing = hoCloMissing - argCount})
+        allocAtoms [HeapPtr newAp]
 
       -- over saturation
       | hoCloMissing - argCount < 0
       -> do
-        let (satArgs, remArgs) = splitAt hoCloMissing args
+        let (satArgs, remArgs) = splitAt hoCloMissing argsAddr
         stackPush (Apply remArgs)
-        builtinStgApply so a satArgs
+        builtinStgApply so atomAddr satArgs
 
       -- saturation
       | hoCloMissing - argCount == 0
       -> do
         newAp <- freshHeapAddress
-        store newAp (o {hoCloArgs = hoCloArgs ++ args, hoCloMissing = hoCloMissing - argCount})
-        builtinStgEval so (HeapPtr newAp)
-
-builtinStgApply so a args = stgErrorM $ "builtinStgApply - expected a closure (ptr), got: " ++
-  show a ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
+        store newAp (o {hoCloArgs = hoCloArgs ++ argsAddr, hoCloMissing = hoCloMissing - argCount})
+        hpAddr <- storeNewAtom (HeapPtr newAp)
+        builtinStgEval so hpAddr
 
 {-
 heapObjectKind :: HeapObject -> String
@@ -277,13 +284,13 @@ killAllThreads :: M ()
 killAllThreads = do
   pure () -- TODO
 
-evalOnMainThread :: M [Atom] -> M [Atom]
+evalOnMainThread :: M [AtomAddr] -> M [AtomAddr]
 evalOnMainThread = evalOnThread True
 
-evalOnNewThread :: M [Atom] -> M [Atom]
+evalOnNewThread :: M [AtomAddr] -> M [AtomAddr]
 evalOnNewThread = evalOnThread False
 
-evalOnThread :: Bool -> M [Atom] -> M [Atom]
+evalOnThread :: Bool -> M [AtomAddr] -> M [AtomAddr]
 evalOnThread isMainThread setupAction = do
   -- create main thread
   (tid, ts) <- createThread
@@ -302,24 +309,27 @@ evalOnThread isMainThread setupAction = do
             pure tsCurrentResult
   loop result0
 
-evalStackMachine :: [Atom] -> M [Atom]
+evalStackMachine :: [AtomAddr] -> M [AtomAddr]
 evalStackMachine result = do
   stackPop >>= \case
     Nothing         -> pure result
     Just stackCont  -> evalStackContinuation result stackCont >>= evalStackMachine
 
-evalStackContinuation :: [Atom] -> StackContinuation -> M [Atom]
-evalStackContinuation result = \case
+evalStackContinuation :: [AtomAddr] -> StackContinuation -> M [AtomAddr]
+evalStackContinuation resultAddr stackCont = do
+ result <- getAtoms resultAddr
+ case stackCont of
   Apply args
     | [fun@HeapPtr{}] <- result
-    -> builtinStgApply SO_ClosureResult fun args
+    , [funAddr] <- resultAddr
+    -> builtinStgApply SO_ClosureResult funAddr args
 
   Update dstAddr
     | [src@HeapPtr{}] <- result
     -> do
       o <- readHeap src
       store dstAddr o
-      pure result
+      pure resultAddr
 
   -- HINT: STG IR uses 'case' expressions to chain instructions with strict evaluation
   CaseOf localEnv resultBinder altType alts -> do
@@ -327,20 +337,26 @@ evalStackContinuation result = \case
     let resultId = (Id resultBinder)
     case altType of
       AlgAlt tc -> do
-        let v = case result of
+        let vAddr = case resultAddr of
               [l] -> l
               _   -> error $ "expected a single value: " ++ show result
-            extendedEnv = addBinderToEnv SO_Scrut resultBinder v localEnv
+            v = case result of
+              [l] -> l
+              _   -> error $ "expected a single value: " ++ show result
+            extendedEnv = addBinderToEnv SO_Scrut resultBinder vAddr localEnv
         con <- readHeapCon v
         case alts of
           d@(Alt AltDefault _ _) : al -> matchFirstCon resultId extendedEnv con $ al ++ [d]
           _ -> matchFirstCon resultId extendedEnv con alts
 
       PrimAlt _r -> do
-        let lit = case result of
+        let litAddr = case resultAddr of
               [l] -> l
               _   -> error $ "expected a single value: " ++ show result
-            extendedEnv = addBinderToEnv SO_Scrut resultBinder lit localEnv
+            lit = case result of
+              [l] -> l
+              _   -> error $ "expected a single value: " ++ show result
+            extendedEnv = addBinderToEnv SO_Scrut resultBinder litAddr localEnv
         case alts of
           d@(Alt AltDefault _ _) : al -> matchFirstLit resultId extendedEnv lit $ al ++ [d]
           _ -> matchFirstLit resultId extendedEnv lit alts
@@ -348,34 +364,34 @@ evalStackContinuation result = \case
       MultiValAlt _n -> do -- unboxed tuple
         -- NOTE: result binder is not assigned
         let [Alt{..}] = alts
-            extendedEnv = addManyBindersToEnv SO_Scrut altBinders result localEnv
+            extendedEnv = addManyBindersToEnv SO_Scrut altBinders resultAddr localEnv
 
         evalExpr extendedEnv altRHS
 
       PolyAlt -> do
         let [Alt{..}]   = alts
-            [v]         = result
+            [v]         = resultAddr
             extendedEnv = addBinderToEnv SO_Scrut resultBinder v $                 -- HINT: bind the result
-                          addManyBindersToEnv SO_AltArg altBinders result localEnv  -- HINT: bind alt params
+                          addManyBindersToEnv SO_AltArg altBinders resultAddr localEnv  -- HINT: bind alt params
 
         evalExpr extendedEnv altRHS
 
   RestoreExMask b i -> do
     -- TODO
-    pure result
+    pure resultAddr
 
   Catch h b i -> do
     -- TODO: is anything to do??
-    pure result
+    pure resultAddr
 
-  RunScheduler sr -> Scheduler.runScheduler result sr
+  RunScheduler sr -> Scheduler.runScheduler resultAddr sr
 
   -- HINT: dataToTag# has an eval call in the middle, that's why we need this continuation, it is the post-returning part of the op implementation
   DataToTagOp -> PrimTagToEnum.dataToTagOp result
 
   x -> error $ "unsupported continuation: " ++ show x ++ ", result: " ++ show result
 
-evalExpr :: HasCallStack => Env -> Expr -> M [Atom]
+evalExpr :: HasCallStack => Env -> Expr -> M [AtomAddr]
 evalExpr localEnv = \case
   StgTick _ e       -> evalExpr localEnv e
   StgLit l          -> pure <$> evalLiteral l
@@ -389,7 +405,7 @@ evalExpr localEnv = \case
     -> do
       args <- mapM (evalArg localEnv) l
       loc <- allocAndStore (Con False dc args)
-      pure [HeapPtr loc]
+      allocAtoms [HeapPtr loc]
 
   StgLet b e -> do
     extendedEnv <- declareBinding False localEnv b
@@ -461,6 +477,7 @@ evalExpr localEnv = \case
     tid <- gets ssCurrentThreadId
     evalPrimOp op args t tc
 
+{- TODO
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
     args <- case foreignCTarget foreignCall of
       StaticTarget _ "createAdjustor" _ _
@@ -470,7 +487,7 @@ evalExpr localEnv = \case
             mapM (evalArg localEnv) [arg0, arg1, StgLitArg LitNullAddr, arg3, arg4, arg5]
       _ -> mapM (evalArg localEnv) l
     evalFCallOp evalOnNewThread foreignCall args t tc
-
+-}
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
     args <- mapM (evalArg localEnv) l
     evalPrimCallOp primCall args t tc
@@ -478,7 +495,7 @@ evalExpr localEnv = \case
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
 
-matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [Atom]
+matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [AtomAddr]
 matchFirstLit resultId localEnv a [Alt AltDefault _ rhs] = do
   evalExpr localEnv rhs
 matchFirstLit resultId localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, map altCon alts)) of
@@ -504,7 +521,7 @@ convertAltLit lit = case lit of
   LitString{}               -> error $ "invalid alt pattern: " ++ show lit
   l -> Literal l
 
-matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
+matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [AtomAddr]
 matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
   []  -> stgErrorM $ "no matching alts for: " ++ show resultId
   Alt{..} : _ -> do
@@ -522,12 +539,14 @@ declareBinding isLetNoEscape localEnv = \case
   StgNonRec b rhs -> do
     addr <- freshHeapAddress
     storeRhs isLetNoEscape localEnv b addr rhs
-    pure $ addBinderToEnv SO_Let b (HeapPtr addr) localEnv
+    atomAddr <- storeNewAtom (HeapPtr addr)
+    pure $ addBinderToEnv SO_Let b atomAddr localEnv
 
   StgRec l -> do
     (ls, newEnvItems) <- fmap unzip . forM l $ \(b, _) -> do
       addr <- freshHeapAddress
-      pure (addr, (b, (HeapPtr addr)))
+      atomAddr <- storeNewAtom (HeapPtr addr)
+      pure (addr, (b, atomAddr))
     let extendedEnv = addZippedBindersToEnv SO_Let newEnvItems localEnv
     forM_ (zip ls l) $ \(addr, (b, rhs)) -> do
       storeRhs isLetNoEscape extendedEnv b addr rhs
@@ -565,7 +584,8 @@ declareTopBindings mods = do
 
   (closureEnv, rhsList) <- fmap unzip . forM bindings $ \(b, rhs) -> do
     addr <- freshHeapAddress
-    pure ((Id b, (SO_TopLevel, HeapPtr addr)), (b, addr, rhs))
+    atomAddr <- storeNewAtom $ HeapPtr addr
+    pure ((Id b, (SO_TopLevel, atomAddr)), (b, addr, rhs))
 
   -- set the top level binder env
   modify' $ \s@StgState{..} -> s {ssStaticGlobalEnv = Map.fromList $ stringEnv ++ closureEnv}
@@ -608,7 +628,8 @@ runProgram switchCWD progFilePath mods0 progArgs = do
         mainAtom <- lookupEnv mempty rootMain
 
         evalOnMainThread $ do
-          stackPush $ Apply [Void]
+          voidAddr <- storeNewAtom Void
+          stackPush $ Apply [voidAddr]
           pure [mainAtom]
 
         {-
@@ -670,7 +691,8 @@ flushStdHandles = do
   Rts{..} <- gets ssRtsSupport
   evalOnNewThread $ do
     stackPush $ Apply [] -- HINT: force IO monad result to WHNF
-    stackPush $ Apply [Void]
+    voidAddr <- storeNewAtom Void
+    stackPush $ Apply [voidAddr]
     pure [rtsTopHandlerFlushStdHandles]
 {-
   (tid, ts) <- createThread
@@ -790,34 +812,34 @@ scheduleWaitThread (StgTSO* tso, /*[out]*/HaskellObj* ret, Capability **pcap)
 -}
 ---------------------- primops
 
-evalPrimOp :: HasCallStack => Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp :: HasCallStack => Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
 evalPrimOp =
-  PrimAddr.evalPrimOp $
-  PrimArray.evalPrimOp $
-  PrimSmallArray.evalPrimOp $
-  PrimArrayArray.evalPrimOp $
-  PrimByteArray.evalPrimOp $
-  PrimChar.evalPrimOp $
-  PrimConcurrency.evalPrimOp $
-  PrimDelayWait.evalPrimOp $
-  PrimParallelism.evalPrimOp $
+--  PrimAddr.evalPrimOp $
+--  PrimArray.evalPrimOp $
+--  PrimSmallArray.evalPrimOp $
+--  PrimArrayArray.evalPrimOp $
+--  PrimByteArray.evalPrimOp $
+--  PrimChar.evalPrimOp $
+--  PrimConcurrency.evalPrimOp $
+--  PrimDelayWait.evalPrimOp $
+--  PrimParallelism.evalPrimOp $
   PrimExceptions.evalPrimOp $
-  PrimFloat.evalPrimOp $
-  PrimDouble.evalPrimOp $
-  PrimInt16.evalPrimOp $
-  PrimInt8.evalPrimOp $
-  PrimInt.evalPrimOp $
-  PrimMutVar.evalPrimOp $
-  PrimMVar.evalPrimOp $
-  PrimNarrowings.evalPrimOp $
-  PrimPrefetch.evalPrimOp $
-  PrimStablePointer.evalPrimOp $
-  PrimWeakPointer.evalPrimOp $
-  PrimWord16.evalPrimOp $
-  PrimWord8.evalPrimOp $
-  PrimWord.evalPrimOp $
+----  PrimFloat.evalPrimOp $
+--  PrimDouble.evalPrimOp $
+--  PrimInt16.evalPrimOp $
+--  PrimInt8.evalPrimOp $
+--  PrimInt.evalPrimOp $
+--  PrimMutVar.evalPrimOp $
+--  PrimMVar.evalPrimOp $
+--  PrimNarrowings.evalPrimOp $
+--  PrimPrefetch.evalPrimOp $
+--  PrimStablePointer.evalPrimOp $
+--  PrimWeakPointer.evalPrimOp $
+--  PrimWord16.evalPrimOp $
+--  PrimWord8.evalPrimOp $
+--  PrimWord.evalPrimOp $
   PrimTagToEnum.evalPrimOp $
-  PrimUnsafe.evalPrimOp $
-  PrimMiscEtc.evalPrimOp $
+--  PrimUnsafe.evalPrimOp $
+--  PrimMiscEtc.evalPrimOp $
   unsupported where
     unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args

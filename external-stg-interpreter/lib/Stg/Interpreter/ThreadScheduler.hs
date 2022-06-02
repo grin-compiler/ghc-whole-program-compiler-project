@@ -9,7 +9,7 @@ import Data.Time.Clock
 import Stg.Interpreter.Base
 import Stg.Interpreter.IOManager
 
-runScheduler :: [Atom] -> ScheduleReason -> M [Atom]
+runScheduler :: [AtomAddr] -> ScheduleReason -> M [AtomAddr]
 runScheduler result sr = do
   tid <- gets ssCurrentThreadId
   --liftIO $ putStrLn $ " * scheduler: " ++ show sr ++ " thread: " ++ show tid
