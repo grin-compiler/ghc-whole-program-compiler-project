@@ -17,8 +17,10 @@ pattern IntV i = IntAtom i
     this is an ugly design, needs to be fixed in the future!
 -}
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp fallback op argsAddr t tc = do
+ args <- getAtoms argsAddr
+ case (op, args) of
 
   -- delay# :: Int# -> State# s -> State# s
   ( "delay#", [IntV usDelay, _s]) -> do
@@ -73,4 +75,4 @@ evalPrimOp fallback op args t tc = case (op, args) of
     stackPush $ RunScheduler SR_ThreadBlocked
     pure []
 
-  _ -> fallback op args t tc
+  _ -> fallback op argsAddr t tc

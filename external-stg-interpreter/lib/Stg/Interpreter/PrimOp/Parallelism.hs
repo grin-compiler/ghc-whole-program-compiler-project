@@ -13,13 +13,13 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- par# :: a -> Int#
   -- DEPRECATED: Use 'spark#' instead
   ( "par#", [_a]) -> do
-    pure [IntV 1]
+    allocAtoms [IntV 1]
 
   -- spark# :: a -> State# s -> (# State# s, a #)
   ( "spark#", [a, _s]) -> do
@@ -32,10 +32,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- getSpark# :: State# s -> (# State# s, Int#, a #)
   ( "getSpark#", [_s]) -> do
-    pure [IntV 0, LiftedUndefined]
+    allocAtoms [IntV 0, LiftedUndefined]
 
   -- numSparks# :: State# s -> (# State# s, Int# #)
   ( "numSparks#", [_s]) -> do
-    pure [IntV 0]
+    allocAtoms [IntV 0]
 
   _ -> fallback op args t tc

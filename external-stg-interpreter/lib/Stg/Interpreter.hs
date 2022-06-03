@@ -48,11 +48,11 @@ import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
 --import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
 --import qualified Stg.Interpreter.PrimOp.SmallArray    as PrimSmallArray
 --import qualified Stg.Interpreter.PrimOp.ArrayArray    as PrimArrayArray
---import qualified Stg.Interpreter.PrimOp.ByteArray     as PrimByteArray
+import qualified Stg.Interpreter.PrimOp.ByteArray     as PrimByteArray
 import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
 --import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
---import qualified Stg.Interpreter.PrimOp.DelayWait     as PrimDelayWait
---import qualified Stg.Interpreter.PrimOp.Parallelism   as PrimParallelism
+import qualified Stg.Interpreter.PrimOp.DelayWait     as PrimDelayWait
+import qualified Stg.Interpreter.PrimOp.Parallelism   as PrimParallelism
 import qualified Stg.Interpreter.PrimOp.Exceptions    as PrimExceptions
 import qualified Stg.Interpreter.PrimOp.Float         as PrimFloat
 import qualified Stg.Interpreter.PrimOp.Double        as PrimDouble
@@ -66,10 +66,10 @@ import qualified Stg.Interpreter.PrimOp.Int16         as PrimInt16
 --import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
 import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
 import qualified Stg.Interpreter.PrimOp.Prefetch      as PrimPrefetch
---import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
---import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
+import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
+import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
 import qualified Stg.Interpreter.PrimOp.TagToEnum     as PrimTagToEnum
---import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
+import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
 import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
 
 {-
@@ -817,11 +817,11 @@ evalPrimOp =
 --  PrimArray.evalPrimOp $
 --  PrimSmallArray.evalPrimOp $
 --  PrimArrayArray.evalPrimOp $
---  PrimByteArray.evalPrimOp $
+  PrimByteArray.evalPrimOp $
   PrimChar.evalPrimOp $
 --  PrimConcurrency.evalPrimOp $
---  PrimDelayWait.evalPrimOp $
---  PrimParallelism.evalPrimOp $
+  PrimDelayWait.evalPrimOp $
+  PrimParallelism.evalPrimOp $
   PrimExceptions.evalPrimOp $
   PrimFloat.evalPrimOp $
   PrimDouble.evalPrimOp $
@@ -832,13 +832,13 @@ evalPrimOp =
 --  PrimMVar.evalPrimOp $
   PrimNarrowings.evalPrimOp $
   PrimPrefetch.evalPrimOp $
---  PrimStablePointer.evalPrimOp $
---  PrimWeakPointer.evalPrimOp $
+  PrimStablePointer.evalPrimOp $
+  PrimWeakPointer.evalPrimOp $
   PrimWord16.evalPrimOp $
   PrimWord8.evalPrimOp $
   PrimWord.evalPrimOp $
   PrimTagToEnum.evalPrimOp $
---  PrimUnsafe.evalPrimOp $
+  PrimUnsafe.evalPrimOp $
   PrimMiscEtc.evalPrimOp $
   unsupported where
     unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args

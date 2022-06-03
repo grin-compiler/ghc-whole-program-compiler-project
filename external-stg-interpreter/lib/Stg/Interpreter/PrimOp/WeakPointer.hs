@@ -9,7 +9,7 @@ import Stg.Interpreter.Base
 
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
-newWeakPointer :: Atom -> Atom -> Maybe Atom -> M Int
+newWeakPointer :: AtomAddr -> AtomAddr -> Maybe AtomAddr -> M Int
 newWeakPointer key value finalizer = do
   weakPointers <- gets ssWeakPointers
   next <- gets ssNextWeakPointer
@@ -23,42 +23,44 @@ newWeakPointer key value finalizer = do
   modify' $ \s -> s {ssWeakPointers = IntMap.insert next desc weakPointers, ssNextWeakPointer = succ next}
   pure next
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp fallback op argsAddr t tc = do
+ args <- getAtoms argsAddr
+ case (op, args, argsAddr) of
 
   -- mkWeak# :: o -> b -> (State# RealWorld -> (# State# RealWorld, c #)) -> State# RealWorld -> (# State# RealWorld, Weak# b #)
-  ( "mkWeak#", [key, value, finalizer, _w]) -> do
+  ( "mkWeak#", _, [key, value, finalizer, _w]) -> do
     wpId <- newWeakPointer key value (Just finalizer)
-    pure [WeakPointer wpId]
+    allocAtoms [WeakPointer wpId]
 
   -- mkWeakNoFinalizer# :: o -> b -> State# RealWorld -> (# State# RealWorld, Weak# b #)
-  ( "mkWeakNoFinalizer#", [key, value, _w]) -> do
+  ( "mkWeakNoFinalizer#", _, [key, value, _w]) -> do
     wpId <- newWeakPointer key value Nothing
-    pure [WeakPointer wpId]
+    allocAtoms [WeakPointer wpId]
 
   -- addCFinalizerToWeak# :: Addr# -> Addr# -> Int# -> Addr# -> Weak# b -> State# RealWorld -> (# State# RealWorld, Int# #)
-  ( "addCFinalizerToWeak#", [fun, dataPtr, IntV hasEnv, envPtr, WeakPointer wpId, _w]) -> do
+  ( "addCFinalizerToWeak#", [_fun, _dataPtr, IntV hasEnv, _envPtr, WeakPointer wpId, _w], [fun, dataPtr, _, envPtr, _, _]) -> do
     wpd@WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
     let desc = wpd {wpdCFinalizers = (fun, if hasEnv == 0 then Nothing else Just envPtr, dataPtr) : wpdCFinalizers}
     modify' $ \s@StgState{..} -> s {ssWeakPointers = IntMap.insert wpId desc ssWeakPointers}
-    pure [IntV $ if wpdValue == Nothing then 0 else 1]
+    allocAtoms [IntV $ if wpdValue == Nothing then 0 else 1]
 
   -- deRefWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, a #)
-  ( "deRefWeak#", [WeakPointer wpId, _w]) -> do
+  ( "deRefWeak#", [WeakPointer wpId, _w], _) -> do
     WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
     case wpdValue of
-      Just v  -> pure [IntV 1, v]
-      Nothing -> pure [IntV 0, LiftedUndefined]
+      Just v  -> (:) <$> storeNewAtom (IntV 1) <*> pure [v]
+      Nothing -> allocAtoms [IntV 0, LiftedUndefined]
 
   -- finalizeWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, (State# RealWorld -> (# State# RealWorld, b #) ) #)
   -- TODO
 
   -- touch# :: o -> State# RealWorld -> State# RealWorld
-  ( "touch#", [_o, _s]) -> do
+  ( "touch#", [_o, _s], _) -> do
     -- see more about 'touch#': https://gitlab.haskell.org/ghc/ghc/-/wikis/hidden-dangers-of-touch
     pure []
 
-  _ -> fallback op args t tc
+  _ -> fallback op argsAddr t tc
 
 {-
 
