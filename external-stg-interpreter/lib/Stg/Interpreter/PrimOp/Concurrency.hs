@@ -11,15 +11,18 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp fallback op argsAddr t tc = do
+ args <- getAtoms argsAddr
+ case (op, args, argsAddr) of
 
   -- fork# :: a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
-  ( "fork#", [ioAction, _s]) -> do
+  ( "fork#", [_ioAction, _s], [ioAction, _]) -> do
     currentTS <- getCurrentThreadState
 
     (newTId, newTS) <- createThread
-    stackTop <- mkStack Nothing [Apply [Void], RunScheduler SR_ThreadFinished]
+    voidAddr <- storeNewAtom Void
+    stackTop <- mkStack Nothing [Apply [voidAddr], RunScheduler SR_ThreadFinished]
     updateThreadState newTId $ newTS
       { tsCurrentResult   = [ioAction]
       , tsStackTop        = stackTop
@@ -34,14 +37,15 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- NOTE: context switch soon, but not immediately: we don't want every forkIO to force a context-switch.
     requestContextSwitch  -- TODO: push continuation reschedule, reason request context switch
 
-    pure [ThreadId newTId]
+    allocAtoms [ThreadId newTId]
 
   -- forkOn# :: Int# -> a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
-  ( "forkOn#", [IntV capabilityNo, ioAction, _s]) -> do
+  ( "forkOn#", [IntV capabilityNo, _ioAction, _s], [_, ioAction, _]) -> do
     currentTS <- getCurrentThreadState
 
     (newTId, newTS) <- createThread
-    stackTop <- mkStack Nothing [Apply [Void], RunScheduler SR_ThreadFinished]
+    voidAddr <- storeNewAtom Void
+    stackTop <- mkStack Nothing [Apply [voidAddr], RunScheduler SR_ThreadFinished]
     updateThreadState newTId $ newTS
       { tsCurrentResult   = [ioAction]
       , tsStackTop        = stackTop
@@ -60,10 +64,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- NOTE: context switch soon, but not immediately: we don't want every forkIO to force a context-switch.
     requestContextSwitch  -- TODO: push continuation reschedule, reason request context switch
 
-    pure [ThreadId newTId]
+    allocAtoms [ThreadId newTId]
 
   -- killThread# :: ThreadId# -> a -> State# RealWorld -> State# RealWorld
-  ( "killThread#", [ThreadId tidTarget, exception, _s]) -> do
+  ( "killThread#", [ThreadId tidTarget, _exception, _s], [_, exception, _]) -> do
     tid <- gets ssCurrentThreadId
     case tid == tidTarget of
       True -> do
@@ -127,34 +131,34 @@ evalPrimOp fallback op args t tc = case (op, args) of
             BlockedOnDelay{}        -> blockIfNotInterruptible_raiseOtherwise
 
   -- yield# :: State# RealWorld -> State# RealWorld
-  ( "yield#", [_s]) -> do
+  ( "yield#", [_s], _) -> do
     stackPush $ RunScheduler SR_ThreadYield
     pure []
 
   -- myThreadId# :: State# RealWorld -> (# State# RealWorld, ThreadId# #)
-  ( "myThreadId#", [_s]) -> do
+  ( "myThreadId#", [_s], _) -> do
     tid <- gets ssCurrentThreadId
-    pure [ThreadId tid]
+    allocAtoms [ThreadId tid]
 
   -- labelThread# :: ThreadId# -> Addr# -> State# RealWorld -> State# RealWorld
-  ( "labelThread#", [ThreadId tid, PtrAtom _ p, _s]) -> do
+  ( "labelThread#", [ThreadId tid, PtrAtom _ p, _s], _) -> do
     threadLabel <- liftIO . BS8.packCString $ castPtr p
     let setLabel ts@ThreadState{..} = ts {tsLabel = Just threadLabel}
     modify' $ \s@StgState{..} -> s {ssThreads = IntMap.adjust setLabel tid ssThreads}
     pure []
 
   -- isCurrentThreadBound# :: State# RealWorld -> (# State# RealWorld, Int# #)
-  ( "isCurrentThreadBound#", [_s]) -> do
+  ( "isCurrentThreadBound#", [_s], _) -> do
     ThreadState{..} <- getCurrentThreadState
-    pure [IntV $ if tsBound then 1 else 0]
+    allocAtoms [IntV $ if tsBound then 1 else 0]
 
   -- noDuplicate# :: State# s -> State# s
-  ( "noDuplicate#", [_s]) -> do
+  ( "noDuplicate#", [_s], _) -> do
     -- NOTE: the stg interpreter is not parallel, so this is a no-op
     pure []
 
   -- threadStatus# :: ThreadId# -> State# RealWorld -> (# State# RealWorld, Int#, Int#, Int# #)
-  ( "threadStatus#", [ThreadId tid, _s]) -> do
+  ( "threadStatus#", [ThreadId tid, _s], _) -> do
     ThreadState{..} <- getThreadState tid
     -- HINT:  includes/rts/Constants.h
     --        base:GHC.Conc.Sync.threadStatus
@@ -173,12 +177,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
             BlockedOnDelay{}        -> 5
             BlockedOnThrowAsyncEx{} -> 12
 
-    pure [IntV statusCode, IntV tsCapability, IntV $ if tsLocked then 1 else 0]
+    allocAtoms [IntV statusCode, IntV tsCapability, IntV $ if tsLocked then 1 else 0]
 
-  _ -> fallback op args t tc
+  _ -> fallback op argsAddr t tc
 
 
-raiseAsyncEx :: [Atom] -> Int -> Atom -> M ()
+raiseAsyncEx :: [AtomAddr] -> Int -> AtomAddr -> M ()
 raiseAsyncEx lastResult tid exception = do
   ts@ThreadState{..} <- getThreadState tid
   let unwindStack result stackPiece = \case
@@ -209,7 +213,7 @@ raiseAsyncEx lastResult tid exception = do
                     , hoStack   = reverse stackPiece
                     }
               store addr apStack
-              let newResult = [HeapPtr addr]
+              newResult <- allocAtoms [HeapPtr addr]
               unwindStack newResult [Apply []] prevStackAddr
 
             -- collect stack frames for ApStack

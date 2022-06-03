@@ -23,12 +23,12 @@ library
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
     Stg.Interpreter.PrimOp.Addr
---    Stg.Interpreter.PrimOp.ArrayArray
---    Stg.Interpreter.PrimOp.Array
+    Stg.Interpreter.PrimOp.ArrayArray
+    Stg.Interpreter.PrimOp.Array
     Stg.Interpreter.PrimOp.ByteArray
     Stg.Interpreter.PrimOp.Char
     Stg.Interpreter.PrimOp.Compact
---    Stg.Interpreter.PrimOp.Concurrency
+    Stg.Interpreter.PrimOp.Concurrency
     Stg.Interpreter.PrimOp.DelayWait
     Stg.Interpreter.PrimOp.Double
     Stg.Interpreter.PrimOp.Exceptions
@@ -38,12 +38,12 @@ library
     Stg.Interpreter.PrimOp.Int8
     Stg.Interpreter.PrimOp.Int
     Stg.Interpreter.PrimOp.MiscEtc
---    Stg.Interpreter.PrimOp.MutVar
---    Stg.Interpreter.PrimOp.MVar
+    Stg.Interpreter.PrimOp.MutVar
+    Stg.Interpreter.PrimOp.MVar
     Stg.Interpreter.PrimOp.Narrowings
     Stg.Interpreter.PrimOp.Parallelism
     Stg.Interpreter.PrimOp.Prefetch
---    Stg.Interpreter.PrimOp.SmallArray
+    Stg.Interpreter.PrimOp.SmallArray
     Stg.Interpreter.PrimOp.StablePointer
     Stg.Interpreter.PrimOp.STM
     Stg.Interpreter.PrimOp.TagToEnum

@@ -45,12 +45,12 @@ import Stg.Interpreter.Rts
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
 
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
---import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
---import qualified Stg.Interpreter.PrimOp.SmallArray    as PrimSmallArray
---import qualified Stg.Interpreter.PrimOp.ArrayArray    as PrimArrayArray
+import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
+import qualified Stg.Interpreter.PrimOp.SmallArray    as PrimSmallArray
+import qualified Stg.Interpreter.PrimOp.ArrayArray    as PrimArrayArray
 import qualified Stg.Interpreter.PrimOp.ByteArray     as PrimByteArray
 import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
---import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
+import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
 import qualified Stg.Interpreter.PrimOp.DelayWait     as PrimDelayWait
 import qualified Stg.Interpreter.PrimOp.Parallelism   as PrimParallelism
 import qualified Stg.Interpreter.PrimOp.Exceptions    as PrimExceptions
@@ -62,8 +62,8 @@ import qualified Stg.Interpreter.PrimOp.Word16        as PrimWord16
 import qualified Stg.Interpreter.PrimOp.Int           as PrimInt
 import qualified Stg.Interpreter.PrimOp.Int8          as PrimInt8
 import qualified Stg.Interpreter.PrimOp.Int16         as PrimInt16
---import qualified Stg.Interpreter.PrimOp.MutVar        as PrimMutVar
---import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
+import qualified Stg.Interpreter.PrimOp.MutVar        as PrimMutVar
+import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
 import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
 import qualified Stg.Interpreter.PrimOp.Prefetch      as PrimPrefetch
 import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
@@ -814,12 +814,12 @@ scheduleWaitThread (StgTSO* tso, /*[out]*/HaskellObj* ret, Capability **pcap)
 evalPrimOp :: HasCallStack => Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
 evalPrimOp =
   PrimAddr.evalPrimOp $
---  PrimArray.evalPrimOp $
---  PrimSmallArray.evalPrimOp $
---  PrimArrayArray.evalPrimOp $
+  PrimArray.evalPrimOp $
+  PrimSmallArray.evalPrimOp $
+  PrimArrayArray.evalPrimOp $
   PrimByteArray.evalPrimOp $
   PrimChar.evalPrimOp $
---  PrimConcurrency.evalPrimOp $
+  PrimConcurrency.evalPrimOp $
   PrimDelayWait.evalPrimOp $
   PrimParallelism.evalPrimOp $
   PrimExceptions.evalPrimOp $
@@ -828,8 +828,8 @@ evalPrimOp =
   PrimInt16.evalPrimOp $
   PrimInt8.evalPrimOp $
   PrimInt.evalPrimOp $
---  PrimMutVar.evalPrimOp $
---  PrimMVar.evalPrimOp $
+  PrimMutVar.evalPrimOp $
+  PrimMVar.evalPrimOp $
   PrimNarrowings.evalPrimOp $
   PrimPrefetch.evalPrimOp $
   PrimStablePointer.evalPrimOp $

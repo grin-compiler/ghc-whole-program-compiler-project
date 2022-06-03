@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections #-}
 module Stg.Interpreter.Base where
 
 import Data.Word
@@ -486,7 +486,7 @@ addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so
 addManyBindersToEnv :: StaticOrigin -> [Binder] -> [AtomAddr] -> Env -> Env
 addManyBindersToEnv so binders values = addZippedBindersToEnv so $ zip binders values
 
-lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, Addr)
+lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, AtomAddr)
 lookupEnvSO localEnv b = do
   env <- if binderTopLevel b
           then gets ssStaticGlobalEnv
@@ -495,13 +495,11 @@ lookupEnvSO localEnv b = do
     Just a  -> pure a
     Nothing -> case binderUniqueName b of
       -- HINT: GHC.Prim module does not exist it's a wired in module
-{- TODO
-      "ghc-prim_GHC.Prim.void#"           -> pure (SO_Builtin, Void)
-      "ghc-prim_GHC.Prim.realWorld#"      -> pure (SO_Builtin, Void)
-      "ghc-prim_GHC.Prim.coercionToken#"  -> pure (SO_Builtin, Void)
-      "ghc-prim_GHC.Prim.proxy#"          -> pure (SO_Builtin, Void)
-      "ghc-prim_GHC.Prim.(##)"            -> pure (SO_Builtin, Void)
--}
+      "ghc-prim_GHC.Prim.void#"           -> (SO_Builtin,) <$> storeNewAtom Void
+      "ghc-prim_GHC.Prim.realWorld#"      -> (SO_Builtin,) <$> storeNewAtom Void
+      "ghc-prim_GHC.Prim.coercionToken#"  -> (SO_Builtin,) <$> storeNewAtom Void
+      "ghc-prim_GHC.Prim.proxy#"          -> (SO_Builtin,) <$> storeNewAtom Void
+      "ghc-prim_GHC.Prim.(##)"            -> (SO_Builtin,) <$> storeNewAtom Void
       _ -> stgErrorM $ "unknown variable: " ++ show b
 
 lookupEnv :: HasCallStack => Env -> Binder -> M AtomAddr

@@ -12,109 +12,117 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-lookupArrayArrIdx :: ArrayArrIdx -> M (V.Vector Atom)
+lookupArrayArrIdx :: ArrayArrIdx -> M (V.Vector AtomAddr)
 lookupArrayArrIdx = \case
   ArrayMutArrIdx i -> lookupMutableArrayArray i
   ArrayArrIdx    i -> lookupArrayArray i
 
-updateArrayArrIdx :: ArrayArrIdx -> V.Vector Atom -> M ()
+updateArrayArrIdx :: ArrayArrIdx -> V.Vector AtomAddr -> M ()
 updateArrayArrIdx m v = do
   modify' $ \s@StgState{..} -> case m of
     ArrayMutArrIdx n -> s { ssMutableArrayArrays = IntMap.insert n v ssMutableArrayArrays }
     ArrayArrIdx    n -> s { ssArrayArrays        = IntMap.insert n v ssArrayArrays        }
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp fallback op argsAddr t tc = do
+ args <- getAtoms argsAddr
+ case (op, args, argsAddr) of
 
   -- newArrayArray# :: Int# -> State# s -> (# State# s, MutableArrayArray# s #)
-  ( "newArrayArray#", [IntV i, _s]) -> do
+  ( "newArrayArray#", [IntV i, _s], _) -> do
     mutableArrayArrays <- gets ssMutableArrayArrays
     next <- gets ssNextMutableArrayArray
-    let result = MutableArrayArray $ ArrayMutArrIdx next
-        v      = V.replicate (fromIntegral i) result -- wow
+    result <- storeNewAtom $ MutableArrayArray $ ArrayMutArrIdx next
+    let v = V.replicate (fromIntegral i) result -- HINT: initialize with self references
     modify' $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays, ssNextMutableArrayArray = succ next}
     pure [result]
 
   -- sameMutableArrayArray# :: MutableArrayArray# s -> MutableArrayArray# s -> Int#
-  ( "sameMutableArrayArray#", [MutableArrayArray a, MutableArrayArray b]) -> do
-    pure [IntV $ if a == b then 1 else 0]
+  ( "sameMutableArrayArray#", [MutableArrayArray a, MutableArrayArray b], _) -> do
+    allocAtoms [IntV $ if a == b then 1 else 0]
 
   -- unsafeFreezeArrayArray# :: MutableArrayArray# s -> State# s -> (# State# s, ArrayArray# #)
-  ( "unsafeFreezeArrayArray#", [MutableArrayArray v, _s]) -> do
-    pure [ArrayArray v]
+  ( "unsafeFreezeArrayArray#", [MutableArrayArray v, _s], _) -> do
+    allocAtoms [ArrayArray v]
 
   -- sizeofArrayArray# :: ArrayArray# -> Int#
-  ( "sizeofArrayArray#", [ArrayArray a]) -> do
+  ( "sizeofArrayArray#", [ArrayArray a], _) -> do
     v <- lookupArrayArrIdx a
-    pure [IntV . fromIntegral $ V.length v]
+    allocAtoms [IntV . fromIntegral $ V.length v]
 
   -- sizeofMutableArrayArray# :: MutableArrayArray# s -> Int#
-  ( "sizeofMutableArrayArray#", [MutableArrayArray a]) -> do
+  ( "sizeofMutableArrayArray#", [MutableArrayArray a], _) -> do
     v <- lookupArrayArrIdx a
-    pure [IntV . fromIntegral $ V.length v]
+    allocAtoms [IntV . fromIntegral $ V.length v]
 
   -- indexByteArrayArray# :: ArrayArray# -> Int# -> ByteArray#
-  ( "indexByteArrayArray#", [ArrayArray a, IntV i]) -> do
+  ( "indexByteArrayArray#", [ArrayArray a, IntV i], _) -> do
     v <- lookupArrayArrIdx a
-    let x@ByteArray{} = v V.! (fromIntegral i)
+    let x = v V.! (fromIntegral i)
+    ByteArray{} <- getAtom x -- HINT: validation
     pure [x]
 
   -- indexArrayArrayArray# :: ArrayArray# -> Int# -> ArrayArray#
-  ( "indexArrayArrayArray#", [ArrayArray a, IntV i]) -> do
+  ( "indexArrayArrayArray#", [ArrayArray a, IntV i], _) -> do
     v <- lookupArrayArrIdx a
-    let x@ArrayArray{} = v V.! (fromIntegral i)
+    let x = v V.! (fromIntegral i)
+    ArrayArray{} <- getAtom x -- HINT: validation
     pure [x]
 
   -- readByteArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, ByteArray# #)
-  ( "readByteArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
+  ( "readByteArrayArray#", [MutableArrayArray a, IntV i, _s], _) -> do
     v <- lookupArrayArrIdx a
-    let x@ByteArray{} = v V.! (fromIntegral i)
+    let x = v V.! (fromIntegral i)
+    ByteArray{} <- getAtom x -- HINT: validation
     pure [x]
 
   -- readMutableByteArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
-  ( "readMutableByteArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
+  ( "readMutableByteArrayArray#", [MutableArrayArray a, IntV i, _s], _) -> do
     v <- lookupArrayArrIdx a
-    let x@MutableByteArray{} = v V.! (fromIntegral i)
+    let x = v V.! (fromIntegral i)
+    MutableByteArray{} <- getAtom x -- HINT: validation
     pure [x]
 
   -- readArrayArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, ArrayArray# #)
-  ( "readArrayArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
+  ( "readArrayArrayArray#", [MutableArrayArray a, IntV i, _s], _) -> do
     v <- lookupArrayArrIdx a
-    let x@ArrayArray{} = v V.! (fromIntegral i)
+    let x = v V.! (fromIntegral i)
+    ArrayArray{} <- getAtom x -- HINT: validation
     pure [x]
 
   -- readMutableArrayArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableArrayArray# s #)
-  ( "readMutableArrayArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
+  ( "readMutableArrayArrayArray#", [MutableArrayArray a, IntV i, _s], _) -> do
     v <- lookupArrayArrIdx a
-    let x@MutableArrayArray{} = v V.! (fromIntegral i)
+    let x = v V.! (fromIntegral i)
+    MutableArrayArray{} <- getAtom x -- HINT: validation
     pure [x]
 
   -- writeByteArrayArray# :: MutableArrayArray# s -> Int# -> ByteArray# -> State# s -> State# s
-  ( "writeByteArrayArray#", [MutableArrayArray m, IntV i, a@ByteArray{}, _s]) -> do
+  ( "writeByteArrayArray#", [MutableArrayArray m, IntV i, ByteArray{}, _s], [_, _, a, _]) -> do
     v <- lookupArrayArrIdx m
     updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
     pure []
 
   -- writeMutableByteArrayArray# :: MutableArrayArray# s -> Int# -> MutableByteArray# s -> State# s -> State# s
-  ( "writeMutableByteArrayArray#", [MutableArrayArray m, IntV i, a@MutableByteArray{}, _s]) -> do
+  ( "writeMutableByteArrayArray#", [MutableArrayArray m, IntV i, MutableByteArray{}, _s], [_, _, a, _]) -> do
     v <- lookupArrayArrIdx m
     updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
     pure []
 
   -- writeArrayArrayArray# :: MutableArrayArray# s -> Int# -> ArrayArray# -> State# s -> State# s
-  ( "writeArrayArrayArray#", [MutableArrayArray m, IntV i, a@ArrayArray{}, _s]) -> do
+  ( "writeArrayArrayArray#", [MutableArrayArray m, IntV i, ArrayArray{}, _s], [_, _, a, _]) -> do
     v <- lookupArrayArrIdx m
     updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
     pure []
 
   -- writeMutableArrayArrayArray# :: MutableArrayArray# s -> Int# -> MutableArrayArray# s -> State# s -> State# s
-  ( "writeMutableArrayArrayArray#", [MutableArrayArray m, IntV i, a@MutableArrayArray{}, _s]) -> do
+  ( "writeMutableArrayArrayArray#", [MutableArrayArray m, IntV i, MutableArrayArray{}, _s], [_, _, a, _]) -> do
     v <- lookupArrayArrIdx m
     updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
     pure []
 
   -- copyArrayArray# :: ArrayArray# -> Int# -> MutableArrayArray# s -> Int# -> Int# -> State# s -> State# s
-  ( "copyArrayArray#", [ArrayArray src, IntV os, MutableArrayArray dst, IntV od, IntV n, _s]) -> do
+  ( "copyArrayArray#", [ArrayArray src, IntV os, MutableArrayArray dst, IntV od, IntV n, _s], _) -> do
     vsrc <- lookupArrayArrIdx src
     vdst <- lookupArrayArrIdx dst
     let vdst' = vdst V.// [ (fromIntegral di, v)
@@ -127,7 +135,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- copyMutableArrayArray#" :: MutableArrayArray# s -> Int# -> MutableArrayArray# s -> Int# -> Int# -> State# s -> State# s
-  ( "copyMutableArrayArray#", [MutableArrayArray src, IntV os, MutableArrayArray dst, IntV od, IntV n, _s]) -> do
+  ( "copyMutableArrayArray#", [MutableArrayArray src, IntV os, MutableArrayArray dst, IntV od, IntV n, _s], _) -> do
     vsrc <- lookupArrayArrIdx src
     vdst <- lookupArrayArrIdx dst
     let vdst' = vdst V.// [ (fromIntegral di, v)
@@ -139,4 +147,4 @@ evalPrimOp fallback op args t tc = case (op, args) of
     updateArrayArrIdx dst vdst'
     pure []
 
-  _ -> fallback op args t tc
+  _ -> fallback op argsAddr t tc
