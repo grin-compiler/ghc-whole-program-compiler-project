@@ -102,14 +102,17 @@ data MVarDescriptor
 
 -- TODO: detect coercions during the evaluation
 data Atom     -- Q: should atom fit into a cpu register? A: yes
-  = HeapPtr           !Addr
-  | Literal           !Lit  -- TODO: remove this
+  -- values
+  = Literal           !Lit  -- TODO: remove this
   | Void
   | PtrAtom           !PtrOrigin !(Ptr Word8)
   | IntAtom           !Int
   | WordAtom          !Word
   | FloatAtom         !Float
   | DoubleAtom        !Double
+  | LiftedUndefined
+  -- indirections to store
+  | HeapPtr           !Addr
   | MVar              !Int
   | MutVar            !Int
   | Array             !ArrIdx
@@ -123,7 +126,6 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | WeakPointer       !Int
   | StableName        !Int
   | ThreadId          !Int
-  | LiftedUndefined
   deriving (Show, Eq, Ord)
 
 type ReturnValue = [AtomAddr]
