@@ -4,7 +4,6 @@ module Stg.Interpreter.PrimOp.StablePointer where
 import Foreign.Ptr
 import Control.Monad.State
 import qualified Data.IntMap as IntMap
-import qualified Data.Map as Map
 
 import Stg.Syntax
 import Stg.Interpreter.Base
@@ -44,11 +43,11 @@ evalPrimOp fallback op argsAddr t tc = do
   -- makeStableName# :: a -> State# RealWorld -> (# State# RealWorld, StableName# a #)
   ( "makeStableName#", _, [a, _s]) -> do
     snMap <- gets ssStableNameMap
-    case Map.lookup a snMap of
+    case IntMap.lookup a snMap of
       Just snId -> allocAtoms [StableName snId]
       Nothing -> do
         snId <- gets ssNextStableName
-        modify' $ \s -> s {ssStableNameMap = Map.insert a snId snMap, ssNextStableName = succ snId}
+        modify' $ \s -> s {ssStableNameMap = IntMap.insert a snId snMap, ssNextStableName = succ snId}
         allocAtoms [StableName snId]
 
   -- eqStableName# :: StableName# a -> StableName# b -> Int#
