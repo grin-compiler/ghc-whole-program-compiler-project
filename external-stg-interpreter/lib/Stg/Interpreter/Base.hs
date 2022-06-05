@@ -181,12 +181,12 @@ instance Show (PrintableMVar a) where
   show _ = "MVar"
 
 type Addr   = Int
-type Heap   = IntMap HeapObject
-type Env    = Map Id (StaticOrigin, AtomAddr)   -- NOTE: must contain only the defined local variables
-type Stack  = IntMap (StackContinuation, Maybe Int)
+type Heap   = IntMap HeapObject                     -- abs-int: IntMap (Set HeapObject) | lattice
+type Env    = Map Id (StaticOrigin, AtomAddr)       -- NOTE: must contain only the defined local variables
+type Stack  = IntMap (StackContinuation, Maybe Int) -- abs-int: IntMap (Set (StackContinuation, Maybe Int)) | lattice
 
 type AtomAddr   = Int
-type AtomStore  = IntMap Atom
+type AtomStore  = IntMap Atom                       -- abs-int: IntMap (Set Atom) | lattice
 
 data StaticOrigin
   = SO_CloArg
@@ -210,7 +210,7 @@ data StgState
   , ssCStringConstants    :: Map ByteString AtomAddr
 
   -- threading
-  , ssThreads             :: IntMap ThreadState
+  , ssThreads             :: IntMap ThreadState         -- abs-int: IntMap (Set ...) | lattice
 
   -- thread scheduler related
   , ssCurrentThreadId     :: Int
@@ -218,18 +218,20 @@ data StgState
 
   -- primop related
 
-  , ssStableNameMap       :: Map AtomAddr Int
-  , ssWeakPointers        :: IntMap WeakPtrDescriptor
-  , ssStablePointers      :: IntMap AtomAddr
-  , ssMutableByteArrays   :: IntMap ByteArrayDescriptor
-  , ssMVars               :: IntMap MVarDescriptor
-  , ssMutVars             :: IntMap AtomAddr
-  , ssArrays              :: IntMap (Vector AtomAddr)
-  , ssMutableArrays       :: IntMap (Vector AtomAddr)
-  , ssSmallArrays         :: IntMap (Vector AtomAddr)
-  , ssSmallMutableArrays  :: IntMap (Vector AtomAddr)
-  , ssArrayArrays         :: IntMap (Vector AtomAddr)
-  , ssMutableArrayArrays  :: IntMap (Vector AtomAddr)
+  , ssStableNameMap       :: IntMap Int                 -- HINT: AtomAddr -> Int ; -- abs-int: IntMap (Set ...) | lattice
+  , ssWeakPointers        :: IntMap WeakPtrDescriptor   -- abs-int: IntMap (Set ...) | lattice
+  , ssStablePointers      :: IntMap AtomAddr            -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableByteArrays   :: IntMap ByteArrayDescriptor -- abs-int: IntMap (Set ...) | lattice
+  , ssMVars               :: IntMap MVarDescriptor      -- abs-int: IntMap (Set ...) | lattice
+  , ssMutVars             :: IntMap AtomAddr            -- abs-int: IntMap (Set ...) | lattice
+  , ssArrays              :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableArrays       :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssSmallArrays         :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssSmallMutableArrays  :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssArrayArrays         :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableArrayArrays  :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+
+  -- allocator related
 
   , ssNextAtomAddr          :: {-# UNPACK #-} !Int
   , ssNextStackAddr         :: {-# UNPACK #-} !Int
