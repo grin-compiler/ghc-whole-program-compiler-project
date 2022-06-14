@@ -669,6 +669,7 @@ declareTopBindings mods = do
 data Context = Context {
     baseFullPaks :: [FilePath]
   , libBasePath  :: FilePath
+  , verbose      :: Bool
   }
 
 loadAndRunProgram :: HasCallStack => Context -> Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> Bool -> IO ()
@@ -681,14 +682,14 @@ loadAndRunProgram ctx switchCWD fullpak_name progArgs dbgChan dbgState tracing s
   mods1 <- case takeExtension fullpak_name of
     ".fullpak" -> do
         mods <- getFullpakModules fullpak_name
-        when showstg $ do
+        when (showstg && verbose ctx) $ do
           putStrLn "Printing fullpak modules."
           print $ plain $ pretty mods
         pure mods
     ".json" -> do
       -- TODO: Add CLI arg to refer fullpaks to be loaded.
       mods <- getJSONModules fullpak_name
-      when showstg $ do
+      when (showstg && verbose ctx) $ do
         putStrLn "Printing JSON defined modules."
         print $ plain $ pretty mods
       pure mods -- $ concat [baseMods, idrisHaskellInterfaceMods, jsonMods]
@@ -769,11 +770,12 @@ runProgram ctx switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = 
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
-    putStrLn $ "ssHeapStartAddress: " ++ show ssHeapStartAddress
-    putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
-    putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
-    putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
-    putStrLn $ "call graph size: " ++ show (StrictMap.size . cgInterClosureCallGraph $ ssCallGraph)
+    when (verbose ctx) $ do
+      putStrLn $ "ssHeapStartAddress: " ++ show ssHeapStartAddress
+      putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
+      putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
+      putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)
+      putStrLn $ "call graph size: " ++ show (StrictMap.size . cgInterClosureCallGraph $ ssCallGraph)
     --putStrLn $ unlines $ [BS8.unpack $ binderUniqueName b | Id b <- Map.keys ssEnv]
     --print ssNextHeapAddr
     --print $ head $ Map.toList ssEnv

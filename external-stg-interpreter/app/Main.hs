@@ -23,6 +23,7 @@ data StgIOpts
   , appArgs2    :: [String]
   , appPath     :: FilePath
   , appArgs3    :: [String]
+  , verbose     :: Bool
   }
 
 stgi :: Parser StgIOpts
@@ -38,6 +39,7 @@ stgi = StgIOpts
   <*> many (strOption (short 'a' <> help "Single APPARG"))
   <*> argument str (metavar "APPFILE" <> help "The .ghc_stgapp or .fullpak file to run")
   <*> many (argument str (metavar "APPARG..."))
+  <*> switch (short 'v' <> long "verbose" <> help "Set to verbose mode.")
 
 main :: IO ()
 main = do
@@ -56,6 +58,7 @@ main = do
                   -- , "./data/idris-haskell-interface.fullpak"
                   -- ]
               , libBasePath = fromMaybe "./libHSbase-4.14.0.0.cbits.so" hsBaseLib
+              , verbose = verbose
               }
 
   case runDebugger of
