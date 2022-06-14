@@ -15,7 +15,7 @@ loadMap :: String -> IO (IntMap IntSet)
 loadMap fname = do
   let factPath = "./.gc-datalog-facts/" ++ fname
   absFactPath <- makeAbsolute factPath
-  putStrLn $ "loading: " ++ show absFactPath
+  -- putStrLn $ "loading: " ++ show absFactPath
   refs <- map (map read . words) . lines <$> readFile absFactPath
   pure $ IntMap.fromListWith IntSet.union [(to, IntSet.singleton from) | [to, from] <- refs]
 
@@ -23,7 +23,7 @@ loadSet :: String -> IO IntSet
 loadSet fname = do
   let factPath = "./.gc-datalog-facts/" ++ fname
   absFactPath <- makeAbsolute factPath
-  putStrLn $ "loading: " ++ show absFactPath
+  -- putStrLn $ "loading: " ++ show absFactPath
   IntSet.fromList . map read . lines <$> readFile absFactPath
 
 loadRetanerDb :: M ()

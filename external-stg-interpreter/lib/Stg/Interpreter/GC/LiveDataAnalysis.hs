@@ -75,9 +75,9 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
       absFactPath <- liftIO $ makeAbsolute factPath
       liftIO $ do
         createDirectoryIfMissing True absFactPath
-        putStrLn $ "write gc facts to: " ++ absFactPath
+        -- putStrLn $ "write gc facts to: " ++ absFactPath
       Souffle.writeFiles prog absFactPath
-      liftIO $ putStrLn "Souffle.writeFiles done"
+      -- liftIO $ putStrLn "Souffle.writeFiles done"
 
       -- read back result
       --readbackDeadData prog

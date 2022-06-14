@@ -60,8 +60,8 @@ analysisLoop :: MVar ([Atom], StgState) -> MVar RefSet -> IO ()
 analysisLoop gcIn gcOut = do
   (localGCRoots, stgState) <- takeMVar gcIn
   rsData <- runLiveDataAnalysis localGCRoots stgState
-  reportRemovedData stgState rsData
-  reportAddressCounters stgState
+  -- reportRemovedData stgState rsData
+  -- reportAddressCounters stgState
   putMVar gcOut rsData
   analysisLoop gcIn gcOut
 
@@ -103,10 +103,10 @@ runGCSync localGCRoots = do
   put $ (pruneStgState stgState rsData) {ssGCIsRunning = False}
   finalizeDeadWeakPointers (rsWeakPointers rsData)
   loadRetanerDb
-  liftIO $ do
-    reportRemovedData stgState rsData
-    reportAddressCounters stgState
-  postGCReport
+--  liftIO $ do
+--    reportRemovedData stgState rsData
+--    reportAddressCounters stgState
+--  postGCReport
 
 -- weak pointer handling
 
