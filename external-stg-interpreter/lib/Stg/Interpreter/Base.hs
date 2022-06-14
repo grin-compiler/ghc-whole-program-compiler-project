@@ -126,6 +126,21 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | WeakPointer       !Int
   | StableName        !Int
   | ThreadId          !Int
+{-
+  Atom lattice:
+    - concrete atom value
+    - set of atoms (optionally limited size)
+    - atom type (Q: is this the same as rep type or prim type?)
+    - set of atom type (due to unsafe coercions
+
+  IDEA: define lattices for value atoms (i.e. IntAtom) , not indirection atoms (e.g. HeapPtr or Array)
+        indirection atoms will have a corresponding lattice in their stores
+
+  Q: how to join two:
+      Arrays  A: (single set of elements) or (extend size to fit the bigger array, then join values at each index to a set)
+      HeapPtr A: TODO: design the heap object lattice
+      IntAtom A: set or type
+-}
   deriving (Show, Eq, Ord)
 
 type ReturnValue = [AtomAddr]
@@ -147,7 +162,7 @@ data HeapObject
   | BlackHole HeapObject
   | ApStack                   -- HINT: needed for the async exceptions
     { hoResult      :: [AtomAddr]
-    , hoStack       :: [StackContinuation]
+    , hoStack       :: [StackContinuation] -- TODO: replace this with a single stack addr, same idea as in ThreadState.stackTop
     }
   | RaiseException AtomAddr
   deriving (Show, Eq, Ord)
@@ -180,13 +195,15 @@ newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
 instance Show (PrintableMVar a) where
   show _ = "MVar"
 
+type StackAddr  = Int
+type HeapAddr   = Int
 type Addr   = Int
-type Heap   = IntMap HeapObject                     -- abs-int: IntMap (Set HeapObject) | lattice
-type Env    = Map Id (StaticOrigin, AtomAddr)       -- NOTE: must contain only the defined local variables
-type Stack  = IntMap (StackContinuation, Maybe Int) -- abs-int: IntMap (Set (StackContinuation, Maybe Int)) | lattice
+type Heap   = IntMap HeapObject                           -- abs-int: IntMap (Set HeapObject) | lattice
+type Env    = Map Id (StaticOrigin, AtomAddr)             -- NOTE: must contain only the defined local variables
+type Stack  = IntMap (StackContinuation, Maybe StackAddr) -- abs-int: IntMap (Set (StackContinuation, Maybe Int)) | lattice
 
 type AtomAddr   = Int
-type AtomStore  = IntMap Atom                       -- abs-int: IntMap (Set Atom) | lattice
+type AtomStore  = IntMap Atom                             -- abs-int: IntMap (Set Atom) | lattice
 
 data StaticOrigin
   = SO_CloArg
@@ -653,7 +670,7 @@ data AsyncExceptionMask
 data ThreadState
   = ThreadState
   { tsCurrentResult     :: [AtomAddr] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
-  , tsStackTop          :: Maybe Int
+  , tsStackTop          :: Maybe StackAddr
   , tsStatus            :: !ThreadStatus
   , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
   , tsBlockExceptions   :: !Bool  -- block async exceptions
