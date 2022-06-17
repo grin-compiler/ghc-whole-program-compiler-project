@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, FlexibleContexts #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
 module Stg.Interpreter where
@@ -10,7 +10,11 @@ import Foreign.Ptr
 import Control.Concurrent
 import Control.Concurrent.MVar
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
-import Control.Monad.State.Strict
+import Control.Monad
+import Control.Carrier.State.Strict
+import Control.Carrier.Lift
+import Control.Effect.State
+import Control.Effect.Lift
 import Control.Exception
 import qualified Data.Primitive.ByteArray as BA
 
@@ -100,7 +104,7 @@ data Lit
   | LitNumber   !LitNumType !Integer
 -}
 
-evalLiteral :: HasCallStack => Lit -> M AtomAddr
+evalLiteral :: (HasCallStack, M sig m) => Lit -> m AtomAddr
 evalLiteral = \case
   LitLabel name spec  -> getFFILabelPtrAtom name spec
   LitString str       -> getCStringConstantPtrAtom str
@@ -113,7 +117,7 @@ evalLiteral = \case
   LitNumber LitNumWord64 n  -> storeNewAtom . WordAtom $ fromIntegral n
   l -> storeNewAtom $ Literal l
 
-evalArg :: HasCallStack => Env -> Arg -> M AtomAddr
+evalArg :: (HasCallStack, M sig m) => Env -> Arg -> m AtomAddr
 evalArg localEnv = \case
   StgLitArg l -> evalLiteral l
   StgVarArg b -> lookupEnv localEnv b
@@ -127,7 +131,7 @@ evalArg localEnv = \case
 -}
 
 
-builtinStgEval :: HasCallStack => StaticOrigin -> AtomAddr -> M [AtomAddr]
+builtinStgEval :: (HasCallStack, M sig m) => StaticOrigin -> AtomAddr -> m [AtomAddr]
 builtinStgEval so atomAddr = do
   atom <- getAtom atomAddr >>= \case
     v@HeapPtr{} -> pure v
@@ -149,7 +153,7 @@ builtinStgEval so atomAddr = do
     -- TODO: check how the cmm stg machine handles this case
     BlackHole t -> do
                     Rts{..} <- gets ssRtsSupport
-                    liftIO $ do
+                    sendIO $ do
                       hPutStrLn stderr $ takeBaseName rtsProgName ++ ": <<loop>>"
                       exitWith ExitSuccess
                     stgErrorM $ "blackhole ; loop in evaluation of : " ++ show t
@@ -181,7 +185,7 @@ builtinStgEval so atomAddr = do
             evalExpr extendedEnv e
     _ -> stgErrorM $ "expected heap object: " ++ show o
 
-builtinStgApply :: HasCallStack => StaticOrigin -> AtomAddr -> [AtomAddr] -> M [AtomAddr]
+builtinStgApply :: (HasCallStack, M sig m) => StaticOrigin -> AtomAddr -> [AtomAddr] -> m [AtomAddr]
 builtinStgApply so a [] = builtinStgEval so a
 --builtinStgApply so a@HeapPtr{} args = do
 builtinStgApply so atomAddr argsAddr = do
@@ -248,7 +252,7 @@ peekResult [hp@HeapPtr{}] = do
     BlackHole{} -> pure "BlackHole"
 peekResult r = pure $ show r
 -}
-assertWHNF :: HasCallStack => [Atom] -> AltType -> Binder -> M ()
+assertWHNF :: (HasCallStack, M sig m) => [Atom] -> AltType -> Binder -> m ()
 assertWHNF [hp@HeapPtr{}] aty res = do
   o <- readHeap hp
   case o of
@@ -257,7 +261,7 @@ assertWHNF [hp@HeapPtr{}] aty res = do
       | hoCloMissing == 0
       , aty /= MultiValAlt 1
       -> do
-          liftIO $ do
+          sendIO $ do
             putStrLn "Thunk"
             putStrLn ""
             print aty
@@ -298,17 +302,17 @@ data ThreadStatus
   | ThreadDied      -- RTS name: ThreadKilled
 -}
 
-killAllThreads :: M ()
+killAllThreads :: M sig m => m ()
 killAllThreads = do
   pure () -- TODO
 
-evalOnMainThread :: M [AtomAddr] -> M [AtomAddr]
+evalOnMainThread :: M sig m => m [AtomAddr] -> m [AtomAddr]
 evalOnMainThread = evalOnThread True
 
-evalOnNewThread :: M [AtomAddr] -> M [AtomAddr]
+evalOnNewThread :: M sig m => m [AtomAddr] -> m [AtomAddr]
 evalOnNewThread = evalOnThread False
 
-evalOnThread :: Bool -> M [AtomAddr] -> M [AtomAddr]
+evalOnThread :: M sig m => Bool -> m [AtomAddr] -> m [AtomAddr]
 evalOnThread isMainThread setupAction = do
   -- create main thread
   (tid, ts) <- createThread
@@ -327,13 +331,13 @@ evalOnThread isMainThread setupAction = do
             pure tsCurrentResult
   loop result0
 
-evalStackMachine :: [AtomAddr] -> M [AtomAddr]
+evalStackMachine :: M sig m => [AtomAddr] -> m [AtomAddr]
 evalStackMachine result = do
   stackPop >>= \case
     Nothing         -> pure result
     Just stackCont  -> evalStackContinuation result stackCont >>= evalStackMachine
 
-evalStackContinuation :: [AtomAddr] -> StackContinuation -> M [AtomAddr]
+evalStackContinuation :: M sig m => [AtomAddr] -> StackContinuation -> m [AtomAddr]
 evalStackContinuation resultAddr stackCont = do
  result <- getAtoms resultAddr
  case stackCont of
@@ -409,7 +413,7 @@ evalStackContinuation resultAddr stackCont = do
 
   x -> error $ "unsupported continuation: " ++ show x ++ ", result: " ++ show result
 
-evalExpr :: HasCallStack => Env -> Expr -> M [AtomAddr]
+evalExpr :: (HasCallStack, M sig m) => Env -> Expr -> m [AtomAddr]
 evalExpr localEnv = \case
   StgTick _ e       -> evalExpr localEnv e
   StgLit l          -> pure <$> evalLiteral l
@@ -512,7 +516,7 @@ evalExpr localEnv = \case
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
 
-matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [AtomAddr]
+matchFirstLit :: (HasCallStack, M sig m) => Id -> Env -> Atom -> [Alt] -> m [AtomAddr]
 matchFirstLit resultId localEnv a [Alt AltDefault _ rhs] = do
   evalExpr localEnv rhs
 matchFirstLit resultId localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, map altCon alts)) of
@@ -538,7 +542,7 @@ convertAltLit lit = case lit of
   LitString{}               -> error $ "invalid alt pattern: " ++ show lit
   l -> Literal l
 
-matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [AtomAddr]
+matchFirstCon :: (HasCallStack, M sig m) => Id -> Env -> HeapObject -> [Alt] -> m [AtomAddr]
 matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
   []  -> stgErrorM $ "no matching alts for: " ++ show resultId
   Alt{..} : _ -> do
@@ -551,7 +555,7 @@ matchCon a = \case
   AltLit{}      -> False
   AltDefault    -> True
 
-declareBinding :: HasCallStack => Bool -> Env -> Binding -> M Env
+declareBinding :: (HasCallStack, M sig m) => Bool -> Env -> Binding -> m Env
 declareBinding isLetNoEscape localEnv = \case
   StgNonRec b rhs -> do
     addr <- freshHeapAddress
@@ -569,7 +573,7 @@ declareBinding isLetNoEscape localEnv = \case
       storeRhs isLetNoEscape extendedEnv b addr rhs
     pure extendedEnv
 
-storeRhs :: HasCallStack => Bool -> Env -> Binder -> Addr -> Rhs -> M ()
+storeRhs :: (HasCallStack, M sig m) => Bool -> Env -> Binder -> Addr -> Rhs -> m ()
 storeRhs isLetNoEscape localEnv i addr = \case
   StgRhsCon dc l -> do
     args <- mapM (evalArg localEnv) l
@@ -582,7 +586,7 @@ storeRhs isLetNoEscape localEnv i addr = \case
 
 -----------------------
 
-declareTopBindings :: HasCallStack => [Module] -> M ()
+declareTopBindings :: (HasCallStack, M sig m) => [Module] -> m ()
 declareTopBindings mods = do
   let (strings, closures) = partition isStringLit $ (concatMap moduleTopBindings) mods
       isStringLit = \case
@@ -605,7 +609,7 @@ declareTopBindings mods = do
     pure ((Id b, (SO_TopLevel, atomAddr)), (b, addr, rhs))
 
   -- set the top level binder env
-  modify' $ \s@StgState{..} -> s {ssStaticGlobalEnv = Map.fromList $ stringEnv ++ closureEnv}
+  modify $ \s@StgState{..} -> s {ssStaticGlobalEnv = Map.fromList $ stringEnv ++ closureEnv}
 
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
@@ -625,11 +629,11 @@ runProgram switchCWD progFilePath mods0 progArgs = do
   let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension progFilePath
 
-  currentDir <- liftIO getCurrentDirectory
+  currentDir <- getCurrentDirectory
   stgappDir <- makeAbsolute $ takeDirectory progFilePath
   --putStrLn $ "progName: " ++ show progName ++ " progArgs: " ++ show progArgs
   let run = do
-        when switchCWD $ liftIO $ setCurrentDirectory stgappDir
+        when switchCWD $ sendIO $ setCurrentDirectory stgappDir
         declareTopBindings mods
         initRtsSupport progName progArgs mods
         env <- gets ssStaticGlobalEnv
@@ -638,8 +642,8 @@ runProgram switchCWD progFilePath mods0 progArgs = do
               []        -> error "main_:Main.main not found"
               _         -> error "multiple main_:Main.main have found"
         limit <- gets ssNextHeapAddr
-        --modify' $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
-        --modify' $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
+        --modify $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
+        --modify $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
 
         -- TODO: check how it is done in the native RTS: call hs_main
         mainAtom <- lookupEnv mempty rootMain
@@ -673,7 +677,7 @@ runProgram switchCWD progFilePath mods0 progArgs = do
         dlclose dl
         --killThread gcThreadId
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState stateStore dl)
+    s@StgState{..} <- runM $ execState (emptyStgState stateStore dl) run
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
@@ -703,7 +707,7 @@ loadCbitsSO isQuiet progFilePath = do
 
 -------------------------
 
-flushStdHandles :: M ()
+flushStdHandles :: M sig m => m ()
 flushStdHandles = do
   Rts{..} <- gets ssRtsSupport
   evalOnNewThread $ do
@@ -829,7 +833,7 @@ scheduleWaitThread (StgTSO* tso, /*[out]*/HaskellObj* ret, Capability **pcap)
 -}
 ---------------------- primops
 
-evalPrimOp :: HasCallStack => Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: (HasCallStack, M sig m) => Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp =
   PrimAddr.evalPrimOp $
   PrimArray.evalPrimOp $

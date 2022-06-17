@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, RankNTypes #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, RankNTypes, FlexibleContexts #-}
 module Stg.Interpreter.FFI where
 
 ----- FFI experimental
@@ -85,7 +85,7 @@ rtsSymbolSet = Set.fromList $ map BS8.pack rtsSymbols
 getFFISymbol :: M sig m => Name -> m (FunPtr a)
 getFFISymbol name = do
   dl <- gets ssCBitsMap
-  funPtr <- liftIO . BS8.useAsCString name $ c_dlsym (packDL dl)
+  funPtr <- sendIO . BS8.useAsCString name $ c_dlsym (packDL dl)
   case funPtr == nullFunPtr of
     False -> pure funPtr
     True  -> if Set.member name rtsSymbolSet
@@ -142,10 +142,10 @@ evalForeignCall funPtr cArgs retType = case retType of
     pure [DoubleAtom result]
 
 {-# NOINLINE evalFCallOp #-}
-evalFCallOp :: EvalOnNewThread sig m -> ForeignCall -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
+--evalFCallOp :: M sig m => EvalOnNewThread m -> ForeignCall -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalFCallOp evalOnNewThread fCall@ForeignCall{..} argsAddr t _tc = do
     args <- getAtoms argsAddr
-    --liftIO $ putStrLn $ "  " ++ show foreignCTarget ++ " " ++ show args
+    --sendIO $ putStrLn $ "  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
 
       ----------------
@@ -204,7 +204,7 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} argsAddr t _tc = do
       StaticTarget _ "getMonotonicNSec" _ _
         | [Void] <- args
         -> do
-          now <- liftIO getCurrentTime
+          now <- sendIO getCurrentTime
           pure [WordV nSec]
 -}
 {-
@@ -244,7 +244,7 @@ getProgArgv(int *argc, char **argv[])
         | [PtrAtom (ByteArrayPtr ba1) ptrArgc, PtrAtom (ByteArrayPtr ba2) ptrArgv, Void] <- args
         -> do
           Rts{..} <- gets ssRtsSupport
-          liftIO $ do
+          sendIO $ do
             -- HINT: getProgArgv :: Ptr CInt -> Ptr (Ptr CString) -> IO ()
             poke (castPtr ptrArgc :: Ptr CInt) (fromIntegral $ 1 + length rtsProgArgs)
 
@@ -263,7 +263,7 @@ getProgArgv(int *argc, char **argv[])
           --showDebug evalOnNewThread
           --error $ "shutdownHaskellAndExit exit code:  " ++ show retCode ++ ", fast exit: " ++ show fastExit
           --exportCallGraph
-          liftIO . exitWith $ case retCode of
+          sendIO . exitWith $ case retCode of
             0 -> ExitSuccess
             n -> ExitFailure n
 
@@ -274,16 +274,16 @@ getProgArgv(int *argc, char **argv[])
             showByteArray :: M sig m => ByteArrayIdx -> m String
             showByteArray b = do
               ByteArrayDescriptor{..} <- lookupByteArrayDescriptorI b
-              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> liftIO (BA.unsafeFreezeByteArray baaMutableByteArray)
+              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> sendIO (BA.unsafeFreezeByteArray baaMutableByteArray)
           formatStr <- showByteArray bai1
           value <- showByteArray bai2
-          liftIO $ do
+          sendIO $ do
             hPutStr stderr $ printf formatStr value
             hFlush stderr
           pure []
 
       StaticTarget _ "errorBelch" _ _ -> do
-        liftIO $ putStrLn $ "errorBelch: " ++ show args
+        sendIO $ putStrLn $ "errorBelch: " ++ show args
         pure []
       StaticTarget _ "errorBelch2" _ _
         | [PtrAtom (ByteArrayPtr bai1) _, PtrAtom (ByteArrayPtr bai2) _, Void] <- args
@@ -292,11 +292,11 @@ getProgArgv(int *argc, char **argv[])
             showByteArray :: M sig m => ByteArrayIdx -> m String
             showByteArray b = do
               ByteArrayDescriptor{..} <- lookupByteArrayDescriptorI b
-              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> liftIO (BA.unsafeFreezeByteArray baaMutableByteArray)
+              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> sendIO (BA.unsafeFreezeByteArray baaMutableByteArray)
           formatStr <- showByteArray bai1
           value <- showByteArray bai2
           Rts{..} <- gets ssRtsSupport
-          liftIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
+          sendIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
           pure []
 
       StaticTarget _ "hs_free_stable_ptr" _ _ -> pure []
@@ -350,7 +350,7 @@ getProgArgv(int *argc, char **argv[])
 
       StaticTarget _ foreignSymbol _ _
         -> do
-          --liftIO $ print foreignSymbol
+          --sendIO $ print foreignSymbol
           cArgs <- catMaybes <$> mapM mkFFIArg args
           funPtr <- getFFISymbol foreignSymbol
           result <- liftIOAndBorrowStgState $ do
@@ -510,7 +510,7 @@ INFO_TABLE_RET(stg_forceIO, RET_SMALL, P_ info_ptr)
 -}
 
 {-# NOINLINE ffiCallbackBridge #-}
-ffiCallbackBridge :: (HasCallStack) => EvalOnNewThread sig m -> MVar StgState -> AtomAddr -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
+ffiCallbackBridge :: HasCallStack => EvalOnNewThread C -> MVar StgState -> AtomAddr -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
 ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif retStorage argsStoragePtr _userData = do
   let (retType : argsType) = typeString
       ('e' : hsRetType : hsArgsType) = hsTypeString
@@ -572,13 +572,15 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
       -- NOTE: only single result is supported
       charToSetter retType retStorage retAtom
 
-createAdjustor :: (HasCallStack) => EvalOnNewThread sig m -> AtomAddr -> String -> String -> m (FunPtr a, IO ())
+type C = StateC StgState (LiftC IO)
+
+--createAdjustor :: HasCallStack => EvalOnNewThread C -> AtomAddr -> String -> String -> C (FunPtr a, IO ())
 createAdjustor evalOnNewThread fun typeString hsTypeString = do
-  --liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show typeString ++ " " ++ show hsTypeString
+  --sendIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show typeString ++ " " ++ show hsTypeString
 
   let (retCType : argsCType) = map charToFFIType typeString
   stateStore <- gets $ unPrintableMVar . ssStateStore
-  liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString)
+  sendIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString)
 
 boxFFIAtom :: M sig m => Char -> Atom -> m Atom
 boxFFIAtom c a = case (c, a) of

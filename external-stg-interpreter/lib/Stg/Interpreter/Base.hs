@@ -390,10 +390,9 @@ data Rts
 --type M = StateT StgState IO
 type M sig m =
   ( Has (State StgState) sig m
---  , Has (Lift IO) sig m
+  , Has (Lift IO) sig m
 --  , Has Fail sig m
   , MonadFail m
-  , MonadIO m
   )
 
 -- atom operations
@@ -496,7 +495,7 @@ store a o = do
     NoTracing   -> pure ()
     DoTracing h -> do
       origin <- gets ssCurrentClosureAddr
-      liftIO $ hPutStrLn h $ show a ++ "\t" ++ show origin
+      sendIO $ hPutStrLn h $ show a ++ "\t" ++ show origin
   -}
 
 {-
@@ -512,8 +511,8 @@ store a o = do
 stgErrorM :: M sig m => String -> m a
 stgErrorM msg = do
   tid <- gets ssCurrentThreadId
-  liftIO $ putStrLn $ " * stgErrorM: " ++ show msg
-  liftIO $ putStrLn $ "current thread id: " ++ show tid
+  sendIO $ putStrLn $ " * stgErrorM: " ++ show msg
+  sendIO $ putStrLn $ "current thread id: " ++ show tid
   reportThread tid
   --action <- unPrintable <$> gets ssStgErrorAction
   --action
@@ -568,7 +567,7 @@ readHeapClosure a = readHeap a >>= \o -> case o of
 -- primop related
 
 type PrimOpEval m = Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
-type EvalOnNewThread sig m = M sig m => m [AtomAddr] -> m [AtomAddr]
+type EvalOnNewThread m = m [AtomAddr] -> m [AtomAddr]
 
 lookupWeakPointerDescriptor :: (HasCallStack, M sig m) => Int -> m WeakPtrDescriptor
 lookupWeakPointerDescriptor wpId = do
@@ -651,7 +650,7 @@ liftIOAndBorrowStgState action = do
   -- HINT: remember the local thread id
   myThread <- gets ssCurrentThreadId
   before <- get
-  (result, after) <- liftIO $ do
+  (result, after) <- sendIO $ do
     -- save current state
     putMVar stateStore before
     -- execute acition
@@ -908,14 +907,14 @@ data BlockedStatus
 reportThreads :: M sig m => m ()
 reportThreads = do
   threadIds <- IntMap.keys <$> gets ssThreads
-  liftIO $ putStrLn $ "thread Ids: " ++ show threadIds
+  sendIO $ putStrLn $ "thread Ids: " ++ show threadIds
   mapM_ reportThread threadIds
 
 reportThread :: M sig m => Int -> m ()
 reportThread tid = do
   endTS <- getThreadState tid
   tsStack <- getThreadStack tid
-  liftIO $ reportThreadIO tid endTS tsStack
+  sendIO $ reportThreadIO tid endTS tsStack
 
 getThreadStack :: M sig m => Int -> m [StackContinuation]
 getThreadStack tid = do
