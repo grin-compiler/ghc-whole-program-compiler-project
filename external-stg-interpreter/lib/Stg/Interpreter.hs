@@ -134,6 +134,15 @@ builtinStgEval so atomAddr = do
     v           -> stgErrorM $ "expected a thunk, got: " ++ show v ++ ", static-origin: " ++ show so
   o <- readHeap atom
   case o of
+    ApStack{..} -> do
+      -- HINT: reconstruct stack
+      stackSegment <- getStackSegment [] hoStackPieceTop Nothing
+      mapM_ stackPush stackSegment
+
+      -- HINT: run hoResult
+      stackPush $ Apply []
+      pure hoResult
+
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}             -> pure [atomAddr]
     {-
@@ -186,6 +195,15 @@ builtinStgApply so atomAddr argsAddr = do
       HeapPtr addr  = atom
   o <- readHeap atom
   case o of
+    ApStack{..} -> do
+      -- HINT: reconstruct stack
+      stackSegment <- getStackSegment [] hoStackPieceTop Nothing
+      mapM_ stackPush stackSegment
+
+      -- HINT: run hoResult
+      stackPush $ Apply argsAddr
+      pure hoResult
+
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}             -> stgErrorM $ "unexpexted con at apply: "-- ++ show o
     BlackHole t       -> stgErrorM $ "blackhole ; loop in application of : " ++ show t

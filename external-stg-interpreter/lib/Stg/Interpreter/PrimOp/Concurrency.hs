@@ -208,13 +208,14 @@ raiseAsyncEx lastResult tid exception = do
 
             -- replace Update with ApStack
             Update addr -> do
+              stackSegment <- mkStack Nothing stackPiece
               let apStack = ApStack
-                    { hoResult  = result
-                    , hoStack   = reverse stackPiece
+                    { hoResult        = result
+                    , hoStackPieceTop = stackSegment
                     }
               store addr apStack
               newResult <- allocAtoms [HeapPtr addr]
-              unwindStack newResult [Apply []] prevStackAddr
+              unwindStack newResult [] prevStackAddr
 
             -- collect stack frames for ApStack
             _ -> unwindStack result (stackCont : stackPiece) prevStackAddr

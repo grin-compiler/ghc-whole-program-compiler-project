@@ -161,8 +161,8 @@ data HeapObject
     }
   | BlackHole HeapObject
   | ApStack                   -- HINT: needed for the async exceptions
-    { hoResult      :: [AtomAddr]
-    , hoStack       :: [StackContinuation] -- TODO: replace this with a single stack addr, same idea as in ThreadState.stackTop
+    { hoResult        :: [AtomAddr]
+    , hoStackPieceTop :: Maybe StackAddr
     }
   | RaiseException AtomAddr
   deriving (Show, Eq, Ord)
@@ -445,6 +445,7 @@ stackPop = do
         }
       pure $ Just sc
 
+-- HINT: frame list order: [stack-bottom..stack-top]
 mkStack :: Maybe Addr -> [StackContinuation] -> M (Maybe Addr)
 mkStack prevFrameAddr frames = do
   let pushFrame stackTop sc = do
@@ -453,6 +454,14 @@ mkStack prevFrameAddr frames = do
         modify' $ \s@StgState{..} -> s {ssStack = IntMap.insert a stackFrame ssStack}
         pure $ Just a
   foldlM pushFrame prevFrameAddr frames
+
+-- HINT: result stack frame list order: [stack-bottom..stack-top]
+getStackSegment :: [StackContinuation] -> Maybe StackAddr -> Maybe StackAddr -> M [StackContinuation]
+getStackSegment frames start endExclusive | start == endExclusive = pure frames
+getStackSegment frames (Just addr) endExclusive = do
+    (stackCont, prevStackAddr) <- getStackFrame addr
+    getStackSegment (stackCont : frames) prevStackAddr endExclusive
+getStackSegment _ start@Nothing end = error $ "invalid stack segment range, start: " ++ show start ++ " end: " ++ show end
 
 -- heap operations
 
