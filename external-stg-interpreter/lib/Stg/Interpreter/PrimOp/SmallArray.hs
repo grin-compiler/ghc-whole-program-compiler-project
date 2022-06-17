@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.SmallArray where
 
-import Control.Monad.State
+import Control.Effect.State
 import qualified Data.IntMap as IntMap
 import qualified Data.Vector as V
 
@@ -12,18 +12,18 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-lookupSmallArrIdx :: SmallArrIdx -> M (V.Vector AtomAddr)
+lookupSmallArrIdx :: M sig m => SmallArrIdx -> m (V.Vector AtomAddr)
 lookupSmallArrIdx = \case
   SmallMutArrIdx i -> lookupSmallMutableArray i
   SmallArrIdx    i -> lookupSmallArray i
 
-updateSmallArrIdx :: SmallArrIdx -> V.Vector AtomAddr -> M ()
+updateSmallArrIdx :: M sig m => SmallArrIdx -> V.Vector AtomAddr -> m ()
 updateSmallArrIdx m v = do
-  modify' $ \s@StgState{..} -> case m of
+  modify $ \s@StgState{..} -> case m of
     SmallMutArrIdx n -> s { ssSmallMutableArrays = IntMap.insert n v ssSmallMutableArrays }
     SmallArrIdx    n -> s { ssSmallArrays        = IntMap.insert n v ssSmallArrays }
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
  args <- getAtoms argsAddr
  case (op, args, argsAddr) of
@@ -33,7 +33,7 @@ evalPrimOp fallback op argsAddr t tc = do
     smallMutableArrays <- gets ssSmallMutableArrays
     next <- gets ssNextSmallMutableArray
     let v = V.replicate (fromIntegral i) a
-    modify' $ \s@StgState{..} -> s {ssSmallMutableArrays = IntMap.insert next v ssSmallMutableArrays, ssNextSmallMutableArray = succ next}
+    modify $ \s@StgState{..} -> s {ssSmallMutableArrays = IntMap.insert next v ssSmallMutableArrays, ssNextSmallMutableArray = succ next}
     allocAtoms [SmallMutableArray $ SmallMutArrIdx next]
 
   -- sameSmallMutableArray# :: SmallMutableArray# s a -> SmallMutableArray# s a -> Int#
@@ -118,7 +118,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
       let next = ssNextSmallArray
-      in ([SmallArray $ SmallArrIdx next], s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays, ssNextSmallArray = succ next})
+      in (s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays, ssNextSmallArray = succ next}, [SmallArray $ SmallArrIdx next])
 
   -- cloneSmallMutableArray# :: SmallMutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, SmallMutableArray# s a #)
   ( "cloneSmallMutableArray#", [SmallMutableArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
@@ -126,7 +126,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
       let next = ssNextSmallMutableArray
-      in ([SmallMutableArray $ SmallMutArrIdx next], s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays, ssNextSmallMutableArray = succ next})
+      in (s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays, ssNextSmallMutableArray = succ next}, [SmallMutableArray $ SmallMutArrIdx next])
 
   -- freezeSmallArray# :: SmallMutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, SmallArray# a #)
   ( "freezeSmallArray#", [SmallMutableArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
@@ -134,7 +134,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
       let next = ssNextSmallArray
-      in ([SmallArray $ SmallArrIdx next], s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays, ssNextSmallArray = next})
+      in (s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays, ssNextSmallArray = next}, [SmallArray $ SmallArrIdx next])
 
   -- thawSmallArray# :: SmallArray# a -> Int# -> Int# -> State# s -> (# State# s, SmallMutableArray# s a #)
   ( "thawSmallArray#", [SmallArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
@@ -142,7 +142,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     state $ \s'@StgState{..} ->
       let next = ssNextSmallMutableArray
-      in ([SmallMutableArray $ SmallMutArrIdx next], s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays, ssNextSmallMutableArray = succ next})
+      in (s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays, ssNextSmallMutableArray = succ next}, [SmallMutableArray $ SmallMutArrIdx next])
 
   -- casSmallArray# :: SmallMutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
   -- NOTE: CPU atomic

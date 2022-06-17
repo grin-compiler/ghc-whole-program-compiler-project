@@ -11,7 +11,7 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
  let
     w8  = fromIntegral :: Word -> Word8

@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ArrayArray where
 
-import Control.Monad.State
+import Control.Effect.State
 import qualified Data.IntMap as IntMap
 import qualified Data.Vector as V
 
@@ -12,18 +12,18 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-lookupArrayArrIdx :: ArrayArrIdx -> M (V.Vector AtomAddr)
+lookupArrayArrIdx :: M sig m => ArrayArrIdx -> m (V.Vector AtomAddr)
 lookupArrayArrIdx = \case
   ArrayMutArrIdx i -> lookupMutableArrayArray i
   ArrayArrIdx    i -> lookupArrayArray i
 
-updateArrayArrIdx :: ArrayArrIdx -> V.Vector AtomAddr -> M ()
+updateArrayArrIdx :: M sig m => ArrayArrIdx -> V.Vector AtomAddr -> m ()
 updateArrayArrIdx m v = do
-  modify' $ \s@StgState{..} -> case m of
+  modify $ \s@StgState{..} -> case m of
     ArrayMutArrIdx n -> s { ssMutableArrayArrays = IntMap.insert n v ssMutableArrayArrays }
     ArrayArrIdx    n -> s { ssArrayArrays        = IntMap.insert n v ssArrayArrays        }
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
  args <- getAtoms argsAddr
  case (op, args, argsAddr) of
@@ -34,7 +34,7 @@ evalPrimOp fallback op argsAddr t tc = do
     next <- gets ssNextMutableArrayArray
     result <- storeNewAtom $ MutableArrayArray $ ArrayMutArrIdx next
     let v = V.replicate (fromIntegral i) result -- HINT: initialize with self references
-    modify' $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays, ssNextMutableArrayArray = succ next}
+    modify $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays, ssNextMutableArrayArray = succ next}
     pure [result]
 
   -- sameMutableArrayArray# :: MutableArrayArray# s -> MutableArrayArray# s -> Int#

@@ -13,7 +13,7 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- par# :: a -> Int#

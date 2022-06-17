@@ -1,14 +1,15 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Exceptions where
 
-import Control.Monad.State
+import Control.Monad
+import Control.Effect.State
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   {-
@@ -129,7 +130,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   _ -> fallback op args t tc
 
-raiseEx :: AtomAddr -> M [AtomAddr]
+raiseEx :: M sig m => AtomAddr -> m [AtomAddr]
 raiseEx ex = unwindStack where
   unwindStack = do
     stackPop >>= \case

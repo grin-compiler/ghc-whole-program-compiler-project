@@ -1,10 +1,14 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections, ConstraintKinds, RankNTypes #-}
 module Stg.Interpreter.Base where
 
 import Data.Word
 import Foreign.Ptr
-import Control.Monad.State.Strict
+--import Control.Monad.State.Strict
+import Control.Effect.State
+import Control.Effect.Lift
+import Control.Effect.Fail
 import Control.Monad.Loops
+import Control.Monad.IO.Class
 import Data.Foldable
 import Data.List (foldl')
 import Data.Set (Set)
@@ -274,7 +278,7 @@ data StgState
   -- RTS related
   , ssRtsSupport          :: Rts
 
-  , ssStgErrorAction      :: Printable (M ())
+--  , ssStgErrorAction      :: Printable (M ())
   }
   deriving (Show)
 
@@ -383,56 +387,63 @@ data Rts
   }
   deriving (Show)
 
-type M = StateT StgState IO
+--type M = StateT StgState IO
+type M sig m =
+  ( Has (State StgState) sig m
+--  , Has (Lift IO) sig m
+--  , Has Fail sig m
+  , MonadFail m
+  , MonadIO m
+  )
 
 -- atom operations
 
-freshAtomAddress :: HasCallStack => M AtomAddr
+freshAtomAddress :: (HasCallStack, M sig m) => m AtomAddr
 freshAtomAddress = do
-  state $ \s@StgState{..} -> (ssNextAtomAddr, s {ssNextAtomAddr = succ ssNextAtomAddr})
+  state $ \s@StgState{..} -> (s {ssNextAtomAddr = succ ssNextAtomAddr}, ssNextAtomAddr)
 
-storeNewAtom :: Atom -> M AtomAddr
+storeNewAtom :: M sig m => Atom -> m AtomAddr
 storeNewAtom a = do
   addr <- freshAtomAddress
-  modify' $ \s@StgState{..} -> s {ssAtomStore = IntMap.insert addr a ssAtomStore}
+  modify $ \s@StgState{..} -> s {ssAtomStore = IntMap.insert addr a ssAtomStore}
   pure addr
 
-getAtom :: AtomAddr -> M Atom
+getAtom :: M sig m => AtomAddr -> m Atom
 getAtom atomAddr = do
   gets (IntMap.lookup atomAddr . ssAtomStore) >>= \case
     Nothing   -> stgErrorM $ "missing atom at address: " ++ show atomAddr
     Just atom -> pure atom
 
-getAtoms :: [AtomAddr] -> M [Atom]
+getAtoms :: M sig m => [AtomAddr] -> m [Atom]
 getAtoms = mapM getAtom
 
-allocAtoms :: [Atom] -> M [AtomAddr]
+allocAtoms :: M sig m => [Atom] -> m [AtomAddr]
 allocAtoms = mapM storeNewAtom
 
 -- stack operations
 
-freshStackAddress :: HasCallStack => M Addr
+freshStackAddress :: (HasCallStack, M sig m) => m Addr
 freshStackAddress = do
-  state $ \s@StgState{..} -> (ssNextStackAddr, s {ssNextStackAddr = succ ssNextStackAddr})
+  state $ \s@StgState{..} -> (s {ssNextStackAddr = succ ssNextStackAddr}, ssNextStackAddr)
 
-getStackFrame :: Addr -> M (StackContinuation, Maybe Addr)
+getStackFrame :: M sig m => Addr -> m (StackContinuation, Maybe Addr)
 getStackFrame stackAddr = do
   gets (IntMap.lookup stackAddr . ssStack) >>= \case
     Nothing     -> stgErrorM $ "missing stack frame at address: " ++ show stackAddr
     Just frame  -> pure frame
 
-stackPush :: StackContinuation -> M ()
+stackPush :: M sig m => StackContinuation -> m ()
 stackPush sc = do
   a <- freshStackAddress
   cts <- getCurrentThreadState
   let pushFun ts@ThreadState{..} = ts {tsStackTop = Just a}
       stackFrame = (sc, tsStackTop cts)
-  modify' $ \s@StgState{..} -> s
+  modify $ \s@StgState{..} -> s
     { ssThreads = IntMap.adjust pushFun ssCurrentThreadId ssThreads
     , ssStack = IntMap.insert a stackFrame ssStack
     }
 
-stackPop :: M (Maybe StackContinuation)
+stackPop :: M sig m => m (Maybe StackContinuation)
 stackPop = do
   cts <- getCurrentThreadState
   case tsStackTop cts of
@@ -440,23 +451,24 @@ stackPop = do
     Just oldStackTop -> do
       (sc, newStackTop) <- getStackFrame oldStackTop
       let popFun ts@ThreadState{..} = ts {tsStackTop = newStackTop}
-      modify' $ \s@StgState{..} -> s
+      modify $ \s@StgState{..} -> s
         { ssThreads = IntMap.adjust popFun ssCurrentThreadId ssThreads
         }
       pure $ Just sc
 
 -- HINT: frame list order: [stack-bottom..stack-top]
-mkStack :: Maybe Addr -> [StackContinuation] -> M (Maybe Addr)
+mkStack :: M sig m => Maybe Addr -> [StackContinuation] -> m (Maybe Addr)
 mkStack prevFrameAddr frames = do
-  let pushFrame stackTop sc = do
+  let pushFrame :: M sig m => Maybe Addr -> StackContinuation -> m (Maybe Addr)
+      pushFrame stackTop sc = do
         a <- freshStackAddress
         let stackFrame = (sc, stackTop)
-        modify' $ \s@StgState{..} -> s {ssStack = IntMap.insert a stackFrame ssStack}
+        modify $ \s@StgState{..} -> s {ssStack = IntMap.insert a stackFrame ssStack}
         pure $ Just a
   foldlM pushFrame prevFrameAddr frames
 
 -- HINT: result stack frame list order: [stack-bottom..stack-top]
-getStackSegment :: [StackContinuation] -> Maybe StackAddr -> Maybe StackAddr -> M [StackContinuation]
+getStackSegment :: M sig m => [StackContinuation] -> Maybe StackAddr -> Maybe StackAddr -> m [StackContinuation]
 getStackSegment frames start endExclusive | start == endExclusive = pure frames
 getStackSegment frames (Just addr) endExclusive = do
     (stackCont, prevStackAddr) <- getStackFrame addr
@@ -465,19 +477,19 @@ getStackSegment _ start@Nothing end = error $ "invalid stack segment range, star
 
 -- heap operations
 
-freshHeapAddress :: HasCallStack => M Addr
+freshHeapAddress :: (HasCallStack, M sig m) => m Addr
 freshHeapAddress = do
-  state $ \s@StgState{..} -> (ssNextHeapAddr, s {ssNextHeapAddr = succ ssNextHeapAddr})
+  state $ \s@StgState{..} -> (s {ssNextHeapAddr = succ ssNextHeapAddr}, ssNextHeapAddr)
 
-allocAndStore :: HasCallStack => HeapObject -> M Addr
+allocAndStore :: (HasCallStack, M sig m) => HeapObject -> m Addr
 allocAndStore o = do
   a <- freshHeapAddress
   store a o
   pure a
 
-store :: HasCallStack => Addr -> HeapObject -> M ()
+store :: (HasCallStack, M sig m) => Addr -> HeapObject -> m ()
 store a o = do
-  modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
+  modify $ \s@StgState{..} -> s { ssHeap = IntMap.insert a o ssHeap }
 
   {-
   gets ssTracingState >>= \case
@@ -497,14 +509,14 @@ store a o = do
           - generational
 -}
 
-stgErrorM :: String -> M a
+stgErrorM :: M sig m => String -> m a
 stgErrorM msg = do
   tid <- gets ssCurrentThreadId
   liftIO $ putStrLn $ " * stgErrorM: " ++ show msg
   liftIO $ putStrLn $ "current thread id: " ++ show tid
   reportThread tid
-  action <- unPrintable <$> gets ssStgErrorAction
-  action
+  --action <- unPrintable <$> gets ssStgErrorAction
+  --action
   error "stgErrorM"
 
 addBinderToEnv :: StaticOrigin -> Binder -> AtomAddr -> Env -> Env
@@ -516,7 +528,7 @@ addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so
 addManyBindersToEnv :: StaticOrigin -> [Binder] -> [AtomAddr] -> Env -> Env
 addManyBindersToEnv so binders values = addZippedBindersToEnv so $ zip binders values
 
-lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, AtomAddr)
+lookupEnvSO :: (HasCallStack, M sig m) => Env -> Binder -> m (StaticOrigin, AtomAddr)
 lookupEnvSO localEnv b = do
   env <- if binderTopLevel b
           then gets ssStaticGlobalEnv
@@ -532,10 +544,10 @@ lookupEnvSO localEnv b = do
       "ghc-prim_GHC.Prim.(##)"            -> (SO_Builtin,) <$> storeNewAtom Void
       _ -> stgErrorM $ "unknown variable: " ++ show b
 
-lookupEnv :: HasCallStack => Env -> Binder -> M AtomAddr
+lookupEnv :: (HasCallStack, M sig m) => Env -> Binder -> m AtomAddr
 lookupEnv localEnv b = snd <$> lookupEnvSO localEnv b
 
-readHeap :: HasCallStack => Atom -> M HeapObject
+readHeap :: (HasCallStack, M sig m) => Atom -> m HeapObject
 readHeap (HeapPtr l) = do
   h <- gets ssHeap
   case IntMap.lookup l h of
@@ -543,97 +555,97 @@ readHeap (HeapPtr l) = do
     Just o  -> pure o
 readHeap v = error $ "readHeap: could not read heap object: " ++ show v
 
-readHeapCon :: HasCallStack => Atom -> M HeapObject
+readHeapCon :: (HasCallStack, M sig m) => Atom -> m HeapObject
 readHeapCon a = readHeap a >>= \o -> case o of
     Con{} -> pure o
     _     -> stgErrorM $ "expected con but got: "-- ++ show o
 
-readHeapClosure :: HasCallStack => Atom -> M HeapObject
+readHeapClosure :: (HasCallStack, M sig m) => Atom -> m HeapObject
 readHeapClosure a = readHeap a >>= \o -> case o of
     Closure{} -> pure o
     _ -> stgErrorM $ "expected closure but got: "-- ++ show o
 
 -- primop related
 
-type PrimOpEval = Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
-type EvalOnNewThread = M [AtomAddr] -> M [AtomAddr]
+type PrimOpEval m = Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
+type EvalOnNewThread sig m = M sig m => m [AtomAddr] -> m [AtomAddr]
 
-lookupWeakPointerDescriptor :: HasCallStack => Int -> M WeakPtrDescriptor
+lookupWeakPointerDescriptor :: (HasCallStack, M sig m) => Int -> m WeakPtrDescriptor
 lookupWeakPointerDescriptor wpId = do
   IntMap.lookup wpId <$> gets ssWeakPointers >>= \case
     Nothing -> stgErrorM $ "unknown WeakPointer: " ++ show wpId
     Just a  -> pure a
 
-lookupStablePointerPtr :: HasCallStack => Ptr Word8 -> M AtomAddr
+lookupStablePointerPtr :: (HasCallStack, M sig m) => Ptr Word8 -> m AtomAddr
 lookupStablePointerPtr sp = do
   let IntPtr spId = ptrToIntPtr sp
   lookupStablePointer spId
 
-lookupStablePointer :: HasCallStack => Int -> M AtomAddr
+lookupStablePointer :: (HasCallStack, M sig m) => Int -> m AtomAddr
 lookupStablePointer spId = do
   IntMap.lookup spId <$> gets ssStablePointers >>= \case
     Nothing -> stgErrorM $ "unknown StablePointer: " ++ show spId
     Just a  -> pure a
 
-lookupMutVar :: HasCallStack => Int -> M AtomAddr
+lookupMutVar :: (HasCallStack, M sig m) => Int -> m AtomAddr
 lookupMutVar m = do
   IntMap.lookup m <$> gets ssMutVars >>= \case
     Nothing -> stgErrorM $ "unknown MutVar: " ++ show m
     Just a  -> pure a
 
-lookupMVar :: HasCallStack => Int -> M MVarDescriptor
+lookupMVar :: (HasCallStack, M sig m) => Int -> m MVarDescriptor
 lookupMVar m = do
   IntMap.lookup m <$> gets ssMVars >>= \case
     Nothing -> stgErrorM $ "unknown MVar: " ++ show m
     Just a  -> pure a
 
-lookupArray :: HasCallStack => Int -> M (Vector AtomAddr)
+lookupArray :: (HasCallStack, M sig m) => Int -> m (Vector AtomAddr)
 lookupArray m = do
   IntMap.lookup m <$> gets ssArrays >>= \case
     Nothing -> stgErrorM $ "unknown Array: " ++ show m
     Just a  -> pure a
 
-lookupMutableArray :: HasCallStack => Int -> M (Vector AtomAddr)
+lookupMutableArray :: (HasCallStack, M sig m) => Int -> m (Vector AtomAddr)
 lookupMutableArray m = do
   IntMap.lookup m <$> gets ssMutableArrays >>= \case
     Nothing -> stgErrorM $ "unknown MutableArray: " ++ show m
     Just a  -> pure a
 
-lookupSmallArray :: HasCallStack => Int -> M (Vector AtomAddr)
+lookupSmallArray :: (HasCallStack, M sig m) => Int -> m (Vector AtomAddr)
 lookupSmallArray m = do
   IntMap.lookup m <$> gets ssSmallArrays >>= \case
     Nothing -> stgErrorM $ "unknown SmallArray: " ++ show m
     Just a  -> pure a
 
-lookupSmallMutableArray :: HasCallStack => Int -> M (Vector AtomAddr)
+lookupSmallMutableArray :: (HasCallStack, M sig m) => Int -> m (Vector AtomAddr)
 lookupSmallMutableArray m = do
   IntMap.lookup m <$> gets ssSmallMutableArrays >>= \case
     Nothing -> stgErrorM $ "unknown SmallMutableArray: " ++ show m
     Just a  -> pure a
 
-lookupArrayArray :: HasCallStack => Int -> M (Vector AtomAddr)
+lookupArrayArray :: (HasCallStack, M sig m) => Int -> m (Vector AtomAddr)
 lookupArrayArray m = do
   IntMap.lookup m <$> gets ssArrayArrays >>= \case
     Nothing -> stgErrorM $ "unknown ArrayArray: " ++ show m
     Just a  -> pure a
 
-lookupMutableArrayArray :: HasCallStack => Int -> M (Vector AtomAddr)
+lookupMutableArrayArray :: (HasCallStack, M sig m) => Int -> m (Vector AtomAddr)
 lookupMutableArrayArray m = do
   IntMap.lookup m <$> gets ssMutableArrayArrays >>= \case
     Nothing -> stgErrorM $ "unknown MutableArrayArray: " ++ show m
     Just a  -> pure a
 
-lookupByteArrayDescriptor :: HasCallStack => Int -> M ByteArrayDescriptor
+lookupByteArrayDescriptor :: (HasCallStack, M sig m) => Int -> m ByteArrayDescriptor
 lookupByteArrayDescriptor m = do
   IntMap.lookup m <$> gets ssMutableByteArrays >>= \case
     Nothing -> stgErrorM $ "unknown ByteArrayDescriptor: " ++ show m
     Just a  -> pure a
 
-lookupByteArrayDescriptorI :: HasCallStack => ByteArrayIdx -> M ByteArrayDescriptor
+lookupByteArrayDescriptorI :: (HasCallStack, M sig m) => ByteArrayIdx -> m ByteArrayDescriptor
 lookupByteArrayDescriptorI = lookupByteArrayDescriptor . baId
 
 {-# NOINLINE liftIOAndBorrowStgState #-}
-liftIOAndBorrowStgState :: HasCallStack => IO a -> M a
+liftIOAndBorrowStgState :: (HasCallStack, M sig m) => IO a -> m a
 liftIOAndBorrowStgState action = do
   stateStore <- gets $ unPrintableMVar . ssStateStore
   -- HINT: remember the local thread id
@@ -655,7 +667,7 @@ liftIOAndBorrowStgState action = do
 
 -- string constants
 -- NOTE: the string gets extended with a null terminator
-getCStringConstantPtrAtom :: ByteString -> M AtomAddr
+getCStringConstantPtrAtom :: M sig m => ByteString -> m AtomAddr
 getCStringConstantPtrAtom key = do
   strMap <- gets ssCStringConstants
   case Map.lookup key strMap of
@@ -665,7 +677,7 @@ getCStringConstantPtrAtom key = do
           (bsFPtr, bsOffset, _bsLen) = BS.toForeignPtr bsCString
           a = PtrAtom (CStringPtr bsCString) $ plusPtr (unsafeForeignPtrToPtr bsFPtr) bsOffset
       addr <- storeNewAtom a
-      modify' $ \s -> s {ssCStringConstants = Map.insert key addr strMap}
+      modify $ \s -> s {ssCStringConstants = Map.insert key addr strMap}
       pure addr
 
 ---------------------------------------------
@@ -694,7 +706,7 @@ data ThreadState
 
 -- thread operations
 
-createThread :: M (Int, ThreadState)
+createThread :: M sig m => m (Int, ThreadState)
 createThread = do
   let ts = ThreadState
         { tsCurrentResult     = []
@@ -710,27 +722,27 @@ createThread = do
         }
   threads <- gets ssThreads
   threadId <- gets ssNextThreadId
-  modify' $ \s -> s {ssThreads = IntMap.insert threadId ts threads, ssNextThreadId = succ threadId}
+  modify $ \s -> s {ssThreads = IntMap.insert threadId ts threads, ssNextThreadId = succ threadId}
   pure (threadId, ts)
 
-updateThreadState :: Int -> ThreadState -> M ()
+updateThreadState :: M sig m => Int -> ThreadState -> m ()
 updateThreadState tid ts = do
-  modify' $ \s@StgState{..} -> s {ssThreads = IntMap.insert tid ts ssThreads}
+  modify $ \s@StgState{..} -> s {ssThreads = IntMap.insert tid ts ssThreads}
 
-getThreadState :: HasCallStack => Int -> M ThreadState
+getThreadState :: (HasCallStack, M sig m) => Int -> m ThreadState
 getThreadState tid = do
   IntMap.lookup tid <$> gets ssThreads >>= \case
     Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
     Just a  -> pure a
 
-getCurrentThreadState :: M ThreadState
+getCurrentThreadState :: M sig m => m ThreadState
 getCurrentThreadState = do
   tid <- gets ssCurrentThreadId
   getThreadState tid
 
-switchToThread :: Int -> M () -- TODO: check what code uses this
+switchToThread :: M sig m => Int -> m () -- TODO: check what code uses this
 switchToThread tid = do
-  modify' $ \s -> s {ssCurrentThreadId = tid}
+  modify $ \s -> s {ssCurrentThreadId = tid}
 {-
   used by:
     FFI.hs:   ffiCallbackBridge
@@ -741,7 +753,7 @@ insertThread :: Int -> ThreadState -> M ()
 insertThread = updateThreadState
 -}
 -- NOTE: only fork# and forkOn# uses requestContextSwitch
-requestContextSwitch :: M ()
+requestContextSwitch :: M sig m => m ()
 requestContextSwitch = do
   -- NOTE: the semantics does not require immediate yielding, some latency is allowed
   --        for simplicity we yield immediately
@@ -752,9 +764,9 @@ requestContextSwitch = do
     forkOn# - yield
 -}
 
-scheduleToTheEnd :: Int -> M ()
+scheduleToTheEnd :: M sig m => Int -> m ()
 scheduleToTheEnd tid = do
-  modify' $ \s -> s {ssScheduledThreadIds = ssScheduledThreadIds s ++ [tid]}
+  modify $ \s -> s {ssScheduledThreadIds = ssScheduledThreadIds s ++ [tid]}
 
 {-
   used by:
@@ -893,19 +905,19 @@ data BlockedStatus
 #define ThreadComplete  4       /* thread has finished */
 -}
 
-reportThreads :: M ()
+reportThreads :: M sig m => m ()
 reportThreads = do
   threadIds <- IntMap.keys <$> gets ssThreads
   liftIO $ putStrLn $ "thread Ids: " ++ show threadIds
   mapM_ reportThread threadIds
 
-reportThread :: Int -> M ()
+reportThread :: M sig m => Int -> m ()
 reportThread tid = do
   endTS <- getThreadState tid
   tsStack <- getThreadStack tid
   liftIO $ reportThreadIO tid endTS tsStack
 
-getThreadStack :: Int -> M [StackContinuation]
+getThreadStack :: M sig m => Int -> m [StackContinuation]
 getThreadStack tid = do
   ThreadState{..} <- getThreadState tid
   flip unfoldrM tsStackTop $ \case

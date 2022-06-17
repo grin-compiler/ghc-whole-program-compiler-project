@@ -2,7 +2,7 @@
 module Stg.Interpreter.PrimOp.StablePointer where
 
 import Foreign.Ptr
-import Control.Monad.State
+import Control.Effect.State
 import qualified Data.IntMap as IntMap
 
 import Stg.Syntax
@@ -10,7 +10,7 @@ import Stg.Interpreter.Base
 
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
  args <- getAtoms argsAddr
  case (op, args, argsAddr) of
@@ -21,7 +21,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "makeStablePtr#", _, [a, _s]) -> do
     stablePtrs <- gets ssStablePointers
     next <- gets ssNextStablePointer
-    modify' $ \s -> s {ssStablePointers = IntMap.insert next a stablePtrs, ssNextStablePointer = succ next}
+    modify $ \s -> s {ssStablePointers = IntMap.insert next a stablePtrs, ssNextStablePointer = succ next}
     allocAtoms [PtrAtom (StablePtr next) . intPtrToPtr $ IntPtr next]
 
   -- deRefStablePtr# :: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
@@ -47,7 +47,7 @@ evalPrimOp fallback op argsAddr t tc = do
       Just snId -> allocAtoms [StableName snId]
       Nothing -> do
         snId <- gets ssNextStableName
-        modify' $ \s -> s {ssStableNameMap = IntMap.insert a snId snMap, ssNextStableName = succ snId}
+        modify $ \s -> s {ssStableNameMap = IntMap.insert a snId snMap, ssNextStableName = succ snId}
         allocAtoms [StableName snId]
 
   -- eqStableName# :: StableName# a -> StableName# b -> Int#

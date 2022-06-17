@@ -9,7 +9,7 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-dataToTagOp :: [Atom] -> M [AtomAddr]
+dataToTagOp :: M sig m => [Atom] -> m [AtomAddr]
 dataToTagOp [whnf@HeapPtr{}] = do
   -- NOTE: the GHC dataToTag# primop works for any Data Con regardless its arity
   (Con _ dataCon _) <- readHeapCon whnf
@@ -19,7 +19,7 @@ dataToTagOp [whnf@HeapPtr{}] = do
     Just i  -> allocAtoms [IntV i]
 dataToTagOp result = stgErrorM $ "dataToTagOp expected [HeapPtr], got: " ++ show result
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
  args <- getAtoms argsAddr
  case (op, args, argsAddr) of

@@ -6,7 +6,7 @@ import Stg.Interpreter.Base
 
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op args t tc = case (op, args) of
   -- reallyUnsafePtrEquality# :: a -> a -> Int#
   ( "reallyUnsafePtrEquality#", [_a, _b]) -> do

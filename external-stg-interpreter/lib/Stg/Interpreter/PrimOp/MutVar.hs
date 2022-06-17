@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.MutVar where
 
-import Control.Monad.State
+import Control.Effect.State
 import qualified Data.IntMap as IntMap
 
 import Stg.Syntax
@@ -11,7 +11,7 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
  args <- getAtoms argsAddr
  case (op, args, argsAddr) of
@@ -20,7 +20,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "newMutVar#", [_a, _s], [a, _]) -> do
     mutVars <- gets ssMutVars
     next <- gets ssNextMutVar
-    modify' $ \s -> s {ssMutVars = IntMap.insert next a mutVars, ssNextMutVar = succ next}
+    modify $ \s -> s {ssMutVars = IntMap.insert next a mutVars, ssNextMutVar = succ next}
     allocAtoms [MutVar next]
 
   -- readMutVar# :: MutVar# s a -> State# s -> (# State# s, a #)
@@ -31,7 +31,7 @@ evalPrimOp fallback op argsAddr t tc = do
   -- writeMutVar# :: MutVar# s a -> a -> State# s -> State# s
   ( "writeMutVar#", [MutVar m, _a, _s], [_, a, _]) -> do
     _ <- lookupMutVar m -- check existence
-    modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m a ssMutVars}
+    modify $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m a ssMutVars}
     pure []
 
   -- sameMutVar# :: MutVar# s a -> MutVar# s a -> Int#
@@ -53,7 +53,7 @@ evalPrimOp fallback op argsAddr t tc = do
     lazyNewMutVarValue <- HeapPtr <$> allocAndStore (tup2Prj0 {hoCloArgs = [lazyNewTup2Value], hoCloMissing = 0}) >>= storeNewAtom
 
     -- update mutvar
-    modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m lazyNewMutVarValue ssMutVars}
+    modify $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m lazyNewMutVarValue ssMutVars}
     pure [old, lazyNewTup2Value]
 
   -- atomicModifyMutVar_# :: MutVar# s a -> (a -> a) -> State# s -> (# State# s, a, a #)
@@ -67,7 +67,7 @@ evalPrimOp fallback op argsAddr t tc = do
     lazyNewMutVarValue <- HeapPtr <$> allocAndStore (apFun {hoCloArgs = [fun, old], hoCloMissing = 0}) >>= storeNewAtom
 
     -- update mutvar
-    modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m lazyNewMutVarValue ssMutVars}
+    modify $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m lazyNewMutVarValue ssMutVars}
     pure [old, lazyNewMutVarValue]
 
   -- casMutVar# :: MutVar# s a -> a -> a -> State# s -> (# State# s, Int#, a #)
@@ -76,7 +76,7 @@ evalPrimOp fallback op argsAddr t tc = do
     current <- lookupMutVar m >>= getAtom
     if current == old
       then do
-        modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m newAddr ssMutVars}
+        modify $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m newAddr ssMutVars}
         (:) <$> storeNewAtom (IntV 0) <*> pure [newAddr]
       else do
         (:) <$> storeNewAtom (IntV 1) <*> pure [oldAddr]

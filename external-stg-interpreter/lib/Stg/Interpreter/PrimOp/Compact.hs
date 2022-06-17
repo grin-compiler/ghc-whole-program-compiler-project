@@ -4,7 +4,7 @@ module Stg.Interpreter.PrimOp.Compact where
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- compactNew# :: Word# -> State# RealWorld -> (# State# RealWorld, Compact# #)

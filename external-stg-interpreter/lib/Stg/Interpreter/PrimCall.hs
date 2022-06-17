@@ -1,7 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimCall where
 
-import Control.Monad.State.Strict
+import Control.Effect.State
+import Control.Effect.Lift
 import Foreign
 
 import Stg.Syntax
@@ -18,7 +19,7 @@ pattern DoubleV d = DoubleAtom d
 
 -- NOTE: the WordV should contain a 64 bit wide value
 
-evalPrimCallOp :: PrimCall -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimCallOp :: M sig m => PrimCall -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = do
   args <- getAtoms argsAddr
   case primCallTarget of
@@ -55,7 +56,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = d
       | [DoubleV a] <- args
       -> do
         -- HINT: bit-conversion
-        w <- liftIO $ with a $ \p -> peek (castPtr p :: Ptr Word64)
+        w <- sendIO $ with a $ \p -> peek (castPtr p :: Ptr Word64)
         allocAtoms [WordV $ fromIntegral w]
 
   -- stg_floatToWord32zh :: Float# -> Word#
@@ -63,7 +64,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = d
       | [FloatV a] <- args
       -> do
         -- HINT: bit-conversion
-        w <- liftIO $ with a $ \p -> peek (castPtr p :: Ptr Word32)
+        w <- sendIO $ with a $ \p -> peek (castPtr p :: Ptr Word32)
         allocAtoms [WordV $ fromIntegral w]
 
   -- stg_word32ToFloatzh :: Word# -> Float#
@@ -71,7 +72,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = d
       | [WordV a] <- args
       -> do
         -- HINT: bit-conversion
-        f <- liftIO $ with (fromIntegral a :: Word32) $ \p -> peek (castPtr p :: Ptr Float)
+        f <- sendIO $ with (fromIntegral a :: Word32) $ \p -> peek (castPtr p :: Ptr Float)
         allocAtoms [FloatV f]
 
   -- stg_word64ToDoublezh :: Word# -> Double#
@@ -79,7 +80,7 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = d
       | [WordV a] <- args
       -> do
         -- HINT: bit-conversion
-        d <- liftIO $ with (fromIntegral a :: Word64) $ \p -> peek (castPtr p :: Ptr Double)
+        d <- sendIO $ with (fromIntegral a :: Word64) $ \p -> peek (castPtr p :: Ptr Double)
         allocAtoms [DoubleV d]
 
 

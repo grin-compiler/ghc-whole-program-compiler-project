@@ -1,7 +1,9 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.DelayWait where
 
-import Control.Monad.State
+import Control.Monad
+import Control.Effect.State
+import Control.Effect.Lift
 import Data.Time.Clock
 import Data.Fixed
 
@@ -17,7 +19,7 @@ pattern IntV i = IntAtom i
     this is an ugly design, needs to be fixed in the future!
 -}
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
  args <- getAtoms argsAddr
  case (op, args) of
@@ -30,7 +32,7 @@ evalPrimOp fallback op argsAddr t tc = do
       error $ "expected running thread status, but got: " ++ show tsStatus
 
     -- calculate target time
-    t0 <- liftIO getCurrentTime
+    t0 <- sendIO getCurrentTime
     let delayTime   = secondsToNominalDiffTime $ (fromIntegral usDelay :: Pico) / 1000000
         targetTime  = addUTCTime delayTime t0
 

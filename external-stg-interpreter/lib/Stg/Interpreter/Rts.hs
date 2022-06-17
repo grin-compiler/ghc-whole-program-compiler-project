@@ -2,7 +2,8 @@
 module Stg.Interpreter.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
 
 import GHC.Stack
-import Control.Monad.State
+import Control.Monad
+import Control.Effect.State
 import Control.Concurrent.MVar
 
 import Data.List (foldl')
@@ -24,11 +25,11 @@ emptyRts progName progArgs = Rts
   , rtsProgArgs     = progArgs
   }
 
-initRtsSupport :: String -> [String] -> [Module] -> M ()
+initRtsSupport :: M sig m => String -> [String] -> [Module] -> m ()
 initRtsSupport progName progArgs mods = do
 
   -- create empty Rts data con, it is filled gradually
-  modify' $ \s@StgState{..} -> s {ssRtsSupport = emptyRts progName progArgs}
+  modify $ \s@StgState{..} -> s {ssRtsSupport = emptyRts progName progArgs}
 
   -- collect rts related modules
   let rtsModSet = Set.fromList $
@@ -51,7 +52,7 @@ initRtsSupport progName progArgs mods = do
   forM_ wiredInCons $ \(u, m, t, d, setter) -> do
     case Map.lookup (UnitId u, ModuleName m, t, d) dcMap of
         Nothing -> error $ "missing wired in data con: " ++ show (u, m, t, d)
-        Just dc -> modify' $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport dc}
+        Just dc -> modify $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport dc}
 
   -- lookup wired-in closures
   let getBindings = \case
@@ -73,7 +74,7 @@ initRtsSupport progName progArgs mods = do
         Nothing -> error $ "missing wired in closure: " ++ show (u, m, n)
         Just b  -> do
           cl <- lookupEnv mempty b
-          modify' $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport cl}
+          modify $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport cl}
 
 globalStoreSymbols :: Set.Set Name
 globalStoreSymbols = Set.fromList

@@ -2,7 +2,9 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
 module Stg.Interpreter.IOManager where
 
-import Control.Monad.State
+import Control.Monad
+import Control.Effect.State
+import Control.Effect.Lift
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Time.Clock
@@ -144,10 +146,10 @@ fdPollWriteState fd = do
     done - enable threads
 -}
 
-handleBlockedDelayWait :: M ()
+handleBlockedDelayWait :: M sig m => m ()
 handleBlockedDelayWait = do
   tsList <- gets $ IntMap.toList . fmap tsStatus . ssThreads
-  now <- liftIO getCurrentTime
+  now <- sendIO getCurrentTime
   let maxSeconds  = 31 * 24 * 60 * 60 -- some OS have this constraint
       maxDelay    = secondsToNominalDiffTime maxSeconds
       delaysT     = [(tid, t `diffUTCTime` now) | (tid, ThreadBlocked (BlockedOnDelay t)) <- tsList]
@@ -162,18 +164,18 @@ handleBlockedDelayWait = do
   -- TODO: detect deadlocks
   if maxDelay == 0 then pure () else unless (null fdList) $ do
     -- query file descriptors
-    (selectResult, errorNo) <- liftIO $ waitForFDs (V.fromList readFDs) (V.fromList writeFDs) maxFD
+    (selectResult, errorNo) <- sendIO $ waitForFDs (V.fromList readFDs) (V.fromList writeFDs) maxFD
     when (selectResult < 0) $ error $ "select error, errno: " ++ show errorNo
 
     forM_ readFDsT $ \(tid, fd) -> do
-      liftIO (fdPollReadState fd) >>= \case
+      sendIO (fdPollReadState fd) >>= \case
         0 -> do
           ts <- getThreadState tid
           updateThreadState tid ts {tsStatus = ThreadRunning}
         _ -> pure () -- TODO
 
     forM_ writeFDsT $ \(tid, fd) -> do
-      liftIO (fdPollWriteState fd) >>= \case
+      sendIO (fdPollWriteState fd) >>= \case
         0 -> do
           ts <- getThreadState tid
           updateThreadState tid ts {tsStatus = ThreadRunning}

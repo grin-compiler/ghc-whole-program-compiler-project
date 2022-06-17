@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, RankNTypes #-}
 module Stg.Interpreter.FFI where
 
 ----- FFI experimental
@@ -41,8 +41,14 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
 import GHC.Stack
-import Control.Monad.State.Strict
+import Control.Monad
+import Control.Monad.IO.Class
+import Control.Effect.State
+import Control.Effect.Lift
 import Control.Concurrent.MVar
+
+import Control.Carrier.State.Strict
+import Control.Carrier.Lift
 
 import Stg.Syntax
 import Stg.GHC.Symbols
@@ -76,7 +82,7 @@ data CCallConv = CCallConv | CApiConv | StdCallConv | PrimCallConv | JavaScriptC
 rtsSymbolSet :: Set Name
 rtsSymbolSet = Set.fromList $ map BS8.pack rtsSymbols
 
-getFFISymbol :: Name -> M (FunPtr a)
+getFFISymbol :: M sig m => Name -> m (FunPtr a)
 getFFISymbol name = do
   dl <- gets ssCBitsMap
   funPtr <- liftIO . BS8.useAsCString name $ c_dlsym (packDL dl)
@@ -86,12 +92,12 @@ getFFISymbol name = do
       then stgErrorM $ "this RTS symbol is not implemented yet: " ++ BS8.unpack name
       else stgErrorM $ "unknown foreign symbol: " ++ BS8.unpack name
 
-getFFILabelPtrAtom :: Name -> LabelSpec -> M AtomAddr
+getFFILabelPtrAtom :: M sig m => Name -> LabelSpec -> m AtomAddr
 getFFILabelPtrAtom labelName labelSpec = do
   funPtr <- getFFISymbol labelName
   storeNewAtom $ PtrAtom (LabelPtr labelName labelSpec) $ castFunPtrToPtr funPtr
 
-mkFFIArg :: Atom -> M (Maybe FFI.Arg)
+mkFFIArg :: M sig m => Atom -> m (Maybe FFI.Arg)
 mkFFIArg = \case
   Void              -> pure Nothing
   PtrAtom _ p       -> pure . Just $ FFI.argPtr p
@@ -136,7 +142,7 @@ evalForeignCall funPtr cArgs retType = case retType of
     pure [DoubleAtom result]
 
 {-# NOINLINE evalFCallOp #-}
-evalFCallOp :: EvalOnNewThread -> ForeignCall -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalFCallOp :: EvalOnNewThread sig m -> ForeignCall -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalFCallOp evalOnNewThread fCall@ForeignCall{..} argsAddr t _tc = do
     args <- getAtoms argsAddr
     --liftIO $ putStrLn $ "  " ++ show foreignCTarget ++ " " ++ show args
@@ -265,9 +271,10 @@ getProgArgv(int *argc, char **argv[])
         | [PtrAtom (ByteArrayPtr bai1) _, PtrAtom (ByteArrayPtr bai2) _, Void] <- args
         -> do
           let
+            showByteArray :: M sig m => ByteArrayIdx -> m String
             showByteArray b = do
               ByteArrayDescriptor{..} <- lookupByteArrayDescriptorI b
-              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
+              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> liftIO (BA.unsafeFreezeByteArray baaMutableByteArray)
           formatStr <- showByteArray bai1
           value <- showByteArray bai2
           liftIO $ do
@@ -282,9 +289,10 @@ getProgArgv(int *argc, char **argv[])
         | [PtrAtom (ByteArrayPtr bai1) _, PtrAtom (ByteArrayPtr bai2) _, Void] <- args
         -> do
           let
+            showByteArray :: M sig m => ByteArrayIdx -> m String
             showByteArray b = do
               ByteArrayDescriptor{..} <- lookupByteArrayDescriptorI b
-              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
+              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> liftIO (BA.unsafeFreezeByteArray baaMutableByteArray)
           formatStr <- showByteArray bai1
           value <- showByteArray bai2
           Rts{..} <- gets ssRtsSupport
@@ -334,7 +342,7 @@ getProgArgv(int *argc, char **argv[])
             store <- gets $ rtsGlobalStore . ssRtsSupport
             case Map.lookup foreignSymbol store of
               Nothing -> do
-                modify' $ \s@StgState{..} -> s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol valueAddr store}}
+                modify $ \s@StgState{..} -> s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol valueAddr store}}
                 pure [valueAddr]
               Just v  -> pure [v]
 
@@ -502,7 +510,7 @@ INFO_TABLE_RET(stg_forceIO, RET_SMALL, P_ info_ptr)
 -}
 
 {-# NOINLINE ffiCallbackBridge #-}
-ffiCallbackBridge :: HasCallStack => EvalOnNewThread -> MVar StgState -> AtomAddr -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
+ffiCallbackBridge :: (HasCallStack) => EvalOnNewThread sig m -> MVar StgState -> AtomAddr -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
 ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif retStorage argsStoragePtr _userData = do
   let (retType : argsType) = typeString
       ('e' : hsRetType : hsArgsType) = hsTypeString
@@ -517,7 +525,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
   putStrLn $ "[callback BEGIN] " ++ show fun
   -}
   before <- takeMVar stateStore
-  (result, after) <- flip runStateT before $ do
+  (after, result) <- runM . runState before $ do
     {-
     oldThread <- gets ssCurrentThreadId
     -- TODO: properly setup ffi thread
@@ -526,6 +534,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
     scheduleToTheEnd tidFFI
     switchToThread tidFFI
     -}
+
     resultAddress <- evalOnNewThread $ do
       -- TODO: box FFI arg atoms
       --  i.e. rts_mkWord8
@@ -539,6 +548,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
       stackPush $ Apply boxedArgsAddr
       pure [fun]
     getAtoms resultAddress
+
 {-
 --=============================================================================
     -- force result to WHNF
@@ -562,7 +572,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
       -- NOTE: only single result is supported
       charToSetter retType retStorage retAtom
 
-createAdjustor :: HasCallStack => EvalOnNewThread -> AtomAddr -> String -> String -> M (FunPtr a, IO ())
+createAdjustor :: (HasCallStack) => EvalOnNewThread sig m -> AtomAddr -> String -> String -> m (FunPtr a, IO ())
 createAdjustor evalOnNewThread fun typeString hsTypeString = do
   --liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show typeString ++ " " ++ show hsTypeString
 
@@ -570,7 +580,7 @@ createAdjustor evalOnNewThread fun typeString hsTypeString = do
   stateStore <- gets $ unPrintableMVar . ssStateStore
   liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString)
 
-boxFFIAtom :: Char -> Atom -> M Atom
+boxFFIAtom :: M sig m => Char -> Atom -> m Atom
 boxFFIAtom c a = case (c, a) of
   -- boxed Char
   ('c', WordV _)      -> mkWiredInCon rtsCharCon    [a]
@@ -600,7 +610,7 @@ boxFFIAtom c a = case (c, a) of
   ('s', PtrAtom RawPtr _)     -> error "TODO: support C string FFI arg boxing"
   x                   -> error $ "boxFFIAtom - unknown pattern: " ++ show x
 
-mkWiredInCon :: (Rts -> DataCon) -> [Atom] -> M Atom
+mkWiredInCon :: M sig m => (Rts -> DataCon) -> [Atom] -> m Atom
 mkWiredInCon conFun args = do
   argsAddr <- allocAtoms args
   dc <- gets $ conFun . ssRtsSupport

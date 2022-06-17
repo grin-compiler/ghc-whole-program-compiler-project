@@ -1,7 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Concurrency where
 
-import Control.Monad.State
+import Control.Effect.State
+import Control.Effect.Lift
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.IntMap as IntMap
 import Foreign.Ptr
@@ -11,7 +12,7 @@ import Stg.Interpreter.Base
 
 pattern IntV i = IntAtom i
 
-evalPrimOp :: PrimOpEval -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> M [AtomAddr]
+evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
  args <- getAtoms argsAddr
  case (op, args, argsAddr) of
@@ -142,9 +143,9 @@ evalPrimOp fallback op argsAddr t tc = do
 
   -- labelThread# :: ThreadId# -> Addr# -> State# RealWorld -> State# RealWorld
   ( "labelThread#", [ThreadId tid, PtrAtom _ p, _s], _) -> do
-    threadLabel <- liftIO . BS8.packCString $ castPtr p
+    threadLabel <- sendIO . BS8.packCString $ castPtr p
     let setLabel ts@ThreadState{..} = ts {tsLabel = Just threadLabel}
-    modify' $ \s@StgState{..} -> s {ssThreads = IntMap.adjust setLabel tid ssThreads}
+    modify $ \s@StgState{..} -> s {ssThreads = IntMap.adjust setLabel tid ssThreads}
     pure []
 
   -- isCurrentThreadBound# :: State# RealWorld -> (# State# RealWorld, Int# #)
@@ -182,10 +183,11 @@ evalPrimOp fallback op argsAddr t tc = do
   _ -> fallback op argsAddr t tc
 
 
-raiseAsyncEx :: [AtomAddr] -> Int -> AtomAddr -> M ()
+raiseAsyncEx :: M sig m => [AtomAddr] -> Int -> AtomAddr -> m ()
 raiseAsyncEx lastResult tid exception = do
   ts@ThreadState{..} <- getThreadState tid
-  let unwindStack result stackPiece = \case
+  let unwindStack :: M sig m =>  [AtomAddr] -> [StackContinuation] -> Maybe StackAddr -> m ()
+      unwindStack result stackPiece = \case
         -- no Catch stack frame is found, kill thread
         Nothing -> do
           updateThreadState tid (ts {tsStackTop = Nothing, tsStatus = ThreadDied})
@@ -222,7 +224,7 @@ raiseAsyncEx lastResult tid exception = do
 
   unwindStack lastResult [] tsStackTop
 
-removeFromQueues :: Int -> M ()
+removeFromQueues :: M sig m => Int -> m ()
 removeFromQueues tid = do
   ThreadState{..} <- getThreadState tid
   case tsStatus of
@@ -230,7 +232,7 @@ removeFromQueues tid = do
     ThreadBlocked (BlockedOnMVarRead m) -> removeFromMVarQueue tid m
     _                                   -> pure ()
 
-removeFromMVarQueue :: Int -> Int -> M ()
+removeFromMVarQueue :: M sig m => Int -> Int -> m ()
 removeFromMVarQueue tid m = do
   let filterFun mvd@MVarDescriptor{..} = mvd {mvdQueue = filter (tid /=) mvdQueue}
-  modify' $ \s@StgState{..} -> s {ssMVars = IntMap.adjust filterFun m ssMVars}
+  modify $ \s@StgState{..} -> s {ssMVars = IntMap.adjust filterFun m ssMVars}

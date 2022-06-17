@@ -1,7 +1,9 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.ThreadScheduler where
 
-import Control.Monad.State
+import Control.Monad
+import Control.Effect.State
+import Control.Effect.Lift
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Time.Clock
@@ -9,7 +11,7 @@ import Data.Time.Clock
 import Stg.Interpreter.Base
 import Stg.Interpreter.IOManager
 
-runScheduler :: [AtomAddr] -> ScheduleReason -> M [AtomAddr]
+runScheduler :: M sig m => [AtomAddr] -> ScheduleReason -> m [AtomAddr]
 runScheduler result sr = do
   tid <- gets ssCurrentThreadId
   --liftIO $ putStrLn $ " * scheduler: " ++ show sr ++ " thread: " ++ show tid
@@ -24,6 +26,7 @@ runScheduler result sr = do
 
     SR_ThreadYield    -> yield result
 
+yield :: M sig m => [AtomAddr] -> m [AtomAddr]
 yield result = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
@@ -50,11 +53,11 @@ yield result = do
 
   pure $ tsCurrentResult nextTS
 
-getNextRunnableThread :: M Int
+getNextRunnableThread :: M sig m => m Int
 getNextRunnableThread = do
   -- HINT: drop current thread id
   tidQueue <- gets $ drop 1 . ssScheduledThreadIds
-  modify' $ \s@StgState{..} -> s {ssScheduledThreadIds = tidQueue}
+  modify $ \s@StgState{..} -> s {ssScheduledThreadIds = tidQueue}
   case tidQueue of
     [] -> head <$> calculateNewSchedule
     tid : _ -> do
@@ -63,7 +66,7 @@ getNextRunnableThread = do
         then pure tid
         else getNextRunnableThread -- HINT: try next
 
-calculateNewSchedule :: M [Int]
+calculateNewSchedule :: M sig m => m [Int]
 calculateNewSchedule = do
   wakeUpSleepingThreads
   -- calculate the new scheduling
@@ -73,20 +76,20 @@ calculateNewSchedule = do
     [] -> waitAndScheduleBlockedThreads
     newQueue -> do
       -- save the new scheduling
-      modify' $ \s -> s {ssScheduledThreadIds = newQueue}
+      modify $ \s -> s {ssScheduledThreadIds = newQueue}
       --liftIO $ putStrLn $ "new scheduling: " ++ show newQueue
       pure newQueue
 
-wakeUpSleepingThreads :: M ()
+wakeUpSleepingThreads :: M sig m => m ()
 wakeUpSleepingThreads = do
-  now <- liftIO getCurrentTime
+  now <- sendIO getCurrentTime
   tsList <- gets $ IntMap.toList . ssThreads
   forM_ tsList $ \(tid, ts) -> case tsStatus ts of
     ThreadBlocked (BlockedOnDelay wakeupTime)
       | wakeupTime >= now -> updateThreadState tid ts {tsStatus = ThreadRunning}
     _ -> pure ()
 
-waitAndScheduleBlockedThreads :: M [Int]
+waitAndScheduleBlockedThreads :: M sig m => m [Int]
 waitAndScheduleBlockedThreads = do
   tsList <- gets $ IntMap.toList . ssThreads
   let blockedThreads = [(tid, ts) | (tid, ts) <- tsList, isBlocked (tsStatus ts)]
@@ -103,7 +106,7 @@ waitAndScheduleBlockedThreads = do
   if null blockedThreads
     then do
       -- error "TODO: scheduler has n runnable thread to schedule" -- nothing to run, what to do??
-      modify' $ \s -> s {ssScheduledThreadIds = []}
+      modify $ \s -> s {ssScheduledThreadIds = []}
       -- HACK:
       pure $ map fst tsList
     else do
