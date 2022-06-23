@@ -1,5 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections, ConstraintKinds, RankNTypes #-}
-module Stg.Interpreter.Base where
+module Stg.Interpreter.Base
+  ( module Stg.Interpreter.Base.Atom
+  , module Stg.Interpreter.Base
+  ) where
 
 import Data.Word
 import Foreign.Ptr
@@ -38,31 +41,9 @@ import GHC.Stack
 import Text.Printf
 import Debug.Trace
 import Stg.Syntax
+import Stg.Interpreter.Base.Atom
 
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
-
-data ArrIdx
-  = MutArrIdx !Int
-  | ArrIdx    !Int
-  deriving (Show, Eq, Ord)
-
-data SmallArrIdx
-  = SmallMutArrIdx !Int
-  | SmallArrIdx    !Int
-  deriving (Show, Eq, Ord)
-
-data ArrayArrIdx
-  = ArrayMutArrIdx !Int
-  | ArrayArrIdx    !Int
-  deriving (Show, Eq, Ord)
-
-data ByteArrayIdx
-  = ByteArrayIdx
-  { baId        :: !Int
-  , baPinned    :: !Bool
-  , baAlignment :: !Int
-  }
-  deriving (Show, Eq, Ord)
 
 data ByteArrayDescriptor
   = ByteArrayDescriptor
@@ -80,14 +61,6 @@ instance Eq ByteArrayDescriptor where
 instance Ord ByteArrayDescriptor where
   _ `compare` _ = EQ -- TODO
 
-data PtrOrigin
-  = CStringPtr    !ByteString       -- null terminated string
-  | ByteArrayPtr  !ByteArrayIdx     -- raw ptr to the byte array
-  | RawPtr                          -- raw ptr to a values with unknown origin (i.e. FFI)
-  | StablePtr     !Int              -- stable pointer must have AddrRep
-  | LabelPtr      !Name !LabelSpec  -- foreign symbol/label name + label sepcification (i.e. data or function)
-  deriving (Show, Eq, Ord)
-
 data WeakPtrDescriptor
   = WeakPtrDescriptor
   { wpdKey          :: AtomAddr
@@ -102,49 +75,6 @@ data MVarDescriptor
   { mvdValue    :: Maybe AtomAddr
   , mvdQueue    :: [Int] -- thread id, blocking in this mvar ; this is required only for the fairness ; INVARIANT: BlockedOnReads are present at the beginning of the queue
   }
-  deriving (Show, Eq, Ord)
-
--- TODO: detect coercions during the evaluation
-data Atom     -- Q: should atom fit into a cpu register? A: yes
-  -- values
-  = Literal           !Lit  -- TODO: remove this
-  | Void
-  | PtrAtom           !PtrOrigin !(Ptr Word8)
-  | IntAtom           !Int
-  | WordAtom          !Word
-  | FloatAtom         !Float
-  | DoubleAtom        !Double
-  | LiftedUndefined
-  -- indirections to store
-  | HeapPtr           !Addr
-  | MVar              !Int
-  | MutVar            !Int
-  | Array             !ArrIdx
-  | MutableArray      !ArrIdx
-  | SmallArray        !SmallArrIdx
-  | SmallMutableArray !SmallArrIdx
-  | ArrayArray        !ArrayArrIdx
-  | MutableArrayArray !ArrayArrIdx
-  | ByteArray         !ByteArrayIdx
-  | MutableByteArray  !ByteArrayIdx
-  | WeakPointer       !Int
-  | StableName        !Int
-  | ThreadId          !Int
-{-
-  Atom lattice:
-    - concrete atom value
-    - set of atoms (optionally limited size)
-    - atom type (Q: is this the same as rep type or prim type?)
-    - set of atom type (due to unsafe coercions
-
-  IDEA: define lattices for value atoms (i.e. IntAtom) , not indirection atoms (e.g. HeapPtr or Array)
-        indirection atoms will have a corresponding lattice in their stores
-
-  Q: how to join two:
-      Arrays  A: (single set of elements) or (extend size to fit the bigger array, then join values at each index to a set)
-      HeapPtr A: TODO: design the heap object lattice
-      IntAtom A: set or type
--}
   deriving (Show, Eq, Ord)
 
 type ReturnValue = [AtomAddr]
@@ -201,12 +131,10 @@ instance Show (PrintableMVar a) where
 
 type StackAddr  = Int
 type HeapAddr   = Int
-type Addr   = Int
 type Heap   = IntMap HeapObject                           -- abs-int: IntMap (Set HeapObject) | lattice
 type Env    = Map Id (StaticOrigin, AtomAddr)             -- NOTE: must contain only the defined local variables
 type Stack  = IntMap (StackContinuation, Maybe StackAddr) -- abs-int: IntMap (Set (StackContinuation, Maybe Int)) | lattice
 
-type AtomAddr   = Int
 type AtomStore  = IntMap Atom                             -- abs-int: IntMap (Set Atom) | lattice
 
 data StaticOrigin
@@ -244,7 +172,6 @@ data StgState
   , ssStablePointers      :: IntMap AtomAddr            -- abs-int: IntMap (Set ...) | lattice
   , ssMutableByteArrays   :: IntMap ByteArrayDescriptor -- abs-int: IntMap (Set ...) | lattice
   , ssMVars               :: IntMap MVarDescriptor      -- abs-int: IntMap (Set ...) | lattice
-  , ssMutVars             :: IntMap AtomAddr            -- abs-int: IntMap (Set ...) | lattice
   , ssArrays              :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
   , ssMutableArrays       :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
   , ssSmallArrays         :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
@@ -263,17 +190,12 @@ data StgState
   , ssNextStablePointer     :: !Int
   , ssNextMutableByteArray  :: !Int
   , ssNextMVar              :: !Int
-  , ssNextMutVar            :: !Int
   , ssNextArray             :: !Int
   , ssNextMutableArray      :: !Int
   , ssNextSmallArray        :: !Int
   , ssNextSmallMutableArray :: !Int
   , ssNextArrayArray        :: !Int
   , ssNextMutableArrayArray :: !Int
-
-  -- FFI related
-  , ssCBitsMap            :: DL
-  , ssStateStore          :: PrintableMVar StgState
 
   -- RTS related
   , ssRtsSupport          :: Rts
@@ -309,7 +231,6 @@ emptyStgState stateStore dl = StgState
   , ssStablePointers      = mempty
   , ssMutableByteArrays   = mempty
   , ssMVars               = mempty
-  , ssMutVars             = mempty
   , ssArrays              = mempty
   , ssMutableArrays       = mempty
   , ssSmallArrays         = mempty
@@ -326,17 +247,12 @@ emptyStgState stateStore dl = StgState
   , ssNextStablePointer     = 0
   , ssNextMutableByteArray  = 0
   , ssNextMVar              = 0
-  , ssNextMutVar            = 0
   , ssNextArray             = 0
   , ssNextMutableArray      = 0
   , ssNextSmallArray        = 0
   , ssNextSmallMutableArray = 0
   , ssNextArrayArray        = 0
   , ssNextMutableArrayArray = 0
-
-  -- FFI related
-  , ssCBitsMap            = dl
-  , ssStateStore          = stateStore
 
   , ssRtsSupport          = error "uninitialized ssRtsSupport"
   }
@@ -566,6 +482,7 @@ readHeapClosure a = readHeap a >>= \o -> case o of
 
 -- primop related
 
+type FCallEval m = ForeignCall -> [AtomAddr] -> Type -> m [AtomAddr]
 type PrimOpEval m = Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 type EvalOnNewThread m = m [AtomAddr] -> m [AtomAddr]
 
@@ -584,12 +501,6 @@ lookupStablePointer :: (HasCallStack, M sig m) => Int -> m AtomAddr
 lookupStablePointer spId = do
   IntMap.lookup spId <$> gets ssStablePointers >>= \case
     Nothing -> stgErrorM $ "unknown StablePointer: " ++ show spId
-    Just a  -> pure a
-
-lookupMutVar :: (HasCallStack, M sig m) => Int -> m AtomAddr
-lookupMutVar m = do
-  IntMap.lookup m <$> gets ssMutVars >>= \case
-    Nothing -> stgErrorM $ "unknown MutVar: " ++ show m
     Just a  -> pure a
 
 lookupMVar :: (HasCallStack, M sig m) => Int -> m MVarDescriptor
@@ -642,27 +553,6 @@ lookupByteArrayDescriptor m = do
 
 lookupByteArrayDescriptorI :: (HasCallStack, M sig m) => ByteArrayIdx -> m ByteArrayDescriptor
 lookupByteArrayDescriptorI = lookupByteArrayDescriptor . baId
-
-{-# NOINLINE liftIOAndBorrowStgState #-}
-liftIOAndBorrowStgState :: (HasCallStack, M sig m) => IO a -> m a
-liftIOAndBorrowStgState action = do
-  stateStore <- gets $ unPrintableMVar . ssStateStore
-  -- HINT: remember the local thread id
-  myThread <- gets ssCurrentThreadId
-  before <- get
-  (result, after) <- sendIO $ do
-    -- save current state
-    putMVar stateStore before
-    -- execute acition
-    r <- action
-    -- load the state back
-    s <- takeMVar stateStore
-    pure (r, s)
-
-  put after
-  -- HINT: continue the local thread
-  switchToThread myThread
-  pure result
 
 -- string constants
 -- NOTE: the string gets extended with a null terminator
