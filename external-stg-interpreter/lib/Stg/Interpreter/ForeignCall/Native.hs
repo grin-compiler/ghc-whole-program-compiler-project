@@ -73,26 +73,44 @@ type I2 sig m =
 data FFIState
   = FFIState
   { ssCBitsMap    :: DL
---  , ssStateStore  :: PrintableMVar (StgState, FFIState, PrimMutVar.MutVarState)
-  , ssStateStore  :: PrintableMVar StgState
+  , ssStateStore  :: PrintableMVar FullState
   }
   deriving (Show)
 
-
-emptyFFIState :: FFIState
-emptyFFIState = FFIState
-  { ssCBitsMap    = undefined
-  , ssStateStore  = undefined
-  }
-
 --run m   = runState  emptyMutVarState (runLabelled @"MutVar" m)
-evalFFI m = evalState emptyFFIState (runLabelled @"FFI" m)
+evalFFI s m = evalState s (runLabelled @"FFI" m)
 
 type C =
   Labelled "FFI" (StateC FFIState)
     (Labelled "MutVar" (StateC PrimMutVar.MutVarState)
       (StateC StgState (LiftC IO))
     )
+
+data FullState
+  = FullState
+  { fsStg     :: StgState
+  , fsFFI     :: FFIState
+  , fsMutVar  :: PrimMutVar.MutVarState
+  }
+  deriving Show
+
+getFullState :: I2 sig m => m FullState
+getFullState = FullState
+  <$> get
+  <*> L.get @"FFI"
+  <*> L.get @"MutVar"
+
+putFullState :: I2 sig m => FullState -> m ()
+putFullState FullState{..} = do
+  put fsStg
+  L.put @"FFI" fsFFI
+  L.put @"MutVar" fsMutVar
+
+withFullState :: I2 sig m => m a -> m (FullState, a)
+withFullState action = do
+  result <- action
+  fullState <- getFullState
+  pure (fullState, result)
 
   -- FFI related
 
@@ -142,7 +160,7 @@ evalFCallOp evalOnNewThread fallback fCall@ForeignCall{..} argsAddr t = do
           --sendIO $ print foreignSymbol
           cArgs <- catMaybes <$> mapM mkFFIArg args
           funPtr <- getFFISymbol foreignSymbol
-          result <- liftIOAndBorrowStgState $ do
+          result <- liftIOAndBorrowState $ do
             {-
             when (False || "hs_OpenGLRaw_getProcAddress" == foreignSymbol) $ do
               print args
@@ -156,7 +174,7 @@ evalFCallOp evalOnNewThread fallback fCall@ForeignCall{..} argsAddr t = do
         | (PtrAtom RawPtr funPtr) : funArgs <- args
         -> do
           cArgs <- catMaybes <$> mapM mkFFIArg funArgs
-          result <- liftIOAndBorrowStgState $ do
+          result <- liftIOAndBorrowState $ do
             evalNativeCall (castPtrToFunPtr funPtr) cArgs t
           allocAtoms result
 
@@ -164,14 +182,15 @@ evalFCallOp evalOnNewThread fallback fCall@ForeignCall{..} argsAddr t = do
 
       _ -> fallback fCall argsAddr t
 
-{-# NOINLINE liftIOAndBorrowStgState #-}
-liftIOAndBorrowStgState :: (HasCallStack, I2 sig m) => IO a -> m a
-liftIOAndBorrowStgState action = do
+
+{-# NOINLINE liftIOAndBorrowState #-}
+liftIOAndBorrowState :: (HasCallStack, I2 sig m) => IO a -> m a
+liftIOAndBorrowState action = do
   -- TODO: save and restore full state
   stateStore <- L.gets @"FFI" $ unPrintableMVar . ssStateStore
   -- HINT: remember the local thread id
   myThread <- gets ssCurrentThreadId
-  before <- get
+  before <- getFullState
   (result, after) <- sendIO $ do
     -- save current state
     putMVar stateStore before
@@ -181,7 +200,7 @@ liftIOAndBorrowStgState action = do
     s <- takeMVar stateStore
     pure (r, s)
 
-  put after
+  putFullState after
   -- HINT: continue the local thread
   switchToThread myThread
   pure result
@@ -401,7 +420,7 @@ INFO_TABLE_RET(stg_forceIO, RET_SMALL, P_ info_ptr)
 -}
 
 {-# NOINLINE ffiCallbackBridge #-}
-ffiCallbackBridge :: HasCallStack => EvalOnNewThread C -> MVar StgState -> AtomAddr -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
+ffiCallbackBridge :: HasCallStack => EvalOnNewThread C -> MVar FullState -> AtomAddr -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
 ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif retStorage argsStoragePtr _userData = do
   let (retType : argsType) = typeString
       ('e' : hsRetType : hsArgsType) = hsTypeString
@@ -415,8 +434,8 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
 
   putStrLn $ "[callback BEGIN] " ++ show fun
   -}
-  before <- takeMVar stateStore
-  (after, result) <- runM . runState before . PrimMutVar.eval . evalFFI $ do
+  FullState{..} <- takeMVar stateStore
+  (after, result) <- runM . evalState fsStg . PrimMutVar.eval fsMutVar . evalFFI fsFFI . withFullState $ do
     {-
     oldThread <- gets ssCurrentThreadId
     -- TODO: properly setup ffi thread

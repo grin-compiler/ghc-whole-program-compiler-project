@@ -34,7 +34,7 @@ emptyMutVarState = MutVarState
   }
 
 run m   = runState  emptyMutVarState (runLabelled @"MutVar" m)
-eval m  = evalState emptyMutVarState (runLabelled @"MutVar" m)
+eval s m  = evalState s (runLabelled @"MutVar" m)
 
 lookupMutVar :: P sig m => Int -> m AtomAddr
 lookupMutVar m = do

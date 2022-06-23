@@ -206,12 +206,10 @@ data StgState
 
 -- for the primop tests
 emptyUndefinedStgState :: StgState
-emptyUndefinedStgState = emptyStgState undefined undefined
+emptyUndefinedStgState = emptyStgState
 
-emptyStgState :: PrintableMVar StgState
-              -> DL
-              -> StgState
-emptyStgState stateStore dl = StgState
+emptyStgState :: StgState
+emptyStgState = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
   , ssStack               = mempty

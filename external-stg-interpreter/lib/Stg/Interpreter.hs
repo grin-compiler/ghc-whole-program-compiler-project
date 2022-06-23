@@ -703,7 +703,7 @@ runProgram switchCWD progFilePath mods0 progArgs = do
         dlclose dl
         --killThread gcThreadId
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- runM . execState (emptyStgState stateStore dl) . PrimMutVar.eval . FCallNative.evalFFI $ run
+    s@StgState{..} <- runM . execState emptyStgState . PrimMutVar.eval PrimMutVar.emptyMutVarState . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) $ run
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
