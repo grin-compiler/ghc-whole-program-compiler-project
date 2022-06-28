@@ -68,7 +68,7 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   deriving (Show, Eq, Ord)
 
 data Lattice
-  = TODO
+  = Top
   deriving (Show, Eq, Ord)
 
 {-

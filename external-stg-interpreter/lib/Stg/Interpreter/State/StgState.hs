@@ -1,37 +1,4 @@
-{- # LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections, ConstraintKinds, RankNTypes # -}
 module Stg.Interpreter.State.StgState where
-
-{-
-import Data.Word
-import Foreign.Ptr
---import Control.Monad.State.Strict
-import Data.Foldable
-import Data.List (foldl')
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Map (Map)
-import qualified Data.Map as Map
-import qualified Data.Map.Strict as StrictMap
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
-import qualified Data.IntMap as IntMap
-import Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteString.Internal as BS
-import qualified Data.ByteString.Lazy as BL
-import qualified Data.Primitive.ByteArray as BA
-import Control.Monad.Primitive
-import System.Posix.DynamicLinker
-import Control.Concurrent.MVar
-import Control.Concurrent.Chan.Unagi.Bounded
-import Foreign.ForeignPtr.Unsafe
-import Data.Time.Clock
-import System.IO
-
-import GHC.Stack
-import Text.Printf
-import Debug.Trace
--}
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Map (Map)

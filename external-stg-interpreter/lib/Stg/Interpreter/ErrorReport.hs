@@ -57,6 +57,8 @@ showStackCont = \case
   CaseOf _ b _ _ -> "CaseOf, result var: " ++ show (Id b)
   c -> show c
 
+-- TODO: remove this code duplication below
+
 getThreadStateErr :: (HasCallStack, M sig m) => Int -> m ThreadState
 getThreadStateErr tid = do
   IntMap.lookup tid <$> gets ssThreads >>= \case
