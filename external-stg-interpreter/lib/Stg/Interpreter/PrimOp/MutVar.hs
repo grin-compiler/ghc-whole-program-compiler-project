@@ -70,7 +70,7 @@ evalPrimOp fallback op argsAddr t tc = do
 
   -- atomicModifyMutVar2# :: MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
   ( "atomicModifyMutVar2#", [MutVar m, _fun, _s], [_, fun, _]) -> do
-    Rts{..} <- gets ssRtsSupport
+    RtsBaseInterop{..} <- gets ssRtsBaseInterop
     -- NOTE: CPU atomic
     old <- lookupMutVar m
 
@@ -88,7 +88,7 @@ evalPrimOp fallback op argsAddr t tc = do
 
   -- atomicModifyMutVar_# :: MutVar# s a -> (a -> a) -> State# s -> (# State# s, a, a #)
   ( "atomicModifyMutVar_#", [MutVar m, _fun, _s], [_, fun, _]) -> do
-    Rts{..} <- gets ssRtsSupport
+    RtsBaseInterop{..} <- gets ssRtsBaseInterop
     -- NOTE: CPU atomic
     old <- lookupMutVar m
 

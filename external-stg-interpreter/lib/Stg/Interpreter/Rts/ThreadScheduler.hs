@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
-module Stg.Interpreter.ThreadScheduler where
+module Stg.Interpreter.Rts.ThreadScheduler where
 
 import Control.Monad
 import Control.Effect.State
@@ -9,7 +9,7 @@ import qualified Data.IntMap as IntMap
 import Data.Time.Clock
 
 import Stg.Interpreter.Base
-import Stg.Interpreter.IOManager
+import Stg.Interpreter.Rts.IOManager
 
 runScheduler :: M sig m => [AtomAddr] -> ScheduleReason -> m [AtomAddr]
 runScheduler result sr = do

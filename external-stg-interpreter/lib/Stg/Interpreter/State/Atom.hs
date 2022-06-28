@@ -1,9 +1,10 @@
-module Stg.Interpreter.Base.Atom where
+module Stg.Interpreter.State.Atom where
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Word
 import Foreign.Ptr
 import Stg.Syntax
+import Stg.Interpreter.State.Allocator
 
 data ArrIdx
   = MutArrIdx !Int
@@ -36,9 +37,6 @@ data PtrOrigin
   | LabelPtr      !Name !LabelSpec  -- foreign symbol/label name + label sepcification (i.e. data or function)
   deriving (Show, Eq, Ord)
 
-type Addr     = Int
-type AtomAddr = Int
-
 -- TODO: detect coercions during the evaluation
 data Atom     -- Q: should atom fit into a cpu register? A: yes
   -- values
@@ -65,6 +63,14 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | WeakPointer       !Int
   | StableName        !Int
   | ThreadId          !Int
+  -- lattice for abstract values
+  | Lattice           !Lattice
+  deriving (Show, Eq, Ord)
+
+data Lattice
+  = TODO
+  deriving (Show, Eq, Ord)
+
 {-
   Atom lattice:
     - concrete atom value
@@ -80,4 +86,3 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
       HeapPtr A: TODO: design the heap object lattice
       IntAtom A: set or type
 -}
-  deriving (Show, Eq, Ord)

@@ -1,9 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
-module Stg.Interpreter.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
+module Stg.Interpreter.StateOp.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
 
 import GHC.Stack
 import Control.Monad
-import Control.Effect.State
 import Control.Concurrent.MVar
 
 import Data.List (foldl')
@@ -12,24 +11,29 @@ import qualified Data.Map as Map
 
 import Stg.Syntax
 import Stg.Reconstruct
-import Stg.Interpreter.Base
+import Stg.Interpreter.StateOp.Env
+import Stg.Interpreter.BaseState
 
 pattern CharV c = Literal (LitChar c)
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-emptyRts progName progArgs = Rts
+emptyRtsBaseInterop = RtsBaseInterop
   { rtsGlobalStore  = Map.empty
-  , rtsProgName     = progName
-  , rtsProgArgs     = progArgs
   }
 
 initRtsSupport :: M sig m => String -> [String] -> [Module] -> m ()
 initRtsSupport progName progArgs mods = do
 
   -- create empty Rts data con, it is filled gradually
-  modify $ \s@StgState{..} -> s {ssRtsSupport = emptyRts progName progArgs}
+  modify $ \s@StgState{..} -> s
+    { ssRtsBaseInterop  = emptyRtsBaseInterop
+    , ssRtsStaticEnv    = RtsStaticEnv
+                          { rtsProgName = progName
+                          , rtsProgArgs = progArgs
+                          }
+    }
 
   -- collect rts related modules
   let rtsModSet = Set.fromList $
@@ -52,7 +56,7 @@ initRtsSupport progName progArgs mods = do
   forM_ wiredInCons $ \(u, m, t, d, setter) -> do
     case Map.lookup (UnitId u, ModuleName m, t, d) dcMap of
         Nothing -> error $ "missing wired in data con: " ++ show (u, m, t, d)
-        Just dc -> modify $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport dc}
+        Just dc -> modify $ \s@StgState{..} -> s {ssRtsBaseInterop = setter ssRtsBaseInterop dc}
 
   -- lookup wired-in closures
   let getBindings = \case
@@ -74,7 +78,7 @@ initRtsSupport progName progArgs mods = do
         Nothing -> error $ "missing wired in closure: " ++ show (u, m, n)
         Just b  -> do
           cl <- lookupEnv mempty b
-          modify $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport cl}
+          modify $ \s@StgState{..} -> s {ssRtsBaseInterop = setter ssRtsBaseInterop cl}
 
 globalStoreSymbols :: Set.Set Name
 globalStoreSymbols = Set.fromList
@@ -95,7 +99,7 @@ globalStoreSymbols = Set.fromList
   ]
 
 -- HINT: needed for FFI value boxing
-wiredInCons :: [(Name, Name, Name, Name, Rts -> DataCon -> Rts)]
+wiredInCons :: [(Name, Name, Name, Name, RtsBaseInterop -> DataCon -> RtsBaseInterop)]
 wiredInCons =
   -- unit-id,     module,       type con,     data con
   [ ("ghc-prim",  "GHC.Types",  "Char",       "C#",         \s dc -> s {rtsCharCon      = dc})
@@ -125,7 +129,7 @@ wiredInCons =
   TODO:
     bind wired in closures when allocating static top level closures
 -}
-wiredInClosures :: [(Name, Name, Name, Rts -> AtomAddr -> Rts)]
+wiredInClosures :: [(Name, Name, Name, RtsBaseInterop -> AtomAddr -> RtsBaseInterop)]
 wiredInClosures =
   -- unit-id,     module,                   binder,                         closure setter
   [ ("base",      "GHC.TopHandler",         "runIO",                        \s cl -> s {rtsTopHandlerRunIO            = cl})

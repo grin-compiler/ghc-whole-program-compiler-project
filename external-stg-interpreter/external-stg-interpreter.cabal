@@ -17,13 +17,35 @@ library
 
     Stg.Interpreter
     Stg.Interpreter.Base
-    Stg.Interpreter.Base.Atom
+    Stg.Interpreter.BaseState
+    Stg.Interpreter.Monad
+    Stg.Interpreter.ErrorReport
+
+    Stg.Interpreter.PrimCall
     Stg.Interpreter.ForeignCall.Interpreted
     Stg.Interpreter.ForeignCall.Native
-    Stg.Interpreter.PrimCall
-    Stg.Interpreter.Rts
-    Stg.Interpreter.IOManager
-    Stg.Interpreter.ThreadScheduler
+
+    Stg.Interpreter.Rts.IOManager
+    Stg.Interpreter.Rts.ThreadScheduler
+
+    Stg.Interpreter.State.Allocator
+    Stg.Interpreter.State.Atom
+    Stg.Interpreter.State.Env
+    Stg.Interpreter.State.Heap
+    Stg.Interpreter.State.PrimTypes
+    Stg.Interpreter.State.Rts
+    Stg.Interpreter.State.Stack
+    Stg.Interpreter.State.StgState
+    Stg.Interpreter.State.Thread
+    Stg.Interpreter.StateOp.Allocator
+    Stg.Interpreter.StateOp.Atom
+    Stg.Interpreter.StateOp.Env
+    Stg.Interpreter.StateOp.Heap
+    Stg.Interpreter.StateOp.PrimTypes
+    Stg.Interpreter.StateOp.Rts
+    Stg.Interpreter.StateOp.Stack
+    Stg.Interpreter.StateOp.Thread
+
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array

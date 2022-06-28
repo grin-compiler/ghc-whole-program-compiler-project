@@ -30,18 +30,18 @@ evalPrimOp fallback op argsAddr t tc = do
 
   -- newSmallArray# :: Int# -> a -> State# s -> (# State# s, SmallMutableArray# s a #)
   ( "newSmallArray#", [IntV i, _a, _s], [_, a, _]) -> do
-    smallMutableArrays <- gets ssSmallMutableArrays
-    next <- gets ssNextSmallMutableArray
+    next <- freshSmallMutableArrayAddress
     let v = V.replicate (fromIntegral i) a
-    modify $ \s@StgState{..} -> s {ssSmallMutableArrays = IntMap.insert next v ssSmallMutableArrays, ssNextSmallMutableArray = succ next}
+    smallMutableArrays <- gets ssSmallMutableArrays
+    modify $ \s@StgState{..} -> s {ssSmallMutableArrays = IntMap.insert next v ssSmallMutableArrays}
     allocAtoms [SmallMutableArray $ SmallMutArrIdx next]
 
   -- sameSmallMutableArray# :: SmallMutableArray# s a -> SmallMutableArray# s a -> Int#
-  ( "sameMutableArray#", [SmallMutableArray a, SmallMutableArray b], _) -> do
+  ( "sameSmallMutableArray#", [SmallMutableArray a, SmallMutableArray b], _) -> do
     allocAtoms [IntV $ if a == b then 1 else 0]
 
   -- shrinkSmallMutableArray# :: SmallMutableArray# s a -> Int# -> State# s -> State# s
-  ( "shrinkSmallMutableArray#",[SmallMutableArray src, IntV n, _s], _) -> do
+  ( "shrinkSmallMutableArray#", [SmallMutableArray src, IntV n, _s], _) -> do
     v <- lookupSmallArrIdx src
     updateSmallArrIdx src $ V.slice 0 (fromIntegral n) v
     pure []
@@ -116,33 +116,41 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "cloneSmallArray#", [SmallArray src, IntV o, IntV n], _) -> allocAtoms =<< do
     vsrc <- lookupSmallArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
+    next <- freshSmallArrayAddress
     state $ \s'@StgState{..} ->
-      let next = ssNextSmallArray
-      in (s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays, ssNextSmallArray = succ next}, [SmallArray $ SmallArrIdx next])
+      ( s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays}
+      , [SmallArray $ SmallArrIdx next]
+      )
 
   -- cloneSmallMutableArray# :: SmallMutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, SmallMutableArray# s a #)
   ( "cloneSmallMutableArray#", [SmallMutableArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
     vsrc <- lookupSmallArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
+    next <- freshSmallMutableArrayAddress
     state $ \s'@StgState{..} ->
-      let next = ssNextSmallMutableArray
-      in (s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays, ssNextSmallMutableArray = succ next}, [SmallMutableArray $ SmallMutArrIdx next])
+      ( s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays}
+      , [SmallMutableArray $ SmallMutArrIdx next]
+      )
 
   -- freezeSmallArray# :: SmallMutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, SmallArray# a #)
   ( "freezeSmallArray#", [SmallMutableArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
     vsrc <- lookupSmallArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
+    next <- freshSmallArrayAddress
     state $ \s'@StgState{..} ->
-      let next = ssNextSmallArray
-      in (s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays, ssNextSmallArray = next}, [SmallArray $ SmallArrIdx next])
+      ( s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays}
+      , [SmallArray $ SmallArrIdx next]
+      )
 
   -- thawSmallArray# :: SmallArray# a -> Int# -> Int# -> State# s -> (# State# s, SmallMutableArray# s a #)
   ( "thawSmallArray#", [SmallArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
     vsrc <- lookupSmallArrIdx src
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
+    next <- freshSmallMutableArrayAddress
     state $ \s'@StgState{..} ->
-      let next = ssNextSmallMutableArray
-      in (s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays, ssNextSmallMutableArray = succ next}, [SmallMutableArray $ SmallMutArrIdx next])
+      ( s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays}
+      , [SmallMutableArray $ SmallMutArrIdx next]
+      )
 
   -- casSmallArray# :: SmallMutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
   -- NOTE: CPU atomic

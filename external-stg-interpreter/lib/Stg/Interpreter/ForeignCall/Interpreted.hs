@@ -25,7 +25,6 @@ import Control.Effect.Lift
 
 import Stg.Syntax
 import Stg.Interpreter.Base
-import Stg.Interpreter.Rts (globalStoreSymbols)
 
 pattern CharV c = Literal (LitChar c)
 pattern IntV i  = IntAtom i -- Literal (LitNumber LitNumInt i)
@@ -136,7 +135,7 @@ getProgArgv(int *argc, char **argv[])
       StaticTarget _ "getProgArgv" _ _
         | [PtrAtom (ByteArrayPtr ba1) ptrArgc, PtrAtom (ByteArrayPtr ba2) ptrArgv, Void] <- args
         -> do
-          Rts{..} <- gets ssRtsSupport
+          RtsStaticEnv{..} <- gets ssRtsStaticEnv
           sendIO $ do
             -- HINT: getProgArgv :: Ptr CInt -> Ptr (Ptr CString) -> IO ()
             poke (castPtr ptrArgc :: Ptr CInt) (fromIntegral $ 1 + length rtsProgArgs)
@@ -188,7 +187,7 @@ getProgArgv(int *argc, char **argv[])
               Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> sendIO (BA.unsafeFreezeByteArray baaMutableByteArray)
           formatStr <- showByteArray bai1
           value <- showByteArray bai2
-          Rts{..} <- gets ssRtsSupport
+          RtsStaticEnv{..} <- gets ssRtsStaticEnv
           sendIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
           pure []
 
@@ -201,10 +200,10 @@ getProgArgv(int *argc, char **argv[])
         , [valueAddr, _] <- argsAddr
         -> do
             -- HINT: set once with the first value, then return it always, only for the globalStoreSymbols
-            store <- gets $ rtsGlobalStore . ssRtsSupport
+            store <- gets $ rtsGlobalStore . ssRtsBaseInterop
             case Map.lookup foreignSymbol store of
               Nothing -> do
-                modify $ \s@StgState{..} -> s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol valueAddr store}}
+                modify $ \s@StgState{..} -> s {ssRtsBaseInterop = ssRtsBaseInterop {rtsGlobalStore = Map.insert foreignSymbol valueAddr store}}
                 pure [valueAddr]
               Just v  -> pure [v]
 

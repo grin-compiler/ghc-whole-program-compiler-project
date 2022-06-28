@@ -45,7 +45,7 @@ newByteArray size alignment pinned = do
   sendIO $ BA.fillByteArray ba 0 size 0
 
   byteArrays <- gets ssMutableByteArrays
-  next <- gets ssNextMutableByteArray
+  next <- freshMutableByteArrayAddress
   let desc = ByteArrayDescriptor
         { baaMutableByteArray = ba
         , baaByteArray        = Nothing
@@ -53,7 +53,7 @@ newByteArray size alignment pinned = do
         , baaAlignment        = alignment
         }
 
-  modify $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays, ssNextMutableByteArray = succ next}
+  modify $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays}
 
   pure $ ByteArrayIdx
     { baId        = next

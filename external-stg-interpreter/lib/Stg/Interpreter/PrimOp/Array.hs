@@ -28,10 +28,10 @@ evalPrimOp fallback op argsAddr t tc = do
 
   -- newArray# :: Int# -> a -> State# s -> (# State# s, MutableArray# s a #)
   ( "newArray#", [IntV i, _a, _s], [_, a, _]) -> do
-    mutableArrays <- gets ssMutableArrays
-    next <- gets ssNextMutableArray
+    next <- freshMutableArrayAddress
     let v = V.replicate i a
-    modify $ \s -> s {ssMutableArrays = IntMap.insert next v mutableArrays, ssNextMutableArray = succ next}
+    mutableArrays <- gets ssMutableArrays
+    modify $ \s -> s {ssMutableArrays = IntMap.insert next v mutableArrays}
     allocAtoms [MutableArray $ MutArrIdx next]
 
   -- sameMutableArray# :: MutableArray# s a -> MutableArray# s a -> Int#
@@ -102,33 +102,41 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "cloneArray#", [Array src, IntV o, IntV n], _) -> allocAtoms =<< do
     vsrc <- lookupArrIdx src
     let vdst = V.slice o n vsrc
+    next <- freshArrayAddress
     state $ \s'@StgState{..} ->
-      let next = ssNextArray
-      in (s' {ssArrays = IntMap.insert next vdst ssArrays, ssNextArray = succ next}, [Array $ ArrIdx next])
+      ( s' {ssArrays = IntMap.insert next vdst ssArrays}
+      , [Array $ ArrIdx next]
+      )
 
   -- cloneMutableArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
-  ( "cloneMutableArray#", [ MutableArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
+  ( "cloneMutableArray#", [MutableArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
     vsrc <- lookupArrIdx src
     let vdst = V.slice o n vsrc
+    next <- freshMutableArrayAddress
     state $ \s'@StgState{..} ->
-      let next = ssNextMutableArray
-      in (s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays, ssNextMutableArray = succ next}, [MutableArray $ MutArrIdx next])
+      ( s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays}
+      , [MutableArray $ MutArrIdx next]
+      )
 
   -- freezeArray# :: MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, Array# a #)
   ( "freezeArray#", [MutableArray src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
     vsrc <- lookupArrIdx src
     let vdst = V.slice o n vsrc
+    next <- freshArrayAddress
     state $ \s'@StgState{..} ->
-      let next = ssNextArray
-      in (s' {ssArrays = IntMap.insert next vdst ssArrays, ssNextArray = succ next}, [Array $ ArrIdx next])
+      ( s' {ssArrays = IntMap.insert next vdst ssArrays}
+      , [Array $ ArrIdx next]
+      )
 
   -- thawArray# :: Array# a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
   ( "thawArray#", [Array src, IntV o, IntV n, _s], _) -> allocAtoms =<< do
     vsrc <- lookupArrIdx src
     let vdst = V.slice o n vsrc
+    next <- freshMutableArrayAddress
     state $ \s'@StgState{..} ->
-      let next = ssNextMutableArray
-      in (s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays, ssNextMutableArray = succ next}, [MutableArray $ MutArrIdx next])
+      ( s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays}
+      , [MutableArray $ MutArrIdx next]
+      )
 
   -- casArray# :: MutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
   -- NOTE: CPU atomic

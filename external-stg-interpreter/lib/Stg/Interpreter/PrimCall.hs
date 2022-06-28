@@ -27,28 +27,28 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = d
     "stg_raiseDivZZerozh"
       | [Void] <- args
       -> do
-        Rts{..} <- gets ssRtsSupport
+        RtsBaseInterop{..} <- gets ssRtsBaseInterop
         raiseEx rtsDivZeroException
 
   -- stg_raiseUnderflowzh :: State# RealWorld -> (# State# RealWorld, Void# #)
     "stg_raiseUnderflowzh"
       | [Void] <- args
       -> do
-        Rts{..} <- gets ssRtsSupport
+        RtsBaseInterop{..} <- gets ssRtsBaseInterop
         raiseEx rtsUnderflowException
 
   -- stg_raiseOverflowzh :: State# RealWorld -> (# State# RealWorld, Void# #)
     "stg_raiseOverflowzh"
       | [Void] <- args
       -> do
-        Rts{..} <- gets ssRtsSupport
+        RtsBaseInterop{..} <- gets ssRtsBaseInterop
         raiseEx rtsOverflowException
 
   -- stg_getThreadAllocationCounterzh :: State# RealWorld -> (# State# RealWorld, INT64 #)
     "stg_getThreadAllocationCounterzh"
       | [Void] <- args
       -> do
-        i <- gets ssNextHeapAddr
+        i <- gets $ ssNextHeapAddr . ssAllocator
         allocAtoms [IntAtom (-i)]
 
   -- stg_doubleToWord64zh :: Double# -> Word#
@@ -82,6 +82,5 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = d
         -- HINT: bit-conversion
         d <- sendIO $ with (fromIntegral a :: Word64) $ \p -> peek (castPtr p :: Ptr Double)
         allocAtoms [DoubleV d]
-
 
     _ -> stgErrorM $ "unsupported StgPrimCallOp: " ++ show pCall ++ " :: " ++ show t ++ "\n args: " ++ show args

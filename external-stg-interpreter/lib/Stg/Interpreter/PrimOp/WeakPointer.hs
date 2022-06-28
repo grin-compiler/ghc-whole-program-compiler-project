@@ -11,8 +11,7 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
 newWeakPointer :: M sig m => AtomAddr -> AtomAddr -> Maybe AtomAddr -> m Int
 newWeakPointer key value finalizer = do
-  weakPointers <- gets ssWeakPointers
-  next <- gets ssNextWeakPointer
+  next <- freshWeakPointerAddress
   let desc = WeakPtrDescriptor
         { wpdKey          = key
         , wpdValue        = Just value
@@ -20,7 +19,8 @@ newWeakPointer key value finalizer = do
         , wpdCFinalizers  = []
         }
 
-  modify $ \s -> s {ssWeakPointers = IntMap.insert next desc weakPointers, ssNextWeakPointer = succ next}
+  weakPointers <- gets ssWeakPointers
+  modify $ \s -> s {ssWeakPointers = IntMap.insert next desc weakPointers}
   pure next
 
 evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]

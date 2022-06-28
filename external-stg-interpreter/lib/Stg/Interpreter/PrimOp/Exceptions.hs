@@ -35,17 +35,17 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- raiseDivZero# :: Void# -> o
   ( "raiseDivZero#", [_s]) -> do
-    Rts{..} <- gets ssRtsSupport
+    RtsBaseInterop{..} <- gets ssRtsBaseInterop
     raiseEx rtsDivZeroException
 
   -- raiseUnderflow# :: Void# -> o
   ( "raiseUnderflow#", [_s]) -> do
-    Rts{..} <- gets ssRtsSupport
+    RtsBaseInterop{..} <- gets ssRtsBaseInterop
     raiseEx rtsUnderflowException
 
   -- raiseOverflow# :: Void# -> o
   ( "raiseOverflow#", [_s]) -> do
-    Rts{..} <- gets ssRtsSupport
+    RtsBaseInterop{..} <- gets ssRtsBaseInterop
     raiseEx rtsOverflowException
 
   -- raiseIO# :: a -> State# RealWorld -> (# State# RealWorld, b #)

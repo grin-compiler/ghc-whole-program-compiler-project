@@ -31,10 +31,10 @@ evalPrimOp fallback op argsAddr t tc = do
   -- newArrayArray# :: Int# -> State# s -> (# State# s, MutableArrayArray# s #)
   ( "newArrayArray#", [IntV i, _s], _) -> do
     mutableArrayArrays <- gets ssMutableArrayArrays
-    next <- gets ssNextMutableArrayArray
+    next <- freshMutableArrayArrayAddress
     result <- storeNewAtom $ MutableArrayArray $ ArrayMutArrIdx next
     let v = V.replicate (fromIntegral i) result -- HINT: initialize with self references
-    modify $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays, ssNextMutableArrayArray = succ next}
+    modify $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays}
     pure [result]
 
   -- sameMutableArrayArray# :: MutableArrayArray# s -> MutableArrayArray# s -> Int#

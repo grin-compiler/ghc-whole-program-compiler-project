@@ -52,10 +52,8 @@ import qualified Control.Effect.State.Labelled as L
 import Stg.Syntax
 import Stg.GHC.Symbols
 import Stg.Interpreter.Base
-import Stg.Interpreter.Rts (globalStoreSymbols)
 
 import qualified Stg.Interpreter.PrimOp.MutVar as PrimMutVar
-
 
 pattern CharV c = Literal (LitChar c)
 pattern IntV i  = IntAtom i -- Literal (LitNumber LitNumInt i)
@@ -63,6 +61,10 @@ pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
+
+newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
+instance Show (PrintableMVar a) where
+  show _ = "MVar"
 
 type I2 sig m =
   ( M sig m
@@ -520,10 +522,10 @@ boxFFIAtom c a = case (c, a) of
   ('s', PtrAtom RawPtr _)     -> error "TODO: support C string FFI arg boxing"
   x                   -> error $ "boxFFIAtom - unknown pattern: " ++ show x
 
-mkWiredInCon :: I2 sig m => (Rts -> DataCon) -> [Atom] -> m Atom
+mkWiredInCon :: I2 sig m => (RtsBaseInterop -> DataCon) -> [Atom] -> m Atom
 mkWiredInCon conFun args = do
   argsAddr <- allocAtoms args
-  dc <- gets $ conFun . ssRtsSupport
+  dc <- gets $ conFun . ssRtsBaseInterop
   HeapPtr <$> allocAndStore (Con False dc argsAddr)
 
 {- dead code

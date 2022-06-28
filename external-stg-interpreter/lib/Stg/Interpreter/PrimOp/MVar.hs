@@ -88,10 +88,12 @@ evalPrimOp fallback op argsAddr t tc = do
   -- newMVar# :: State# s -> (# State# s, MVar# s a #)
   ( "newMVar#", [_s], _) -> allocAtoms =<< do
     reportOp op args
-    state (\s@StgState{..} ->
-      let next  = ssNextMVar
-          value = MVarDescriptor {mvdValue = Nothing, mvdQueue = []}
-      in (s {ssMVars = IntMap.insert next value ssMVars, ssNextMVar = succ next}, [MVar next]))
+    next <- freshMVarAddress
+    let value = MVarDescriptor {mvdValue = Nothing, mvdQueue = []}
+    state $ \s@StgState{..} ->
+      ( s {ssMVars = IntMap.insert next value ssMVars}
+      , [MVar next]
+      )
 
   -- takeMVar# :: MVar# s a -> State# s -> (# State# s, a #)
   ( "takeMVar#", [MVar m, _s], _) -> do

@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
-module Stg.Interpreter.IOManager where
+module Stg.Interpreter.Rts.IOManager where
 
 import Control.Monad
 import Control.Effect.State
