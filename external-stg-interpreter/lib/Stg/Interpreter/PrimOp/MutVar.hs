@@ -2,7 +2,6 @@
 module Stg.Interpreter.PrimOp.MutVar where
 
 import Control.Carrier.State.Strict
-import Control.Effect.State
 import Control.Effect.Labelled
 import qualified Control.Effect.State.Labelled as L
 import Data.IntMap (IntMap)

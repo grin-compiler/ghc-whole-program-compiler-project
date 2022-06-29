@@ -1,7 +1,6 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ArrayArray where
 
-import Control.Effect.State
 import qualified Data.IntMap as IntMap
 import qualified Data.Vector as V
 

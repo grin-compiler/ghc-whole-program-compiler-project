@@ -2,7 +2,6 @@
 module Stg.Interpreter.PrimOp.StablePointer where
 
 import Foreign.Ptr
-import Control.Effect.State
 import qualified Data.IntMap as IntMap
 
 import Stg.Syntax

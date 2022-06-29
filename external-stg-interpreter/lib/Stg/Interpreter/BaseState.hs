@@ -11,6 +11,8 @@ module Stg.Interpreter.BaseState
   , module Stg.Interpreter.Monad
   , module Stg.Interpreter.ErrorReport
   , module Control.Effect.State
+  , module Control.Effect.Lift
+  , module Control.Monad
   ) where
 
 import Stg.Interpreter.State.Allocator
@@ -26,3 +28,5 @@ import Stg.Interpreter.Monad
 import Stg.Interpreter.ErrorReport
 
 import Control.Effect.State
+import Control.Effect.Lift
+import Control.Monad

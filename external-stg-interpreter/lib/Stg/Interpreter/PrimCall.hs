@@ -1,8 +1,6 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimCall where
 
-import Control.Effect.State
-import Control.Effect.Lift
 import Foreign
 
 import Stg.Syntax

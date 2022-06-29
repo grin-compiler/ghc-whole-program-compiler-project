@@ -36,10 +36,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
 import GHC.Stack
-import Control.Monad
 import Control.Monad.IO.Class
-import Control.Effect.State
-import Control.Effect.Lift
 import Control.Effect.Labelled
 import Control.Concurrent.MVar
 

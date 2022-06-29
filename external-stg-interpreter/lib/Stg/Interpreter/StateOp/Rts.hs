@@ -2,7 +2,6 @@
 module Stg.Interpreter.StateOp.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
 
 import GHC.Stack
-import Control.Monad
 import Control.Concurrent.MVar
 
 import Data.List (foldl')

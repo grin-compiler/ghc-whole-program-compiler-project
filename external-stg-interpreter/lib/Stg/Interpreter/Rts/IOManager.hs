@@ -2,9 +2,6 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
 module Stg.Interpreter.Rts.IOManager where
 
-import Control.Monad
-import Control.Effect.State
-import Control.Effect.Lift
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Time.Clock

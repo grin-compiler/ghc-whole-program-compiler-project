@@ -1,7 +1,6 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.WeakPointer where
 
-import Control.Effect.State
 import qualified Data.IntMap as IntMap
 
 import Stg.Syntax

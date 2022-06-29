@@ -20,9 +20,6 @@ import Text.Printf
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
-import Control.Effect.State
-import Control.Effect.Lift
-
 import Stg.Syntax
 import Stg.Interpreter.Base
 
