@@ -129,8 +129,7 @@ runProgram switchCWD progFilePath mods0 progArgs = do
   currentDir <- getCurrentDirectory
   stgappDir <- makeAbsolute $ takeDirectory progFilePath
   --putStrLn $ "progName: " ++ show progName ++ " progArgs: " ++ show progArgs
-  let run = do
-        when switchCWD $ sendIO $ setCurrentDirectory stgappDir
+  let runStgMain = do
         declareTopBindings mods
         initRtsSupport progName progArgs mods
         env <- gets ssStaticGlobalEnv
@@ -138,7 +137,7 @@ runProgram switchCWD progFilePath mods0 progArgs = do
               [mainId]  -> mainId
               []        -> error "main_:Main.main not found"
               _         -> error "multiple main_:Main.main have found"
-        limit <- gets $ ssNextHeapAddr . ssAllocator
+        --limit <- gets $ ssNextHeapAddr . ssAllocator
         --modify $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
         --modify $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
 
@@ -166,15 +165,14 @@ runProgram switchCWD progFilePath mods0 progArgs = do
           Debugger.processCommandsUntilExit
         -}
 
-
   stateStore <- FCallNative.PrintableMVar <$> newEmptyMVar
-
   dl <- loadCbitsSO False progFilePath
   let freeResources = do
         dlclose dl
         --killThread gcThreadId
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- runM . execState emptyStgState . PrimMutVar.eval PrimMutVar.emptyMutVarState . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) $ run
+    when switchCWD $ setCurrentDirectory stgappDir
+    s@StgState{..} <- runM . execState emptyStgState . PrimMutVar.eval PrimMutVar.emptyMutVarState . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) $ runStgMain
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
