@@ -20,6 +20,7 @@ library
     Stg.Interpreter.BaseState
     Stg.Interpreter.Monad
     Stg.Interpreter.ErrorReport
+    Stg.Interpreter.EvalStg
 
     Stg.Interpreter.PrimCall
     Stg.Interpreter.ForeignCall.Interpreted
