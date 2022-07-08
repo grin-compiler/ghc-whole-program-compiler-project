@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.SmallArray where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import qualified Data.Vector as V
 
 import Stg.Syntax
@@ -19,8 +19,8 @@ lookupSmallArrIdx = \case
 updateSmallArrIdx :: M sig m => SmallArrIdx -> V.Vector AtomAddr -> m ()
 updateSmallArrIdx m v = do
   modify $ \s@StgState{..} -> case m of
-    SmallMutArrIdx n -> s { ssSmallMutableArrays = IntMap.insert n v ssSmallMutableArrays }
-    SmallArrIdx    n -> s { ssSmallArrays        = IntMap.insert n v ssSmallArrays }
+    SmallMutArrIdx n -> s { ssSmallMutableArrays = Map.insert n v ssSmallMutableArrays }
+    SmallArrIdx    n -> s { ssSmallArrays        = Map.insert n v ssSmallArrays }
 
 evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
@@ -32,7 +32,7 @@ evalPrimOp fallback op argsAddr t tc = do
     next <- freshSmallMutableArrayAddress
     let v = V.replicate (fromIntegral i) a
     smallMutableArrays <- gets ssSmallMutableArrays
-    modify $ \s@StgState{..} -> s {ssSmallMutableArrays = IntMap.insert next v ssSmallMutableArrays}
+    modify $ \s@StgState{..} -> s {ssSmallMutableArrays = Map.insert next v ssSmallMutableArrays}
     allocAtoms [SmallMutableArray $ SmallMutArrIdx next]
 
   -- sameSmallMutableArray# :: SmallMutableArray# s a -> SmallMutableArray# s a -> Int#
@@ -117,7 +117,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     next <- freshSmallArrayAddress
     state $ \s'@StgState{..} ->
-      ( s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays}
+      ( s' {ssSmallArrays = Map.insert next vdst ssSmallArrays}
       , [SmallArray $ SmallArrIdx next]
       )
 
@@ -127,7 +127,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     next <- freshSmallMutableArrayAddress
     state $ \s'@StgState{..} ->
-      ( s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays}
+      ( s' {ssSmallMutableArrays = Map.insert next vdst ssSmallMutableArrays}
       , [SmallMutableArray $ SmallMutArrIdx next]
       )
 
@@ -137,7 +137,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     next <- freshSmallArrayAddress
     state $ \s'@StgState{..} ->
-      ( s' {ssSmallArrays = IntMap.insert next vdst ssSmallArrays}
+      ( s' {ssSmallArrays = Map.insert next vdst ssSmallArrays}
       , [SmallArray $ SmallArrIdx next]
       )
 
@@ -147,7 +147,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice (fromIntegral o) (fromIntegral n) vsrc
     next <- freshSmallMutableArrayAddress
     state $ \s'@StgState{..} ->
-      ( s' {ssSmallMutableArrays = IntMap.insert next vdst ssSmallMutableArrays}
+      ( s' {ssSmallMutableArrays = Map.insert next vdst ssSmallMutableArrays}
       , [SmallMutableArray $ SmallMutArrIdx next]
       )
 

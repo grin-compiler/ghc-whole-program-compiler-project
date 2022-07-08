@@ -8,7 +8,7 @@ import Data.Char
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.Marshal.Utils
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import qualified Data.Primitive.ByteArray as BA
 
 import Stg.Syntax
@@ -19,14 +19,14 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-lookupByteArray :: M sig m => Int -> m BA.ByteArray
+lookupByteArray :: M sig m => MutableByteArrayAddr -> m BA.ByteArray
 lookupByteArray baId = do
   ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
   case baaByteArray of
     Just ba -> pure ba
     Nothing -> stgErrorM $ "unknown ByteArray: " ++ show baId
 
-getByteArrayContentPtr :: M sig m => Int -> m (Ptr Word8)
+getByteArrayContentPtr :: M sig m => MutableByteArrayAddr -> m (Ptr Word8)
 getByteArrayContentPtr baId = do
   ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
   pure $ BA.mutableByteArrayContents baaMutableByteArray
@@ -50,7 +50,7 @@ newByteArray size alignment pinned = do
         , baaAlignment        = alignment
         }
 
-  modify $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays}
+  modify $ \s -> s {ssMutableByteArrays = Map.insert next desc byteArrays}
 
   pure $ ByteArrayIdx
     { baId        = next
@@ -141,7 +141,7 @@ evalPrimOp fallback op argsAddr t tc = do
                 , baaPinned           = False
                 , baaAlignment        = baAlignment
                 }
-    modify $ \s@StgState{..} -> s {ssMutableByteArrays = IntMap.insert baId desc' ssMutableByteArrays}
+    modify $ \s@StgState{..} -> s {ssMutableByteArrays = Map.insert baId desc' ssMutableByteArrays}
     -- TODO: do inplace when the new size <= old size, otherwise allocate new array and copy the required amount of content
     -- NOTE: always inplace resize should work also for the interpreter, so it is ok for now
     allocAtoms [MutableByteArray baIdx]
@@ -154,7 +154,7 @@ evalPrimOp fallback op argsAddr t tc = do
       Nothing -> do
         ba <- sendIO $ BA.unsafeFreezeByteArray baaMutableByteArray
         let newDesc = desc {baaByteArray = Just ba}
-        modify $ \s@StgState{..} -> s {ssMutableByteArrays = IntMap.insert baId newDesc ssMutableByteArrays}
+        modify $ \s@StgState{..} -> s {ssMutableByteArrays = Map.insert baId newDesc ssMutableByteArrays}
     allocAtoms [ByteArray baIdx]
 
   -- sizeofByteArray# :: ByteArray# -> Int#
@@ -224,7 +224,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "indexStablePtrArray#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- sendIO (peekElemOff (castPtr p) index :: IO (Ptr Word8))
-    allocAtoms [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
+    allocAtoms [PtrAtom (StablePtr . StablePointerAddr . AddrInt . fromIntegral $ ptrToIntPtr value) value]
 
   -- indexInt8Array# :: ByteArray# -> Int# -> Int#
   ( "indexInt8Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
@@ -310,7 +310,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "indexWord8ArrayAsStablePtr#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
     p <- getByteArrayContentPtr baId
     value <- sendIO (peekByteOff p offset :: IO (Ptr Word8))
-    allocAtoms [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
+    allocAtoms [PtrAtom (StablePtr . StablePointerAddr . AddrInt . fromIntegral $ ptrToIntPtr value) value]
 
   -- indexWord8ArrayAsInt16# :: ByteArray# -> Int# -> Int#
   ( "indexWord8ArrayAsInt16#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
@@ -412,7 +412,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "readStablePtrArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- sendIO (peekElemOff (castPtr p) index :: IO (Ptr Word8))
-    allocAtoms [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
+    allocAtoms [PtrAtom (StablePtr . StablePointerAddr . AddrInt . fromIntegral $ ptrToIntPtr value) value]
 
   -- readInt8Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
   ( "readInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
@@ -498,7 +498,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "readWord8ArrayAsStablePtr#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- sendIO (peekByteOff p offset :: IO (Ptr Word8))
-    allocAtoms [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
+    allocAtoms [PtrAtom (StablePtr . StablePointerAddr . AddrInt . fromIntegral $ ptrToIntPtr value) value]
 
   -- readWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
   ( "readWord8ArrayAsInt16#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do

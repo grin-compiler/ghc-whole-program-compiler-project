@@ -2,7 +2,7 @@
 module Stg.Interpreter.PrimOp.StablePointer where
 
 import Foreign.Ptr
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 
 import Stg.Syntax
 import Stg.Interpreter.Base
@@ -18,10 +18,10 @@ evalPrimOp fallback op argsAddr t tc = do
 
   -- makeStablePtr# :: a -> State# RealWorld -> (# State# RealWorld, StablePtr# a #)
   ( "makeStablePtr#", _, [a, _s]) -> do
-    next <- freshStablePointerAddress
+    next@(StablePointerAddr (AddrInt nextInt)) <- freshStablePointerAddress
     stablePtrs <- gets ssStablePointers
-    modify $ \s -> s {ssStablePointers = IntMap.insert next a stablePtrs}
-    allocAtoms [PtrAtom (StablePtr next) . intPtrToPtr $ IntPtr next]
+    modify $ \s -> s {ssStablePointers = Map.insert next a stablePtrs}
+    allocAtoms [PtrAtom (StablePtr next) . intPtrToPtr $ IntPtr nextInt]
 
   -- deRefStablePtr# :: StablePtr# a -> State# RealWorld -> (# State# RealWorld, a #)
   ( "deRefStablePtr#", [PtrAtom (StablePtr _index) p, _s], _) -> do
@@ -42,11 +42,11 @@ evalPrimOp fallback op argsAddr t tc = do
   -- makeStableName# :: a -> State# RealWorld -> (# State# RealWorld, StableName# a #)
   ( "makeStableName#", _, [a, _s]) -> do
     snMap <- gets ssStableNameMap
-    case IntMap.lookup a snMap of
+    case Map.lookup a snMap of
       Just snId -> allocAtoms [StableName snId]
       Nothing -> do
         snId <- freshStableNameAddress
-        modify $ \s -> s {ssStableNameMap = IntMap.insert a snId snMap}
+        modify $ \s -> s {ssStableNameMap = Map.insert a snId snMap}
         allocAtoms [StableName snId]
 
   -- eqStableName# :: StableName# a -> StableName# b -> Int#
@@ -54,7 +54,7 @@ evalPrimOp fallback op argsAddr t tc = do
     allocAtoms [IntV $ if a == b then 1 else 0]
 
   -- stableNameToInt# :: StableName# a -> Int#
-  ( "stableNameToInt#", [StableName snId], _) -> do
+  ( "stableNameToInt#", [StableName (StableNameAddr (AddrInt snId))], _) -> do
     allocAtoms [IntV snId]
 
   _ -> fallback op argsAddr t tc

@@ -1,14 +1,14 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.WeakPointer where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
-newWeakPointer :: M sig m => AtomAddr -> AtomAddr -> Maybe AtomAddr -> m Int
+newWeakPointer :: M sig m => AtomAddr -> AtomAddr -> Maybe AtomAddr -> m WeakPointerAddr
 newWeakPointer key value finalizer = do
   next <- freshWeakPointerAddress
   let desc = WeakPtrDescriptor
@@ -19,7 +19,7 @@ newWeakPointer key value finalizer = do
         }
 
   weakPointers <- gets ssWeakPointers
-  modify $ \s -> s {ssWeakPointers = IntMap.insert next desc weakPointers}
+  modify $ \s -> s {ssWeakPointers = Map.insert next desc weakPointers}
   pure next
 
 evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
@@ -41,7 +41,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "addCFinalizerToWeak#", [_fun, _dataPtr, IntV hasEnv, _envPtr, WeakPointer wpId, _w], [fun, dataPtr, _, envPtr, _, _]) -> do
     wpd@WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
     let desc = wpd {wpdCFinalizers = (fun, if hasEnv == 0 then Nothing else Just envPtr, dataPtr) : wpdCFinalizers}
-    modify $ \s@StgState{..} -> s {ssWeakPointers = IntMap.insert wpId desc ssWeakPointers}
+    modify $ \s@StgState{..} -> s {ssWeakPointers = Map.insert wpId desc ssWeakPointers}
     allocAtoms [IntV $ if wpdValue == Nothing then 0 else 1]
 
   -- deRefWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, a #)

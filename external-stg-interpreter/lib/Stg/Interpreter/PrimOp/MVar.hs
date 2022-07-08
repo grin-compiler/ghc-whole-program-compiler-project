@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.MVar where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 
 import Stg.Syntax
 import Stg.Interpreter.Base
@@ -10,12 +10,12 @@ pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
-handleTakeMVar_ValueFullCase :: M sig m => Int -> MVarDescriptor -> m ()
+handleTakeMVar_ValueFullCase :: M sig m => MVarAddr -> MVarDescriptor -> m ()
 handleTakeMVar_ValueFullCase m mvd@MVarDescriptor{..} = do
   case mvdQueue of
     [] -> do
       -- HINT: the queue is empty so there is nothing to do, just mark the mvar empty
-      modify $ \s@StgState{..} -> s {ssMVars = IntMap.insert m (mvd {mvdValue = Nothing}) ssMVars }
+      modify $ \s@StgState{..} -> s {ssMVars = Map.insert m (mvd {mvdValue = Nothing}) ssMVars }
 
     tid : tidTail -> do
       -- HINT: every blocked thread in the queue waits for an empty mvar to write their value in it
@@ -27,13 +27,13 @@ handleTakeMVar_ValueFullCase m mvd@MVarDescriptor{..} = do
       -- put the thread's new value to mvar
       let ThreadBlocked (BlockedOnMVar _ (Just v)) = tsStatus ts
           newValue = mvd {mvdValue = Just v, mvdQueue = tidTail}
-      modify $ \s@StgState{..} -> s {ssMVars = IntMap.insert m newValue ssMVars }
+      modify $ \s@StgState{..} -> s {ssMVars = Map.insert m newValue ssMVars }
 
-handlePutMVar_ValueEmptyCase :: M sig m => Int -> MVarDescriptor -> AtomAddr -> m ()
+handlePutMVar_ValueEmptyCase :: M sig m => MVarAddr -> MVarDescriptor -> AtomAddr -> m ()
 handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
   -- HINT: first handle the blocked readMVar case, it does not consume the value
   --       BlockedOnMVarRead are always at the beginning of the queue, process all of them
-  let processReads :: M sig m => [Int] -> m [Int]
+  let processReads :: M sig m => [ThreadAddr] -> m [ThreadAddr]
       processReads [] = pure []
       processReads tids@(tid : tidTail) = do
         ts@ThreadState{..} <- getThreadState tid
@@ -51,7 +51,7 @@ handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
     [] -> do
       -- HINT: the queue is empty so there is nothing to do, just store the value in mvar
       let newValue = MVarDescriptor {mvdValue = Just v, mvdQueue = []}
-      modify $ \s@StgState{..} -> s {ssMVars = IntMap.insert m newValue ssMVars }
+      modify $ \s@StgState{..} -> s {ssMVars = Map.insert m newValue ssMVars }
 
     tid : tidTail -> do
       -- HINT: every blocked thread in the queue waits for an incoming value to take
@@ -63,12 +63,12 @@ handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
 
       -- update wait queue
       let newValue = mvd {mvdQueue = tidTail}
-      modify $ \s@StgState{..} -> s {ssMVars = IntMap.insert m newValue ssMVars }
+      modify $ \s@StgState{..} -> s {ssMVars = Map.insert m newValue ssMVars }
 
-appendMVarQueue :: M sig m => Int -> Int -> m ()
+appendMVarQueue :: M sig m => MVarAddr -> ThreadAddr -> m ()
 appendMVarQueue m tid = do
   let appendFun mvd = mvd {mvdQueue = mvdQueue mvd ++ [tid]}
-  modify $ \s@StgState{..} -> s {ssMVars = IntMap.adjust appendFun m ssMVars}
+  modify $ \s@StgState{..} -> s {ssMVars = Map.adjust appendFun m ssMVars}
 
 reportOp :: M sig m => Name -> [Atom] -> m ()
 reportOp op args = do
@@ -90,7 +90,7 @@ evalPrimOp fallback op argsAddr t tc = do
     next <- freshMVarAddress
     let value = MVarDescriptor {mvdValue = Nothing, mvdQueue = []}
     state $ \s@StgState{..} ->
-      ( s {ssMVars = IntMap.insert next value ssMVars}
+      ( s {ssMVars = Map.insert next value ssMVars}
       , [MVar next]
       )
 

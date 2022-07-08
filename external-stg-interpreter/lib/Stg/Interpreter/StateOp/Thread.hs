@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase, RecordWildCards #-}
 module Stg.Interpreter.StateOp.Thread where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import GHC.Stack
 
 import Stg.Interpreter.BaseState
@@ -10,7 +10,7 @@ import Stg.Interpreter.StateOp.Stack
 
 -- thread operations
 
-createThread :: M sig m => m (Int, ThreadState)
+createThread :: M sig m => m (ThreadAddr, ThreadState)
 createThread = do
   let ts = ThreadState
         { tsCurrentResult     = []
@@ -26,16 +26,16 @@ createThread = do
         }
   threadId <- freshThreadId
   threads <- gets ssThreads
-  modify $ \s -> s {ssThreads = IntMap.insert threadId ts threads}
+  modify $ \s -> s {ssThreads = Map.insert threadId ts threads}
   pure (threadId, ts)
 
-updateThreadState :: M sig m => Int -> ThreadState -> m ()
+updateThreadState :: M sig m => ThreadAddr -> ThreadState -> m ()
 updateThreadState tid ts = do
-  modify $ \s@StgState{..} -> s {ssThreads = IntMap.insert tid ts ssThreads}
+  modify $ \s@StgState{..} -> s {ssThreads = Map.insert tid ts ssThreads}
 
-getThreadState :: (HasCallStack, M sig m) => Int -> m ThreadState
+getThreadState :: (HasCallStack, M sig m) => ThreadAddr -> m ThreadState
 getThreadState tid = do
-  IntMap.lookup tid <$> gets ssThreads >>= \case
+  Map.lookup tid <$> gets ssThreads >>= \case
     Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
     Just a  -> pure a
 
@@ -44,7 +44,7 @@ getCurrentThreadState = do
   tid <- gets ssCurrentThreadId
   getThreadState tid
 
-switchToThread :: M sig m => Int -> m () -- TODO: check what code uses this
+switchToThread :: M sig m => ThreadAddr -> m () -- TODO: check what code uses this
 switchToThread tid = do
   modify $ \s -> s {ssCurrentThreadId = tid}
 {-
@@ -68,7 +68,7 @@ requestContextSwitch = do
     forkOn# - yield
 -}
 
-scheduleToTheEnd :: M sig m => Int -> m ()
+scheduleToTheEnd :: M sig m => ThreadAddr -> m ()
 scheduleToTheEnd tid = do
   modify $ \s -> s {ssScheduledThreadIds = ssScheduledThreadIds s ++ [tid]}
 

@@ -17,7 +17,7 @@ data ThreadState
   { tsCurrentResult     :: [AtomAddr] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
   , tsStackTop          :: Maybe StackAddr
   , tsStatus            :: !ThreadStatus
-  , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
+  , tsBlockedExceptions :: [ThreadAddr] -- ids of the threads waitng to send an async exception
   , tsBlockExceptions   :: !Bool  -- block async exceptions
   , tsInterruptible     :: !Bool  -- interruptible blocking of async exception
 --  , tsAsyncExMask     :: !AsyncExceptionMask
@@ -33,10 +33,10 @@ data ThreadState
 
 -- NOTE: the BlockReason data type is some kind of reification of the blocked operation
 data BlockReason
-  = BlockedOnMVar         Int (Maybe AtomAddr) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
-  | BlockedOnMVarRead     Int       -- mvar id
+  = BlockedOnMVar         MVarAddr (Maybe AtomAddr) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
+  | BlockedOnMVarRead     MVarAddr      -- mvar id
   | BlockedOnBlackHole
-  | BlockedOnThrowAsyncEx Int AtomAddr  -- target thread id, exception
+  | BlockedOnThrowAsyncEx ThreadAddr AtomAddr  -- target thread id, exception
   | BlockedOnSTM
   | BlockedOnForeignCall            -- RTS name: BlockedOnCCall
   | BlockedOnRead         Int       -- file descriptor

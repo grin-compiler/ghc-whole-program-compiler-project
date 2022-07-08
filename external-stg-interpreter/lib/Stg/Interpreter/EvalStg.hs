@@ -421,7 +421,7 @@ declareBinding isLetNoEscape localEnv = \case
     pure extendedEnv
 
 --storeRhs :: (HasCallStack, I sig m) => Bool -> Env -> Binder -> Addr -> Rhs -> m ()
-storeRhs :: (HasCallStack) => Bool -> Env -> Binder -> Addr -> Rhs -> C ()
+storeRhs :: (HasCallStack) => Bool -> Env -> Binder -> HeapAddr -> Rhs -> C ()
 storeRhs isLetNoEscape localEnv i addr = \case
   StgRhsCon dc l -> do
     args <- mapM (evalArg localEnv) l

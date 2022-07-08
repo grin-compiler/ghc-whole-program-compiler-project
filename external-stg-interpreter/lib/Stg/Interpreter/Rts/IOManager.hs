@@ -2,8 +2,8 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
 module Stg.Interpreter.Rts.IOManager where
 
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Time.Clock
 
 import Data.Monoid ((<>))
@@ -145,7 +145,7 @@ fdPollWriteState fd = do
 
 handleBlockedDelayWait :: M sig m => m ()
 handleBlockedDelayWait = do
-  tsList <- gets $ IntMap.toList . fmap tsStatus . ssThreads
+  tsList <- gets $ Map.toList . fmap tsStatus . ssThreads
   now <- sendIO getCurrentTime
   let maxSeconds  = 31 * 24 * 60 * 60 -- some OS have this constraint
       maxDelay    = secondsToNominalDiffTime maxSeconds

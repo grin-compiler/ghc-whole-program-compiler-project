@@ -2,7 +2,7 @@
 module Stg.Interpreter.PrimOp.Concurrency where
 
 import qualified Data.ByteString.Char8 as BS8
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import Foreign.Ptr
 
 import Stg.Syntax
@@ -142,8 +142,8 @@ evalPrimOp fallback op argsAddr t tc = do
   -- labelThread# :: ThreadId# -> Addr# -> State# RealWorld -> State# RealWorld
   ( "labelThread#", [ThreadId tid, PtrAtom _ p, _s], _) -> do
     threadLabel <- sendIO . BS8.packCString $ castPtr p
-    let setLabel ts@ThreadState{..} = ts {tsLabel = Just threadLabel}
-    modify $ \s@StgState{..} -> s {ssThreads = IntMap.adjust setLabel tid ssThreads}
+    let setLabel ts = ts {tsLabel = Just threadLabel}
+    modify $ \s@StgState{..} -> s {ssThreads = Map.adjust setLabel tid ssThreads}
     pure []
 
   -- isCurrentThreadBound# :: State# RealWorld -> (# State# RealWorld, Int# #)
@@ -181,7 +181,7 @@ evalPrimOp fallback op argsAddr t tc = do
   _ -> fallback op argsAddr t tc
 
 
-raiseAsyncEx :: M sig m => [AtomAddr] -> Int -> AtomAddr -> m ()
+raiseAsyncEx :: M sig m => [AtomAddr] -> ThreadAddr -> AtomAddr -> m ()
 raiseAsyncEx lastResult tid exception = do
   ts@ThreadState{..} <- getThreadState tid
   let unwindStack :: M sig m =>  [AtomAddr] -> [StackContinuation] -> Maybe StackAddr -> m ()
@@ -222,7 +222,7 @@ raiseAsyncEx lastResult tid exception = do
 
   unwindStack lastResult [] tsStackTop
 
-removeFromQueues :: M sig m => Int -> m ()
+removeFromQueues :: M sig m => ThreadAddr -> m ()
 removeFromQueues tid = do
   ThreadState{..} <- getThreadState tid
   case tsStatus of
@@ -230,7 +230,7 @@ removeFromQueues tid = do
     ThreadBlocked (BlockedOnMVarRead m) -> removeFromMVarQueue tid m
     _                                   -> pure ()
 
-removeFromMVarQueue :: M sig m => Int -> Int -> m ()
+removeFromMVarQueue :: M sig m => ThreadAddr -> MVarAddr -> m ()
 removeFromMVarQueue tid m = do
   let filterFun mvd@MVarDescriptor{..} = mvd {mvdQueue = filter (tid /=) mvdQueue}
-  modify $ \s@StgState{..} -> s {ssMVars = IntMap.adjust filterFun m ssMVars}
+  modify $ \s@StgState{..} -> s {ssMVars = Map.adjust filterFun m ssMVars}

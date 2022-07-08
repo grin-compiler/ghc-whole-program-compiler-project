@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ArrayArray where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import qualified Data.Vector as V
 
 import Stg.Syntax
@@ -19,8 +19,8 @@ lookupArrayArrIdx = \case
 updateArrayArrIdx :: M sig m => ArrayArrIdx -> V.Vector AtomAddr -> m ()
 updateArrayArrIdx m v = do
   modify $ \s@StgState{..} -> case m of
-    ArrayMutArrIdx n -> s { ssMutableArrayArrays = IntMap.insert n v ssMutableArrayArrays }
-    ArrayArrIdx    n -> s { ssArrayArrays        = IntMap.insert n v ssArrayArrays        }
+    ArrayMutArrIdx n -> s { ssMutableArrayArrays = Map.insert n v ssMutableArrayArrays }
+    ArrayArrIdx    n -> s { ssArrayArrays        = Map.insert n v ssArrayArrays        }
 
 evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
@@ -33,7 +33,7 @@ evalPrimOp fallback op argsAddr t tc = do
     next <- freshMutableArrayArrayAddress
     result <- storeNewAtom $ MutableArrayArray $ ArrayMutArrIdx next
     let v = V.replicate (fromIntegral i) result -- HINT: initialize with self references
-    modify $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays}
+    modify $ \s -> s {ssMutableArrayArrays = Map.insert next v mutableArrayArrays}
     pure [result]
 
   -- sameMutableArrayArray# :: MutableArrayArray# s -> MutableArrayArray# s -> Int#

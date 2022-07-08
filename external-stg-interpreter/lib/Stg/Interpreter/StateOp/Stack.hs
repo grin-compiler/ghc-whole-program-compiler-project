@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase, RecordWildCards #-}
 module Stg.Interpreter.StateOp.Stack where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 
 import GHC.Stack
 import Data.Foldable
@@ -10,9 +10,9 @@ import Stg.Interpreter.StateOp.Allocator
 
 -- stack operations
 
-getStackFrame :: M sig m => Addr -> m (StackContinuation, Maybe Addr)
+getStackFrame :: M sig m => StackAddr -> m (StackContinuation, Maybe StackAddr)
 getStackFrame stackAddr = do
-  gets (IntMap.lookup stackAddr . ssStack) >>= \case
+  gets (Map.lookup stackAddr . ssStack) >>= \case
     Nothing     -> stgErrorM $ "missing stack frame at address: " ++ show stackAddr
     Just frame  -> pure frame
 
@@ -20,11 +20,11 @@ stackPush :: M sig m => StackContinuation -> m ()
 stackPush sc = do
   a <- freshStackAddress
   cts <- getCurrentThreadState0
-  let pushFun ts@ThreadState{..} = ts {tsStackTop = Just a}
+  let pushFun ts = ts {tsStackTop = Just a}
       stackFrame = (sc, tsStackTop cts)
   modify $ \s@StgState{..} -> s
-    { ssThreads = IntMap.adjust pushFun ssCurrentThreadId ssThreads
-    , ssStack = IntMap.insert a stackFrame ssStack
+    { ssThreads = Map.adjust pushFun ssCurrentThreadId ssThreads
+    , ssStack = Map.insert a stackFrame ssStack
     }
 
 stackPop :: M sig m => m (Maybe StackContinuation)
@@ -34,20 +34,20 @@ stackPop = do
     Nothing -> pure Nothing
     Just oldStackTop -> do
       (sc, newStackTop) <- getStackFrame oldStackTop
-      let popFun ts@ThreadState{..} = ts {tsStackTop = newStackTop}
+      let popFun ts = ts {tsStackTop = newStackTop}
       modify $ \s@StgState{..} -> s
-        { ssThreads = IntMap.adjust popFun ssCurrentThreadId ssThreads
+        { ssThreads = Map.adjust popFun ssCurrentThreadId ssThreads
         }
       pure $ Just sc
 
 -- HINT: frame list order: [stack-bottom..stack-top]
-mkStack :: M sig m => Maybe Addr -> [StackContinuation] -> m (Maybe Addr)
+mkStack :: M sig m => Maybe StackAddr -> [StackContinuation] -> m (Maybe StackAddr)
 mkStack prevFrameAddr frames = do
-  let pushFrame :: M sig m => Maybe Addr -> StackContinuation -> m (Maybe Addr)
+  let pushFrame :: M sig m => Maybe StackAddr -> StackContinuation -> m (Maybe StackAddr)
       pushFrame stackTop sc = do
         a <- freshStackAddress
         let stackFrame = (sc, stackTop)
-        modify $ \s@StgState{..} -> s {ssStack = IntMap.insert a stackFrame ssStack}
+        modify $ \s@StgState{..} -> s {ssStack = Map.insert a stackFrame ssStack}
         pure $ Just a
   foldlM pushFrame prevFrameAddr frames
 
@@ -62,9 +62,9 @@ getStackSegment _ start@Nothing end = error $ "invalid stack segment range, star
 ----------------
 -- TODO: remove this and fix code duplication
 
-getThreadState0 :: (HasCallStack, M sig m) => Int -> m ThreadState
+getThreadState0 :: (HasCallStack, M sig m) => ThreadAddr -> m ThreadState
 getThreadState0 tid = do
-  IntMap.lookup tid <$> gets ssThreads >>= \case
+  Map.lookup tid <$> gets ssThreads >>= \case
     Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
     Just a  -> pure a
 

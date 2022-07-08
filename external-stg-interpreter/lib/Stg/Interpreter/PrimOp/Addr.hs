@@ -109,7 +109,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "indexStablePtrOffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
     sendIO $ do
       v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
-      pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr v) v]
+      pure [PtrAtom (StablePtr . StablePointerAddr . AddrInt . fromIntegral $ ptrToIntPtr v) v]
 
   -- indexInt8OffAddr# :: Addr# -> Int# -> Int#
   ( "indexInt8OffAddr#", [PtrAtom _ p, IntV index]) -> allocAtoms =<< do
@@ -207,7 +207,7 @@ evalPrimOp fallback op argsAddr t tc = do
   ( "readStablePtrOffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do
     sendIO $ do
       v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
-      pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr v) v]
+      pure [PtrAtom (StablePtr . StablePointerAddr . AddrInt . fromIntegral $ ptrToIntPtr v) v]
 
   -- readInt8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
   ( "readInt8OffAddr#", [PtrAtom _ p, IntV index, _s]) -> allocAtoms =<< do

@@ -31,35 +31,35 @@ newtype Store a = Store (Int, IntMap a)
 -}
 data StgState
   = StgState
-  { ssHeap                :: !(Map Addr HeapObject)                           -- abs-int: IntMap (Set HeapObject) | lattice
-  , ssStaticGlobalEnv     :: !(Map Id (StaticOrigin, AtomAddr))               -- NOTE: top level bindings only!
-  , ssStack               :: !(Map Addr (StackContinuation, Maybe StackAddr)) -- abs-int: IntMap (Set (StackContinuation, Maybe Int)) | lattice
-  , ssAtomStore           :: !(Map Addr Atom)                                 -- abs-int: IntMap (Set Atom) | lattice
+  { ssHeap                :: !(Map HeapAddr HeapObject)                             -- abs-int: IntMap (Set HeapObject) | lattice
+  , ssStaticGlobalEnv     :: !(Map Id (StaticOrigin, AtomAddr))                     -- NOTE: top level bindings only!
+  , ssStack               :: !(Map StackAddr (StackContinuation, Maybe StackAddr))  -- abs-int: IntMap (Set (StackContinuation, Maybe Int)) | lattice
+  , ssAtomStore           :: !(Map AtomAddr Atom)                                   -- abs-int: IntMap (Set Atom) | lattice
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
   , ssCStringConstants    :: Map ByteString AtomAddr
 
   -- threading
-  , ssThreads             :: Map Addr ThreadState         -- abs-int: IntMap (Set ...) | lattice
+  , ssThreads             :: Map ThreadAddr ThreadState   -- abs-int: IntMap (Set ...) | lattice
 
   -- thread scheduler related
-  , ssCurrentThreadId     :: Int
-  , ssScheduledThreadIds  :: [Int]  -- HINT: one round
+  , ssCurrentThreadId     :: ThreadAddr
+  , ssScheduledThreadIds  :: [ThreadAddr]  -- HINT: one round
 
   -- primop related
 
-  , ssStableNameMap       :: Map Addr Int                 -- HINT: AtomAddr -> Int ; -- abs-int: IntMap (Set ...) | lattice
-  , ssWeakPointers        :: Map Addr WeakPtrDescriptor   -- abs-int: IntMap (Set ...) | lattice
-  , ssStablePointers      :: Map Addr AtomAddr            -- abs-int: IntMap (Set ...) | lattice
-  , ssMutableByteArrays   :: Map Addr ByteArrayDescriptor -- abs-int: IntMap (Set ...) | lattice
-  , ssMVars               :: Map Addr MVarDescriptor      -- abs-int: IntMap (Set ...) | lattice
-  , ssArrays              :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssMutableArrays       :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssSmallArrays         :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssSmallMutableArrays  :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssArrayArrays         :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssMutableArrayArrays  :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssStableNameMap       :: Map AtomAddr StableNameAddr                  -- HINT: AtomAddr -> Int ; -- abs-int: IntMap (Set ...) | lattice
+  , ssWeakPointers        :: Map WeakPointerAddr WeakPtrDescriptor        -- abs-int: IntMap (Set ...) | lattice
+  , ssStablePointers      :: Map StablePointerAddr AtomAddr               -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableByteArrays   :: Map MutableByteArrayAddr ByteArrayDescriptor -- abs-int: IntMap (Set ...) | lattice
+  , ssMVars               :: Map MVarAddr MVarDescriptor                  -- abs-int: IntMap (Set ...) | lattice
+  , ssArrays              :: Map ArrayAddr (Vector AtomAddr)              -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableArrays       :: Map MutableArrayAddr (Vector AtomAddr)       -- abs-int: IntMap (Set ...) | lattice
+  , ssSmallArrays         :: Map SmallArrayAddr (Vector AtomAddr)         -- abs-int: IntMap (Set ...) | lattice
+  , ssSmallMutableArrays  :: Map SmallMutableArrayAddr (Vector AtomAddr)  -- abs-int: IntMap (Set ...) | lattice
+  , ssArrayArrays         :: Map ArrayArrayAddr (Vector AtomAddr)         -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableArrayArrays  :: Map MutableArrayArrayAddr (Vector AtomAddr)  -- abs-int: IntMap (Set ...) | lattice
 
   -- allocator related
   , ssAllocator           :: !AllocatorState

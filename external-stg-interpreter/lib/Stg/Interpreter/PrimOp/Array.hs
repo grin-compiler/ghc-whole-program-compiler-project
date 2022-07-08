@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Array where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import qualified Data.Vector as V
 
 import Stg.Syntax
@@ -17,8 +17,8 @@ lookupArrIdx = \case
 updateArrIdx :: M sig m => ArrIdx -> V.Vector AtomAddr -> m ()
 updateArrIdx m v = do
   modify $ \s@StgState{..} -> case m of
-    MutArrIdx n -> s { ssMutableArrays = IntMap.insert n v ssMutableArrays }
-    ArrIdx    n -> s { ssArrays        = IntMap.insert n v ssArrays }
+    MutArrIdx n -> s { ssMutableArrays = Map.insert n v ssMutableArrays }
+    ArrIdx    n -> s { ssArrays        = Map.insert n v ssArrays }
 
 evalPrimOp :: M sig m => PrimOpEval m -> Name -> [AtomAddr] -> Type -> Maybe TyCon -> m [AtomAddr]
 evalPrimOp fallback op argsAddr t tc = do
@@ -30,7 +30,7 @@ evalPrimOp fallback op argsAddr t tc = do
     next <- freshMutableArrayAddress
     let v = V.replicate i a
     mutableArrays <- gets ssMutableArrays
-    modify $ \s -> s {ssMutableArrays = IntMap.insert next v mutableArrays}
+    modify $ \s -> s {ssMutableArrays = Map.insert next v mutableArrays}
     allocAtoms [MutableArray $ MutArrIdx next]
 
   -- sameMutableArray# :: MutableArray# s a -> MutableArray# s a -> Int#
@@ -103,7 +103,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice o n vsrc
     next <- freshArrayAddress
     state $ \s'@StgState{..} ->
-      ( s' {ssArrays = IntMap.insert next vdst ssArrays}
+      ( s' {ssArrays = Map.insert next vdst ssArrays}
       , [Array $ ArrIdx next]
       )
 
@@ -113,7 +113,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice o n vsrc
     next <- freshMutableArrayAddress
     state $ \s'@StgState{..} ->
-      ( s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays}
+      ( s' {ssMutableArrays = Map.insert next vdst ssMutableArrays}
       , [MutableArray $ MutArrIdx next]
       )
 
@@ -123,7 +123,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice o n vsrc
     next <- freshArrayAddress
     state $ \s'@StgState{..} ->
-      ( s' {ssArrays = IntMap.insert next vdst ssArrays}
+      ( s' {ssArrays = Map.insert next vdst ssArrays}
       , [Array $ ArrIdx next]
       )
 
@@ -133,7 +133,7 @@ evalPrimOp fallback op argsAddr t tc = do
     let vdst = V.slice o n vsrc
     next <- freshMutableArrayAddress
     state $ \s'@StgState{..} ->
-      ( s' {ssMutableArrays = IntMap.insert next vdst ssMutableArrays}
+      ( s' {ssMutableArrays = Map.insert next vdst ssMutableArrays}
       , [MutableArray $ MutArrIdx next]
       )
 

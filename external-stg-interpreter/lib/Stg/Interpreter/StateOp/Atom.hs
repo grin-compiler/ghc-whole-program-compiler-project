@@ -2,7 +2,6 @@
 module Stg.Interpreter.StateOp.Atom where
 
 import qualified Data.Map as Map
-import GHC.Stack
 
 import Stg.Interpreter.BaseState
 import Stg.Interpreter.StateOp.Allocator

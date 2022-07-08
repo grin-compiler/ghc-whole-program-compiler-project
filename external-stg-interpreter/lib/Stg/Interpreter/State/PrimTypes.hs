@@ -32,6 +32,6 @@ data WeakPtrDescriptor
 data MVarDescriptor
   = MVarDescriptor
   { mvdValue    :: Maybe AtomAddr
-  , mvdQueue    :: [Int] -- thread id, blocking in this mvar ; this is required only for the fairness ; INVARIANT: BlockedOnReads are present at the beginning of the queue
+  , mvdQueue    :: [ThreadAddr]   -- thread id, blocking in this mvar ; this is required only for the fairness ; INVARIANT: BlockedOnReads are present at the beginning of the queue
   }
   deriving (Show, Eq, Ord)

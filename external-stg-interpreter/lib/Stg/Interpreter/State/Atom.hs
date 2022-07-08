@@ -7,34 +7,34 @@ import Stg.Syntax
 import Stg.Interpreter.State.Allocator
 
 data ArrIdx
-  = MutArrIdx !Int
-  | ArrIdx    !Int
+  = MutArrIdx !MutableArrayAddr
+  | ArrIdx    !ArrayAddr
   deriving (Show, Eq, Ord)
 
 data SmallArrIdx
-  = SmallMutArrIdx !Int
-  | SmallArrIdx    !Int
+  = SmallMutArrIdx !SmallMutableArrayAddr
+  | SmallArrIdx    !SmallArrayAddr
   deriving (Show, Eq, Ord)
 
 data ArrayArrIdx
-  = ArrayMutArrIdx !Int
-  | ArrayArrIdx    !Int
+  = ArrayMutArrIdx !MutableArrayArrayAddr
+  | ArrayArrIdx    !ArrayArrayAddr
   deriving (Show, Eq, Ord)
 
 data ByteArrayIdx
   = ByteArrayIdx
-  { baId        :: !Int
+  { baId        :: !MutableByteArrayAddr
   , baPinned    :: !Bool
   , baAlignment :: !Int
   }
   deriving (Show, Eq, Ord)
 
 data PtrOrigin
-  = CStringPtr    !ByteString       -- null terminated string
-  | ByteArrayPtr  !ByteArrayIdx     -- raw ptr to the byte array
-  | RawPtr                          -- raw ptr to a values with unknown origin (i.e. FFI)
-  | StablePtr     !Int              -- stable pointer must have AddrRep
-  | LabelPtr      !Name !LabelSpec  -- foreign symbol/label name + label sepcification (i.e. data or function)
+  = CStringPtr    !ByteString         -- null terminated string
+  | ByteArrayPtr  !ByteArrayIdx       -- raw ptr to the byte array
+  | RawPtr                            -- raw ptr to a values with unknown origin (i.e. FFI)
+  | StablePtr     !StablePointerAddr  -- stable pointer must have AddrRep
+  | LabelPtr      !Name !LabelSpec    -- foreign symbol/label name + label sepcification (i.e. data or function)
   deriving (Show, Eq, Ord)
 
 -- TODO: detect coercions during the evaluation
@@ -49,9 +49,9 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | DoubleAtom        !Double
   | LiftedUndefined
   -- indirections to store
-  | HeapPtr           !Addr
-  | MVar              !Int
-  | MutVar            !Int
+  | HeapPtr           !HeapAddr
+  | MVar              !MVarAddr
+  | MutVar            !MutVarAddr
   | Array             !ArrIdx
   | MutableArray      !ArrIdx
   | SmallArray        !SmallArrIdx
@@ -60,9 +60,9 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | MutableArrayArray !ArrayArrIdx
   | ByteArray         !ByteArrayIdx
   | MutableByteArray  !ByteArrayIdx
-  | WeakPointer       !Int
-  | StableName        !Int
-  | ThreadId          !Int
+  | WeakPointer       !WeakPointerAddr
+  | StableName        !StableNameAddr
+  | ThreadId          !ThreadAddr
   -- lattice for abstract values
   | Lattice           !Lattice
   deriving (Show, Eq, Ord)

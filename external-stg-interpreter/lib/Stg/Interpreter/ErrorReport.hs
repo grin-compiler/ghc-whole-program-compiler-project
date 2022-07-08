@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase, RecordWildCards #-}
 module Stg.Interpreter.ErrorReport where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import GHC.Stack
 
 import Control.Effect.State
@@ -27,24 +27,24 @@ stgErrorM msg = do
 
 reportThreads :: M sig m => m ()
 reportThreads = do
-  threadIds <- IntMap.keys <$> gets ssThreads
+  threadIds <- Map.keys <$> gets ssThreads
   sendIO $ putStrLn $ "thread Ids: " ++ show threadIds
   mapM_ reportThread threadIds
 
-reportThread :: M sig m => Int -> m ()
+reportThread :: M sig m => ThreadAddr -> m ()
 reportThread tid = do
   endTS <- getThreadStateErr tid
   tsStack <- getThreadStack tid
   sendIO $ reportThreadIO tid endTS tsStack
 
-getThreadStack :: M sig m => Int -> m [StackContinuation]
+getThreadStack :: M sig m => ThreadAddr -> m [StackContinuation]
 getThreadStack tid = do
   ThreadState{..} <- getThreadStateErr tid
   flip unfoldrM tsStackTop $ \case
     Nothing       -> pure Nothing
     Just stackTop -> Just <$> getStackFrameErr stackTop
 
-reportThreadIO :: Int -> ThreadState -> [StackContinuation] -> IO ()
+reportThreadIO :: ThreadAddr -> ThreadState -> [StackContinuation] -> IO ()
 reportThreadIO tid endTS tsStack = do
     putStrLn ""
     putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
@@ -59,14 +59,14 @@ showStackCont = \case
 
 -- TODO: remove this code duplication below
 
-getThreadStateErr :: (HasCallStack, M sig m) => Int -> m ThreadState
+getThreadStateErr :: (HasCallStack, M sig m) => ThreadAddr -> m ThreadState
 getThreadStateErr tid = do
-  IntMap.lookup tid <$> gets ssThreads >>= \case
+  Map.lookup tid <$> gets ssThreads >>= \case
     Nothing -> stgErrorM $ "unknown ThreadState: " ++ show tid
     Just a  -> pure a
 
-getStackFrameErr :: M sig m => Addr -> m (StackContinuation, Maybe Addr)
+getStackFrameErr :: M sig m => StackAddr -> m (StackContinuation, Maybe StackAddr)
 getStackFrameErr stackAddr = do
-  gets (IntMap.lookup stackAddr . ssStack) >>= \case
+  gets (Map.lookup stackAddr . ssStack) >>= \case
     Nothing     -> stgErrorM $ "missing stack frame at address: " ++ show stackAddr
     Just frame  -> pure frame

@@ -1,8 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.Rts.ThreadScheduler where
 
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Time.Clock
 
 import Stg.Interpreter.Base
@@ -50,7 +50,7 @@ yield result = do
 
   pure $ tsCurrentResult nextTS
 
-getNextRunnableThread :: M sig m => m Int
+getNextRunnableThread :: M sig m => m ThreadAddr
 getNextRunnableThread = do
   -- HINT: drop current thread id
   tidQueue <- gets $ drop 1 . ssScheduledThreadIds
@@ -63,11 +63,11 @@ getNextRunnableThread = do
         then pure tid
         else getNextRunnableThread -- HINT: try next
 
-calculateNewSchedule :: M sig m => m [Int]
+calculateNewSchedule :: M sig m => m [ThreadAddr]
 calculateNewSchedule = do
   wakeUpSleepingThreads
   -- calculate the new scheduling
-  tsList <- gets $ IntMap.toList . ssThreads
+  tsList <- gets $ Map.toList . ssThreads
   let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
   case runnableThreads of
     [] -> waitAndScheduleBlockedThreads
@@ -80,15 +80,15 @@ calculateNewSchedule = do
 wakeUpSleepingThreads :: M sig m => m ()
 wakeUpSleepingThreads = do
   now <- sendIO getCurrentTime
-  tsList <- gets $ IntMap.toList . ssThreads
+  tsList <- gets $ Map.toList . ssThreads
   forM_ tsList $ \(tid, ts) -> case tsStatus ts of
     ThreadBlocked (BlockedOnDelay wakeupTime)
       | wakeupTime >= now -> updateThreadState tid ts {tsStatus = ThreadRunning}
     _ -> pure ()
 
-waitAndScheduleBlockedThreads :: M sig m => m [Int]
+waitAndScheduleBlockedThreads :: M sig m => m [ThreadAddr]
 waitAndScheduleBlockedThreads = do
-  tsList <- gets $ IntMap.toList . ssThreads
+  tsList <- gets $ Map.toList . ssThreads
   let blockedThreads = [(tid, ts) | (tid, ts) <- tsList, isBlocked (tsStatus ts)]
       isBlocked = \case
         ThreadBlocked{} -> True
