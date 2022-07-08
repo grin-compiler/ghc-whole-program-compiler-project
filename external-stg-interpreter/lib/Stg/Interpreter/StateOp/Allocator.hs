@@ -9,103 +9,103 @@ freshAtomAddress :: (HasCallStack, M sig m) => m AtomAddr
 freshAtomAddress = do
   state $ \s@StgState{ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextAtomAddr = succ ssNextAtomAddr}}
-    , ssNextAtomAddr
+    , AddrInt ssNextAtomAddr
     )
 
 freshHeapAddress :: (HasCallStack, M sig m) => m Addr
 freshHeapAddress = do
   state $ \s@StgState{ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextHeapAddr = succ ssNextHeapAddr}}
-    , ssNextHeapAddr
+    , AddrInt ssNextHeapAddr
     )
 
 freshStackAddress :: (HasCallStack, M sig m) => m Addr
 freshStackAddress = do
   state $ \s@StgState{ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextStackAddr = succ ssNextStackAddr}}
-    , ssNextStackAddr
+    , AddrInt ssNextStackAddr
     )
 
-freshThreadId :: (HasCallStack, M sig m) => m Int
+freshThreadId :: (HasCallStack, M sig m) => m Addr
 freshThreadId = do
   state $ \s@StgState{ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextThreadId = succ ssNextThreadId}}
-    , ssNextThreadId
+    , AddrInt ssNextThreadId
     )
 
-freshStablePointerAddress :: (HasCallStack, M sig m) => m Int
+freshStablePointerAddress :: (HasCallStack, M sig m) => m Addr
 freshStablePointerAddress = do
   state $ \s@StgState{ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextStablePointer = succ ssNextStablePointer}}
-    , ssNextStablePointer
+    , AddrInt ssNextStablePointer
     )
 
-freshStableNameAddress :: (HasCallStack, M sig m) => m Int
+freshStableNameAddress :: (HasCallStack, M sig m) => m Addr
 freshStableNameAddress = do
   state $ \s@StgState{ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextStableName = succ ssNextStableName}}
-    , ssNextStableName
+    , AddrInt ssNextStableName
     )
 
-freshWeakPointerAddress :: (HasCallStack, M sig m) => m Int
+freshWeakPointerAddress :: (HasCallStack, M sig m) => m Addr
 freshWeakPointerAddress = do
   state $ \s@StgState{ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextWeakPointer = succ ssNextWeakPointer}}
-    , ssNextWeakPointer
+    , AddrInt ssNextWeakPointer
     )
 
-freshSmallArrayAddress :: (HasCallStack, M sig m) => m Int
+freshSmallArrayAddress :: (HasCallStack, M sig m) => m Addr
 freshSmallArrayAddress = do
   state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextSmallArray = succ ssNextSmallArray}}
-    , ssNextSmallArray
+    , AddrInt ssNextSmallArray
     )
 
-freshSmallMutableArrayAddress :: (HasCallStack, M sig m) => m Int
+freshSmallMutableArrayAddress :: (HasCallStack, M sig m) => m Addr
 freshSmallMutableArrayAddress = do
   state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextSmallMutableArray = succ ssNextSmallMutableArray}}
-    , ssNextSmallMutableArray
+    , AddrInt ssNextSmallMutableArray
     )
 
-freshArrayAddress :: (HasCallStack, M sig m) => m Int
+freshArrayAddress :: (HasCallStack, M sig m) => m Addr
 freshArrayAddress = do
   state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextArray = succ ssNextArray}}
-    , ssNextArray
+    , AddrInt ssNextArray
     )
 
-freshMutableArrayAddress :: (HasCallStack, M sig m) => m Int
+freshMutableArrayAddress :: (HasCallStack, M sig m) => m Addr
 freshMutableArrayAddress = do
   state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextMutableArray = succ ssNextMutableArray}}
-    , ssNextMutableArray
+    , AddrInt ssNextMutableArray
     )
 
-freshArrayArrayAddress :: (HasCallStack, M sig m) => m Int
+freshArrayArrayAddress :: (HasCallStack, M sig m) => m Addr
 freshArrayArrayAddress = do
   state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextArrayArray = succ ssNextArrayArray}}
-    , ssNextArrayArray
+    , AddrInt ssNextArrayArray
     )
 
-freshMutableArrayArrayAddress :: (HasCallStack, M sig m) => m Int
+freshMutableArrayArrayAddress :: (HasCallStack, M sig m) => m Addr
 freshMutableArrayArrayAddress = do
   state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextMutableArrayArray = succ ssNextMutableArrayArray}}
-    , ssNextMutableArrayArray
+    , AddrInt ssNextMutableArrayArray
     )
 
-freshMutableByteArrayAddress :: (HasCallStack, M sig m) => m Int
+freshMutableByteArrayAddress :: (HasCallStack, M sig m) => m Addr
 freshMutableByteArrayAddress = do
   state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextMutableByteArray = succ ssNextMutableByteArray}}
-    , ssNextMutableByteArray
+    , AddrInt ssNextMutableByteArray
     )
 
-freshMVarAddress :: (HasCallStack, M sig m) => m Int
+freshMVarAddress :: (HasCallStack, M sig m) => m Addr
 freshMVarAddress = do
   state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
     ( s {ssAllocator = a {ssNextMVar = succ ssNextMVar}}
-    , ssNextMVar
+    , AddrInt ssNextMVar
     )

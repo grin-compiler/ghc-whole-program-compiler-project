@@ -2,7 +2,6 @@ module Stg.Interpreter.State.StgState where
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Map (Map)
-import Data.IntMap (IntMap)
 import Data.Vector (Vector)
 
 import Stg.Syntax
@@ -32,17 +31,17 @@ newtype Store a = Store (Int, IntMap a)
 -}
 data StgState
   = StgState
-  { ssHeap                :: !(IntMap HeapObject)                           -- abs-int: IntMap (Set HeapObject) | lattice
-  , ssStaticGlobalEnv     :: !(Map Id (StaticOrigin, AtomAddr))             -- NOTE: top level bindings only!
-  , ssStack               :: !(IntMap (StackContinuation, Maybe StackAddr)) -- abs-int: IntMap (Set (StackContinuation, Maybe Int)) | lattice
-  , ssAtomStore           :: !(IntMap Atom)                                 -- abs-int: IntMap (Set Atom) | lattice
+  { ssHeap                :: !(Map Addr HeapObject)                           -- abs-int: IntMap (Set HeapObject) | lattice
+  , ssStaticGlobalEnv     :: !(Map Id (StaticOrigin, AtomAddr))               -- NOTE: top level bindings only!
+  , ssStack               :: !(Map Addr (StackContinuation, Maybe StackAddr)) -- abs-int: IntMap (Set (StackContinuation, Maybe Int)) | lattice
+  , ssAtomStore           :: !(Map Addr Atom)                                 -- abs-int: IntMap (Set Atom) | lattice
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
   , ssCStringConstants    :: Map ByteString AtomAddr
 
   -- threading
-  , ssThreads             :: IntMap ThreadState         -- abs-int: IntMap (Set ...) | lattice
+  , ssThreads             :: Map Addr ThreadState         -- abs-int: IntMap (Set ...) | lattice
 
   -- thread scheduler related
   , ssCurrentThreadId     :: Int
@@ -50,17 +49,17 @@ data StgState
 
   -- primop related
 
-  , ssStableNameMap       :: IntMap Int                 -- HINT: AtomAddr -> Int ; -- abs-int: IntMap (Set ...) | lattice
-  , ssWeakPointers        :: IntMap WeakPtrDescriptor   -- abs-int: IntMap (Set ...) | lattice
-  , ssStablePointers      :: IntMap AtomAddr            -- abs-int: IntMap (Set ...) | lattice
-  , ssMutableByteArrays   :: IntMap ByteArrayDescriptor -- abs-int: IntMap (Set ...) | lattice
-  , ssMVars               :: IntMap MVarDescriptor      -- abs-int: IntMap (Set ...) | lattice
-  , ssArrays              :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssMutableArrays       :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssSmallArrays         :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssSmallMutableArrays  :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssArrayArrays         :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
-  , ssMutableArrayArrays  :: IntMap (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssStableNameMap       :: Map Addr Int                 -- HINT: AtomAddr -> Int ; -- abs-int: IntMap (Set ...) | lattice
+  , ssWeakPointers        :: Map Addr WeakPtrDescriptor   -- abs-int: IntMap (Set ...) | lattice
+  , ssStablePointers      :: Map Addr AtomAddr            -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableByteArrays   :: Map Addr ByteArrayDescriptor -- abs-int: IntMap (Set ...) | lattice
+  , ssMVars               :: Map Addr MVarDescriptor      -- abs-int: IntMap (Set ...) | lattice
+  , ssArrays              :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableArrays       :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssSmallArrays         :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssSmallMutableArrays  :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssArrayArrays         :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
+  , ssMutableArrayArrays  :: Map Addr (Vector AtomAddr)   -- abs-int: IntMap (Set ...) | lattice
 
   -- allocator related
   , ssAllocator           :: !AllocatorState

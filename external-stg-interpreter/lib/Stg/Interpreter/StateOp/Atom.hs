@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase, RecordWildCards #-}
 module Stg.Interpreter.StateOp.Atom where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import GHC.Stack
 
 import Stg.Interpreter.BaseState
@@ -12,12 +12,12 @@ import Stg.Interpreter.StateOp.Allocator
 storeNewAtom :: M sig m => Atom -> m AtomAddr
 storeNewAtom a = do
   addr <- freshAtomAddress
-  modify $ \s@StgState{..} -> s {ssAtomStore = IntMap.insert addr a ssAtomStore}
+  modify $ \s@StgState{..} -> s {ssAtomStore = Map.insert addr a ssAtomStore}
   pure addr
 
 getAtom :: M sig m => AtomAddr -> m Atom
 getAtom atomAddr = do
-  gets (IntMap.lookup atomAddr . ssAtomStore) >>= \case
+  gets (Map.lookup atomAddr . ssAtomStore) >>= \case
     Nothing   -> stgErrorM $ "missing atom at address: " ++ show atomAddr
     Just atom -> pure atom
 

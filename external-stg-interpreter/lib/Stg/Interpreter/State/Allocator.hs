@@ -1,9 +1,10 @@
 module Stg.Interpreter.State.Allocator where
 
-type Addr       = Int
-type AtomAddr   = Int
-type StackAddr  = Int
-type HeapAddr   = Int
+import Stg.Syntax
+
+type AtomAddr   = Addr
+type StackAddr  = Addr
+type HeapAddr   = Addr
 
 data AllocatorState
   = AllocatorState
@@ -43,3 +44,19 @@ emptyAllocatorState = AllocatorState
   , ssNextArrayArray        = 0
   , ssNextMutableArrayArray = 0
   }
+
+--type Addr = Int
+
+data Addr
+  = AddrInt         Int -- NOTE: only for the pretty printer
+  | AddrId          Id
+{-
+  | AddrIdExp       {addrId :: String, addrExp :: Exp}
+  | AddrIdExpKAddr  {addrId :: String, addrExp :: Exp, addrReturn :: KAddr}
+  | AddrIdKAddr     {addrId :: String, addrReturn :: KAddr}
+  | AddrExp         {addrExp :: Exp}
+  | AddrExpEnv      {addrExp :: Exp, addrEnv :: Env}
+  | AddrAAC         Exp Env Exp Env Store
+  | AddrHalt
+-}
+  deriving (Show, Eq, Ord)
