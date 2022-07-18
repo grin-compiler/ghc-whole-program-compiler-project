@@ -109,3 +109,10 @@ freshMVarAddress = do
     ( s {ssAllocator = a {ssNextMVar = succ ssNextMVar}}
     , MVarAddr $ AddrInt ssNextMVar
     )
+
+freshMutVarAddress :: (HasCallStack, M sig m) => m MutVarAddr
+freshMutVarAddress = do
+  state $ \s@StgState{ ssAllocator = a@AllocatorState{..}} ->
+    ( s {ssAllocator = a {ssNextMutVar = succ ssNextMutVar}}
+    , MutVarAddr $ AddrInt ssNextMutVar
+    )

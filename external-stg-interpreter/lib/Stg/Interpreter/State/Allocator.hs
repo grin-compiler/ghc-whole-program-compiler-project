@@ -12,6 +12,7 @@ data AllocatorState
   , ssNextWeakPointer       :: !Int
   , ssNextStablePointer     :: !Int
   , ssNextMutableByteArray  :: !Int
+  , ssNextMutVar            :: !Int
   , ssNextMVar              :: !Int
   , ssNextArray             :: !Int
   , ssNextMutableArray      :: !Int
@@ -32,6 +33,7 @@ emptyAllocatorState = AllocatorState
   , ssNextWeakPointer       = 0
   , ssNextStablePointer     = 0
   , ssNextMutableByteArray  = 0
+  , ssNextMutVar            = 0
   , ssNextMVar              = 0
   , ssNextArray             = 0
   , ssNextMutableArray      = 0

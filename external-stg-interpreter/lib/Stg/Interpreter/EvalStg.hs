@@ -46,7 +46,6 @@ import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
 
 type I sig m =
   ( M sig m
-  , PrimMutVar.P sig m
   , FCallNative.I2 sig m
   )
 

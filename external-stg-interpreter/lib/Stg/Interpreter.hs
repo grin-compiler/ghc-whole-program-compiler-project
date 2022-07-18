@@ -24,7 +24,6 @@ import Stg.Foreign.Linker
 import Stg.Interpreter.Base
 import Stg.Interpreter.EvalStg
 import qualified Stg.Interpreter.ForeignCall.Native as FCallNative
-import qualified Stg.Interpreter.PrimOp.MutVar      as PrimMutVar
 
 ------------------
 -- init / finish
@@ -172,7 +171,7 @@ runProgram switchCWD progFilePath mods0 progArgs = do
         --killThread gcThreadId
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
     when switchCWD $ setCurrentDirectory stgappDir
-    s@StgState{..} <- runM . execState emptyStgState . PrimMutVar.eval PrimMutVar.emptyMutVarState . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) $ runStgMain
+    s@StgState{..} <- runM . execState emptyStgState . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) $ runStgMain
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 

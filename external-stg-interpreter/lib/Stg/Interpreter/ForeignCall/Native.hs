@@ -50,8 +50,6 @@ import Stg.Syntax
 import Stg.GHC.Symbols
 import Stg.Interpreter.Base
 
-import qualified Stg.Interpreter.PrimOp.MutVar as PrimMutVar
-
 pattern CharV c = Literal (LitChar c)
 pattern IntV i  = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
@@ -65,7 +63,6 @@ instance Show (PrintableMVar a) where
 
 type I2 sig m =
   ( M sig m
-  , PrimMutVar.P sig m
   , HasLabelled "FFI" (State FFIState) sig m
   )
 
@@ -81,15 +78,12 @@ evalFFI s m = evalState s (runLabelled @"FFI" m)
 
 type C =
   Labelled "FFI" (StateC FFIState)
-    (Labelled "MutVar" (StateC PrimMutVar.MutVarState)
-      (StateC StgState (LiftC IO))
-    )
+    (StateC StgState (LiftC IO))
 
 data FullState
   = FullState
   { fsStg     :: StgState
   , fsFFI     :: FFIState
-  , fsMutVar  :: PrimMutVar.MutVarState
   }
   deriving Show
 
@@ -97,13 +91,11 @@ getFullState :: I2 sig m => m FullState
 getFullState = FullState
   <$> get
   <*> L.get @"FFI"
-  <*> L.get @"MutVar"
 
 putFullState :: I2 sig m => FullState -> m ()
 putFullState FullState{..} = do
   put fsStg
   L.put @"FFI" fsFFI
-  L.put @"MutVar" fsMutVar
 
 withFullState :: I2 sig m => m a -> m (FullState, a)
 withFullState action = do
@@ -434,7 +426,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
   putStrLn $ "[callback BEGIN] " ++ show fun
   -}
   FullState{..} <- takeMVar stateStore
-  (after, result) <- runM . evalState fsStg . PrimMutVar.eval fsMutVar . evalFFI fsFFI . withFullState $ do
+  (after, result) <- runM . evalState fsStg . evalFFI fsFFI . withFullState $ do
     {-
     oldThread <- gets ssCurrentThreadId
     -- TODO: properly setup ffi thread
