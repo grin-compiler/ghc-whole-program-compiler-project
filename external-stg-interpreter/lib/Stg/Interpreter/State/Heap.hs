@@ -2,7 +2,7 @@ module Stg.Interpreter.State.Heap where
 
 import Stg.Syntax
 import Stg.Interpreter.State.Env
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
 

@@ -46,7 +46,9 @@ evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) argsAddr t _tc = d
     "stg_getThreadAllocationCounterzh"
       | [Void] <- args
       -> do
-        i <- gets $ ssNextHeapAddr . ssAllocator
+        -- FIXME: implement this properly, but first design an proper abstraction for this
+        -- i <- gets $ ssNextHeapAddr . ssAllocator
+        let i = 1
         allocAtoms [IntAtom (-i)]
 
   -- stg_doubleToWord64zh :: Double# -> Word#

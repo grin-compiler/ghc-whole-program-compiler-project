@@ -3,7 +3,7 @@ module Stg.Interpreter.State.Rts where
 import Data.Map (Map)
 
 import Stg.Syntax
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 
 data RtsBaseInterop
   = RtsBaseInterop

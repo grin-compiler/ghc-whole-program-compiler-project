@@ -3,7 +3,7 @@ module Stg.Interpreter.State.Thread where
 
 import Data.Time.Clock
 import Data.ByteString.Char8 (ByteString)
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 
 -- threading
 

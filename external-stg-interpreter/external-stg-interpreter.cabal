@@ -12,6 +12,7 @@ category:            Development
 build-type:          Simple
 
 library
+  extensions: FlexibleContexts
   exposed-modules:
     Foreign.LibFFI.Closure
 
@@ -29,7 +30,9 @@ library
     Stg.Interpreter.Rts.IOManager
     Stg.Interpreter.Rts.ThreadScheduler
 
+    Stg.Interpreter.State.Global
     Stg.Interpreter.State.Allocator
+    Stg.Interpreter.State.Address
     Stg.Interpreter.State.Atom
     Stg.Interpreter.State.Env
     Stg.Interpreter.State.Heap

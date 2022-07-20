@@ -4,7 +4,7 @@ import Data.ByteString.Char8 (ByteString)
 import Data.Word
 import Foreign.Ptr
 import Stg.Syntax
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 
 data ArrIdx
   = MutArrIdx !MutableArrayAddr

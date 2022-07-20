@@ -13,7 +13,7 @@ import Stg.Interpreter.Monad
 import Stg.Interpreter.State.Stack
 import Stg.Interpreter.State.Thread
 import Stg.Interpreter.State.StgState
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 
 stgErrorM :: M sig m => String -> m a
 stgErrorM msg = do

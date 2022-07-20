@@ -40,6 +40,7 @@ import Control.Monad.IO.Class
 import Control.Effect.Labelled
 import Control.Concurrent.MVar
 
+import Control.Carrier.NonDet.Church
 import Control.Carrier.State.Strict
 import Control.Carrier.Lift
 
@@ -77,13 +78,20 @@ data FFIState
 evalFFI s m = evalState s (runLabelled @"FFI" m)
 
 type C =
-  Labelled "FFI" (StateC FFIState)
-    (StateC StgState (LiftC IO))
+  StateC StgState
+    (NonDetC
+      (Labelled "FFI" (StateC FFIState)
+        (Labelled "Global" (StateC GlobalState)
+          (LiftC IO)
+        )
+      )
+    )
 
 data FullState
   = FullState
   { fsStg     :: StgState
   , fsFFI     :: FFIState
+  , fsGlobal  :: GlobalState
   }
   deriving Show
 
@@ -91,11 +99,13 @@ getFullState :: I2 sig m => m FullState
 getFullState = FullState
   <$> get
   <*> L.get @"FFI"
+  <*> L.get @"Global"
 
 putFullState :: I2 sig m => FullState -> m ()
 putFullState FullState{..} = do
   put fsStg
   L.put @"FFI" fsFFI
+  L.put @"Global" fsGlobal
 
 withFullState :: I2 sig m => m a -> m (FullState, a)
 withFullState action = do
@@ -426,7 +436,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
   putStrLn $ "[callback BEGIN] " ++ show fun
   -}
   FullState{..} <- takeMVar stateStore
-  (after, result) <- runM . evalState fsStg . evalFFI fsFFI . withFullState $ do
+  (after, result) <- runM . evalGlobal fsGlobal . evalFFI fsFFI . fmap head . runNonDetM (:[]) . evalState fsStg . withFullState $ do
     {-
     oldThread <- gets ssCurrentThreadId
     -- TODO: properly setup ffi thread

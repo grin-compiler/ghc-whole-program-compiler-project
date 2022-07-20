@@ -2,7 +2,7 @@ module Stg.Interpreter.State.PrimTypes where
 
 import Control.Monad.Primitive
 import qualified Data.Primitive.ByteArray as BA
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 
 data ByteArrayDescriptor
   = ByteArrayDescriptor

@@ -3,7 +3,7 @@ module Stg.Interpreter.State.Env where
 import Data.Map (Map)
 
 import Stg.Syntax
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 
 type Env = Map Id (StaticOrigin, AtomAddr)   -- NOTE: must contain only the defined local variables
 

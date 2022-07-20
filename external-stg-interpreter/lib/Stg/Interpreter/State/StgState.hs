@@ -5,7 +5,7 @@ import Data.Map (Map)
 import Data.Vector (Vector)
 
 import Stg.Syntax
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 import Stg.Interpreter.State.Atom
 import Stg.Interpreter.State.PrimTypes
 import Stg.Interpreter.State.Stack
@@ -62,9 +62,6 @@ data StgState
   , ssArrayArrays         :: Map ArrayArrayAddr (Vector AtomAddr)         -- abs-int: Map (Set ...) | lattice
   , ssMutableArrayArrays  :: Map MutableArrayArrayAddr (Vector AtomAddr)  -- abs-int: Map (Set ...) | lattice
 
-  -- allocator related
-  , ssAllocator           :: !AllocatorState
-
   -- RTS related
   , ssRtsBaseInterop      :: RtsBaseInterop
   , ssRtsStaticEnv        :: RtsStaticEnv
@@ -105,7 +102,6 @@ emptyStgState = StgState
   , ssArrayArrays         = mempty
   , ssMutableArrayArrays  = mempty
 
-  , ssAllocator           = emptyAllocatorState
   , ssRtsBaseInterop      = error "uninitialized ssRtsBaseInterop"
   , ssRtsStaticEnv        = error "uninitialized ssRtsStaticEnv"
   }

@@ -2,6 +2,7 @@
 module Stg.Interpreter where
 
 import GHC.Stack
+import Control.Carrier.NonDet.Church
 import Control.Carrier.State.Strict
 import Control.Carrier.Lift
 import Control.Exception
@@ -171,7 +172,7 @@ runProgram switchCWD progFilePath mods0 progArgs = do
         --killThread gcThreadId
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
     when switchCWD $ setCurrentDirectory stgappDir
-    s@StgState{..} <- runM . execState emptyStgState . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) $ runStgMain
+    s@StgState{..} <- runM . evalGlobal emptyGlobalState . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) . fmap head . runNonDetM (:[]) . execState emptyStgState $ runStgMain
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 

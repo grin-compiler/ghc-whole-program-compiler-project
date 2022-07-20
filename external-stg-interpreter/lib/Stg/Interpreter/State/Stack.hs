@@ -1,7 +1,7 @@
 module Stg.Interpreter.State.Stack where
 
 import Stg.Syntax
-import Stg.Interpreter.State.Allocator
+import Stg.Interpreter.State.Address
 import Stg.Interpreter.State.Env
 
 data StackContinuation

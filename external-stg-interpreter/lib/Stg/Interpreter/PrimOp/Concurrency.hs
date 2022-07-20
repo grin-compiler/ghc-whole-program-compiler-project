@@ -192,6 +192,7 @@ raiseAsyncEx lastResult tid exception = do
           -- TODO: reschedule continuation??
           --stackPush $ RunScheduler SR_ThreadBlocked
         currentFrameAddr@(Just stackAddr) -> do
+          -- Q: will this explode during abstract interpretation?
           (stackCont, prevStackAddr) <- getStackFrame stackAddr
           case stackCont of
             -- the thread continues with the excaption handler, also wakes up the thread if necessary
