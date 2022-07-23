@@ -86,6 +86,7 @@ library
   build-depends:       base,
                        monad-loops,
                        fused-effects,
+                       transformers,
                        time,
                        unix,
                        filepath,

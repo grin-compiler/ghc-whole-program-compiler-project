@@ -172,7 +172,7 @@ runProgram switchCWD progFilePath mods0 progArgs = do
         --killThread gcThreadId
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
     when switchCWD $ setCurrentDirectory stgappDir
-    s@StgState{..} <- runM . evalGlobal emptyGlobalState . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) . fmap head . runNonDetM (:[]) . execState emptyStgState $ runStgMain
+    s@StgState{..} <- runM . evalGlobal (emptyGlobalState ConcreteEval) . FCallNative.evalFFI (FCallNative.FFIState dl stateStore) . fmap head . runNonDetM (:[]) . execState emptyStgState $ runStgMain
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 

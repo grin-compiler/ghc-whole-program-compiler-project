@@ -17,11 +17,14 @@ runScheduler result sr = do
       -- set thread status to finished
       ts <- getThreadState tid
       updateThreadState tid ts {tsStatus = ThreadFinished}
-      yield result
+      yield result -- HINT: will save the result
+{-
+  NOTE: disable temporarly to make sure only independent threads are allowed
 
     SR_ThreadBlocked  -> yield result
 
     SR_ThreadYield    -> yield result
+-}
 
 yield :: M sig m => [AtomAddr] -> m [AtomAddr]
 yield result = do

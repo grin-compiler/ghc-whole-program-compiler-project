@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, FlexibleContexts, ConstraintKinds #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, FlexibleContexts, ConstraintKinds, TypeApplications, DataKinds #-}
 module Stg.Interpreter.EvalStg where
 
 import GHC.Stack
@@ -6,6 +6,12 @@ import Foreign.Ptr
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Set (Set)
+
+import Control.Monad.Trans.Class
+import Control.Carrier.NonDet.Church
+import Control.Carrier.State.Strict
+import qualified Control.Effect.State.Labelled as L
 
 import Stg.Syntax
 
@@ -633,7 +639,7 @@ evalOnThread isMainThread setupAction = do
   result0 <- setupAction
   let loop resultIn = do
         resultOut <- evalStackMachine resultIn
-        ThreadState{..} <- getThreadState tid
+        ThreadState{..} <- getThreadState tid -- TODO: this will not work for abstract interpretation, design it proper
         case isThreadLive tsStatus of
           True  -> loop resultOut -- HINT: the new scheduling is ready
           False -> do
@@ -642,11 +648,89 @@ evalOnThread isMainThread setupAction = do
   loop result0
 
 --evalStackMachine :: I sig m => [AtomAddr] -> m [AtomAddr]
-evalStackMachine :: [AtomAddr] -> C [AtomAddr]
-evalStackMachine result = do
+evalStackMachine result = L.gets @"Global" ssEvalMode >>= \case
+  ConcreteEval -> concreteEvalStackMachine result
+  AbstractEval -> do
+    initialCfg <- getConfig result
+    abstractEvalStackMachine [initialCfg] Set.empty
+    pure [] -- TODO: calculate the widened result from thread state with this thread-id where the stack top is nothing (empty stack)
+
+concreteEvalStackMachine :: [AtomAddr] -> C [AtomAddr]
+concreteEvalStackMachine result = do
+  -- HINT: job worker, threads may vary, steps the current thread
   stackPop >>= \case
     Nothing         -> pure result
-    Just stackCont  -> evalStackContinuation result stackCont >>= evalStackMachine
+    Just stackCont  -> evalStackContinuation result stackCont >>= concreteEvalStackMachine
+
+-- HINT: currently only independent threads are supported
+data Config
+  = Config
+  { cfgCurrentResult        :: [AtomAddr]
+  , cfgCurrentStackContAddr :: Maybe StackAddr
+  , cfgCurrentStackCont     :: Maybe StackContinuation
+  , cfgCurrentThreadId      :: ThreadAddr
+  , cfgCurrentThreadState   :: ThreadState
+  }
+  deriving (Show, Ord, Eq)
+
+getConfig :: [AtomAddr] -> C Config
+getConfig result = do
+  tid <- gets ssCurrentThreadId
+  stackContAddr <- tsStackTop <$> getCurrentThreadState
+  stackCont <- stackPop
+
+  -- HINT: use thread state after stack pop so that the stack top is adjusted
+  ts <- getCurrentThreadState
+  pure Config
+    { cfgCurrentResult        = result
+    , cfgCurrentStackContAddr = stackContAddr
+    , cfgCurrentStackCont     = stackCont
+    , cfgCurrentThreadId      = tid
+    , cfgCurrentThreadState   = ts
+    }
+
+mkStgState :: Config -> StgState -> StgState
+mkStgState Config{..} s@StgState{..} = s
+  { ssThreads         = Map.insert cfgCurrentThreadId cfgCurrentThreadState ssThreads
+  , ssCurrentThreadId = cfgCurrentThreadId
+  }
+
+-- HINT: this is the work-list fixed point algorithm
+abstractEvalStackMachine :: [Config] -> Set Config -> C (Set Config)
+abstractEvalStackMachine [] seen = pure seen
+abstractEvalStackMachine (cfg@Config{..} : todo) seen = do
+  -- Q: does this stack pop refers to the work-list algorithm's todo list?
+  -- A: no, that must not be true because the result belongs to a specific thread, and that is not tracked in the global state
+  {-
+    input stg state = widened + config (precise)
+    i.e. widened store & stack, precise stack top & current thread & result
+  -}
+  widenedStgState <- get -- TODO: use global-widened stg state
+  let inputState = mkStgState cfg widenedStgState
+  cfgList <- lift . lift . runNonDetM (:[]) . runState inputState $ do
+    case cfgCurrentStackCont of
+      Nothing         -> pure cfg
+      Just stackCont  -> evalStackContinuation cfgCurrentResult stackCont >>= getConfig
+
+  let newWidenedState = mergeStgStates $ widenedStgState : map fst cfgList
+      new       = [ c
+                  | (stgState, c) <- cfgList
+                  , Set.notMember c seen -- HINT: new config
+                      -- HINT: needs revisit
+                      || stateNotIn stgState widenedStgState
+                  ]
+      todoNext  = new ++ todo
+      seenNext  = Set.union seen $ Set.fromList new
+
+  put newWidenedState
+
+  abstractEvalStackMachine todoNext seenNext
+
+stateNotIn :: StgState -> StgState -> Bool
+stateNotIn = undefined -- TODO: check lattice subsumtion
+
+mergeStgStates :: [StgState] -> StgState
+mergeStgStates = undefined -- TODO: implement widening
 
 --evalStackContinuation :: I sig m => [AtomAddr] -> StackContinuation -> m [AtomAddr]
 evalStackContinuation :: [AtomAddr] -> StackContinuation -> C [AtomAddr]
