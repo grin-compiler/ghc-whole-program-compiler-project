@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, MultiWayIf, TupleSections, OverloadedStrings, CPP #-}
+{-# LANGUAGE ImplicitParams, RecordWildCards, LambdaCase, MultiWayIf, TupleSections, OverloadedStrings, CPP #-}
 
 #ifdef EXTERNAL_STG_COMPILER_PACKAGE
 module Stg.GHC.Convert where
@@ -21,7 +21,7 @@ import qualified GHC.Core.TyCo.Rep      as GHC
 import qualified GHC.Core.Type          as GHC
 import qualified GHC.Data.FastString    as GHC
 import qualified GHC.Driver.Session     as GHC
-import qualified GHC.Driver.Types       as GHC
+import qualified GHC.Driver.Ppr         as GHC
 import qualified GHC.Stg.Syntax         as GHC
 import qualified GHC.Types.Basic        as GHC
 import qualified GHC.Types.ForeignCall  as GHC
@@ -32,6 +32,10 @@ import qualified GHC.Types.Name         as GHC
 import qualified GHC.Types.SrcLoc       as GHC
 import qualified GHC.Types.RepType      as GHC
 import qualified GHC.Types.Unique       as GHC
+import qualified GHC.Types.Tickish      as GHC
+import qualified GHC.Types.SourceText   as GHC
+import qualified GHC.Types.ForeignStubs as GHC
+import qualified GHC.Types.ForeignStubDecls as GHC
 import qualified GHC.Unit.Types         as GHC
 import qualified GHC.Unit.Module.Name   as GHC
 import qualified GHC.Utils.Outputable   as GHC
@@ -79,7 +83,7 @@ type M = State Env
 
 -- debug
 
-checkName :: GHC.Name -> M ()
+checkName :: (?dflags :: GHC.DynFlags) => GHC.Name -> M ()
 checkName n = do
   let key = uniqueKey n
       loc = GHC.nameSrcSpan n
@@ -89,7 +93,7 @@ checkName n = do
     Just l  -> when (l == loc) $ do
       error $ ppr n ++ " has multiple source locations, previous: " ++ show l ++ " current: " ++ show loc
 
-defKey :: (GHC.Uniquable a, GHC.Outputable a) => a -> M ()
+defKey :: (GHC.Uniquable a, GHC.Outputable a, ?dflags :: GHC.DynFlags) => a -> M ()
 defKey a = do
   let key = uniqueKey a
   wasDefined <- state $ \env@Env{..} -> (IntSet.member key envDefinedUnique, env {envDefinedUnique = IntSet.insert key envDefinedUnique})
@@ -98,14 +102,14 @@ defKey a = do
 
 -- helpers
 
-ppr :: GHC.Outputable a => a -> String
-ppr = GHC.showSDoc GHC.unsafeGlobalDynFlags . GHC.ppr
+ppr :: (GHC.Outputable a, ?dflags :: GHC.DynFlags) => a -> String
+ppr = GHC.showSDoc ?dflags . GHC.ppr
 
-showSDoc :: GHC.SDoc -> String
-showSDoc = GHC.showSDoc GHC.unsafeGlobalDynFlags
+showSDoc :: (?dflags :: GHC.DynFlags) => GHC.SDoc -> String
+showSDoc = GHC.showSDoc ?dflags
 
-bs8SDoc :: GHC.SDoc -> BS8.ByteString
-bs8SDoc = BS8.pack . GHC.showSDoc GHC.unsafeGlobalDynFlags
+bs8SDoc :: (?dflags :: GHC.DynFlags) => GHC.SDoc -> BS8.ByteString
+bs8SDoc = BS8.pack . GHC.showSDoc ?dflags
 
 uniqueKey :: GHC.Uniquable a => a -> Int
 uniqueKey = GHC.getKey . GHC.getUnique
@@ -158,7 +162,7 @@ cvtUnhelpfulSpanReason = \case
 
 -- tickish conversion
 
-cvtTickish :: GHC.Tickish id -> Tickish
+cvtTickish :: GHC.StgTickish -> Tickish
 cvtTickish = \case
   GHC.ProfNote{}      -> ProfNote
   GHC.HpcTick{}       -> HpcTick
@@ -180,7 +184,7 @@ cvtDataCon dc = do
 
 -- type conversion
 
-cvtDataTyConIdFromType :: GHC.Type -> M (Maybe TyConId)
+cvtDataTyConIdFromType :: (?dflags :: GHC.DynFlags) => GHC.Type -> M (Maybe TyConId)
 cvtDataTyConIdFromType t
   | Just tc <- GHC.tyConAppTyConPicky_maybe t
   , GHC.isDataTyCon tc
@@ -189,7 +193,7 @@ cvtDataTyConIdFromType t
   | otherwise
   = pure Nothing
 
-cvtDataTyConId :: GHC.TyCon -> M TyConId
+cvtDataTyConId :: (?dflags :: GHC.DynFlags) => GHC.TyCon -> M TyConId
 cvtDataTyConId tc
   | GHC.isDataTyCon tc
   = do
@@ -201,18 +205,18 @@ cvtDataTyConId tc
 instance GHC.Outputable Type where
   ppr = GHC.text . show
 
-trpp :: (GHC.Outputable o, GHC.Outputable a) => String -> (o -> a) -> o -> a
+trpp :: (GHC.Outputable o, GHC.Outputable a, ?dflags :: GHC.DynFlags) => String -> (o -> a) -> o -> a
 trpp msg f a = trace (unwords [msg, ":"]) $
                trace ('\t' : ppr a) $
                trace (unwords ["\t\t=", ppr (f a), "\n-----------\n"]) $
                f a
 
 {-# INLINE debugCvtAppType #-}
-debugCvtAppType :: GHC.Id -> [GHC.StgArg] -> GHC.Type -> String -> Type
+debugCvtAppType :: (?dflags :: GHC.DynFlags) => GHC.Id -> [GHC.StgArg] -> GHC.Type -> String -> Type
 debugCvtAppType f args ty msg = unsafePerformIO $ debugCvtAppTypeM f args ty msg
 
 {-# INLINE debugCvtAppTypeM #-}
-debugCvtAppTypeM :: GHC.Id -> [GHC.StgArg] -> GHC.Type -> String -> IO Type
+debugCvtAppTypeM :: (?dflags :: GHC.DynFlags) => GHC.Id -> [GHC.StgArg] -> GHC.Type -> String -> IO Type
 debugCvtAppTypeM f args ty msg = catch (let t = cvtTypeNormal ty in seq t (pure t)) $ \ex -> do
   putStrLn $ "cought exception during StgApp result type conversion"
   putStrLn "Normal:"
@@ -238,7 +242,7 @@ debugCvtAppTypeM f args ty msg = catch (let t = cvtTypeNormal ty in seq t (pure 
   putStrLn $ "  " ++ msg
   throwIO (ex :: SomeException)
 
-cvtType :: String -> GHC.Type -> Type
+cvtType :: (?dflags :: GHC.DynFlags) => String -> GHC.Type -> Type
 --cvtType msg t = trpp (unwords [msg, "cvtType"]) cvtType3 $ deepCheckType t
 cvtType _ = cvtTypeNormal
 
@@ -279,7 +283,7 @@ isLiftedType_maybe :: HasDebugCallStack => Type -> Maybe Bool
 -}
 
 {-# INLINE cvtTypeNormal #-}
-cvtTypeNormal :: GHC.Type -> Type
+cvtTypeNormal :: (?dflags :: GHC.DynFlags) => GHC.Type -> Type
 cvtTypeNormal t
   | GHC.isTypeLevPoly t
   = PolymorphicRep
@@ -331,8 +335,14 @@ cvtPrimElemRep = \case
 cvtLitNumType :: GHC.LitNumType -> LitNumType
 cvtLitNumType = \case
   GHC.LitNumInt     -> LitNumInt
+  GHC.LitNumInt8    -> LitNumInt8
+  GHC.LitNumInt16   -> LitNumInt16
+  GHC.LitNumInt32   -> LitNumInt32
   GHC.LitNumInt64   -> LitNumInt64
   GHC.LitNumWord    -> LitNumWord
+  GHC.LitNumWord8   -> LitNumWord8
+  GHC.LitNumWord16  -> LitNumWord16
+  GHC.LitNumWord32  -> LitNumWord32
   GHC.LitNumWord64  -> LitNumWord64
 
 cvtLabelSpec :: Maybe Int -> GHC.FunctionOrData -> LabelSpec
@@ -395,7 +405,7 @@ cvtScope i
   | GHC.isExportedId i  = GlobalScope -- HINT: top level local
   | otherwise           = LocalScope
 
-cvtBinderIdClosureParam :: IdDetails -> String -> GHC.Id -> SBinder
+cvtBinderIdClosureParam :: (?dflags :: GHC.DynFlags) => IdDetails -> String -> GHC.Id -> SBinder
 cvtBinderIdClosureParam details msg v
   | GHC.isId v = SBinder
       { sbinderName     = cvtOccName $ GHC.getOccName v
@@ -410,7 +420,7 @@ cvtBinderIdClosureParam details msg v
   | otherwise = error $ "Type binder in STG: " ++ (show $ cvtOccName $ GHC.getOccName v)
 
 
-cvtBinderId :: IdDetails -> String -> GHC.Id -> SBinder
+cvtBinderId :: (?dflags :: GHC.DynFlags) => IdDetails -> String -> GHC.Id -> SBinder
 cvtBinderId details msg v
   | GHC.isId v = SBinder
       { sbinderName     = cvtOccName $ GHC.getOccName v
@@ -424,13 +434,13 @@ cvtBinderId details msg v
       }
   | otherwise = error $ "Type binder in STG: " ++ (show $ cvtOccName $ GHC.getOccName v)
 
-cvtBinderIdClosureParamM :: String -> GHC.Id -> M SBinder
+cvtBinderIdClosureParamM :: (?dflags :: GHC.DynFlags) => String -> GHC.Id -> M SBinder
 cvtBinderIdClosureParamM msg i = do
   --defKey i -- debug
   details <- cvtIdDetails i
   pure $ cvtBinderIdClosureParam details msg i
 
-cvtBinderIdM :: String -> GHC.Id -> M SBinder
+cvtBinderIdM :: (?dflags :: GHC.DynFlags) => String -> GHC.Id -> M SBinder
 cvtBinderIdM msg i = do
   --checkName $ GHC.getName i
   --defKey i -- debug
@@ -484,14 +494,14 @@ cvtArg = \case
 
 -- alt conversion
 
-cvtAltType :: GHC.AltType -> M SAltType
+cvtAltType :: (?dflags :: GHC.DynFlags) => GHC.AltType -> M SAltType
 cvtAltType = \case
   GHC.PolyAlt       -> pure $ PolyAlt
   GHC.MultiValAlt i -> pure $ MultiValAlt i
   GHC.PrimAlt r     -> pure $ PrimAlt $ cvtPrimRep r
   GHC.AlgAlt tc     -> AlgAlt <$> cvtDataTyConId tc
 
-cvtAlt :: GHC.StgAlt -> M SAlt
+cvtAlt :: (?dflags :: GHC.DynFlags) => GHC.StgAlt -> M SAlt
 cvtAlt (con, bs, e) = Alt <$> cvtAltCon con <*> mapM (cvtBinderIdM "Alt") bs <*> cvtExpr e
 
 cvtAltCon :: GHC.AltCon -> M SAltCon
@@ -502,7 +512,7 @@ cvtAltCon = \case
 
 -- stg expr conversion
 
-cvtExpr :: GHC.StgExpr -> M SExpr
+cvtExpr :: (?dflags :: GHC.DynFlags) => GHC.StgExpr -> M SExpr
 cvtExpr = \case
 #ifdef EXT_STG_FOR_NON_PATCHED_GHC
   GHC.StgApp f ps           -> StgApp <$> cvtOccId f <*> mapM cvtArg ps <*> pure PolymorphicRep <*> pure mempty
@@ -510,7 +520,7 @@ cvtExpr = \case
   GHC.StgApp f ps tr        -> StgApp <$> cvtOccId f <*> mapM cvtArg ps <*> pure ({-cvtType "StgApp" t-}debugCvtAppType f ps tr "") <*> pure (BS8.pack . ppr $ GHC.idType f, BS8.pack $ ppr tr, BS8.pack "")
 #endif
   GHC.StgLit l              -> pure $ StgLit (cvtLit l)
-  GHC.StgConApp dc ps ts    -> StgConApp <$> cvtDataCon dc <*> mapM cvtArg ps <*> pure (map (cvtType "StgConApp") ts)
+  GHC.StgConApp dc _ ps ts  -> StgConApp <$> cvtDataCon dc <*> mapM cvtArg ps <*> pure (map (cvtType "StgConApp") ts)
   GHC.StgOpApp o ps t       -> StgOpApp (cvtOp o) <$> mapM cvtArg ps <*> pure (cvtType "StgOpApp" t) <*> cvtDataTyConIdFromType t
   GHC.StgCase e b at al     -> StgCase <$> cvtExpr e <*> cvtBinderIdM "StgCase" b <*> cvtAltType at <*> mapM cvtAlt al
   GHC.StgLet _ b e          -> StgLet <$> cvtBind b <*> cvtExpr e
@@ -526,27 +536,27 @@ cvtUpdateFlag = \case
   GHC.Updatable   -> Updatable
   GHC.SingleEntry -> SingleEntry
 
-cvtRhs :: GHC.StgRhs -> M SRhs
+cvtRhs :: (?dflags :: GHC.DynFlags) => GHC.StgRhs -> M SRhs
 cvtRhs = \case
   GHC.StgRhsClosure _ _ u bs e  -> StgRhsClosure [] (cvtUpdateFlag u) <$> mapM (cvtBinderIdClosureParamM "StgRhsClosure") bs <*> cvtExpr e
-  GHC.StgRhsCon _ dc args       -> StgRhsCon <$> cvtDataCon dc <*> mapM cvtArg args
+  GHC.StgRhsCon _ dc _ _ args   -> StgRhsCon <$> cvtDataCon dc <*> mapM cvtArg args
 
 -- bind and top-bind conversion
 
-cvtBind :: GHC.StgBinding -> M SBinding
+cvtBind :: (?dflags :: GHC.DynFlags) => GHC.StgBinding -> M SBinding
 cvtBind = \case
   GHC.StgNonRec b r -> StgNonRec <$> cvtBinderIdM "StgNonRec" b <*> cvtRhs r
   GHC.StgRec    bs  -> StgRec <$> sequence [(,) <$> cvtBinderIdM "StgRec" b <*> cvtRhs r | (b, r) <- bs]
 
-cvtTopBind :: GHC.StgTopBinding -> M STopBinding
+cvtTopBind :: (?dflags :: GHC.DynFlags) => GHC.StgTopBinding -> M STopBinding
 cvtTopBind = \case
   GHC.StgTopLifted b        -> StgTopLifted <$> cvtBind b
   GHC.StgTopStringLit b bs  -> StgTopStringLit <$> cvtBinderIdM "StgTopStringLit" b <*> pure bs
 
-cvtTopBindsAndStubs :: [GHC.StgTopBinding] -> GHC.ForeignStubs -> M ([STopBinding], SForeignStubs, [(UnitId, [(ModuleName, [SBinder])])])
-cvtTopBindsAndStubs binds stubs = do
+cvtTopBindsAndStubs :: (?dflags :: GHC.DynFlags) => [GHC.StgTopBinding] -> GHC.ForeignStubs -> GHC.ForeignStubDecls -> M ([STopBinding], SForeignStubs, [(UnitId, [(ModuleName, [SBinder])])])
+cvtTopBindsAndStubs binds stubs decls = do
   b <- mapM cvtTopBind binds
-  s <- cvtForeignStubs stubs
+  s <- cvtForeignStubs stubs decls
 
   let stgTopIds = concatMap topBindIds binds
       topKeys   = IntSet.fromList $ map uniqueKey stgTopIds
@@ -568,7 +578,7 @@ cvtCImportSpec = \case
 cvtCExportSpec :: GHC.CExportSpec -> CExportSpec
 cvtCExportSpec (GHC.CExportStatic t n cc) = CExportStatic (cvtSourceText t) (GHC.bytesFS n) (cvtCCallConv cc)
 
-cvtStubImpl :: GHC.StubImpl -> StubImpl
+cvtStubImpl :: (?dflags :: GHC.DynFlags) => GHC.StubImpl -> StubImpl
 cvtStubImpl = \case
   GHC.StubImplImportCWrapper n m  -> StubImplImportCWrapper (GHC.bytesFS n) m
   GHC.StubImplImportCApi n l      -> StubImplImportCApi (GHC.bytesFS n) [(fmap cvtHeader h, bs8SDoc d, c) | (h, d, c) <- l]
@@ -579,15 +589,17 @@ cvtForeignImport (GHC.CImport cc s m is t) = CImport (cvtCCallConv $ GHC.unLoc c
 cvtForeignExport :: GHC.ForeignExport -> ForeignExport
 cvtForeignExport (GHC.CExport s t) = CExport (cvtCExportSpec $ GHC.unLoc s) (cvtSourceText $ GHC.unLoc t)
 
-cvtStubDecl :: GHC.StubDecl -> M SStubDecl
+cvtStubDecl :: (?dflags :: GHC.DynFlags) => GHC.StubDecl -> M SStubDecl
 cvtStubDecl = \case
   GHC.StubDeclImport fi m -> pure $ StubDeclImport (cvtForeignImport fi) (fmap cvtStubImpl m)
   GHC.StubDeclExport fe idOcc n -> StubDeclExport (cvtForeignExport fe) <$> cvtOccId idOcc <*> pure (BS8.pack n)
 
-cvtForeignStubs :: GHC.ForeignStubs -> M SForeignStubs
-cvtForeignStubs = \case
-  GHC.NoStubs             -> pure NoStubs
-  GHC.ForeignStubs h c l  -> ForeignStubs (bs8SDoc $ GHC.pprCode GHC.CStyle h) (bs8SDoc $ GHC.pprCode GHC.CStyle c) <$> mapM cvtStubDecl [d | (_, _, d) <- l]
+cvtForeignStubs :: (?dflags :: GHC.DynFlags) => GHC.ForeignStubs -> GHC.ForeignStubDecls -> M SForeignStubs
+cvtForeignStubs stubs (GHC.ForeignStubDecls decls) = case stubs of
+  GHC.NoStubs
+    -> pure NoStubs
+  GHC.ForeignStubs (GHC.CHeader h) (GHC.CStub c)
+    -> ForeignStubs (bs8SDoc $ GHC.pprCode GHC.CStyle h) (bs8SDoc $ GHC.pprCode GHC.CStyle c) <$> mapM cvtStubDecl [d | (_, _, d) <- decls]
 
 cvtForeignSrcLang :: GHC.ForeignSrcLang -> ForeignSrcLang
 cvtForeignSrcLang = \case
@@ -599,8 +611,12 @@ cvtForeignSrcLang = \case
   GHC.RawObject   -> RawObject
 
 -- module conversion
-cvtModule :: String -> GHC.Unit -> GHC.ModuleName -> Maybe FilePath -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
-cvtModule phase unit' modName' mSrcPath binds foreignStubs foreignFiles =
+
+cvtModule :: GHC.DynFlags -> String -> GHC.Unit -> GHC.ModuleName -> Maybe FilePath -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> GHC.ForeignStubDecls -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
+cvtModule dflags phase unit' modName' mSrcPath binds foreignStubs foreignDecls foreignFiles = let ?dflags = dflags in cvtModule' phase unit' modName' mSrcPath binds foreignStubs foreignDecls foreignFiles
+
+cvtModule' :: (?dflags :: GHC.DynFlags) => String -> GHC.Unit -> GHC.ModuleName -> Maybe FilePath -> [GHC.StgTopBinding] -> GHC.ForeignStubs -> GHC.ForeignStubDecls -> [(GHC.ForeignSrcLang, FilePath)] -> SModule
+cvtModule' phase unit' modName' mSrcPath binds foreignStubs foreignDecls foreignFiles =
   Module
   { modulePhase               = BS8.pack phase
   , moduleUnitId              = unitId
@@ -614,7 +630,8 @@ cvtModule phase unit' modName' mSrcPath binds foreignStubs foreignFiles =
   , moduleTopBindings         = topBinds
   , moduleForeignFiles        = [(cvtForeignSrcLang s, p) | (s, p) <- foreignFiles]
   } where
-      ((topBinds, stubs, externalIds), Env{..}) = runState (cvtTopBindsAndStubs binds foreignStubs) initialEnv
+      -- ?dflags             = dflags
+      ((topBinds, stubs, externalIds), Env{..}) = runState (cvtTopBindsAndStubs binds foreignStubs foreignDecls) initialEnv
 
       initialEnv          = emptyEnv
       stgTopIds           = concatMap topBindIds binds
@@ -634,10 +651,10 @@ groupByUnitIdAndModule l =
   Map.unionsWith (Map.unionWith Set.union)
   [Map.singleton u (Map.singleton m (Set.singleton b)) | ((u, m), b) <- l]
 
-mkExternalName :: GHC.Id -> M ((UnitId, ModuleName), SBinder)
+mkExternalName :: (?dflags :: GHC.DynFlags) => GHC.Id -> M ((UnitId, ModuleName), SBinder)
 mkExternalName x = (cvtUnitIdAndModuleName . GHC.nameModule $ GHC.getName x,) <$> cvtBinderIdM "mkExternalName" x
 
-mkTyCon :: GHC.TyCon -> ((UnitId, ModuleName), STyCon)
+mkTyCon :: (?dflags :: GHC.DynFlags) => GHC.TyCon -> ((UnitId, ModuleName), STyCon)
 mkTyCon tc = (cvtUnitIdAndModuleName $ GHC.nameModule n, b) where
   n = GHC.getName tc
   b = STyCon
@@ -648,14 +665,14 @@ mkTyCon tc = (cvtUnitIdAndModuleName $ GHC.nameModule n, b) where
       }
   sortDataCons l = IntMap.elems $ IntMap.fromList [(GHC.dataConTag dc, dc) | dc <- l]
 
-mkSDataCon :: GHC.DataCon -> SDataCon
+mkSDataCon :: (?dflags :: GHC.DynFlags) => GHC.DataCon -> SDataCon
 mkSDataCon dc = SDataCon
   { sdcName   = cvtOccName $ GHC.getOccName n
   , sdcId     = dataConId
   , sdcRep    = if
-      | GHC.isUnboxedSumCon dc    -> error "unboxed sum cons are not supported in STG!"
-      | GHC.isUnboxedTupleCon dc  -> UnboxedTupleCon $ GHC.dataConRepArity dc
-      | otherwise                 -> AlgDataCon $ concatMap (concatMap getConArgRep . dcpp "3" GHC.typePrimRep . GHC.scaledThing) $ dcpp "2" GHC.dataConRepArgTys $ dcpp "1" id $ dc
+      | GHC.isUnboxedSumDataCon dc    -> error "unboxed sum cons are not supported in STG!"
+      | GHC.isUnboxedTupleDataCon dc  -> UnboxedTupleCon $ GHC.dataConRepArity dc
+      | otherwise                     -> AlgDataCon $ concatMap (concatMap getConArgRep . dcpp "3" GHC.typePrimRep . GHC.scaledThing) $ dcpp "2" GHC.dataConRepArgTys $ dcpp "1" id $ dc
   , sdcWorker = cvtBinderId idDetails "dataConWorkId" workerId
   , sdcDefLoc = cvtSrcSpan $ GHC.nameSrcSpan n
   } where
