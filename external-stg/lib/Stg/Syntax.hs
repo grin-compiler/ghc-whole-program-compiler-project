@@ -323,6 +323,7 @@ data Binder
     }
   deriving (Eq, Ord, Generic, Show)
 
+-- TODO: use better names
 data Scope
   = LocalScope      -- ^ visible for expression body
   | GlobalScope     -- ^ visible for a single haskell module
@@ -357,8 +358,14 @@ rootMainBinderId = BinderId $ Unique '0' 101
 
 data LitNumType
   = LitNumInt     -- ^ @Int#@ - according to target machine
+  | LitNumInt8    -- ^ @Int8#@ - exactly 8 bits
+  | LitNumInt16   -- ^ @Int16#@ - exactly 16 bits
+  | LitNumInt32   -- ^ @Int32#@ - exactly 32 bits
   | LitNumInt64   -- ^ @Int64#@ - exactly 64 bits
   | LitNumWord    -- ^ @Word#@ - according to target machine
+  | LitNumWord8   -- ^ @Word8#@ - exactly 8 bits
+  | LitNumWord16  -- ^ @Word16#@ - exactly 16 bits
+  | LitNumWord32  -- ^ @Word32#@ - exactly 32 bits
   | LitNumWord64  -- ^ @Word64#@ - exactly 64 bits
   deriving (Eq, Ord, Generic, Show)
 
@@ -454,7 +461,7 @@ data Rhs' idBnd idOcc dcOcc tcOcc
         (Expr' idBnd idOcc dcOcc tcOcc) -- body
 
   | StgRhsCon
-        dcOcc  -- DataCon
+        dcOcc               -- DataCon
         [Arg' idOcc]        -- Args
   deriving (Eq, Ord, Generic, Show)
 
