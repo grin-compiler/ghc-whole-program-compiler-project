@@ -84,6 +84,8 @@ data GhcStgApp
   { appWays           :: [String]
   , appObjSuffix      :: String
   , appNoHsMain       :: Bool
+  , appGhcName        :: String
+  , appGhcVersion     :: String
   , appPlatformOS     :: String
   , appUnitDbPaths    :: [FilePath]
   , appObjFiles       :: [FilePath]
@@ -98,12 +100,14 @@ instance FromJSON GhcStgApp where
   parseJSON (Y.Object v) =
     GhcStgApp
       <$> v .:? "ways" .!= []
-      <*> v .: "o_suffix"
-      <*> v .: "no_hs_main"
-      <*> v .: "platform_os"
-      <*> v .:? "unit_db_paths" .!= []
-      <*> v .:? "o_files" .!= []
-      <*> v .:? "extra_ld_inputs" .!= []
+      <*> v .: "o-suffix"
+      <*> v .: "no-hs-main"
+      <*> v .: "ghc-name"
+      <*> v .: "ghc-version"
+      <*> v .: "platform-os"
+      <*> v .:? "unit-db-paths" .!= []
+      <*> v .:? "o-files" .!= []
+      <*> v .:? "extra-ld-inputs" .!= []
       <*> v .:? "extra-libraries" .!= []
       <*> v .:? "library-dirs" .!= []
       <*> v .:? "ld-options" .!= []
@@ -256,7 +260,7 @@ getAppLinkerInfo ghcStgAppFname = do
   -- lib info
   let forceDynamic = True
       arExt n = if forceDynamic
-        then "-ghc9.0.2.1000.dyn_o" ++ n ++ ".a"
+        then "-" ++ appGhcName ++ appGhcVersion ++ ".dyn_o" ++ n ++ ".a"
         else "." ++ appObjSuffix ++ n ++ ".a"
   libInfoList <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
 
@@ -284,7 +288,7 @@ getAppLinkerInfo ghcStgAppFname = do
         False -> pure Nothing
 
     pure $ StgLibLinkerInfo
-      { stglibName            = unitId
+      { stglibName            = unitName
       , stglibCbitsPaths      = catMaybes cbitsPathList
       , stglibCapiStubsPaths  = catMaybes stubsPathList
       , stglibAllStubsPaths   = catMaybes allStubsPathList

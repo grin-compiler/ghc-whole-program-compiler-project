@@ -73,7 +73,7 @@ main = do
   putStrLn $ "linking exe"
 
   (StgAppLinkerInfo{..}, libInfos) <- getAppLinkerInfo stgAppFname
-  let linkerInfoList = filter (\StgLibLinkerInfo{..} -> not (isPrefixOf "rts-1" stglibName)) libInfos
+  let linkerInfoList = filter (\StgLibLinkerInfo{..} -> stglibName /= "rts") libInfos
 
       cbitsOpts = concat
           [ concat

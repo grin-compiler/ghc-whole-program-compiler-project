@@ -26,7 +26,7 @@ linkForeignCbitsSharedLib ghcstgappFname = do
   genStubs ghcstgappFname >>= writeFile stubFname
 
   (StgAppLinkerInfo{..}, linkerInfoList') <- getAppLinkerInfo ghcstgappFname
-  let linkerInfoList = filter (\StgLibLinkerInfo{..} -> not (isPrefixOf "rts-1" stglibName)) linkerInfoList'
+  let linkerInfoList = filter (\StgLibLinkerInfo{..} -> stglibName /= "rts") linkerInfoList'
 
       cbitsOpts =
           [ unwords $ concat
