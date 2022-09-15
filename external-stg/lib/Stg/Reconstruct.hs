@@ -186,8 +186,8 @@ reconModule Module{..} = mod where
 
 reconForeignStubs :: BinderMap -> SForeignStubs -> ForeignStubs
 reconForeignStubs bm = \case
-  NoStubs             -> NoStubs
-  ForeignStubs h c l  -> ForeignStubs h c $ map (reconStubDecl bm) l
+  NoStubs                 -> NoStubs
+  ForeignStubs h c i f l  -> ForeignStubs h c i f $ map (reconStubDecl bm) l
 
 reconStubDecl :: BinderMap -> SStubDecl -> StubDecl
 reconStubDecl bm = \case

@@ -152,7 +152,7 @@ modes = subparser
             moduleList <- loadModules fname
             let ignoredSymbols = Set.fromList $
                   [ n
-                  | ForeignStubs _ _ l <- map moduleForeignStubs moduleList
+                  | ForeignStubs _ _ _ _ l <- map moduleForeignStubs moduleList
                   , StubDeclImport _ (Just (StubImplImportCWrapper n _)) <- l
                   -- HINT: these symbols are used only by "createAdjustor" that does not dereference the symbol
                   ] ++ map BS8.pack handledRTSSymbols

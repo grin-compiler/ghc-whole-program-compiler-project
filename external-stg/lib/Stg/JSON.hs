@@ -23,6 +23,7 @@ instance ToJSON TyConId
 instance ToJSON DataConId
 instance ToJSON DataConRep
 instance ToJSON SDataCon
+instance ToJSON CbvMark
 instance ToJSON IdDetails
 instance ToJSON UnitId
 instance ToJSON ModuleName
@@ -54,6 +55,8 @@ instance ToJSON CExportSpec
 instance ToJSON ForeignImport
 instance ToJSON ForeignExport
 instance ToJSON StubImpl
+instance ToJSON ModuleLabelKind
+instance ToJSON ModuleCLabel
 instance (ToJSON idOcc) => ToJSON (StubDecl' idOcc)
 instance (ToJSON idOcc) => ToJSON (ForeignStubs' idOcc)
 instance ToJSON ForeignSrcLang
@@ -76,6 +79,7 @@ instance FromJSON TyConId
 instance FromJSON DataConId
 instance FromJSON DataConRep
 instance FromJSON SDataCon
+instance FromJSON CbvMark
 instance FromJSON IdDetails
 instance FromJSON UnitId
 instance FromJSON ModuleName
@@ -108,6 +112,8 @@ instance FromJSON CExportSpec
 instance FromJSON ForeignImport
 instance FromJSON ForeignExport
 instance FromJSON StubImpl
+instance FromJSON ModuleLabelKind
+instance FromJSON ModuleCLabel
 instance (FromJSON idOcc) => FromJSON (StubDecl' idOcc)
 instance (FromJSON idOcc) => FromJSON (ForeignStubs' idOcc)
 instance FromJSON ForeignSrcLang

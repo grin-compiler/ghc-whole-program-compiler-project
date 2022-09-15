@@ -10,7 +10,7 @@ import Stg.GHC.Symbols
 genStubs :: FilePath -> IO String
 genStubs ghcstgappFname = do
   mods <- getGhcStgAppModules ghcstgappFname
-  let stubs         = concat $ [map genStubCode l | ForeignStubs _ _ l <- map moduleForeignStubs $ mods]
+  let stubs         = concat $ [map genStubCode l | ForeignStubs _ _ _ _ l <- map moduleForeignStubs $ mods]
       fileIncludes  = [] -- ["#include \"HsFFI.h\""]
       code          = unlines $ filter (not . null) $ fileIncludes ++ stubs ++ extraHack
       extraHack     =

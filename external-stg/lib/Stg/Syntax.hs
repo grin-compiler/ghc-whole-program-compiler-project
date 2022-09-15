@@ -256,6 +256,11 @@ data TyCon
 
 -- id info
 
+data CbvMark
+  = MarkedCbv
+  | NotMarkedCbv
+  deriving (Eq, Ord, Generic, Show)
+
 data IdDetails
   = VanillaId
   | FExportedId
@@ -268,7 +273,8 @@ data IdDetails
   | TickBoxOpId
   | DFunId
   | CoVarId
-  | JoinId        Int
+  | JoinId        Int (Maybe [CbvMark])
+  | WorkerLikeId  [CbvMark]
   deriving (Eq, Ord, Generic, Show)
 
 -- stg expr related
@@ -382,6 +388,7 @@ data Lit
   | LitDouble   !Rational
   | LitLabel    !BS8.ByteString LabelSpec
   | LitNumber   !LitNumType !Integer
+  | LitRubbish  !Type
   deriving (Eq, Ord, Generic, Show)
 
 -- | A top-level binding.
@@ -541,12 +548,25 @@ data StubDecl' idOcc
   | StubDeclExport !ForeignExport idOcc !BS8.ByteString
   deriving (Eq, Ord, Generic, Show)
 
+data ModuleLabelKind
+    = MLK_Initializer       Name
+    | MLK_InitializerArray
+    | MLK_Finalizer         Name
+    | MLK_FinalizerArray
+  deriving (Eq, Ord, Generic, Show)
+
+data ModuleCLabel
+  = ModuleCLabel !UnitId !ModuleName !ModuleLabelKind
+  deriving (Eq, Ord, Generic, Show)
+
 data ForeignStubs' idOcc
   = NoStubs
   | ForeignStubs
-    { fsCHeader :: !BS8.ByteString
-    , fsCSource :: !BS8.ByteString
-    , fsDecls   :: ![StubDecl' idOcc]
+    { fsCHeader       :: !BS8.ByteString
+    , fsCSource       :: !BS8.ByteString
+    , fsInitializers  :: ![ModuleCLabel]
+    , fsFinalizers    :: ![ModuleCLabel]
+    , fsDecls         :: ![StubDecl' idOcc]
     }
   deriving (Eq, Ord, Generic, Show)
 
@@ -609,6 +629,7 @@ instance Binary Unique
 instance Binary PrimElemRep
 instance Binary PrimRep
 instance Binary Type
+instance Binary CbvMark
 instance Binary IdDetails
 instance Binary Scope
 instance Binary Binder
@@ -639,6 +660,8 @@ instance Binary CExportSpec
 instance Binary ForeignImport
 instance Binary ForeignExport
 instance Binary StubImpl
+instance Binary ModuleLabelKind
+instance Binary ModuleCLabel
 instance (Binary idOcc) => Binary (StubDecl' idOcc)
 instance (Binary idOcc) => Binary (ForeignStubs' idOcc)
 instance (Binary tcOcc) => Binary (AltType' tcOcc)

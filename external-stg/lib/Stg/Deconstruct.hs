@@ -109,8 +109,8 @@ deconAltCon = \case
 
 deconForeignStubs :: ForeignStubs -> SForeignStubs
 deconForeignStubs = \case
-  NoStubs             -> NoStubs
-  ForeignStubs h c l  -> ForeignStubs h c $ map deconStubDecl l
+  NoStubs                 -> NoStubs
+  ForeignStubs h c i f l  -> ForeignStubs h c i f $ map deconStubDecl l
 
 deconStubDecl :: StubDecl -> SStubDecl
 deconStubDecl = \case
