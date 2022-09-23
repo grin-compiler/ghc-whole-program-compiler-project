@@ -50,10 +50,17 @@ import Stg.Interpreter.Base
 import Stg.Interpreter.Debug
 import Stg.Interpreter.Rts (globalStoreSymbols)
 
-pattern CharV c = Literal (LitChar c)
-pattern IntV i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern CharV c   = Literal (LitChar c)
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 
@@ -97,7 +104,15 @@ mkFFIArg = \case
   Void              -> pure Nothing
   PtrAtom _ p       -> pure . Just $ FFI.argPtr p
   IntV i            -> pure . Just $ FFI.argInt $ fromIntegral i
+  Int8V i           -> pure . Just $ FFI.argInt8 $ fromIntegral i
+  Int16V i          -> pure . Just $ FFI.argInt16 $ fromIntegral i
+  Int32V i          -> pure . Just $ FFI.argInt32 $ fromIntegral i
+  Int64V i          -> pure . Just $ FFI.argInt64 $ fromIntegral i
   WordV w           -> pure . Just $ FFI.argWord $ fromIntegral w
+  Word8V w          -> pure . Just $ FFI.argWord8 $ fromIntegral w
+  Word16V w         -> pure . Just $ FFI.argWord16 $ fromIntegral w
+  Word32V w         -> pure . Just $ FFI.argWord32 $ fromIntegral w
+  Word64V w         -> pure . Just $ FFI.argWord64 $ fromIntegral w
   FloatAtom f       -> pure . Just . FFI.argCFloat $ CFloat f
   DoubleAtom d      -> pure . Just . FFI.argCDouble $ CDouble d
   ByteArray bai -> do
@@ -120,9 +135,41 @@ evalForeignCall funPtr cArgs retType = case retType of
     result <- FFI.callFFI funPtr FFI.retInt cArgs
     pure [IntV $ fromIntegral result]
 
+  UnboxedTuple [Int8Rep] -> do
+    result <- FFI.callFFI funPtr FFI.retInt8 cArgs
+    pure [Int8V $ fromIntegral result]
+
+  UnboxedTuple [Int16Rep] -> do
+    result <- FFI.callFFI funPtr FFI.retInt16 cArgs
+    pure [Int16V $ fromIntegral result]
+
+  UnboxedTuple [Int32Rep] -> do
+    result <- FFI.callFFI funPtr FFI.retInt32 cArgs
+    pure [Int32V $ fromIntegral result]
+
+  UnboxedTuple [Int64Rep] -> do
+    result <- FFI.callFFI funPtr FFI.retInt64 cArgs
+    pure [Int64V $ fromIntegral result]
+
   UnboxedTuple [WordRep] -> do
     result <- FFI.callFFI funPtr FFI.retWord cArgs
     pure [WordV $ fromIntegral result]
+
+  UnboxedTuple [Word8Rep] -> do
+    result <- FFI.callFFI funPtr FFI.retWord8 cArgs
+    pure [Word8V $ fromIntegral result]
+
+  UnboxedTuple [Word16Rep] -> do
+    result <- FFI.callFFI funPtr FFI.retWord16 cArgs
+    pure [Word16V $ fromIntegral result]
+
+  UnboxedTuple [Word32Rep] -> do
+    result <- FFI.callFFI funPtr FFI.retWord32 cArgs
+    pure [Word32V $ fromIntegral result]
+
+  UnboxedTuple [Word64Rep] -> do
+    result <- FFI.callFFI funPtr FFI.retWord64 cArgs
+    pure [Word64V $ fromIntegral result]
 
   UnboxedTuple [AddrRep] -> do
     result <- FFI.callFFI funPtr (FFI.retPtr FFI.retWord8) cArgs
@@ -135,6 +182,8 @@ evalForeignCall funPtr cArgs retType = case retType of
   UnboxedTuple [DoubleRep] -> do
     CDouble result <- FFI.callFFI funPtr FFI.retCDouble cArgs
     pure [DoubleAtom result]
+
+  _ -> error $ "unsupported retType: " ++ show retType
 
 {-# NOINLINE evalFCallOp #-}
 evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
@@ -382,14 +431,14 @@ charToGetter c p = case c of
   'v' -> pure Void
   'f' -> FloatAtom <$> peek (castPtr p)
   'd' -> DoubleAtom <$> peek (castPtr p)
-  'L' -> IntV  . fromIntegral <$> peek (castPtr p :: Ptr Int64)
-  'l' -> WordV . fromIntegral <$> peek (castPtr p :: Ptr Word64)
-  'W' -> IntV  . fromIntegral <$> peek (castPtr p :: Ptr Int32)
-  'w' -> WordV . fromIntegral <$> peek (castPtr p :: Ptr Word32)
-  'S' -> IntV  . fromIntegral <$> peek (castPtr p :: Ptr Int16)
-  's' -> WordV . fromIntegral <$> peek (castPtr p :: Ptr Word16)
-  'B' -> IntV  . fromIntegral <$> peek (castPtr p :: Ptr Int8)
-  'b' -> WordV . fromIntegral <$> peek (castPtr p :: Ptr Word8)
+  'L' -> Int64V  . fromIntegral <$> peek (castPtr p :: Ptr Int64)
+  'l' -> Word64V . fromIntegral <$> peek (castPtr p :: Ptr Word64)
+  'W' -> Int32V  . fromIntegral <$> peek (castPtr p :: Ptr Int32)
+  'w' -> Word32V . fromIntegral <$> peek (castPtr p :: Ptr Word32)
+  'S' -> Int16V  . fromIntegral <$> peek (castPtr p :: Ptr Int16)
+  's' -> Word16V . fromIntegral <$> peek (castPtr p :: Ptr Word16)
+  'B' -> Int8V   . fromIntegral <$> peek (castPtr p :: Ptr Int8)
+  'b' -> Word8V  . fromIntegral <$> peek (castPtr p :: Ptr Word8)
   'p' -> PtrAtom RawPtr <$> peek (castPtr p)
   x   -> error $ "charToGetter: unknown type " ++ show x
 
@@ -399,14 +448,14 @@ charToSetter c p a = case (c, a) of
   ('v', HeapPtr{})    -> pure () -- WTF???
   ('f', FloatAtom  v) -> poke (castPtr p) v
   ('d', DoubleAtom v) -> poke (castPtr p) v
-  ('L', IntV  v)      -> poke (castPtr p :: Ptr Int64)  $ fromIntegral v
-  ('l', WordV v)      -> poke (castPtr p :: Ptr Word64) $ fromIntegral v
-  ('W', IntV  v)      -> poke (castPtr p :: Ptr Int32)  $ fromIntegral v
-  ('w', WordV v)      -> poke (castPtr p :: Ptr Word32) $ fromIntegral v
-  ('S', IntV  v)      -> poke (castPtr p :: Ptr Int16)  $ fromIntegral v
-  ('s', WordV v)      -> poke (castPtr p :: Ptr Word16) $ fromIntegral v
-  ('B', IntV  v)      -> poke (castPtr p :: Ptr Int8)   $ fromIntegral v
-  ('b', WordV v)      -> poke (castPtr p :: Ptr Word8)  $ fromIntegral v
+  ('L', Int64V  v)    -> poke (castPtr p :: Ptr Int64)  $ fromIntegral v
+  ('l', Word64V v)    -> poke (castPtr p :: Ptr Word64) $ fromIntegral v
+  ('W', Int32V  v)    -> poke (castPtr p :: Ptr Int32)  $ fromIntegral v
+  ('w', Word32V v)    -> poke (castPtr p :: Ptr Word32) $ fromIntegral v
+  ('S', Int16V  v)    -> poke (castPtr p :: Ptr Int16)  $ fromIntegral v
+  ('s', Word16V v)    -> poke (castPtr p :: Ptr Word16) $ fromIntegral v
+  ('B', Int8V  v)     -> poke (castPtr p :: Ptr Int8)   $ fromIntegral v
+  ('b', Word8V v)     -> poke (castPtr p :: Ptr Word8)  $ fromIntegral v
   ('p', PtrAtom RawPtr v)  -> poke (castPtr p) v
   x   -> error $ "charToSetter: unknown type " ++ show x
 
@@ -569,17 +618,17 @@ boxFFIAtom c a = case (c, a) of
 
   -- boxed Ints
   ('I', IntV _)       -> mkWiredInCon rtsIntCon     [a]
-  ('X', IntV _)       -> mkWiredInCon rtsInt8Con    [a]
-  ('Y', IntV _)       -> mkWiredInCon rtsInt16Con   [a]
-  ('Z', IntV _)       -> mkWiredInCon rtsInt32Con   [a]
-  ('W', IntV _)       -> mkWiredInCon rtsInt64Con   [a]
+  ('X', Int8V _)      -> mkWiredInCon rtsInt8Con    [a]
+  ('Y', Int16V _)     -> mkWiredInCon rtsInt16Con   [a]
+  ('Z', Int32V _)     -> mkWiredInCon rtsInt32Con   [a]
+  ('W', Int64V _)     -> mkWiredInCon rtsInt64Con   [a]
 
   -- boxed Words
   ('i', WordV _)       -> mkWiredInCon rtsWordCon    [a]
-  ('x', WordV _)       -> mkWiredInCon rtsWord8Con   [a]
-  ('y', WordV _)       -> mkWiredInCon rtsWord16Con  [a]
-  ('z', WordV _)       -> mkWiredInCon rtsWord32Con  [a]
-  ('w', WordV _)       -> mkWiredInCon rtsWord64Con  [a]
+  ('x', Word8V _)      -> mkWiredInCon rtsWord8Con   [a]
+  ('y', Word16V _)     -> mkWiredInCon rtsWord16Con  [a]
+  ('z', Word32V _)     -> mkWiredInCon rtsWord32Con  [a]
+  ('w', Word64V _)     -> mkWiredInCon rtsWord64Con  [a]
 
   ('p', PtrAtom RawPtr _)     -> mkWiredInCon rtsPtrCon     [a]
   ('*', PtrAtom RawPtr _)     -> mkWiredInCon rtsFunPtrCon  [a]
