@@ -44,6 +44,9 @@ library
     Stg.Interpreter.PrimOp.Exceptions
     Stg.Interpreter.PrimOp.Float
     Stg.Interpreter.PrimOp.GHCiBytecode
+    Stg.Interpreter.PrimOp.InfoTableOrigin
+    Stg.Interpreter.PrimOp.Int64
+    Stg.Interpreter.PrimOp.Int32
     Stg.Interpreter.PrimOp.Int16
     Stg.Interpreter.PrimOp.Int8
     Stg.Interpreter.PrimOp.Int
@@ -51,6 +54,7 @@ library
     Stg.Interpreter.PrimOp.MutVar
     Stg.Interpreter.PrimOp.MVar
     Stg.Interpreter.PrimOp.Narrowings
+    Stg.Interpreter.PrimOp.ObjectLifetime
     Stg.Interpreter.PrimOp.Parallelism
     Stg.Interpreter.PrimOp.Prefetch
     Stg.Interpreter.PrimOp.SmallArray
@@ -59,6 +63,8 @@ library
     Stg.Interpreter.PrimOp.TagToEnum
     Stg.Interpreter.PrimOp.Unsafe
     Stg.Interpreter.PrimOp.WeakPointer
+    Stg.Interpreter.PrimOp.Word64
+    Stg.Interpreter.PrimOp.Word32
     Stg.Interpreter.PrimOp.Word16
     Stg.Interpreter.PrimOp.Word8
     Stg.Interpreter.PrimOp.Word

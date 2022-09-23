@@ -63,9 +63,13 @@ import qualified Stg.Interpreter.PrimOp.Double        as PrimDouble
 import qualified Stg.Interpreter.PrimOp.Word          as PrimWord
 import qualified Stg.Interpreter.PrimOp.Word8         as PrimWord8
 import qualified Stg.Interpreter.PrimOp.Word16        as PrimWord16
+import qualified Stg.Interpreter.PrimOp.Word32        as PrimWord32
+import qualified Stg.Interpreter.PrimOp.Word64        as PrimWord64
 import qualified Stg.Interpreter.PrimOp.Int           as PrimInt
 import qualified Stg.Interpreter.PrimOp.Int8          as PrimInt8
 import qualified Stg.Interpreter.PrimOp.Int16         as PrimInt16
+import qualified Stg.Interpreter.PrimOp.Int32         as PrimInt32
+import qualified Stg.Interpreter.PrimOp.Int64         as PrimInt64
 import qualified Stg.Interpreter.PrimOp.MutVar        as PrimMutVar
 import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
 import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
@@ -75,6 +79,8 @@ import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
 import qualified Stg.Interpreter.PrimOp.TagToEnum     as PrimTagToEnum
 import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
 import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
+import qualified Stg.Interpreter.PrimOp.ObjectLifetime  as PrimObjectLifetime
+import qualified Stg.Interpreter.PrimOp.InfoTableOrigin as PrimInfoTableOrigin
 
 {-
   Q: what is the operational semantic of StgApp
@@ -112,8 +118,14 @@ evalLiteral = \case
   LitDouble d   -> pure . DoubleAtom $ realToFrac d
   LitNullAddr   -> pure $ PtrAtom RawPtr nullPtr
   LitNumber LitNumInt n     -> pure . IntAtom $ fromIntegral n
+  LitNumber LitNumInt8 n    -> pure . IntAtom $ fromIntegral n
+  LitNumber LitNumInt16 n   -> pure . IntAtom $ fromIntegral n
+  LitNumber LitNumInt32 n   -> pure . IntAtom $ fromIntegral n
   LitNumber LitNumInt64 n   -> pure . IntAtom $ fromIntegral n
   LitNumber LitNumWord n    -> pure . WordAtom $ fromIntegral n
+  LitNumber LitNumWord8 n   -> pure . WordAtom $ fromIntegral n
+  LitNumber LitNumWord16 n  -> pure . WordAtom $ fromIntegral n
+  LitNumber LitNumWord32 n  -> pure . WordAtom $ fromIntegral n
   LitNumber LitNumWord64 n  -> pure . WordAtom $ fromIntegral n
   l -> pure $ Literal l
 
@@ -418,6 +430,9 @@ evalStackContinuation result = \case
   -- HINT: dataToTag# has an eval call in the middle, that's why we need this continuation, it is the post-returning part of the op implementation
   DataToTagOp -> PrimTagToEnum.dataToTagOp result
 
+  KeepAlive{} -> do
+    pure result
+
   DebugFrame df -> evalDebugFrame result df
 
   x -> error $ "unsupported continuation: " ++ show x ++ ", result: " ++ show result
@@ -457,14 +472,14 @@ evalExpr localEnv = \case
 
   -- var (join id)
   StgApp i [] _t _
-    | JoinId 0 <- binderDetails i
+    | JoinId 0 _ <- binderDetails i
     -> do
       -- HINT: join id-s are always closures, needs eval
       -- NOTE: join id's type tells the closure return value representation
       (so, v) <- lookupEnvSO localEnv i
       builtinStgEval so v
 
-    | JoinId x <- binderDetails i
+    | JoinId x _ <- binderDetails i
     -> stgErrorM $ "join-id var arity error, expected 0, got: " ++ show x ++ " id: " ++ show i
 
   -- var (non join id)
@@ -491,7 +506,7 @@ evalExpr localEnv = \case
   --  Q: what does unlifted app mean? (i.e. no Ap node, but saturated calls to known functions only?)
   --  A: the join id type is for the return value representation and not for the id representation, so it can be unlifted.
   StgApp i l _t _
-    | JoinId _ <- binderDetails i
+    | JoinId _ _ <- binderDetails i
     -> do
       args <- mapM (evalArg localEnv) l
       (so, v) <- lookupEnvSO localEnv i
@@ -905,6 +920,8 @@ evalPrimOp =
   PrimExceptions.evalPrimOp $
   PrimFloat.evalPrimOp $
   PrimDouble.evalPrimOp $
+  PrimInt64.evalPrimOp $
+  PrimInt32.evalPrimOp $
   PrimInt16.evalPrimOp $
   PrimInt8.evalPrimOp $
   PrimInt.evalPrimOp $
@@ -914,11 +931,15 @@ evalPrimOp =
   PrimPrefetch.evalPrimOp $
   PrimStablePointer.evalPrimOp $
   PrimWeakPointer.evalPrimOp $
+  PrimWord64.evalPrimOp $
+  PrimWord32.evalPrimOp $
   PrimWord16.evalPrimOp $
   PrimWord8.evalPrimOp $
   PrimWord.evalPrimOp $
   PrimTagToEnum.evalPrimOp $
   PrimUnsafe.evalPrimOp $
   PrimMiscEtc.evalPrimOp $
+  PrimObjectLifetime.evalPrimOp $
+  PrimInfoTableOrigin.evalPrimOp $
   unsupported where
     unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args
