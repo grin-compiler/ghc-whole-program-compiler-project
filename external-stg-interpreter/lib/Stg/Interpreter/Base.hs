@@ -78,6 +78,7 @@ data PtrOrigin
   = CStringPtr    !ByteString       -- null terminated string
   | ByteArrayPtr  !ByteArrayIdx     -- raw ptr to the byte array
   | RawPtr                          -- raw ptr to a values with unknown origin (i.e. FFI)
+  | InfoTablePtr                    -- GHC Cmm STG machine's info table
   | StablePtr     !Int              -- stable pointer must have AddrRep
   | LabelPtr      !Name !LabelSpec  -- foreign symbol/label name + label sepcification (i.e. data or function)
   deriving (Show, Eq, Ord)
@@ -156,6 +157,7 @@ data StackContinuation
   | RestoreExMask !Bool !Bool             -- saved: block async exceptions, interruptible
   | RunScheduler  !ScheduleReason
   | DataToTagOp
+  | KeepAlive     !Atom
   | DebugFrame    !DebugFrame             -- for debug purposes, it does not required for STG evaluation
   deriving (Show, Eq, Ord)
 
