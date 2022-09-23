@@ -23,6 +23,7 @@ updateArrayArrIdx m v = do
     ArrayMutArrIdx n -> s { ssMutableArrayArrays = IntMap.insert n v ssMutableArrayArrays }
     ArrayArrIdx    n -> s { ssArrayArrays        = IntMap.insert n v ssArrayArrays        }
 
+-- HINT: the whole 'ArrayArray' is OBSOLETE from GHC 9.4
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 

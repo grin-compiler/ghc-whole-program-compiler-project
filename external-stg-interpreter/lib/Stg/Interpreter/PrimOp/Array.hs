@@ -32,10 +32,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
     modify' $ \s -> s {ssMutableArrays = IntMap.insert next v mutableArrays, ssNextMutableArray = succ next}
     pure [MutableArray $ MutArrIdx next]
 
-  -- sameMutableArray# :: MutableArray# s a -> MutableArray# s a -> Int#
-  ( "sameMutableArray#", [MutableArray a, MutableArray b]) -> do
-    pure [IntV $ if a == b then 1 else 0]
-
   -- readArray# :: MutableArray# s a -> Int# -> State# s -> (# State# s, a #)
   ( "readArray#", [MutableArray a, IntV i, _s]) -> do
     v <- lookupArrIdx a
@@ -139,5 +135,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
         pure [IntV 0, new]
       else do
         pure [IntV 1, old]
+
+  -- OBSOLETE from GHC 9.4
+  -- sameMutableArray# :: MutableArray# s a -> MutableArray# s a -> Int#
+  ( "sameMutableArray#", [MutableArray a, MutableArray b]) -> do
+    pure [IntV $ if a == b then 1 else 0]
 
   _ -> fallback op args t tc

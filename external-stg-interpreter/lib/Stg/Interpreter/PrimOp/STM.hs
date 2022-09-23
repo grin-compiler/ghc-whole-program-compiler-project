@@ -23,6 +23,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- readTVar# :: TVar# s a -> State# s -> (# State# s, a #)
   -- readTVarIO# :: TVar# s a -> State# s -> (# State# s, a #)
   -- writeTVar# :: TVar# s a -> a -> State# s -> State# s
+
+  -- OBSOLETE from GHC 9.4
   -- sameTVar# :: TVar# s a -> TVar# s a -> Int#
 
   _ -> fallback op args t tc

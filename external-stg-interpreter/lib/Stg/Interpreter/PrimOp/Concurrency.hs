@@ -14,7 +14,7 @@ pattern IntV i = IntAtom i
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
-  -- fork# :: a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  -- fork# :: (State# RealWorld -> (# State# RealWorld, t0 #)) -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
   ( "fork#", [ioAction, _s]) -> do
     currentTS <- getCurrentThreadState
 
@@ -35,7 +35,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
     pure [ThreadId newTId]
 
-  -- forkOn# :: Int# -> a -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
+  -- forkOn# :: Int# -> (State# RealWorld -> (# State# RealWorld, t0 #)) -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
   ( "forkOn#", [IntV capabilityNo, ioAction, _s]) -> do
     currentTS <- getCurrentThreadState
 

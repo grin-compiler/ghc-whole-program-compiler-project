@@ -5,6 +5,7 @@ import Control.Monad.State
 import Data.Char
 import Data.Word
 import Data.Int
+import Data.Bits
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BS
@@ -16,8 +17,15 @@ import Stg.Interpreter.Base
 
 pattern CharV c = Literal (LitChar c)
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -110,53 +118,53 @@ evalPrimOp fallback op args t tc = case (op, args) of
       v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
       pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr v) v]
 
-  -- indexInt8OffAddr# :: Addr# -> Int# -> Int#
+  -- indexInt8OffAddr# :: Addr# -> Int# -> Int8#
   ( "indexInt8OffAddr#", [PtrAtom _ p, IntV index]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int8) index
-      pure [IntV $ fromIntegral v]
+      pure [Int8V $ fromIntegral v]
 
-  -- indexInt16OffAddr# :: Addr# -> Int# -> Int#
+  -- indexInt16OffAddr# :: Addr# -> Int# -> Int16#
   ( "indexInt16OffAddr#", [PtrAtom _ p, IntV index]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int16) index
-      pure [IntV $ fromIntegral v]
+      pure [Int16V $ fromIntegral v]
 
-  -- indexInt32OffAddr# :: Addr# -> Int# -> INT32
+  -- indexInt32OffAddr# :: Addr# -> Int# -> Int32#
   ( "indexInt32OffAddr#", [PtrAtom _ p, IntV index]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int32) index
-      pure [IntV $ fromIntegral v]
+      pure [Int32V $ fromIntegral v]
 
-  -- indexInt64OffAddr# :: Addr# -> Int# -> INT64
+  -- indexInt64OffAddr# :: Addr# -> Int# -> Int64#
   ( "indexInt64OffAddr#", [PtrAtom _ p, IntV index]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int64) index
-      pure [IntV $ fromIntegral v]
+      pure [Int64V $ fromIntegral v]
 
-  -- indexWord8OffAddr# :: Addr# -> Int# -> Word#
+  -- indexWord8OffAddr# :: Addr# -> Int# -> Word8#
   ( "indexWord8OffAddr#", [PtrAtom _ p, IntV index]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word8) index
-      pure [WordV $ fromIntegral v]
+      pure [Word8V $ fromIntegral v]
 
-  -- indexWord16OffAddr# :: Addr# -> Int# -> Word#
+  -- indexWord16OffAddr# :: Addr# -> Int# -> Word16#
   ( "indexWord16OffAddr#", [PtrAtom _ p, IntV index]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word16) index
-      pure [WordV $ fromIntegral v]
+      pure [Word16V $ fromIntegral v]
 
-  -- indexWord32OffAddr# :: Addr# -> Int# -> WORD32
+  -- indexWord32OffAddr# :: Addr# -> Int# -> Word32#
   ( "indexWord32OffAddr#", [PtrAtom _ p, IntV index]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word32) index
-      pure [WordV $ fromIntegral v]
+      pure [Word32V $ fromIntegral v]
 
-  -- indexWord64OffAddr# :: Addr# -> Int# -> WORD64
+  -- indexWord64OffAddr# :: Addr# -> Int# -> Word64#
   ( "indexWord64OffAddr#", [PtrAtom _ p, IntV index]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word64) index
-      pure [WordV $ fromIntegral v]
+      pure [Word64V $ fromIntegral v]
 
   -- readCharOffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Char# #)
   ( "readCharOffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
@@ -208,53 +216,53 @@ evalPrimOp fallback op args t tc = case (op, args) of
       v <- peekElemOff (castPtr p :: Ptr (Ptr Word8)) index
       pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr v) v]
 
-  -- readInt8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
+  -- readInt8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int8# #)
   ( "readInt8OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int8) index
-      pure [IntV $ fromIntegral v]
+      pure [Int8V $ fromIntegral v]
 
-  -- readInt16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int# #)
+  -- readInt16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int16# #)
   ( "readInt16OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int16) index
-      pure [IntV $ fromIntegral v]
+      pure [Int16V $ fromIntegral v]
 
-  -- readInt32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, INT32 #)
+  -- readInt32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int32# #)
   ( "readInt32OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int32) index
-      pure [IntV $ fromIntegral v]
+      pure [Int32V $ fromIntegral v]
 
-  -- readInt64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, INT64 #)
+  -- readInt64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Int64# #)
   ( "readInt64OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Int64) index
-      pure [IntV $ fromIntegral v]
+      pure [Int64V $ fromIntegral v]
 
-  -- readWord8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord8OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word8# #)
   ( "readWord8OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word8) index
-      pure [WordV $ fromIntegral v]
+      pure [Word8V $ fromIntegral v]
 
-  -- readWord16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord16OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word16# #)
   ( "readWord16OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word16) index
-      pure [WordV $ fromIntegral v]
+      pure [Word16V $ fromIntegral v]
 
-  -- readWord32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, WORD32 #)
+  -- readWord32OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word32# #)
   ( "readWord32OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word32) index
-      pure [WordV $ fromIntegral v]
+      pure [Word32V $ fromIntegral v]
 
-  -- readWord64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, WORD64 #)
+  -- readWord64OffAddr# :: Addr# -> Int# -> State# s -> (# State# s, Word64# #)
   ( "readWord64OffAddr#", [PtrAtom _ p, IntV index, _s]) -> do
     liftIO $ do
       v <- peekElemOff (castPtr p :: Ptr Word64) index
-      pure [WordV $ fromIntegral v]
+      pure [Word64V $ fromIntegral v]
 
   -- writeCharOffAddr# :: Addr# -> Int# -> Char# -> State# s -> State# s
   ( "writeCharOffAddr#", [PtrAtom _ p, IntV index, CharV value, _s]) -> do
@@ -306,50 +314,50 @@ evalPrimOp fallback op args t tc = case (op, args) of
       pokeElemOff (castPtr p :: Ptr (Ptr Word8)) index value
     pure []
 
-  -- writeInt8OffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
-  ( "writeInt8OffAddr#", [PtrAtom _ p, IntV index, IntV value, _s]) -> do
+  -- writeInt8OffAddr# :: Addr# -> Int# -> Int8# -> State# s -> State# s
+  ( "writeInt8OffAddr#", [PtrAtom _ p, IntV index, Int8V value, _s]) -> do
     liftIO $ do
       pokeElemOff (castPtr p :: Ptr Int8) index (fromIntegral value)
     pure []
 
-  -- writeInt16OffAddr# :: Addr# -> Int# -> Int# -> State# s -> State# s
-  ( "writeInt16OffAddr#", [PtrAtom _ p, IntV index, IntV value, _s]) -> do
+  -- writeInt16OffAddr# :: Addr# -> Int# -> Int16# -> State# s -> State# s
+  ( "writeInt16OffAddr#", [PtrAtom _ p, IntV index, Int16V value, _s]) -> do
     liftIO $ do
       pokeElemOff (castPtr p :: Ptr Int16) index (fromIntegral value)
     pure []
 
-  -- writeInt32OffAddr# :: Addr# -> Int# -> INT32 -> State# s -> State# s
-  ( "writeInt32OffAddr#", [PtrAtom _ p, IntV index, IntV value, _s]) -> do
+  -- writeInt32OffAddr# :: Addr# -> Int# -> Int32# -> State# s -> State# s
+  ( "writeInt32OffAddr#", [PtrAtom _ p, IntV index, Int32V value, _s]) -> do
     liftIO $ do
       pokeElemOff (castPtr p :: Ptr Int32) index (fromIntegral value)
     pure []
 
-  -- writeInt64OffAddr# :: Addr# -> Int# -> INT64 -> State# s -> State# s
-  ( "writeInt64OffAddr#", [PtrAtom _ p, IntV index, IntV value, _s]) -> do
+  -- writeInt64OffAddr# :: Addr# -> Int# -> Int64# -> State# s -> State# s
+  ( "writeInt64OffAddr#", [PtrAtom _ p, IntV index, Int64V value, _s]) -> do
     liftIO $ do
       pokeElemOff (castPtr p :: Ptr Int64) index (fromIntegral value)
     pure []
 
-  -- writeWord8OffAddr# :: Addr# -> Int# -> Word# -> State# s -> State# s
-  ( "writeWord8OffAddr#", [PtrAtom _ p, IntV index, WordV value, _s]) -> do
+  -- writeWord8OffAddr# :: Addr# -> Int# -> Word8# -> State# s -> State# s
+  ( "writeWord8OffAddr#", [PtrAtom _ p, IntV index, Word8V value, _s]) -> do
     liftIO $ do
       pokeElemOff (castPtr p :: Ptr Word8) index (fromIntegral value)
     pure []
 
-  -- writeWord16OffAddr# :: Addr# -> Int# -> Word# -> State# s -> State# s
-  ( "writeWord16OffAddr#", [PtrAtom _ p, IntV index, WordV value, _s]) -> do
+  -- writeWord16OffAddr# :: Addr# -> Int# -> Word16# -> State# s -> State# s
+  ( "writeWord16OffAddr#", [PtrAtom _ p, IntV index, Word16V value, _s]) -> do
     liftIO $ do
       pokeElemOff (castPtr p :: Ptr Word16) index (fromIntegral value)
     pure []
 
-  -- writeWord32OffAddr# :: Addr# -> Int# -> WORD32 -> State# s -> State# s
-  ( "writeWord32OffAddr#", [PtrAtom _ p, IntV index, WordV value, _s]) -> do
+  -- writeWord32OffAddr# :: Addr# -> Int# -> Word32# -> State# s -> State# s
+  ( "writeWord32OffAddr#", [PtrAtom _ p, IntV index, Word32V value, _s]) -> do
     liftIO $ do
       pokeElemOff (castPtr p :: Ptr Word32) index (fromIntegral value)
     pure []
 
-  -- writeWord64OffAddr# :: Addr# -> Int# -> WORD64 -> State# s -> State# s
-  ( "writeWord64OffAddr#", [PtrAtom _ p, IntV index, WordV value, _s]) -> do
+  -- writeWord64OffAddr# :: Addr# -> Int# -> Word64# -> State# s -> State# s
+  ( "writeWord64OffAddr#", [PtrAtom _ p, IntV index, Word64V value, _s]) -> do
     liftIO $ do
       pokeElemOff (castPtr p :: Ptr Word64) index (fromIntegral value)
     pure []
@@ -383,5 +391,99 @@ evalPrimOp fallback op args t tc = case (op, args) of
       when (oldValue == expected) $ do
         poke (castPtr p :: Ptr Word) (fromIntegral value)
       pure [WordV oldValue]
+
+  -- atomicCasWord8Addr# :: Addr# -> Word8# -> Word8# -> State# t0 -> (# State# t0, Word8# #)
+  ( "atomicCasWord8Addr#", [PtrAtom _ p, Word8V expected, Word8V value, _s]) -> do
+    liftIO $ do
+      oldValue <- fromIntegral <$> peek (castPtr p :: Ptr Word8)
+      when (oldValue == expected) $ do
+        poke (castPtr p :: Ptr Word8) (fromIntegral value)
+      pure [Word8V oldValue]
+
+  -- atomicCasWord16Addr# :: Addr# -> Word16# -> Word16# -> State# t0 -> (# State# t0, Word16# #)
+  ( "atomicCasWord16Addr#", [PtrAtom _ p, Word16V expected, Word16V value, _s]) -> do
+    liftIO $ do
+      oldValue <- fromIntegral <$> peek (castPtr p :: Ptr Word16)
+      when (oldValue == expected) $ do
+        poke (castPtr p :: Ptr Word16) (fromIntegral value)
+      pure [Word16V oldValue]
+
+  -- atomicCasWord32Addr# :: Addr# -> Word32# -> Word32# -> State# t0 -> (# State# t0, Word32# #)
+  ( "atomicCasWord32Addr#", [PtrAtom _ p, Word32V expected, Word32V value, _s]) -> do
+    liftIO $ do
+      oldValue <- fromIntegral <$> peek (castPtr p :: Ptr Word32)
+      when (oldValue == expected) $ do
+        poke (castPtr p :: Ptr Word32) (fromIntegral value)
+      pure [Word32V oldValue]
+
+  -- atomicCasWord64Addr# :: Addr# -> Word64# -> Word64# -> State# t0 -> (# State# t0, Word64# #)
+  ( "atomicCasWord64Addr#", [PtrAtom _ p, Word64V expected, Word64V value, _s]) -> do
+    liftIO $ do
+      oldValue <- fromIntegral <$> peek (castPtr p :: Ptr Word64)
+      when (oldValue == expected) $ do
+        poke (castPtr p :: Ptr Word64) (fromIntegral value)
+      pure [Word64V oldValue]
+
+  -- fetchAddWordAddr# :: Addr# -> Word# -> State# t0 -> (# State# t0, Word# #)
+  ( "fetchAddWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+    -- NOTE: CPU atomic
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr Word)
+      poke (castPtr p :: Ptr Word) (oldValue + value)
+      pure [WordV oldValue]
+
+  -- fetchSubWordAddr# :: Addr# -> Word# -> State# t0 -> (# State# t0, Word# #)
+  ( "fetchSubWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+    -- NOTE: CPU atomic
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr Word)
+      poke (castPtr p :: Ptr Word) (oldValue - value)
+      pure [WordV oldValue]
+
+  -- fetchAndWordAddr# :: Addr# -> Word# -> State# t0 -> (# State# t0, Word# #)
+  ( "fetchAndWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+    -- NOTE: CPU atomic
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr Word)
+      poke (castPtr p :: Ptr Word) (oldValue .&. value)
+      pure [WordV oldValue]
+
+  -- fetchNandWordAddr# :: Addr# -> Word# -> State# t0 -> (# State# t0, Word# #)
+  ( "fetchNandWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+    -- NOTE: CPU atomic
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr Word)
+      poke (castPtr p :: Ptr Word) (complement $ oldValue .&. value)
+      pure [WordV oldValue]
+
+  -- fetchOrWordAddr# :: Addr# -> Word# -> State# t0 -> (# State# t0, Word# #)
+  ( "fetchOrWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+    -- NOTE: CPU atomic
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr Word)
+      poke (castPtr p :: Ptr Word) (oldValue .|. value)
+      pure [WordV oldValue]
+
+  -- fetchXorWordAddr# :: Addr# -> Word# -> State# t0 -> (# State# t0, Word# #)
+  ( "fetchXorWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+    -- NOTE: CPU atomic
+    liftIO $ do
+      oldValue <- peek (castPtr p :: Ptr Word)
+      poke (castPtr p :: Ptr Word) (oldValue `xor` value)
+      pure [WordV oldValue]
+
+  -- atomicReadWordAddr# :: Addr# -> State# t0 -> (# State# t0, Word# #)
+  ( "atomicReadWordAddr#", [PtrAtom _ p, _s]) -> do
+    -- NOTE: CPU atomic. Implies a full memory barrier.
+    liftIO $ do
+      value <- peek (castPtr p :: Ptr Word)
+      pure [WordV value]
+
+  -- atomicWriteWordAddr# :: Addr# -> Word# -> State# t0 -> State# t0
+  ( "atomicWriteWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
+    -- NOTE: CPU atomic. Implies a full memory barrier.
+    liftIO $ do
+      poke (castPtr p :: Ptr Word) value
+      pure []
 
   _ -> fallback op args t tc

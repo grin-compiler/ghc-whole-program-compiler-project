@@ -13,7 +13,6 @@ import Stg.Syntax
 import Stg.Interpreter.Base
 
 type PrimInt  = Int64
-type PrimWord = Word64
 
 pattern CharV c   = Literal (LitChar c)
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
@@ -138,12 +137,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "word2Double#",        [WordV a]) -> pure [DoubleV $ fromIntegral a]
 
   -- uncheckedIShiftL# :: Int# -> Int# -> Int#
-  ( "uncheckedIShiftL#",   [IntV a, IntV b]) -> pure [IntV $ unsafeShiftL a (fromIntegral b)]
+  ( "uncheckedIShiftL#",   [IntV a, IntV b]) -> pure [IntV $ unsafeShiftL a b]
 
   -- uncheckedIShiftRA# :: Int# -> Int# -> Int#
-  ( "uncheckedIShiftRA#",  [IntV a, IntV b]) -> pure [IntV $ unsafeShiftR a (fromIntegral b)] -- Shift right arithmetic
+  ( "uncheckedIShiftRA#",  [IntV a, IntV b]) -> pure [IntV $ unsafeShiftR a b] -- Shift right arithmetic
 
   -- uncheckedIShiftRL# :: Int# -> Int# -> Int#
-  ( "uncheckedIShiftRL#",  [IntV a, IntV b]) -> pure [IntV $ fromIntegral $ unsafeShiftR (fromIntegral a :: PrimWord) (fromIntegral b)] -- Shift right logical
+  ( "uncheckedIShiftRL#",  [IntV a, IntV b]) -> pure [IntV $ fromIntegral $ unsafeShiftR (fromIntegral a :: Word64) b] -- Shift right logical
 
   _ -> fallback op args t tc

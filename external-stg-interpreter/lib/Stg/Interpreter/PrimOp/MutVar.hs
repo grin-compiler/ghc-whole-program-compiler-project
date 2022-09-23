@@ -32,10 +32,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
     modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m a ssMutVars}
     pure []
 
-  -- sameMutVar# :: MutVar# s a -> MutVar# s a -> Int#
-  ( "sameMutVar#", [MutVar a, MutVar b]) -> do
-    pure [IntV $ if a == b then 1 else 0]
-
   -- atomicModifyMutVar2# :: MutVar# s a -> (a -> c) -> State# s -> (# State# s, a, c #)
   ( "atomicModifyMutVar2#", [MutVar m, fun, _s]) -> do
     Rts{..} <- gets ssRtsSupport
@@ -78,5 +74,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
         pure [IntV 0, new]
       else do
         pure [IntV 1, old]
+
+  -- OBSOLETE from GHC 9.4
+  -- sameMutVar# :: MutVar# s a -> MutVar# s a -> Int#
+  ( "sameMutVar#", [MutVar a, MutVar b]) -> do
+    pure [IntV $ if a == b then 1 else 0]
 
   _ -> fallback op args t tc

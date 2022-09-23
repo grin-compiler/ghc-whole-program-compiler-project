@@ -34,10 +34,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
     modify' $ \s@StgState{..} -> s {ssSmallMutableArrays = IntMap.insert next v ssSmallMutableArrays, ssNextSmallMutableArray = succ next}
     pure [SmallMutableArray $ SmallMutArrIdx next]
 
-  -- sameSmallMutableArray# :: SmallMutableArray# s a -> SmallMutableArray# s a -> Int#
-  ( "sameMutableArray#", [SmallMutableArray a, SmallMutableArray b]) -> do
-    pure [IntV $ if a == b then 1 else 0]
-
   -- shrinkSmallMutableArray# :: SmallMutableArray# s a -> Int# -> State# s -> State# s
   ( "shrinkSmallMutableArray#",[SmallMutableArray src,IntV n,_s]) -> do
     v <- lookupSmallArrIdx src
@@ -153,5 +149,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
         pure [IntV 0, new]
       else do
         pure [IntV 1, old]
+
+  -- OBSOLETE from GHC 9.4
+  -- sameSmallMutableArray# :: SmallMutableArray# s a -> SmallMutableArray# s a -> Int#
+  ( "sameSmallMutableArray#", [SmallMutableArray a, SmallMutableArray b]) -> do
+    pure [IntV $ if a == b then 1 else 0]
 
   _ -> fallback op args t tc

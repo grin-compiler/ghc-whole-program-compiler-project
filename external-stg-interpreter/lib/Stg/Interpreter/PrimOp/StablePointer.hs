@@ -47,12 +47,13 @@ evalPrimOp fallback op args t tc = case (op, args) of
         modify' $ \s -> s {ssStableNameMap = Map.insert a snId snMap, ssNextStableName = succ snId}
         pure [StableName snId]
 
-  -- eqStableName# :: StableName# a -> StableName# b -> Int#
-  ( "eqStableName#", [StableName a, StableName b]) -> do
-    pure [IntV $ if a == b then 1 else 0]
-
   -- stableNameToInt# :: StableName# a -> Int#
   ( "stableNameToInt#", [StableName snId]) -> do
     pure [IntV snId]
+
+  -- OBSOLETE from GHC 9.4
+  -- eqStableName# :: StableName# a -> StableName# b -> Int#
+  ( "eqStableName#", [StableName a, StableName b]) -> do
+    pure [IntV $ if a == b then 1 else 0]
 
   _ -> fallback op args t tc

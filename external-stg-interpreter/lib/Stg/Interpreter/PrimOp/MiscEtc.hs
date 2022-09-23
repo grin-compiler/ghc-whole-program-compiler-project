@@ -36,7 +36,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     modify' $ \s@StgState{..} -> s {ssTraceMarkers = (msg, addrState) : ssTraceMarkers}
     pure []
 
-  -- setThreadAllocationCounter# :: INT64 -> State# RealWorld -> State# RealWorld
+  -- setThreadAllocationCounter# :: Int64# -> State# RealWorld -> State# RealWorld
 
   _ -> fallback op args t tc
 

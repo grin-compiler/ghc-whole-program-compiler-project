@@ -196,11 +196,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
       Nothing -> pure [IntV 0, LiftedUndefined]
       Just a  -> pure [IntV 1, a]
 
-  -- sameMVar# :: MVar# s a -> MVar# s a -> Int#
-  ( "sameMVar#", [MVar a, MVar b]) -> do
-    reportOp op args
-    pure [IntV $ if a == b then 1 else 0]
-
   -- isEmptyMVar# :: MVar# s a -> State# s -> (# State# s, Int# #)
   ( "isEmptyMVar#", [MVar m, _s]) -> do
     reportOp op args
@@ -209,5 +204,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
     case mvdValue of
       Nothing -> pure [IntV 1]
       Just _  -> pure [IntV 0]
+
+  -- OBSOLETE from GHC 9.4
+  -- sameMVar# :: MVar# s a -> MVar# s a -> Int#
+  ( "sameMVar#", [MVar a, MVar b]) -> do
+    reportOp op args
+    pure [IntV $ if a == b then 1 else 0]
 
   _ -> fallback op args t tc

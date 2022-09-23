@@ -17,8 +17,15 @@ import Stg.Interpreter.Base
 
 pattern CharV c   = Literal (LitChar c)
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 lookupByteArray :: Int -> M BA.ByteArray
 lookupByteArray baId = do
@@ -116,9 +123,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ptr <- getByteArrayContentPtr baId
     pure [PtrAtom (ByteArrayPtr baIdx) ptr]
 
-  -- sameMutableByteArray# :: MutableByteArray# s -> MutableByteArray# s -> Int#
-  ( "sameMutableByteArray#", [MutableByteArray baIdx1, MutableByteArray baIdx2]) -> do
-    pure [IntV $ if baIdx1 == baIdx2 then 1 else 0]
+  -- mutableByteArrayContents# :: MutableByteArray# t0 -> Addr#
+  ( "mutableByteArrayContents#", [MutableByteArray baIdx@ByteArrayIdx{..}]) -> do
+    ptr <- getByteArrayContentPtr baId
+    pure [PtrAtom (ByteArrayPtr baIdx) ptr]
 
   -- shrinkMutableByteArray# :: MutableByteArray# s -> Int# -> State# s -> State# s
   ( "shrinkMutableByteArray#", [MutableByteArray ByteArrayIdx{..}, IntV size, _s]) -> do
@@ -225,53 +233,53 @@ evalPrimOp fallback op args t tc = case (op, args) of
     value <- liftIO (peekElemOff (castPtr p) index :: IO (Ptr Word8))
     pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
-  -- indexInt8Array# :: ByteArray# -> Int# -> Int#
+  -- indexInt8Array# :: ByteArray# -> Int# -> Int8#
   ( "indexInt8Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Int8)
-    pure [IntV $ fromIntegral value]
+    pure [Int8V $ fromIntegral value]
 
-  -- indexInt16Array# :: ByteArray# -> Int# -> Int#
+  -- indexInt16Array# :: ByteArray# -> Int# -> Int16#
   ( "indexInt16Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Int16)
-    pure [IntV $ fromIntegral value]
+    pure [Int16V $ fromIntegral value]
 
-  -- indexInt32Array# :: ByteArray# -> Int# -> INT32
+  -- indexInt32Array# :: ByteArray# -> Int# -> Int32#
   ( "indexInt32Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Int32)
-    pure [IntV $ fromIntegral value]
+    pure [Int32V $ fromIntegral value]
 
-  -- indexInt64Array# :: ByteArray# -> Int# -> INT64
+  -- indexInt64Array# :: ByteArray# -> Int# -> Int64#
   ( "indexInt64Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Int64)
-    pure [IntV $ fromIntegral value]
+    pure [Int64V $ fromIntegral value]
 
-  -- indexWord8Array# :: ByteArray# -> Int# -> Word#
+  -- indexWord8Array# :: ByteArray# -> Int# -> Word8#
   ( "indexWord8Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word8)
-    pure [WordV $ fromIntegral value]
+    pure [Word8V $ fromIntegral value]
 
-  -- indexWord16Array# :: ByteArray# -> Int# -> Word#
+  -- indexWord16Array# :: ByteArray# -> Int# -> Word16#
   ( "indexWord16Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word16)
-    pure [WordV $ fromIntegral value]
+    pure [Word16V $ fromIntegral value]
 
-  -- indexWord32Array# :: ByteArray# -> Int# -> WORD32
+  -- indexWord32Array# :: ByteArray# -> Int# -> Word32#
   ( "indexWord32Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word32)
-    pure [WordV $ fromIntegral value]
+    pure [Word32V $ fromIntegral value]
 
-  -- indexWord64Array# :: ByteArray# -> Int# -> WORD64
+  -- indexWord64Array# :: ByteArray# -> Int# -> Word64#
   ( "indexWord64Array#", [ByteArray ByteArrayIdx{..}, IntV index]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word64)
-    pure [WordV $ fromIntegral value]
+    pure [Word64V $ fromIntegral value]
 
   -- indexWord8ArrayAsChar# :: ByteArray# -> Int# -> Char#
   ( "indexWord8ArrayAsChar#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
@@ -311,23 +319,23 @@ evalPrimOp fallback op args t tc = case (op, args) of
     value <- liftIO (peekByteOff p offset :: IO (Ptr Word8))
     pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
-  -- indexWord8ArrayAsInt16# :: ByteArray# -> Int# -> Int#
+  -- indexWord8ArrayAsInt16# :: ByteArray# -> Int# -> Int16#
   ( "indexWord8ArrayAsInt16#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int16)
-    pure [IntV $ fromIntegral value]
+    pure [Int16V $ fromIntegral value]
 
-  -- indexWord8ArrayAsInt32# :: ByteArray# -> Int# -> INT32
+  -- indexWord8ArrayAsInt32# :: ByteArray# -> Int# -> Int32#
   ( "indexWord8ArrayAsInt32#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int32)
-    pure [IntV $ fromIntegral value]
+    pure [Int32V $ fromIntegral value]
 
-  -- indexWord8ArrayAsInt64# :: ByteArray# -> Int# -> INT64
+  -- indexWord8ArrayAsInt64# :: ByteArray# -> Int# -> Int64#
   ( "indexWord8ArrayAsInt64#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int64)
-    pure [IntV $ fromIntegral value]
+    pure [Int64V $ fromIntegral value]
 
   -- indexWord8ArrayAsInt# :: ByteArray# -> Int# -> Int#
   ( "indexWord8ArrayAsInt#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
@@ -335,23 +343,23 @@ evalPrimOp fallback op args t tc = case (op, args) of
     value <- liftIO (peekByteOff p offset :: IO Int)
     pure [IntV value]
 
-  -- indexWord8ArrayAsWord16# :: ByteArray# -> Int# -> Word#
+  -- indexWord8ArrayAsWord16# :: ByteArray# -> Int# -> Word16#
   ( "indexWord8ArrayAsWord16#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word16)
-    pure [WordV $ fromIntegral value]
+    pure [Word16V $ fromIntegral value]
 
-  -- indexWord8ArrayAsWord32# :: ByteArray# -> Int# -> WORD32
+  -- indexWord8ArrayAsWord32# :: ByteArray# -> Int# -> Word32#
   ( "indexWord8ArrayAsWord32#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word32)
-    pure [WordV $ fromIntegral value]
+    pure [Word32V $ fromIntegral value]
 
-  -- indexWord8ArrayAsWord64# :: ByteArray# -> Int# -> WORD64
+  -- indexWord8ArrayAsWord64# :: ByteArray# -> Int# -> Word64#
   ( "indexWord8ArrayAsWord64#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word64)
-    pure [WordV $ fromIntegral value]
+    pure [Word64V $ fromIntegral value]
 
   -- indexWord8ArrayAsWord# :: ByteArray# -> Int# -> Word#
   ( "indexWord8ArrayAsWord#", [ByteArray ByteArrayIdx{..}, IntV offset]) -> do
@@ -413,53 +421,53 @@ evalPrimOp fallback op args t tc = case (op, args) of
     value <- liftIO (peekElemOff (castPtr p) index :: IO (Ptr Word8))
     pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
-  -- readInt8Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- readInt8Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int8# #)
   ( "readInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Int8)
-    pure [IntV $ fromIntegral value]
+    pure [Int8V $ fromIntegral value]
 
-  -- readInt16Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- readInt16Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int16# #)
   ( "readInt16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Int16)
-    pure [IntV $ fromIntegral value]
+    pure [Int16V $ fromIntegral value]
 
-  -- readInt32Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT32 #)
+  -- readInt32Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int32# #)
   ( "readInt32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Int32)
-    pure [IntV $ fromIntegral value]
+    pure [Int32V $ fromIntegral value]
 
-  -- readInt64Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT64 #)
+  -- readInt64Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int64# #)
   ( "readInt64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Int64)
-    pure [IntV $ fromIntegral value]
+    pure [Int64V $ fromIntegral value]
 
-  -- readWord8Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord8Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word8# #)
   ( "readWord8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word8)
-    pure [WordV $ fromIntegral value]
+    pure [Word8V $ fromIntegral value]
 
-  -- readWord16Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord16Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word16# #)
   ( "readWord16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word16)
-    pure [WordV $ fromIntegral value]
+    pure [Word16V $ fromIntegral value]
 
-  -- readWord32Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD32 #)
+  -- readWord32Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word32# #)
   ( "readWord32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word32)
-    pure [WordV $ fromIntegral value]
+    pure [Word32V $ fromIntegral value]
 
-  -- readWord64Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD64 #)
+  -- readWord64Array# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word64# #)
   ( "readWord64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekElemOff (castPtr p) index :: IO Word64)
-    pure [WordV $ fromIntegral value]
+    pure [Word64V $ fromIntegral value]
 
   -- readWord8ArrayAsChar# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
   ( "readWord8ArrayAsChar#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
@@ -499,23 +507,23 @@ evalPrimOp fallback op args t tc = case (op, args) of
     value <- liftIO (peekByteOff p offset :: IO (Ptr Word8))
     pure [PtrAtom (StablePtr . fromIntegral $ ptrToIntPtr value) value]
 
-  -- readWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+  -- readWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int16# #)
   ( "readWord8ArrayAsInt16#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int16)
-    pure [IntV $ fromIntegral value]
+    pure [Int16V $ fromIntegral value]
 
-  -- readWord8ArrayAsInt32# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT32 #)
+  -- readWord8ArrayAsInt32# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int32# #)
   ( "readWord8ArrayAsInt32#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int32)
-    pure [IntV $ fromIntegral value]
+    pure [Int32V $ fromIntegral value]
 
-  -- readWord8ArrayAsInt64# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, INT64 #)
+  -- readWord8ArrayAsInt64# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int64# #)
   ( "readWord8ArrayAsInt64#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Int64)
-    pure [IntV $ fromIntegral value]
+    pure [Int64V $ fromIntegral value]
 
   -- readWord8ArrayAsInt# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
   ( "readWord8ArrayAsInt#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
@@ -523,23 +531,23 @@ evalPrimOp fallback op args t tc = case (op, args) of
     value <- liftIO (peekByteOff p offset :: IO Int)
     pure [IntV value]
 
-  -- readWord8ArrayAsWord16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
+  -- readWord8ArrayAsWord16# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word16# #)
   ( "readWord8ArrayAsWord16#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word16)
-    pure [WordV $ fromIntegral value]
+    pure [Word16V $ fromIntegral value]
 
-  -- readWord8ArrayAsWord32# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD32 #)
+  -- readWord8ArrayAsWord32# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word32# #)
   ( "readWord8ArrayAsWord32#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word32)
-    pure [WordV $ fromIntegral value]
+    pure [Word32V $ fromIntegral value]
 
-  -- readWord8ArrayAsWord64# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, WORD64 #)
+  -- readWord8ArrayAsWord64# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word64# #)
   ( "readWord8ArrayAsWord64#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
     p <- getByteArrayContentPtr baId
     value <- liftIO (peekByteOff p offset :: IO Word64)
-    pure [WordV $ fromIntegral value]
+    pure [Word64V $ fromIntegral value]
 
   -- readWord8ArrayAsWord# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Word# #)
   ( "readWord8ArrayAsWord#", [MutableByteArray ByteArrayIdx{..}, IntV offset, _s]) -> do
@@ -601,50 +609,50 @@ evalPrimOp fallback op args t tc = case (op, args) of
     liftIO $ pokeElemOff (castPtr p) index value
     pure []
 
-  -- writeInt8Array# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-  ( "writeInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+  -- writeInt8Array# :: MutableByteArray# s -> Int# -> Int8# -> State# s -> State# s
+  ( "writeInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int8V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeElemOff (castPtr p) index (fromIntegral value :: Int8)
     pure []
 
-  -- writeInt16Array# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-  ( "writeInt16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+  -- writeInt16Array# :: MutableByteArray# s -> Int# -> Int16# -> State# s -> State# s
+  ( "writeInt16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int16V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeElemOff (castPtr p) index (fromIntegral value :: Int16)
     pure []
 
-  -- writeInt32Array# :: MutableByteArray# s -> Int# -> INT32 -> State# s -> State# s
-  ( "writeInt32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+  -- writeInt32Array# :: MutableByteArray# s -> Int# -> Int32# -> State# s -> State# s
+  ( "writeInt32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int32V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeElemOff (castPtr p) index (fromIntegral value :: Int32)
     pure []
 
-  -- writeInt64Array# :: MutableByteArray# s -> Int# -> INT64 -> State# s -> State# s
-  ( "writeInt64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+  -- writeInt64Array# :: MutableByteArray# s -> Int# -> Int64# -> State# s -> State# s
+  ( "writeInt64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int64V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeElemOff (castPtr p) index (fromIntegral value :: Int64)
     pure []
 
-  -- writeWord8Array# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
-  ( "writeWord8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, WordV value, _s]) -> do
+  -- writeWord8Array# :: MutableByteArray# s -> Int# -> Word8# -> State# s -> State# s
+  ( "writeWord8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Word8V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeElemOff (castPtr p) index (fromIntegral value :: Word8)
     pure []
 
-  -- writeWord16Array# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
-  ( "writeWord16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, WordV value, _s]) -> do
+  -- writeWord16Array# :: MutableByteArray# s -> Int# -> Word16# -> State# s -> State# s
+  ( "writeWord16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Word16V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeElemOff (castPtr p) index (fromIntegral value :: Word16)
     pure []
 
-  -- writeWord32Array# :: MutableByteArray# s -> Int# -> WORD32 -> State# s -> State# s
-  ( "writeWord32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, WordV value, _s]) -> do
+  -- writeWord32Array# :: MutableByteArray# s -> Int# -> Word32# -> State# s -> State# s
+  ( "writeWord32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Word32V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeElemOff (castPtr p) index (fromIntegral value :: Word32)
     pure []
 
-  -- writeWord64Array# :: MutableByteArray# s -> Int# -> WORD64 -> State# s -> State# s
-  ( "writeWord64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, WordV value, _s]) -> do
+  -- writeWord64Array# :: MutableByteArray# s -> Int# -> Word64# -> State# s -> State# s
+  ( "writeWord64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Word64V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeElemOff (castPtr p) index (fromIntegral value :: Word64)
     pure []
@@ -687,20 +695,20 @@ evalPrimOp fallback op args t tc = case (op, args) of
     liftIO $ pokeByteOff p offset value
     pure []
 
-  -- writeWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-  ( "writeWord8ArrayAsInt16#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+  -- writeWord8ArrayAsInt16# :: MutableByteArray# s -> Int# -> Int16# -> State# s -> State# s
+  ( "writeWord8ArrayAsInt16#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int16V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeByteOff p index (fromIntegral value :: Int16)
     pure []
 
-  -- writeWord8ArrayAsInt32# :: MutableByteArray# s -> Int# -> INT32 -> State# s -> State# s
-  ( "writeWord8ArrayAsInt32#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+  -- writeWord8ArrayAsInt32# :: MutableByteArray# s -> Int# -> Int32# -> State# s -> State# s
+  ( "writeWord8ArrayAsInt32#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int32V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeByteOff p index (fromIntegral value :: Int32)
     pure []
 
-  -- writeWord8ArrayAsInt64# :: MutableByteArray# s -> Int# -> INT64 -> State# s -> State# s
-  ( "writeWord8ArrayAsInt64#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
+  -- writeWord8ArrayAsInt64# :: MutableByteArray# s -> Int# -> Int64# -> State# s -> State# s
+  ( "writeWord8ArrayAsInt64#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int64V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeByteOff p index (fromIntegral value :: Int64)
     pure []
@@ -711,20 +719,20 @@ evalPrimOp fallback op args t tc = case (op, args) of
     liftIO $ pokeByteOff p index value
     pure []
 
-  -- writeWord8ArrayAsWord16# :: MutableByteArray# s -> Int# -> Word# -> State# s -> State# s
-  ( "writeWord8ArrayAsWord16#", [MutableByteArray ByteArrayIdx{..}, IntV index, WordV value, _s]) -> do
+  -- writeWord8ArrayAsWord16# :: MutableByteArray# s -> Int# -> Word16# -> State# s -> State# s
+  ( "writeWord8ArrayAsWord16#", [MutableByteArray ByteArrayIdx{..}, IntV index, Word16V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeByteOff p index (fromIntegral value :: Word16)
     pure []
 
-  -- writeWord8ArrayAsWord32# :: MutableByteArray# s -> Int# -> WORD32 -> State# s -> State# s
-  ( "writeWord8ArrayAsWord32#", [MutableByteArray ByteArrayIdx{..}, IntV index, WordV value, _s]) -> do
+  -- writeWord8ArrayAsWord32# :: MutableByteArray# s -> Int# -> Word32# -> State# s -> State# s
+  ( "writeWord8ArrayAsWord32#", [MutableByteArray ByteArrayIdx{..}, IntV index, Word32V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeByteOff p index (fromIntegral value :: Word32)
     pure []
 
-  -- writeWord8ArrayAsWord64# :: MutableByteArray# s -> Int# -> WORD64 -> State# s -> State# s
-  ( "writeWord8ArrayAsWord64#", [MutableByteArray ByteArrayIdx{..}, IntV index, WordV value, _s]) -> do
+  -- writeWord8ArrayAsWord64# :: MutableByteArray# s -> Int# -> Word64# -> State# s -> State# s
+  ( "writeWord8ArrayAsWord64#", [MutableByteArray ByteArrayIdx{..}, IntV index, Word64V value, _s]) -> do
     p <- getByteArrayContentPtr baId
     liftIO $ pokeByteOff p index (fromIntegral value :: Word64)
     pure []
@@ -832,6 +840,42 @@ evalPrimOp fallback op args t tc = case (op, args) of
       liftIO $ pokeElemOff (castPtr p) index new
     pure [IntV current]
 
+  -- casInt8Array# :: MutableByteArray# t0 -> Int# -> Int8# -> Int8# -> State# t0 -> (# State# t0, Int8# #)
+  ( "casInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int8V old, Int8V new, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    current <- fromIntegral <$> liftIO (peekElemOff (castPtr p) index :: IO Int8)
+    when (current == old) $ do
+      liftIO $ pokeElemOff (castPtr p) index new
+    pure [Int8V current]
+
+  -- casInt16Array# :: MutableByteArray# t0 -> Int# -> Int16# -> Int16# -> State# t0 -> (# State# t0, Int16# #)
+  ( "casInt16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int16V old, Int16V new, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    current <- fromIntegral <$> liftIO (peekElemOff (castPtr p) index :: IO Int16)
+    when (current == old) $ do
+      liftIO $ pokeElemOff (castPtr p) index new
+    pure [Int16V current]
+
+  -- casInt32Array# :: MutableByteArray# t0 -> Int# -> Int32# -> Int32# -> State# t0 -> (# State# t0, Int32# #)
+  ( "casInt32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int32V old, Int32V new, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    current <- fromIntegral <$> liftIO (peekElemOff (castPtr p) index :: IO Int32)
+    when (current == old) $ do
+      liftIO $ pokeElemOff (castPtr p) index new
+    pure [Int32V current]
+
+  -- casInt64Array# :: MutableByteArray# t0 -> Int# -> Int64# -> Int64# -> State# t0 -> (# State# t0, Int64# #)
+  ( "casInt64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int64V old, Int64V new, _s]) -> do
+    p <- getByteArrayContentPtr baId
+    -- NOTE: CPU atomic
+    current <- fromIntegral <$> liftIO (peekElemOff (castPtr p) index :: IO Int64)
+    when (current == old) $ do
+      liftIO $ pokeElemOff (castPtr p) index new
+    pure [Int64V current]
+
   -- fetchAddIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)
   ( "fetchAddIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV value, _s]) -> do
     p <- getByteArrayContentPtr baId
@@ -879,5 +923,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     original <- liftIO (peekElemOff (castPtr p) index :: IO Int)
     liftIO $ pokeElemOff (castPtr p) index (original `xor` value)
     pure [IntV original]
+
+  -- OBSOLETE from GHC 9.4
+  -- sameMutableByteArray# :: MutableByteArray# s -> MutableByteArray# s -> Int#
+  ( "sameMutableByteArray#", [MutableByteArray baIdx1, MutableByteArray baIdx2]) -> do
+    pure [IntV $ if baIdx1 == baIdx2 then 1 else 0]
 
   _ -> fallback op args t tc
