@@ -2,12 +2,12 @@
 
 #ifdef EXTERNAL_STG_COMPILER_PACKAGE
 module Stg.GHC.Convert where
-import Stg.Syntax
 #else
 module GHC.Stg.External.Convert where
-import GHC.Stg.External.Syntax
 import GHC.Prelude
 #endif
+
+import Stg.Syntax
 
 import qualified Data.ByteString.Char8 as BS8
 
@@ -367,9 +367,7 @@ cvtLit = \case
   GHC.LitDouble x     -> LitDouble x
   GHC.LitLabel x i d  -> LitLabel (GHC.bytesFS  x) (cvtLabelSpec i d)
   GHC.LitNumber t i   -> LitNumber (cvtLitNumType t) i
-  GHC.LitRubbish t    ->
-    -- WORKAROUND: rubbish types can cause GHC panic when call `isUnboxedSumType` or `isUnboxedTupleType`
-    LitRubbish . SingleValue . cvtPrimRep . GHC.expectOnly "LitRubbish" $ GHC.runtimeRepPrimRep (GHC.text "LitRubbish") t
+  r@GHC.LitRubbish{}  -> LitRubbish (cvtType "LitRubbish" $ GHC.literalType r)
 
 -- Id conversion
 
