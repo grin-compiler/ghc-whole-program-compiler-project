@@ -9,7 +9,7 @@ extra-deps:
   - souffle-haskell-3.3.0
 
 # use GHC-WPC (whole program compiler)
-compiler:       ghc-9.0.2.1000
+compiler:       ghc-9.2.4.1000
 compiler-check: match-exact
 system-ghc:     true
 extra-path:

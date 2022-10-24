@@ -44,6 +44,7 @@ modes = subparser
     <> mode "strings" stringsMode  (progDesc "print list of used strings")
     <> mode "undef" undefMode  (progDesc "print list of undefined foreign symbols")
     <> mode "link" linkMode  (progDesc "link cbits.so for the applications with used foreign functions")
+    <> mode "hi-list"  hiListMode  (progDesc "whole program interface file list")
     )
   where
     mode :: String -> Parser a -> InfoMod a -> Mod CommandFields a
@@ -194,6 +195,20 @@ modes = subparser
             printf "linking %s\n" soName
             linkForeignCbitsSharedLib fname
 
+    hiListMode :: Parser (IO ())
+    hiListMode =
+        run <$> fullpakFile
+      where
+        run fname = do
+          moduleInfoList <- getAppModuleMapping fname
+
+          printf "GHC core interface files: %d\n" (length moduleInfoList)
+          forM_ moduleInfoList $ \StgModuleInfo{..} -> do
+            let hiName = take (length modModpakPath - 8) modModpakPath ++ "hi"
+            ok <- doesFileExist hiName
+            case ok of
+              True  -> printf "OK: %s\n" modModuleName
+              False -> printf "MISSING: %s\n" hiName
 
 main :: IO ()
 main = join $ execParser $ info (helper <*> modes) mempty

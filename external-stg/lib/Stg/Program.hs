@@ -47,6 +47,7 @@ data StgModuleInfo
   , modModpakPath           :: FilePath
   , modPackageName          :: String
   , modPackageVersion       :: String
+  , modUnitId               :: String
   }
   deriving (Eq, Ord, Show)
 
@@ -131,6 +132,7 @@ getAppModuleMapping ghcStgAppFname = do
           , modModpakPath     = dir </> moduleToModpak modpakExt mod
           , modPackageName    = unitName
           , modPackageVersion = unitVersion
+          , modUnitId         = unitId
           }
         | UnitLinkerInfo{..} <- appLibDeps
         , dir <- unitImportDirs
@@ -153,6 +155,7 @@ getAppModuleMapping ghcStgAppFname = do
           , modModpakPath     = modpak
           , modPackageName    = packageName
           , modPackageVersion = ""
+          , modUnitId         = "main"
           }
   pure $ appModules ++ libModules
 
