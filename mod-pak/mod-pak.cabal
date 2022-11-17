@@ -20,3 +20,13 @@ executable mkmodpak
                        bytestring,
                        zip
   default-language:    Haskell2010
+
+executable zip-cmd
+  hs-source-dirs:      app
+  main-is:             zip-cmd.hs
+  build-depends:       base < 5.0,
+                       optparse-applicative,
+                       filepath,
+                       bytestring,
+                       zip
+  default-language:    Haskell2010
