@@ -1,11 +1,15 @@
+{-# language LambdaCase, RecordWildCards #-}
+import Control.Monad
 import Control.Monad.IO.Class
 import Options.Applicative
 import Data.List
+import Data.Text (Text)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import System.FilePath
 import Codec.Archive.Zip
-import Codec.Archive.Zip.Unix
+import Data.Time.Clock
+import Data.Word
+import qualified ShellWords
 
 data ZipCommand
   = CreateArchive
@@ -63,7 +67,98 @@ data ZipCommand
     { compressionMethod :: CompressionMethod
     , entryPath         :: FilePath
     }
+  | SetEntryComment
+    { comment   :: Text
+    , entryPath :: FilePath
+    }
+  | DeleteEntryComment
+    { entryPath :: FilePath
+    }
+  | SetModTime
+    { time      :: UTCTime
+    , entryPath :: FilePath
+    }
+  | AddExtraField
+    { tag       :: Word16
+    , body      :: ByteString
+    , entryPath :: FilePath
+    }
+  | DeleteExtraField
+    { tag       :: Word16
+    , entryPath :: FilePath
+    }
+  | SetExternalFileAttrs
+    { attributes  :: Word32
+    , entryPath   :: FilePath
+    }
+  | SetArchiveComment
+    { comment :: Text
+    }
+  | DeleteArchiveComment
+  | RunZipCommandsFromFile
+    { commandsPath :: FilePath
+    }
   deriving Show
+
+evalCommand :: ZipCommand -> ZipArchive ()
+evalCommand = \case
+  DoesEntryExist{..}        -> join (doesEntryExist <$> mkEntrySelector entryPath) >>= liftIO . print
+  GetEntry{..}              -> join (getEntry <$> mkEntrySelector entryPath) >>= liftIO . print
+  SaveEntry{..}             -> join (saveEntry <$> mkEntrySelector entryPath <*> pure targetPath)
+  CheckEntry{..}            -> join (checkEntry <$> mkEntrySelector entryPath) >>= liftIO . print
+  UnpackInto{..}            -> unpackInto targetPath
+  GetArchiveComment         -> getArchiveComment >>= maybe (pure ()) (liftIO . print)
+  GetArchiveDescription     -> getArchiveDescription >>= liftIO . print
+  AddEntry{..}              -> join (addEntry compressionMethod entryContent <$> mkEntrySelector entryPath)
+  LoadEntry{..}             -> join (loadEntry compressionMethod <$> mkEntrySelector entryPath <*> pure sourcePath)
+  CopyEntry{..}             -> join (copyEntry zipPath <$> mkEntrySelector sourcePath <*> mkEntrySelector targetPath)
+  PackDirRecur{..}          -> packDirRecur compressionMethod (\p -> mkEntrySelector $ maybe p (</> p) entryPathPrefix) sourcePath
+  RenameEntry{..}           -> join (renameEntry <$> mkEntrySelector sourcePath <*> mkEntrySelector targetPath)
+  DeleteEntry{..}           -> join (deleteEntry <$> mkEntrySelector entryPath)
+  Recompress{..}            -> join (recompress compressionMethod <$> mkEntrySelector entryPath)
+  SetEntryComment{..}       -> join (setEntryComment comment <$> mkEntrySelector entryPath)
+  DeleteEntryComment{..}    -> join (deleteEntryComment <$> mkEntrySelector entryPath)
+  SetModTime{..}            -> join (setModTime time <$> mkEntrySelector entryPath)
+  AddExtraField{..}         -> join (addExtraField tag body <$> mkEntrySelector entryPath)
+  DeleteExtraField{..}      -> join (deleteExtraField tag <$> mkEntrySelector entryPath)
+  SetExternalFileAttrs{..}  -> join (setExternalFileAttrs attributes <$> mkEntrySelector entryPath)
+  SetArchiveComment{..}     -> setArchiveComment comment
+  DeleteArchiveComment      -> deleteArchiveComment
+
+evalZip :: [ZipCommand] -> ZipArchive [ZipCommand]
+evalZip cmds = case cmds of
+  []                  -> pure []
+  CreateArchive{} : _ -> pure cmds
+  WithArchive{} : _   -> pure cmds
+  RunZipCommandsFromFile{..} : cs -> do
+    cmdList <- liftIO $ readCommandsFromFile commandsPath
+    evalZip $ cmdList ++ cs
+  c : cs -> do
+    evalCommand c
+    evalZip cs
+
+evalNoZip :: [ZipCommand] -> IO ()
+evalNoZip = \case
+  CreateArchive{..} : cmds -> do
+    remainingCmds <- createArchive zipPath (evalZip cmds)
+    evalNoZip remainingCmds
+  WithArchive{..} : cmds -> do
+    remainingCmds <- withArchive zipPath (evalZip cmds)
+    evalNoZip remainingCmds
+  RunZipCommandsFromFile{..} : cmds -> do
+    cmdList <- readCommandsFromFile commandsPath
+    evalNoZip $ cmdList ++ cmds
+  c : cmds -> do
+    putStrLn $ "ignore: " ++ show c
+    evalNoZip cmds
+  [] -> pure ()
+
+readCommandsFromFile :: FilePath -> IO [ZipCommand]
+readCommandsFromFile fname = do
+  args <- ShellWords.parse <$> readFile fname >>= \case
+    Right a   -> pure a
+    Left err  -> fail err
+  handleParseResult $ execParserPure defaultPrefs opts args
 
 compressionMethods :: String
 compressionMethods = intercalate "|" $ map show ([minBound..maxBound] :: [CompressionMethod])
@@ -189,49 +284,84 @@ zipCommand = hsubparser $ mconcat
       )
       (progDesc "Change compression method of an entry, if it does not exist, nothing will happen.")
     )
+  , command "SetEntryComment"
+    (info
+      (SetEntryComment
+        <$> strOption (long "comment" <> metavar "TEXT" <> help "Text of the comment")
+        <*> strOption (long "entryPath" <> metavar "FILENAME" <> help "Name of the entry to comment on")
+      )
+      (progDesc "Set an entry comment, if that entry does not exist, nothing will happen. Note that if binary representation of the comment is longer than 65535 bytes, it will be truncated on writing.")
+    )
+  , command "DeleteEntryComment"
+    (info
+      (DeleteEntryComment
+        <$> strOption (long "entryPath" <> metavar "FILENAME" <> help "Selector that identifies archive entry")
+      )
+      (progDesc "Delete an entry's comment, if that entry does not exist, nothing will happen.")
+    )
+  , command "SetModTime"
+    (info
+      (SetModTime
+        <$> option auto (long "time" <> metavar "UTCTime" <> help "New modification time")
+        <*> strOption (long "entryPath" <> metavar "FILENAME" <> help "Name of the entry to modify")
+      )
+      (progDesc "Set the last modification date/time. The specified entry may be missing, in that case the action has no effect.")
+    )
+  , command "AddExtraField"
+    (info
+      (AddExtraField
+        <$> option auto (long "tag" <> metavar "WORD16" <> help "Tag (header id) of the extra field to add")
+        <*> strOption (long "body" <> metavar "BYTESTRING" <> help "Body of the field")
+        <*> strOption (long "entryPath" <> metavar "FILENAME" <> help "Name of the entry to modify")
+      )
+      (progDesc "Add an extra field. The specified entry may be missing, in that case this action has no effect.")
+    )
+  , command "DeleteExtraField"
+    (info
+      (DeleteExtraField
+        <$> option auto (long "tag" <> metavar "WORD16" <> help "Tag (header id) of the extra field to delete")
+        <*> strOption (long "entryPath" <> metavar "FILENAME" <> help "Name of the entry to modify")
+      )
+      (progDesc "Delete an extra field by its type (tag). The specified entry may be missing, in that case this action has no effect.")
+    )
+  , command "SetExternalFileAttrs"
+    (info
+      (SetExternalFileAttrs
+        <$> option auto (long "attributes" <> metavar "WORD32" <> help "External file attributes")
+        <*> strOption (long "entryPath" <> metavar "FILENAME" <> help "Name of the entry to modify")
+      )
+      (progDesc "Set external file attributes. This function can be used to set file permissions.")
+    )
+  , command "SetArchiveComment"
+    (info
+      (SetArchiveComment
+        <$> strOption (long "comment" <> metavar "TEXT" <> help "Text of the comment")
+      )
+      (progDesc "Set the comment of the entire archive.")
+    )
+  , command "DeleteArchiveComment"
+    (info
+      (pure DeleteArchiveComment)
+      (progDesc "Delete the archive's comment if it's present.")
+    )
+  , command "RunZipCommandsFromFile"
+    (info
+      (RunZipCommandsFromFile
+        <$> strOption (long "commandsPath" <> metavar "FILENAME" <> help "Location of the zip commands file to execute")
+      )
+      (progDesc "Executes zip commands from file.")
+    )
   ]
 
 {-
-  zip file specification:
-    createArchive
-    withArchive
-
-  commands:
-    doesEntryExist
-    getEntry
-    saveEntry
-    checkEntry
-    unpackInto
-    getArchiveComment
-    getArchiveDescription
-    addEntry
-    loadEntry
-    copyEntry
-    packDirRecur
-    renameEntry
-    deleteEntry
-    recompress
-
-    setEntryComment
-    deleteEntryComment
-    setModTime
-    addExtraField
-    deleteExtraField
-    setExternalFileAttrs
-    setArchiveComment
-    deleteArchiveComment
-
 TODO:
-  done - use named options instead of arguments
-  done - add field names to command adt constructors
-  - add RunZipCommandsFromFile
   - support regex patterns for filtering (i.e. unpack only the selected content)
 -}
 
+opts :: ParserInfo [ZipCommand]
+opts = info (many zipCommand <**> helper) fullDesc
 
 main :: IO ()
 main = do
-  let opts = info (many zipCommand <**> helper) fullDesc
   cmds <- execParser opts
-  mapM_ print cmds
-  pure ()
+  evalNoZip cmds
