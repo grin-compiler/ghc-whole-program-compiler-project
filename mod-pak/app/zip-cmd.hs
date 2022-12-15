@@ -125,32 +125,32 @@ evalCommand = \case
   SetArchiveComment{..}     -> setArchiveComment comment
   DeleteArchiveComment      -> deleteArchiveComment
 
-evalZip :: [ZipCommand] -> ZipArchive [ZipCommand]
-evalZip cmds = case cmds of
+evalCmdZipArchive :: [ZipCommand] -> ZipArchive [ZipCommand]
+evalCmdZipArchive cmds = case cmds of
   []                  -> pure []
   CreateArchive{} : _ -> pure cmds
   WithArchive{} : _   -> pure cmds
   RunZipCommandsFromFile{..} : cs -> do
     cmdList <- liftIO $ readCommandsFromFile commandsPath
-    evalZip $ cmdList ++ cs
+    evalCmdZipArchive $ cmdList ++ cs
   c : cs -> do
     evalCommand c
-    evalZip cs
+    evalCmdZipArchive cs
 
-evalNoZip :: [ZipCommand] -> IO ()
-evalNoZip = \case
+evalCmdIO :: [ZipCommand] -> IO ()
+evalCmdIO = \case
   CreateArchive{..} : cmds -> do
-    remainingCmds <- createArchive zipPath (evalZip cmds)
-    evalNoZip remainingCmds
+    remainingCmds <- createArchive zipPath (evalCmdZipArchive cmds)
+    evalCmdIO remainingCmds
   WithArchive{..} : cmds -> do
-    remainingCmds <- withArchive zipPath (evalZip cmds)
-    evalNoZip remainingCmds
+    remainingCmds <- withArchive zipPath (evalCmdZipArchive cmds)
+    evalCmdIO remainingCmds
   RunZipCommandsFromFile{..} : cmds -> do
     cmdList <- readCommandsFromFile commandsPath
-    evalNoZip $ cmdList ++ cmds
+    evalCmdIO $ cmdList ++ cmds
   c : cmds -> do
     putStrLn $ "ignore: " ++ show c
-    evalNoZip cmds
+    evalCmdIO cmds
   [] -> pure ()
 
 readCommandsFromFile :: FilePath -> IO [ZipCommand]
@@ -364,4 +364,4 @@ opts = info (many zipCommand <**> helper) fullDesc
 main :: IO ()
 main = do
   cmds <- execParser opts
-  evalNoZip cmds
+  evalCmdIO cmds
