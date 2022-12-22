@@ -127,7 +127,8 @@ evalLiteral = \case
   LitNumber LitNumWord16 n  -> pure . WordAtom $ fromIntegral n
   LitNumber LitNumWord32 n  -> pure . WordAtom $ fromIntegral n
   LitNumber LitNumWord64 n  -> pure . WordAtom $ fromIntegral n
-  l -> pure $ Literal l
+  c@LitChar{}               -> pure $ Literal c
+  l -> error $ "unsupported: " ++ show l
 
 evalArg :: HasCallStack => Env -> Arg -> M Atom
 evalArg localEnv = \case
