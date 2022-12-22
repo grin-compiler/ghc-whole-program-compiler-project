@@ -583,12 +583,19 @@ convertAltLit lit = case lit of
   LitDouble d               -> DoubleAtom $ realToFrac d
   LitNullAddr               -> PtrAtom RawPtr nullPtr
   LitNumber LitNumInt n     -> IntAtom $ fromIntegral n
+  LitNumber LitNumInt8 n    -> IntAtom $ fromIntegral n
+  LitNumber LitNumInt16 n   -> IntAtom $ fromIntegral n
+  LitNumber LitNumInt32 n   -> IntAtom $ fromIntegral n
   LitNumber LitNumInt64 n   -> IntAtom $ fromIntegral n
   LitNumber LitNumWord n    -> WordAtom $ fromIntegral n
+  LitNumber LitNumWord8 n   -> WordAtom $ fromIntegral n
+  LitNumber LitNumWord16 n  -> WordAtom $ fromIntegral n
+  LitNumber LitNumWord32 n  -> WordAtom $ fromIntegral n
   LitNumber LitNumWord64 n  -> WordAtom $ fromIntegral n
   LitLabel{}                -> error $ "invalid alt pattern: " ++ show lit
   LitString{}               -> error $ "invalid alt pattern: " ++ show lit
-  l -> Literal l
+  c@LitChar{}               -> Literal c
+  l -> error $ "unsupported: " ++ show l
 
 matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
 matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
