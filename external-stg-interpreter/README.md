@@ -12,7 +12,11 @@ The interpreter was tested only on Linux.
    ```
    git clone git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
    ```
-2. Build from the interpreter's folder
+2. Setup system dependencies
+   ```
+    apt update && apt install -y pkg-config libbz2-dev
+   ```
+3. Build from the interpreter's folder
    ```
    cd ghc-whole-program-compiler-project/external-stg-interpreter
 

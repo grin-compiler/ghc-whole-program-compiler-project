@@ -64,11 +64,43 @@ I.e. `external-stg-compiler` is such an example.
 
 If you change the External STG IR, then GHC-WPC must be recompiled.
 
-0. Install (exact version):
+0. Install system dependencies:
+   ```
+    apt install -y \
+      autoconf \
+      build-essential \
+      curl \
+      gcc \
+      git \
+      libc6-dev \
+      libffi-dev \
+      libgmp-dev \
+      libncurses-dev \
+      libtinfo5 \
+      python3 \
+      python3-sphinx \
+      wget \
+      xz-utils
+   ```
+1. Install ghcup
+   ```
+    curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
+   ```
+
+2. Install (exact version):
    - GHC 8.8.3
+     ```
+     ghcup install ghc 8.8.3 && ghcup set ghc 8.8.3
+     ```
    - happy 1.19.12
+     ```
+     cabal update && cabal install happy-1.19.12
+     ```
    - alex 3.2.5
-1. Clone this repository.
+     ```
+     cabal install alex-3.2.5
+     ```
+3. Clone this repository.
    ```
    git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
    ```
@@ -76,11 +108,11 @@ If you change the External STG IR, then GHC-WPC must be recompiled.
    ```
    git submodule update --init --recursive
    ```
-2. Install modpak tooling
+4. Install modpak tooling
    ```
    (cd mod-pak ; stack install)
    ```
-3. Compile GHC-WPC in `./ghc-wpc` folder with Hadrian (see [ghc.dev](https://ghc.dev) for details).
+5. Compile GHC-WPC in `./ghc-wpc` folder with Hadrian (see [ghc.dev](https://ghc.dev) for details).
    ```
    cd ghc-wpc
    ./boot
@@ -89,10 +121,10 @@ If you change the External STG IR, then GHC-WPC must be recompiled.
    ```
    **IMPORTANT:** use hadrian/build-stack
 
-4. **At this point you have a working GHC-WPC.**  
+6. **At this point you have a working GHC-WPC.**  
    The next steps are about the compilation of GHC-WPC tooling and the usage of GHC-WPC.
 
-5. Go back to the repository top folder and set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
+7. Go back to the repository top folder and set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
    change the following line to your GHC-WPC build path:
    ```
    extra-path:
@@ -103,12 +135,12 @@ If you change the External STG IR, then GHC-WPC must be recompiled.
    extra-path:
      - /home/USER/PROJECT/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin
    ```
-6. Install the external stg tooling with the following commands:
+8. Install the external stg tooling with the following commands:
    ```
    stack --stack-root `pwd`/.stack-root install
    ```
    *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
-7. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
+9. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
 
 ## TODO
 **Ext-STG IR**
