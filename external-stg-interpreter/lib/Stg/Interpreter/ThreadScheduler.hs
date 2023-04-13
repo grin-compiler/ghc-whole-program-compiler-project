@@ -12,13 +12,19 @@ import Stg.Interpreter.IOManager
 runScheduler :: [Atom] -> ScheduleReason -> M [Atom]
 runScheduler result sr = do
   tid <- gets ssCurrentThreadId
-  --liftIO $ putStrLn $ " * scheduler: " ++ show sr ++ " thread: " ++ show tid
+  --liftIO $ putStrLn $ " * scheduler: " ++ show sr ++ " thread: " ++ show tid ++ " result: " ++ show result
   case sr of
     SR_ThreadFinished -> do
       -- set thread status to finished
       ts <- getThreadState tid
       updateThreadState tid ts {tsStatus = ThreadFinished}
       yield result
+
+    SR_ThreadFinishedFFICallback -> do
+      -- set thread status to finished
+      ts <- getThreadState tid
+      updateThreadState tid ts {tsStatus = ThreadFinished, tsStack = [], tsCurrentResult = result}
+      pure result
 
     SR_ThreadBlocked  -> yield result
 
@@ -68,6 +74,8 @@ calculateNewSchedule = do
   wakeUpSleepingThreads
   -- calculate the new scheduling
   tsList <- gets $ IntMap.toList . ssThreads
+  --liftIO $ putStrLn $ "thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
+
   let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
   case runnableThreads of
     [] -> waitAndScheduleBlockedThreads
@@ -83,7 +91,9 @@ wakeUpSleepingThreads = do
   tsList <- gets $ IntMap.toList . ssThreads
   forM_ tsList $ \(tid, ts) -> case tsStatus ts of
     ThreadBlocked (BlockedOnDelay wakeupTime)
-      | wakeupTime >= now -> updateThreadState tid ts {tsStatus = ThreadRunning}
+      | wakeupTime <= now -> do
+          --liftIO $ putStrLn $ "wake up: " ++ show tid
+          updateThreadState tid ts {tsStatus = ThreadRunning}
     _ -> pure ()
 
 waitAndScheduleBlockedThreads :: M [Int]
