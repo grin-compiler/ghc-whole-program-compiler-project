@@ -153,10 +153,49 @@ raiseEx ex = unwindStack where
         stackPush $ Apply [ex, Void]
         pure [exHandler]
 
+      Just (CatchSTM _stmAction exHandler) -> do
+        ts <- getCurrentThreadState
+        tid <- gets ssCurrentThreadId
+        let tlogStackTop : tlogStackTail = tsTLogStack ts
+        -- HINT: abort current nested transaction, and reload the parent tlog then run the exception handler in it
+        updateThreadState tid $ ts
+          { tsActiveTLog  = Just tlogStackTop
+          , tsTLogStack   = tlogStackTail
+          }
+        -- run the exception handler
+        stackPush $ Apply [ex, Void]
+        pure [exHandler]
+
+      Just CatchRetry{} -> do
+        ts <- getCurrentThreadState
+        tid <- gets ssCurrentThreadId
+        updateThreadState tid $ ts { tsTLogStack = tail $ tsTLogStack ts}
+        unwindStack
+
       Just (Update addr) -> do
         -- update the (balckholed/running) thunk with the exception value
         store addr $ RaiseException ex
         unwindStack
+
+      Just (Atomically stmAction) -> do
+        ts <- getCurrentThreadState
+        tid <- gets ssCurrentThreadId
+        -- extra validation (optional)
+        when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
+        let Just tlog = tsActiveTLog ts
+        isValid <- validateTLog tlog
+        case isValid of
+          True -> do
+            -- abandon transaction
+            updateThreadState tid $ ts {tsActiveTLog = Nothing}
+            unsubscribeTVarWaitQueues tid tlog
+            unwindStack
+          False -> do
+            -- restart transaction due to invalid STM state
+            updateThreadState tid $ ts {tsActiveTLog = Just mempty}
+            stackPush $ Atomically stmAction
+            stackPush $ Apply [Void]
+            pure [stmAction]
 
       _ -> unwindStack
 
