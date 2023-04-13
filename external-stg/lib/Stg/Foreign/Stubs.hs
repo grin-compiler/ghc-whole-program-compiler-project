@@ -10,13 +10,32 @@ import Stg.GHC.Symbols
 genStubs :: FilePath -> IO String
 genStubs ghcstgappFname = do
   mods <- getGhcStgAppModules ghcstgappFname
-  let stubs         = concat $ [map genStubCode l | ForeignStubs _ _ _ _ l <- map moduleForeignStubs $ mods]
-      fileIncludes  = [] -- ["#include \"HsFFI.h\""]
-      code          = unlines $ filter (not . null) $ fileIncludes ++ stubs ++ extraHack
-      extraHack     =
-        [ "char " ++ n ++ ";"
-        | n <- rtsSymbols
+  let stubs           = concat $ [map genStubCode l | ForeignStubs _ _ _ _ l <- map moduleForeignStubs $ mods]
+      fileIncludes    = [ "#include <stdio.h>"
+                        , "#include <stdlib.h>"
+                        -- , "#include \"HsFFI.h\""
+                        ]
+      code            = unlines $ filter (not . null) $ fileIncludes ++ stubs ++ rtsSymbolTraps
+      rtsSymbolTraps  =
+        -- data symbols
+        [ "// data RTS symbols"] ++
+        [ "char " ++ getSymbolName s ++ ";"
+        | s <- rtsSymbols
+        , not (isCode s)
+        ] ++
+        -- code symbols
+        [ "\n// code RTS symbols"] ++
+        [ "void reportCalledRtsSymbol(const char *msg) { printf(\"trap for: %s\\n\", msg); exit(1); }\n"] ++
+        [ "void " ++ funName ++ "() { reportCalledRtsSymbol(" ++ show funName ++ "); }"
+        | s <- rtsSymbols
+        , let funName = getSymbolName s
+        , isCode s
         ]
+      isCode = \case
+        CFun{}    -> True
+        CmmFun{}  -> True
+        _         -> False
+
   pure code
 
 -- gen code + collect include headers
