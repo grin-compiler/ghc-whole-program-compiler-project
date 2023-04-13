@@ -136,6 +136,7 @@ wiredInClosures =
   , ("base",      "GHC.Exception.Type",     "overflowException",            \s cl -> s {rtsOverflowException          = cl})
   , (":ext-stg",  ":ExtStg.RTS.Support",    "applyFun1Arg",                 \s cl -> s {rtsApplyFun1Arg               = cl})
   , (":ext-stg",  ":ExtStg.RTS.Support",    "tuple2Proj0",                  \s cl -> s {rtsTuple2Proj0                = cl})
+  , ("base",      "Control.Exception.Base", "nestedAtomically",             \s cl -> s {rtsNestedAtomically           = cl})
   ]
 
 {-
@@ -150,7 +151,6 @@ wiredInClosures =
   , ("base",      "GHC.IO.Exception",       "cannotCompactMutable",
   , ("base",      "Control.Exception.Base", "absentSumFieldError",
   , ("base",      "Control.Exception.Base", "nonTermination",
-  , ("base",      "Control.Exception.Base", "nestedAtomically",
   , ("base",      "GHC.Event.Thread",       "blockedOnBadFD",
   , ("base",      "GHC.Conc.Sync",          "runSparks",
   , ("base",      "GHC.Conc.IO",            "ensureIOManagerIsRunning",
@@ -174,11 +174,10 @@ extStgRtsSupportModule = reconModule $ Module
   , moduleSourceFilePath      = Nothing
   , moduleForeignStubs        = NoStubs
   , moduleHasForeignExported  = False
-  , moduleDependency          = [(UnitId "ghc-prim", [ModuleName "GHC.Tuple"])]
+  , moduleDependency          = [(UnitId "ghc-prim", [ModuleName "GHC.Tuple.Prim"])]
   , moduleExternalTopIds      = []
-  , moduleTyCons              = [(UnitId "ghc-prim", [(ModuleName "GHC.Tuple", [tup2STyCon])])]
+  , moduleTyCons              = [(UnitId "ghc-prim", [(ModuleName "GHC.Tuple.Prim", [tup2STyCon])])]
   , moduleTopBindings         = [tuple2Proj0, applyFun1Arg]
-  , moduleForeignFiles        = []
   } where
       u :: Int -> Unique
       u = Unique '+'
@@ -196,10 +195,10 @@ extStgRtsSupportModule = reconModule $ Module
                       }
 
       localLiftedVanillaId :: Int -> Name -> (BinderId, SBinder)
-      localLiftedVanillaId i n = (BinderId $ u i, sbinder i n LocalScope)
+      localLiftedVanillaId i n = (BinderId $ u i, sbinder i n ClosurePrivate)
 
       exportedLiftedVanillaId :: Int -> Name -> SBinder
-      exportedLiftedVanillaId i n = sbinder i n HaskellExported
+      exportedLiftedVanillaId i n = sbinder i n ModulePublic
 
       tup2DCOcc       = DataConId $ u 0
       tup2SDataCon    = SDataCon
@@ -217,7 +216,7 @@ extStgRtsSupportModule = reconModule $ Module
                         , stcDefLoc   = UnhelpfulSpan $ UnhelpfulOther "ext-stg-interpreter-rts"
                         }
 
-      -- code for tuple2Proj0 = \t -> case t of GHC.Tuple.(,) a b -> a
+      -- code for tuple2Proj0 = \t -> case t of GHC.Tuple.Prim.(,) a b -> a
       (aOcc, aBnd)    = localLiftedVanillaId 100 "a"
       (_,    bBnd)    = localLiftedVanillaId 101 "b"
       (tOcc, tBnd)    = localLiftedVanillaId 102 "t"
@@ -225,11 +224,11 @@ extStgRtsSupportModule = reconModule $ Module
 
       tuple2Proj0Bnd  = exportedLiftedVanillaId 104 "tuple2Proj0"
       tuple2Proj0     = StgTopLifted $ StgNonRec tuple2Proj0Bnd $ StgRhsClosure [] Updatable [tBnd] $
-                          StgCase (StgApp tOcc [] (SingleValue LiftedRep) mempty) rBnd (AlgAlt tup2TCOcc)
+                          StgCase (StgApp tOcc []) rBnd (AlgAlt tup2TCOcc)
                             [ Alt
                               { altCon      = AltDataCon tup2DCOcc
                               , altBinders  = [aBnd, bBnd]
-                              , altRHS      = StgApp aOcc [] (SingleValue LiftedRep) mempty
+                              , altRHS      = StgApp aOcc []
                               }
                             ]
 
@@ -239,4 +238,4 @@ extStgRtsSupportModule = reconModule $ Module
 
       applyFun1ArgBnd = exportedLiftedVanillaId 202 "applyFun1Arg"
       applyFun1Arg    = StgTopLifted $ StgNonRec applyFun1ArgBnd $ StgRhsClosure [] Updatable [fBnd, pBnd] $
-                          StgApp fOcc [StgVarArg pOcc] (SingleValue LiftedRep) mempty
+                          StgApp fOcc [StgVarArg pOcc]
