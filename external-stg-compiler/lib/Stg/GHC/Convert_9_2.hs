@@ -1,7 +1,7 @@
 {-# LANGUAGE ImplicitParams, RecordWildCards, LambdaCase, MultiWayIf, TupleSections, OverloadedStrings, CPP #-}
 
 #ifdef EXTERNAL_STG_COMPILER_PACKAGE
-module Stg.GHC.Convert where
+module Stg.GHC.Convert_9_2 where
 import Stg.Syntax
 #else
 module GHC.Stg.External.Convert where
@@ -19,6 +19,7 @@ import qualified GHC.Core.TyCon         as GHC
 import qualified GHC.Core.TyCo.Ppr      as GHC
 import qualified GHC.Core.TyCo.Rep      as GHC
 import qualified GHC.Core.Type          as GHC
+import qualified GHC.Core.Utils         as GHC
 import qualified GHC.Data.FastString    as GHC
 import qualified GHC.Driver.Session     as GHC
 import qualified GHC.Driver.Ppr         as GHC
@@ -35,7 +36,7 @@ import qualified GHC.Types.Unique       as GHC
 import qualified GHC.Types.Tickish      as GHC
 import qualified GHC.Types.SourceText   as GHC
 import qualified GHC.Types.ForeignStubs as GHC
-import qualified GHC.Types.ForeignStubDecls as GHC
+--import qualified GHC.Types.ForeignStubDecls as GHC
 import qualified GHC.Unit.Types         as GHC
 import qualified GHC.Unit.Module.Name   as GHC
 import qualified GHC.Utils.Outputable   as GHC

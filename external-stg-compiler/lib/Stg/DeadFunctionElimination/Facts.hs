@@ -42,8 +42,11 @@ writeDfeFacts prefixPath Module{..} = do
 
   -- export LiveSource
   factLiveSource <- openFact "LiveSource.facts"
-  forM_ topBinders $ \b -> when (binderScope b == ForeignExported) $ do
-    BS8.hPutStrLn factLiveSource $ binderUniqueName b
+  case moduleForeignStubs of
+    NoStubs -> pure ()
+    ForeignStubs{..} -> do
+      forM_ [b | StubDeclExport _ b _ <- fsDecls] $ \b -> do
+        BS8.hPutStrLn factLiveSource $ binderUniqueName b
   closeFact factLiveSource
 
   -- export TyCon with DataCons
@@ -100,7 +103,7 @@ writeDfeFacts prefixPath Module{..} = do
 
       visitExpr :: Name -> Expr -> IO ()
       visitExpr fun = \case
-        StgApp f args _ _         -> addFunRef fun f >> mapM_ (visitArg fun) args
+        StgApp f args             -> addFunRef fun f >> mapM_ (visitArg fun) args
         StgLit{}                  -> pure ()
         StgConApp con args _      -> addDataConRef fun con >> mapM_ (visitArg fun) args
 

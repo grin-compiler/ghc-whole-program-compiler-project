@@ -16,7 +16,6 @@ library
   hs-source-dirs:      lib
   exposed-modules:
     Stg.GHC.Backend
-    Stg.GHC.Convert
     Stg.GHC.ToStg
     Stg.DeadFunctionElimination.Analysis
     Stg.DeadFunctionElimination.Facts
@@ -37,6 +36,7 @@ library
     , temporary
     , transformers
     , external-stg
+    , external-stg-syntax
     , souffle-haskell
     , time
 

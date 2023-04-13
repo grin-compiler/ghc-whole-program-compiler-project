@@ -1,7 +1,7 @@
 {-# LANGUAGE ImplicitParams, RecordWildCards, LambdaCase, MultiWayIf, TupleSections, OverloadedStrings, CPP #-}
 
 #ifdef EXTERNAL_STG_COMPILER_PACKAGE
-module Stg.GHC.Convert where
+module Stg.GHC.Convert_9_4 where
 #else
 module GHC.Stg.External.Convert where
 import GHC.Prelude

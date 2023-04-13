@@ -6,7 +6,7 @@ module Stg.GHC.ToStg
 
 -- Compiler
 import GHC
-import GHC.Driver.Types
+--import GHC.Driver.Types
 import GHC.Utils.Outputable
 
 -- Stg Types
@@ -17,6 +17,8 @@ import GHC.Types.Id.Info
 import GHC.Types.Var
 import GHC.Types.Unique
 import GHC.Types.Name.Occurrence as OccName
+import GHC.Types.SourceText
+import GHC.Types.ForeignStubs
 import GHC.Stg.Syntax
 
 import GHC.Types.CostCentre
@@ -77,7 +79,7 @@ simpleTyCon name dataCons = mkAlgTyCon name [] {-(error "Kind")-}liftedTypeKind 
 
 primRepToType :: PrimRep -> Type
 primRepToType = \case
-  VoidRep     -> voidPrimTy
+  VoidRep     -> primRepToRuntimeRep VoidRep
   Int8Rep     -> int8PrimTy
   Int16Rep    -> int16PrimTy
   Int32Rep    -> int32PrimTy
@@ -187,7 +189,6 @@ cvtIdDetails details uname = do
   dcMap <- gets envDataConMap
   pure $ case details of
     Ext.VanillaId       -> VanillaId
-    Ext.FExportedId     -> VanillaId
     Ext.RecSelId        -> RecSelId       (error "Ext.RecSelId sel_tycon") (error "Ext.RecSelId sel_naughty")
     Ext.DataConWorkId d -> DataConWorkId  $ Map.findWithDefault (error $ "Ext.DataConWorkId DataCon: " ++ show d ++ ", binder name: " ++ show uname) d dcMap
     Ext.DataConWrapId d -> DataConWrapId  $ Map.findWithDefault (error $ "Ext.DataConWrapId DataCon: " ++ show d ++ ", binder name: " ++ show uname) d dcMap
@@ -197,7 +198,7 @@ cvtIdDetails details uname = do
     Ext.TickBoxOpId     -> TickBoxOpId    (error "Ext.TickBoxOpId TickBoxOp")
     Ext.DFunId          -> DFunId         (error "Ext.DFunId Bool")
     Ext.CoVarId         -> CoVarId
-    Ext.JoinId ar       -> JoinId ar
+    Ext.JoinId ar _     -> JoinId ar
 
 cvtId :: Ext.Binder -> M Id
 cvtId b@Ext.Binder{..} = do
@@ -217,7 +218,7 @@ cvtIdDef b
   = cvtId $ b {Ext.binderModule = Ext.ModuleName ":Main"}
 
   -- always alloc new uniques for local binders
-  | Ext.binderScope b == Ext.LocalScope
+  | Ext.binderScope b == Ext.ClosurePrivate
   = cvtNewId b
 
   -- keep unique values, globals are never shadowed
@@ -229,7 +230,7 @@ cvtNewId :: Ext.Binder -> M Id
 cvtNewId Ext.Binder{..} = do
   details <- cvtIdDetails binderDetails binderUniqueName
   nameId <- case binderScope of
-    s | s == Ext.LocalScope || s == Ext.GlobalScope -> do
+    s | s == Ext.ClosurePrivate || s == Ext.ModulePrivate -> do
       name <- getFreshName OccName.varName binderUnitId binderModule binderName
       pure $ mkLocalId name Many (cvtPrimRepType binderType)
     _ -> do
@@ -399,7 +400,7 @@ cvtAlt Ext.Alt{..} = (,,) <$> cvtAltCon altCon <*> mapM cvtIdDef altBinders <*> 
 
 cvtExpr :: Ext.Expr -> M StgExpr
 cvtExpr = \case
-  Ext.StgApp f args t (_,_,l) -> StgApp <$> cvtId f <*> cvtArgs args <*> pure (cvtPrimRepType t)
+  Ext.StgApp f args           -> StgApp <$> cvtId f <*> cvtArgs args
   Ext.StgLit l                -> pure $ StgLit (cvtLit l)
   Ext.StgConApp dc args t     -> StgConApp <$> cvtDataCon dc <*> cvtArgs args <*> pure (map cvtPrimRepType t)
   Ext.StgOpApp op args t tc   -> StgOpApp (cvtOp args op) <$> cvtArgs args <*> cvtADTType t tc
@@ -447,15 +448,6 @@ cvtForeignStubs = \case
   Ext.NoStubs           -> NoStubs
   Ext.ForeignStubs{..}  -> ForeignStubs (ftext $ mkFastStringByteString fsCHeader) (ftext $ mkFastStringByteString fsCSource) []
 
-cvtForeignSrcLang :: Ext.ForeignSrcLang -> ForeignSrcLang
-cvtForeignSrcLang = \case
-  Ext.LangC       -> LangC
-  Ext.LangCxx     -> LangCxx
-  Ext.LangObjc    -> LangObjc
-  Ext.LangObjcxx  -> LangObjcxx
-  Ext.LangAsm     -> LangAsm
-  Ext.RawObject   -> RawObject
-
 ---------------
 
 data StgModule
@@ -465,7 +457,6 @@ data StgModule
   , stgModuleTyCons :: [TyCon]
   , stgTopBindings  :: [StgTopBinding]
   , stgForeignStubs :: ForeignStubs
-  , stgForeignFiles :: [(ForeignSrcLang, FilePath)]
   , stgIdUniqueMap  :: [(Ext.Unique, Unique)]
   }
 
@@ -504,7 +495,6 @@ toStg Ext.Module{..} = stgModule where
     , stgModuleTyCons = Map.elems $ Map.restrictKeys envADTTyConMap localTyConIds
     , stgTopBindings  = topBindings
     , stgForeignStubs = cvtForeignStubs moduleForeignStubs
-    , stgForeignFiles = [(cvtForeignSrcLang s, f) | (s, f) <- moduleForeignFiles]
     , stgIdUniqueMap  = [(u, idUnique i) | (Ext.BinderId u, i) <- Map.toList envIdMap]
     }
 

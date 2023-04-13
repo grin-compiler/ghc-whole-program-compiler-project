@@ -10,7 +10,7 @@ import GHC.Driver.Main
 import GHC.Driver.Phases
 import GHC.Driver.Pipeline
 import GHC.Driver.Session
-import GHC.Driver.Types
+--import GHC.Driver.Types
 import GHC.Utils.Error
 import GHC.Utils.Outputable
 import GHC.Builtin.Names (rOOT_MAIN)
@@ -42,7 +42,7 @@ import Data.Binary
 import qualified Data.Set as Set
 
 import qualified Stg.Syntax as C
-import qualified Stg.GHC.Convert as C
+--import qualified Stg.GHC.Convert_9_2 as C
 
 import Data.List (isSuffixOf)
 import System.FilePath
@@ -134,7 +134,7 @@ compileProgram backend noHsMain incPaths libPaths ldOpts clikeFiles stubs tyCons
     -- save exported external STG
     let stgFName = "whole_program_original.stgbin"
     putStrLn $ "writing " ++ stgFName
-    encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnit (mkModuleName ":Main") Nothing topBinds_simple NoStubs []
+    --encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnit (mkModuleName ":Main") Nothing topBinds_simple NoStubs []
 
     putStrLn "==== STG ===="
 --    putStrLn $ showSDoc dflags $ pprStgTopBindings topBinds_simple
@@ -147,7 +147,7 @@ compileProgram backend noHsMain incPaths libPaths ldOpts clikeFiles stubs tyCons
   liftIO $ do
     let stgFName = "whole_program_unarised.stgbin"
     putStrLn $ "writing " ++ stgFName
-    encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnit (mkModuleName ":Main") Nothing topBinds NoStubs []
+    --encodeFile stgFName $ C.cvtModule "whole-program-stg" mainUnit (mkModuleName ":Main") Nothing topBinds NoStubs []
 
   -- construct STG program manually
   -- TODO: specify the following properly
