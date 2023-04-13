@@ -34,12 +34,27 @@ instance VisitGCRef StackContinuation where
     Update addr           -> pure () -- action $ HeapPtr addr -- TODO/FIXME: this is not a GC root!
     Apply args            -> visitGCRef action args
     Catch handler _ _     -> action handler
-    _                     -> pure ()
+    CatchRetry stm alt _  -> action stm >> action alt
+    CatchSTM stm handler  -> action stm >> action handler
+    RestoreExMask{}       -> pure ()
+    RunScheduler{}        -> pure ()
+    Atomically stmAction  -> action stmAction
+    DataToTagOp{}         -> pure ()
+    RaiseOp ex            -> action ex
+    KeepAlive value       -> action value
+    DebugFrame{}          -> pure ()
 
 instance VisitGCRef ThreadState where
   visitGCRef action ThreadState{..} = do
     visitGCRef action tsCurrentResult
     visitGCRef action tsStack
+    visitGCRef action tsActiveTLog
+    visitGCRef action tsTLogStack
+
+instance VisitGCRef TLogEntry where
+  visitGCRef action TLogEntry{..} = do
+    action tleObservedGlobalValue
+    action tleCurrentLocalValue
 
 instance VisitGCRef WeakPtrDescriptor where
   -- NOTE: the value is not tracked by the GC
@@ -67,6 +82,7 @@ data RefNamespace
   | NS_MutableArrayArray
   | NS_MutableByteArray
   | NS_MutVar
+  | NS_TVar
   | NS_MVar
   | NS_SmallArray
   | NS_SmallMutableArray
@@ -88,6 +104,7 @@ visitAtom atom action = case atom of
   HeapPtr i           -> action $ encodeRef i NS_HeapPtr
   MVar i              -> action $ encodeRef i NS_MVar
   MutVar i            -> action $ encodeRef i NS_MutVar
+  TVar i              -> action $ encodeRef i NS_TVar
   Array i             -> action $ arrIdxToRef i
   MutableArray i      -> action $ arrIdxToRef i
   SmallArray i        -> action $ smallArrIdxToRef i

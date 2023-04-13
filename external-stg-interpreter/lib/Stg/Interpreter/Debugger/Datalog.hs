@@ -94,6 +94,7 @@ emitAtomToRef a = do
     HeapPtr i               -> add $ printf "$R_HeapPtr\t%d" i
     MVar i                  -> add $ printf "$R_MVar\t%d" i
     MutVar i                -> add $ printf "$R_MutVar\t%d" i
+    TVar i                  -> add $ printf "$R_TVar\t%d" i
     Array i                 -> add $ arrIdxToRef i
     MutableArray i          -> add $ arrIdxToRef i
     SmallArray i            -> add $ smallArrIdxToRef i
@@ -140,6 +141,11 @@ exportStgStateM stgState@StgState{..} = do
   -- simple resources
   forM_ (IntMap.toList ssMutVars) $ \(i, a) -> do
     addFact "MutVar" [I i, A a]
+
+  forM_ (IntMap.toList ssTVars) $ \(i, TVarDescriptor{..}) -> do
+    addFact "TVar" [I i, A tvdValue]
+    forM_ (IntSet.toList tvdQueue) $ \tid -> do
+      addFact "TVarQueue" [I i, I tid]
 
   forM_ (IntMap.toList ssStablePointers) $ \(i, a) -> do
     addFact "StablePointer" [I i, A a]
@@ -261,6 +267,7 @@ genAddressState AddressState{..} =
   , ("$R_MutableArrayArray",  asNextMutableArrayArray)
   , ("$R_MutableByteArray",   asNextMutableByteArray)
   , ("$R_MutVar",             asNextMutVar)
+  , ("$R_TVar",               asNextTVar)
   , ("$R_MVar",               asNextMVar)
   , ("$R_SmallArray",         asNextSmallArray)
   , ("$R_SmallMutableArray",  asNextSmallMutableArray)
@@ -322,6 +329,7 @@ allFactNames = nub
   , "MutableArrayArrayArg"
   , "MutableByteArray"
   , "MutVar"
+  , "TVar"
   , "MVar"
   , "MVar_Queue"
   , "MVar_Value"

@@ -176,6 +176,7 @@ reportAddressCounters StgState{..} = do
   reportI "ssNextStablePointer     " ssNextStablePointer
   reportI "ssNextMutableByteArray  " ssNextMutableByteArray
   reportI "ssNextMVar              " ssNextMVar
+  reportI "ssNextTVar              " ssNextTVar
   reportI "ssNextMutVar            " ssNextMutVar
   reportI "ssNextArray             " ssNextArray
   reportI "ssNextMutableArray      " ssNextMutableArray
