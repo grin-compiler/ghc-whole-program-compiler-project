@@ -45,9 +45,13 @@ maxMicroSec = 3 * 60 * 1000 * 1000
 
 findTests :: [FilePath] -> IO [FilePath]
 findTests paths = do
-  l <- forM paths $ \path -> do
+  l <- forM paths $ \path0 -> do
+    path <- pathIsSymbolicLink path0 >>= \case
+      True  -> getSymbolicLinkTarget path0
+      False -> pure path0
     printf "Scanning: %s\n" path
-    find always (fileName ~~? "*.run.stderr") path
+    let followSymLink = fromMaybe <$> fileName <*> readLink
+    find always (followSymLink ~~? "*.run.stderr") path
   let tests = nubOrd $ concat l
   printf "Found: %d tests\n" (length tests)
   pure tests
