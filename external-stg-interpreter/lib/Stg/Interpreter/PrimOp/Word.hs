@@ -223,14 +223,14 @@ bitReverse x =
 -- TODO: Maybe this could be implemented showing the desired semantics, instead of
 -- piggy-backing of GHC's implementation.
 
-pdep8 :: Word8 -> Word8 -> Word8
-pdep8 (W8# a) (W8# b) = W8# (pdep8# a b)
+pdep8 :: Word -> Word -> Word
+pdep8 (W# a) (W# b) = W# (pdep8# a b)
 
-pdep16 :: Word16 -> Word16 -> Word16
-pdep16 (W16# a) (W16# b) = W16# (pdep16# a b)
+pdep16 :: Word -> Word -> Word
+pdep16 (W# a) (W# b) = W# (pdep16# a b)
 
-pdep32 :: Word32 -> Word32 -> Word32
-pdep32 (W32# a) (W32# b) = W32# (pdep32# a b)
+pdep32 :: Word -> Word -> Word
+pdep32 (W# a) (W# b) = W# (pdep32# a b)
 
 pdep64 :: Word64 -> Word64 -> Word64
 pdep64 (W64# a) (W64# b) = W64# (pdep64# a b)
@@ -238,14 +238,14 @@ pdep64 (W64# a) (W64# b) = W64# (pdep64# a b)
 pdep :: Word -> Word -> Word
 pdep (W# a) (W# b) = W# (pdep# a b)
 
-pext8 :: Word8 -> Word8 -> Word8
-pext8 (W8# a) (W8# b) = W8# (pext8# a b)
+pext8 :: Word -> Word -> Word
+pext8 (W# a) (W# b) = W# (pext8# a b)
 
-pext16 :: Word16 -> Word16 -> Word16
-pext16 (W16# a) (W16# b) = W16# (pext16# a b)
+pext16 :: Word -> Word -> Word
+pext16 (W# a) (W# b) = W# (pext16# a b)
 
-pext32 :: Word32 -> Word32 -> Word32
-pext32 (W32# a) (W32# b) = W32# (pext32# a b)
+pext32 :: Word -> Word -> Word
+pext32 (W# a) (W# b) = W# (pext32# a b)
 
 pext64 :: Word64 -> Word64 -> Word64
 pext64 (W64# a) (W64# b) = W64# (pext64# a b)

@@ -34,10 +34,10 @@ evalOp op args = run $ do
     (hopefully the Word8 upper bytes are zeros)
 -}
 unboxWord8 :: Word8 -> Word8#
-unboxWord8 (W8# x) = narrowWord8# x
+unboxWord8 (W8# x) = x
 
 boxWord8 :: Word8# -> Word
-boxWord8 x = W# (extendWord8# x)
+boxWord8 x = W# (word8ToWord# x)
 
 unboxWord :: Word -> Word#
 unboxWord (W# x) = x
@@ -52,14 +52,14 @@ spec = do
         -- HINT: it is safe to extend representation size
         [WordV stgVal] <- evalOp "extendWord8#" [Word8V $ fromIntegral a]
 
-        assert $ stgVal == (W# (extendWord8# (unboxWord8 a)))
+        assert $ stgVal == (W# (word8ToWord# (unboxWord8 a)))
 
     it "narrowWord8#" $
       property $ forAll (arbitrary :: Gen Word) $ \a -> monadicIO $ do
         [Word8V stgVal] <- evalOp "narrowWord8#" [WordV a]
 
         -- HINT: compare the wider representations
-        assert $ stgVal == (boxWord8 (narrowWord8# (unboxWord a)))
+        assert $ stgVal == (boxWord8 (wordToWord8# (unboxWord a)))
 
     it "notWord8#" $
       property $ forAll (arbitrary :: Gen Word8) $ \a -> monadicIO $ do

@@ -34,10 +34,10 @@ evalOp op args = run $ do
     (hopefully the Int8 upper bytes are zeros)
 -}
 unboxInt8 :: Int8 -> Int8#
-unboxInt8 (I8# x) = narrowInt8# x
+unboxInt8 (I8# x) = x
 
 boxInt8 :: Int8# -> Int
-boxInt8 x = I# (extendInt8# x)
+boxInt8 x = I# (int8ToInt# x)
 
 unboxInt :: Int -> Int#
 unboxInt (I# x) = x
@@ -52,14 +52,14 @@ spec = do
         -- HINT: it is safe to extend representation size
         [IntV stgVal] <- evalOp "extendInt8#" [Int8V $ fromIntegral a]
 
-        assert $ stgVal == (I# (extendInt8# (unboxInt8 a)))
+        assert $ stgVal == (I# (int8ToInt# (unboxInt8 a)))
 
     it "narrowInt8#" $
       property $ forAll (arbitrary :: Gen Int) $ \a -> monadicIO $ do
         [Int8V stgVal] <- evalOp "narrowInt8#" [IntV a]
 
         -- HINT: compare the wider representations
-        assert $ stgVal == (boxInt8 (narrowInt8# (unboxInt a)))
+        assert $ stgVal == (boxInt8 (intToInt8# (unboxInt a)))
 
     it "negateInt8#" $
       property $ forAll (arbitrary :: Gen Int8) $ \a -> monadicIO $ do

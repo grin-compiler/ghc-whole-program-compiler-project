@@ -13,6 +13,7 @@ import Stg.Syntax (Name, Type(..))
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimOp.Word
 
+import GHC.Word
 import GHC.Exts
 
 runTests :: IO ()

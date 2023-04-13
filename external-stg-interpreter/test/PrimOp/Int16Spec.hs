@@ -34,10 +34,10 @@ evalOp op args = run $ do
     (hopefully the Int16 upper bytes are zeros)
 -}
 unboxInt16 :: Int16 -> Int16#
-unboxInt16 (I16# x) = narrowInt16# x
+unboxInt16 (I16# x) = x
 
 boxInt16 :: Int16# -> Int
-boxInt16 x = I# (extendInt16# x)
+boxInt16 x = I# (int16ToInt# x)
 
 unboxInt :: Int -> Int#
 unboxInt (I# x) = x
@@ -52,14 +52,14 @@ spec = do
         -- HINT: it is safe to extend representation size
         [IntV stgVal] <- evalOp "extendInt16#" [Int16V $ fromIntegral a]
 
-        assert $ stgVal == (I# (extendInt16# (unboxInt16 a)))
+        assert $ stgVal == (I# (int16ToInt# (unboxInt16 a)))
 
     it "narrowInt16#" $
       property $ forAll (arbitrary :: Gen Int) $ \a -> monadicIO $ do
         [Int16V stgVal] <- evalOp "narrowInt16#" [IntV a]
 
         -- HINT: compare the wider representations
-        assert $ stgVal == (boxInt16 (narrowInt16# (unboxInt a)))
+        assert $ stgVal == (boxInt16 (intToInt16# (unboxInt a)))
 
     it "negateInt16#" $
       property $ forAll (arbitrary :: Gen Int16) $ \a -> monadicIO $ do
