@@ -99,6 +99,13 @@ data MVarDescriptor
   }
   deriving (Show, Eq, Ord)
 
+data TVarDescriptor
+  = TVarDescriptor
+  { tvdValue  :: Atom
+  , tvdQueue  :: IntSet -- thread id, STM wake up queue
+  }
+  deriving (Show, Eq, Ord)
+
 -- TODO: detect coercions during the evaluation
 data Atom     -- Q: should atom fit into a cpu register? A: yes
   = HeapPtr       !Addr
@@ -111,6 +118,7 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | DoubleAtom    !Double
   | MVar          !Int
   | MutVar        !Int
+  | TVar          !Int
   | Array             !ArrIdx
   | MutableArray      !ArrIdx
   | SmallArray        !SmallArrIdx
@@ -123,6 +131,7 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | StableName        !Int
   | ThreadId          !Int
   | LiftedUndefined
+  | Rubbish
   deriving (Show, Eq, Ord)
 
 type ReturnValue = [Atom]
@@ -150,14 +159,27 @@ data HeapObject
   deriving (Show, Eq, Ord)
 
 data StackContinuation
+  -- basic block related
   = CaseOf  !Int !Id !Env !Binder !AltType ![Alt]  -- closure addr & name (debug) ; pattern match on the result ; carries the closure's local environment
+  -- closure related
   | Update  !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
   | Apply   ![Atom]                       -- apply args on the result heap object
-  | Catch   !Atom !Bool !Bool             -- catch frame ; exception handler, block async exceptions, interruptible
+  -- exception related
+  | Catch         !Atom !Bool !Bool       -- catch frame ; exception handler, block async exceptions, interruptible
   | RestoreExMask !Bool !Bool             -- saved: block async exceptions, interruptible
+  -- thread related
   | RunScheduler  !ScheduleReason
+  -- stm related
+  | Atomically    !Atom
+  | CatchRetry    !Atom !Atom !Bool       -- first STM action, alternative STM action, is running alt code?
+  | CatchSTM      !Atom !Atom             -- catch STM frame ; stm action, exception handler
+  -- tag/enum related
   | DataToTagOp
+  -- rts helper
+  | RaiseOp       !Atom
+  -- object lifetime related
   | KeepAlive     !Atom
+  -- ext stg interpreter debug related
   | DebugFrame    !DebugFrame             -- for debug purposes, it does not required for STG evaluation
   deriving (Show, Eq, Ord)
 
@@ -167,6 +189,7 @@ data DebugFrame
 
 data ScheduleReason
   = SR_ThreadFinished
+  | SR_ThreadFinishedFFICallback
   | SR_ThreadBlocked
   | SR_ThreadYield
   deriving (Show, Eq, Ord)
@@ -211,8 +234,9 @@ data DebugCommand
 data DebugOutput
   = DbgOutCurrentClosure  !(Maybe Id) !Addr !Env
   | DbgOutClosureList     ![Name]
-  | DbgOutThreadReport    !Int !ThreadState !Name !Addr
+  | DbgOutThreadReport    !Int !ThreadState !Name !Addr String
   | DbgOutHeapObject      !Addr !HeapObject
+  | DbgOutResult          ![Atom]
   deriving (Show)
 
 data DebugState
@@ -283,6 +307,7 @@ data StgState
   -- thread scheduler related
   , ssCurrentThreadId     :: Int
   , ssScheduledThreadIds  :: [Int]  -- HINT: one round
+  , ssThreadStepBudget    :: !Int
 
   -- primop related
 
@@ -291,6 +316,7 @@ data StgState
   , ssStablePointers      :: IntMap Atom
   , ssMutableByteArrays   :: IntMap ByteArrayDescriptor
   , ssMVars               :: IntMap MVarDescriptor
+  , ssTVars               :: IntMap TVarDescriptor
   , ssMutVars             :: IntMap Atom
   , ssArrays              :: IntMap (Vector Atom)
   , ssMutableArrays       :: IntMap (Vector Atom)
@@ -307,6 +333,7 @@ data StgState
   , ssNextMutableByteArray  :: !Int
   , ssNextMVar              :: !Int
   , ssNextMutVar            :: !Int
+  , ssNextTVar              :: !Int
   , ssNextArray             :: !Int
   , ssNextMutableArray      :: !Int
   , ssNextSmallArray        :: !Int
@@ -317,6 +344,9 @@ data StgState
   -- FFI related
   , ssCBitsMap            :: DL
   , ssStateStore          :: PrintableMVar StgState
+
+  -- FFI + createAdjustor
+  , ssCWrapperHsTypeMap   :: !(Map Name (Bool, Name, [Name]))
 
   -- RTS related
   , ssRtsSupport          :: Rts
@@ -344,6 +374,7 @@ data StgState
 
   , ssEvaluatedClosures   :: !(Set Name)
   , ssBreakpoints         :: !(Map Name Int)
+  , ssDebugFuel           :: !Int
   , ssDebugState          :: DebugState
   , ssStgErrorAction      :: Printable (M ())
 
@@ -404,6 +435,7 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   , ssThreads             = mempty
   , ssCurrentThreadId     = error "uninitialized ssCurrentThreadId"
   , ssScheduledThreadIds  = []
+  , ssThreadStepBudget    = 0
 
   -- primop related
 
@@ -413,6 +445,7 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   , ssMutableByteArrays   = mempty
   , ssMVars               = mempty
   , ssMutVars             = mempty
+  , ssTVars               = mempty
   , ssArrays              = mempty
   , ssMutableArrays       = mempty
   , ssSmallArrays         = mempty
@@ -428,6 +461,7 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   , ssNextMutableByteArray  = 0
   , ssNextMVar              = 0
   , ssNextMutVar            = 0
+  , ssNextTVar              = 0
   , ssNextArray             = 0
   , ssNextMutableArray      = 0
   , ssNextSmallArray        = 0
@@ -438,6 +472,9 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   -- FFI related
   , ssCBitsMap            = dl
   , ssStateStore          = stateStore
+
+  -- FFI + createAdjustor
+  , ssCWrapperHsTypeMap   = mempty
 
   , ssRtsSupport          = error "uninitialized ssRtsSupport"
 
@@ -465,6 +502,7 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   , ssEvaluatedClosures   = Set.empty
   , ssBreakpoints         = mempty
   , ssDebugState          = dbgState
+  , ssDebugFuel           = 0
   , ssStgErrorAction      = Printable $ pure ()
 
   -- region tracker
@@ -522,6 +560,9 @@ data Rts
   , rtsDivZeroException   :: Atom
   , rtsUnderflowException :: Atom
   , rtsOverflowException  :: Atom
+
+  -- closures used by the STM primitives
+  , rtsNestedAtomically   :: Atom -- (exception)
 
   -- rts helper custom closures
   , rtsApplyFun1Arg :: Atom
@@ -631,7 +672,9 @@ addZippedBindersToEnv :: StaticOrigin -> [(Binder, Atom)] -> Env -> Env
 addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so, v) e) env bvList
 
 addManyBindersToEnv :: StaticOrigin -> [Binder] -> [Atom] -> Env -> Env
-addManyBindersToEnv so binders values = addZippedBindersToEnv so $ zip binders values
+addManyBindersToEnv so [] [] env = env
+addManyBindersToEnv so (b : binders) (v : values) env = addManyBindersToEnv so binders values $ Map.insert (Id b) (so, v) env
+addManyBindersToEnv so binders values _env = error $ "addManyBindersToEnv - length mismatch: " ++ show (so, [(Id b, binderType b, binderTypeSig b) | b <- binders], values)
 
 lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, Atom)
 lookupEnvSO localEnv b = do
@@ -699,6 +742,12 @@ lookupMutVar :: HasCallStack => Int -> M Atom
 lookupMutVar m = do
   IntMap.lookup m <$> gets ssMutVars >>= \case
     Nothing -> stgErrorM $ "unknown MutVar: " ++ show m
+    Just a  -> pure a
+
+lookupTVar :: HasCallStack => Int -> M TVarDescriptor
+lookupTVar m = do
+  IntMap.lookup m <$> gets ssTVars >>= \case
+    Nothing -> stgErrorM $ "unknown TVar: " ++ show m
     Just a  -> pure a
 
 lookupMVar :: HasCallStack => Int -> M MVarDescriptor
@@ -840,6 +889,51 @@ getCStringConstantPtrAtom key = do
       pure a
 
 ---------------------------------------------
+-- stm
+
+promptM :: IO () -> M ()
+promptM ioAction = pure ()
+promptM ioAction = do
+  liftIO $ do
+    ioAction
+    putStrLn "[press enter]"
+    getLine
+    pure ()
+
+data TLogEntry
+  = TLogEntry
+  { tleObservedGlobalValue  :: !Atom
+  , tleCurrentLocalValue    :: !Atom
+  }
+  deriving (Show, Eq, Ord)
+
+type TLog = IntMap TLogEntry
+
+validateTLog :: TLog -> M Bool
+validateTLog tlog = do
+  isValid <- and <$> forM (IntMap.toList tlog)
+    (\(tvar, TLogEntry{..}) -> ((tleObservedGlobalValue ==) . tvdValue) <$> lookupTVar tvar)
+  promptM $ do
+    putStrLn $ "[STM] tlog: " ++ show tlog
+    putStrLn $ "[STM] validateTLog: " ++ show isValid
+  pure isValid
+
+subscribeTVarWaitQueues :: Int -> TLog -> M ()
+subscribeTVarWaitQueues tid tlog = do
+  -- subscribe to wait queues
+  let subscribe tvd@TVarDescriptor{..} = tvd {tvdQueue = IntSet.insert tid tvdQueue}
+  forM_ (IntMap.keys tlog) $ \tvar -> do
+    modify' $ \s@StgState{..} -> s {ssTVars = IntMap.adjust subscribe tvar ssTVars}
+
+unsubscribeTVarWaitQueues :: Int -> TLog -> M ()
+unsubscribeTVarWaitQueues tid tlog = do
+  -- unsubscribe from wait queues
+  let unsubscribe tvd@TVarDescriptor{..} = tvd {tvdQueue = IntSet.delete tid tvdQueue}
+  forM_ (IntMap.keys tlog) $ \tvar -> do
+    modify' $ \s@StgState{..} -> s {ssTVars = IntMap.adjust unsubscribe tvar ssTVars}
+
+
+---------------------------------------------
 -- threading
 
 data AsyncExceptionMask
@@ -860,6 +954,9 @@ data ThreadState
   , tsLocked            :: !Bool  -- Q: what is this for? is this necessary?
   , tsCapability        :: !Int   -- NOTE: the thread is running on this capability ; Q: is this necessary?
   , tsLabel             :: !(Maybe ByteString)
+  -- STM
+  , tsActiveTLog        :: !(Maybe TLog) -- elems: (global value, local value)
+  , tsTLogStack         :: ![TLog]
   }
   deriving (Eq, Ord, Show)
 
@@ -878,6 +975,8 @@ createThread = do
         , tsLocked            = False
         , tsCapability        = 0 -- TODO: implement capability handling
         , tsLabel             = Nothing
+        , tsActiveTLog        = Nothing
+        , tsTLogStack         = []
         }
   threads <- gets ssThreads
   threadId <- gets ssNextThreadId
@@ -1136,6 +1235,7 @@ data AddressState
   , asNextMutableByteArray  :: !Int
   , asNextMVar              :: !Int
   , asNextMutVar            :: !Int
+  , asNextTVar              :: !Int
   , asNextArray             :: !Int
   , asNextMutableArray      :: !Int
   , asNextSmallArray        :: !Int
@@ -1155,6 +1255,7 @@ emptyAddressState = AddressState
   , asNextMutableByteArray  = 0
   , asNextMVar              = 0
   , asNextMutVar            = 0
+  , asNextTVar              = 0
   , asNextArray             = 0
   , asNextMutableArray      = 0
   , asNextSmallArray        = 0
@@ -1177,6 +1278,7 @@ convertAddressState StgState{..} = AddressState
   , asNextMutableByteArray  = ssNextMutableByteArray
   , asNextMVar              = ssNextMVar
   , asNextMutVar            = ssNextMutVar
+  , asNextTVar              = ssNextTVar
   , asNextArray             = ssNextArray
   , asNextMutableArray      = ssNextMutableArray
   , asNextSmallArray        = ssNextSmallArray
