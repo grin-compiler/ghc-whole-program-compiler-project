@@ -56,6 +56,8 @@ main = do
   -- collect license info
   StgAppLicenseInfo{..} <- getAppLicenseInfo ghcstgappPath
 
+  -- collect cbits sources
+  cbitsSourceInfos <- getAppForeignFiles ghcstgappPath
 
   -- link cbits.so
   workDir <- getExtStgWorkDirectory ghcstgappPath
@@ -86,6 +88,10 @@ main = do
     forM_ stgappUnitConfs $ \unitConf -> do
       add (".package-db-and-license-info" </> takeFileName unitConf) unitConf
 
+    -- copy cbits sources
+    forM_ cbitsSourceInfos $ \StgAppForeignSourceInfo{..} -> do
+      add ("cbits-source" </> stgForeignUnitId </> stgForeignSourceRelPath) stgForeignSourceAbsPath
+
     -- copy cbits.so and related files
     add "cbits/cbits.so" soName
     add "cbits/cbits.so.sh" (soName ++ ".sh")
@@ -97,6 +103,7 @@ main = do
             [ "module.stgbin"
             ] ++ if stgbinsOnly then [] else
             [ "module.ghcstg"
+            , "module.fullcore-hi"
             , "module.ghccore"
             , "module.hs"
             , "module.cmm"
@@ -104,6 +111,7 @@ main = do
             , "module.info"
             , "module_stub.h"
             , "module_stub.c"
+            , "module_capi_stub.o"
             ]
       existingFiles <- withArchive modModpakPath $ mapM mkEntrySelector files >>= filterM doesEntryExist
       forM_ existingFiles $ \src -> do

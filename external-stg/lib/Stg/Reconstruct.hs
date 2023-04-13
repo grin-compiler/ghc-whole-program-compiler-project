@@ -77,7 +77,7 @@ reconLocalBinder BinderMap{..} b@SBinder{..} = -- HINT: local binders only
   , binderDefLoc      = sbinderDefLoc
   , binderUnitId      = bmUnitId
   , binderModule      = bmModule
-  , binderScope       = LocalScope
+  , binderScope       = ClosurePrivate
   , binderTopLevel    = False
   , binderUniqueName  = uName
   , binderUNameHash   = hash uName
@@ -141,7 +141,6 @@ reconModule Module{..} = mod where
     , moduleExternalTopIds      = exts
     , moduleTyCons              = tyConList
     , moduleTopBindings         = binds
-    , moduleForeignFiles        = moduleForeignFiles
     }
 
   bm = BinderMap
@@ -173,7 +172,7 @@ reconModule Module{..} = mod where
           ]
 
   exts :: [(UnitId, [(ModuleName, [Binder])])]
-  exts = [(u, [(m, map (mkTopBinder u m HaskellExported) l) | (m, l) <- ml]) | (u, ml) <- moduleExternalTopIds]
+  exts = [(u, [(m, map (mkTopBinder u m ModulePublic) l) | (m, l) <- ml]) | (u, ml) <- moduleExternalTopIds]
 
   reconTopBinder :: SBinder -> Binder
   reconTopBinder b = getBinder bm $ sbinderId b
@@ -206,7 +205,7 @@ reconExpr bm = \case
   StgCase x b at alts   -> let b'   = reconLocalBinder bm b
                                bm'  = insertBinder b' bm
                            in StgCase (reconExpr bm x) b' (reconAltType bm at) (map (reconAlt bm') alts)
-  StgApp f args t s     -> StgApp (getBinder bm f) (map (reconArg bm) args) t s
+  StgApp f args         -> StgApp (getBinder bm f) (map (reconArg bm) args)
   StgOpApp op args t tc -> StgOpApp op (map (reconArg bm) args) t (getTyCon bm <$> tc)
   StgConApp dc args t   -> StgConApp (getDataCon bm dc) (map (reconArg bm) args) t
   StgLet b e            -> let (bm', b') = reconBinding bm b

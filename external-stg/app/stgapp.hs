@@ -154,7 +154,7 @@ modes = subparser
             let ignoredSymbols = Set.fromList $
                   [ n
                   | ForeignStubs _ _ _ _ l <- map moduleForeignStubs moduleList
-                  , StubDeclImport _ (Just (StubImplImportCWrapper n _)) <- l
+                  , StubDeclImport _ (Just (StubImplImportCWrapper n _ _ _ _)) <- l
                   -- HINT: these symbols are used only by "createAdjustor" that does not dereference the symbol
                   ] ++ map BS8.pack handledRTSSymbols
             let ForeignInfo{..} = getForeignInfos moduleList
@@ -176,7 +176,7 @@ modes = subparser
             printf "undefined symbols: %d\n" (Set.size undefSet)
             mapM_ BS8.putStrLn $ Set.toList undefSet
 
-            let nonRTSUndefSet = undefSet Set.\\ Set.fromList (map BS8.pack rtsSymbols)
+            let nonRTSUndefSet = undefSet Set.\\ Set.fromList (map (BS8.pack . getSymbolName) rtsSymbols)
             printf "\nnon RTS undefined symbols: %d\n" (Set.size nonRTSUndefSet)
             mapM_ BS8.putStrLn $ Set.toList nonRTSUndefSet
 

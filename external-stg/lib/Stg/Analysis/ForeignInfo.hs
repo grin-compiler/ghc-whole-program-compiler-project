@@ -112,7 +112,7 @@ visitRhs = \case
 
 visitExpr :: Expr -> M ()
 visitExpr e = case e of
-  StgApp _ args _ _ -> mapM_ visitArg args
+  StgApp _ args -> mapM_ visitArg args
 
   StgLit l -> visitLit l
 

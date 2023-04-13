@@ -41,11 +41,14 @@ linkForeignCbitsSharedLib ghcstgappFname = do
 
       stubArs = concatMap stglibCapiStubsPaths linkerInfoList
 
+      arList = cbitsArs ++ stubArs
+      {-
       arList = case cbitsArs ++ stubArs of
           []  -> []
           l   -> case stgappPlatformOS of
                   "darwin"  -> ["-Wl,-all_load"] ++ l
                   _         -> ["-Wl,--whole-archive"] ++ l ++ ["-Wl,--no-whole-archive"]
+      -}
 
       stubOpts =
           [ "-fPIC"

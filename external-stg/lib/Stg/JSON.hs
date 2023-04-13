@@ -59,7 +59,6 @@ instance ToJSON ModuleLabelKind
 instance ToJSON ModuleCLabel
 instance (ToJSON idOcc) => ToJSON (StubDecl' idOcc)
 instance (ToJSON idOcc) => ToJSON (ForeignStubs' idOcc)
-instance ToJSON ForeignSrcLang
 instance (ToJSON a, ToJSON b, ToJSON c, ToJSON d, ToJSON e) => ToJSON (Module' a b c d e)
 
 instance FromJSON BS8.ByteString where
@@ -116,5 +115,4 @@ instance FromJSON ModuleLabelKind
 instance FromJSON ModuleCLabel
 instance (FromJSON idOcc) => FromJSON (StubDecl' idOcc)
 instance (FromJSON idOcc) => FromJSON (ForeignStubs' idOcc)
-instance FromJSON ForeignSrcLang
 instance (FromJSON a, FromJSON b, FromJSON c, FromJSON d, FromJSON e) => FromJSON (Module' a b c d e)

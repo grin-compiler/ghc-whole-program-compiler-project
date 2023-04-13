@@ -16,7 +16,6 @@ deconModule Module{..} = smod where
     , moduleExternalTopIds      = [(uid, [(m, map deconIdBnd ids) | (m, ids) <- mods]) | (uid, mods) <- moduleExternalTopIds]
     , moduleTyCons              = [(uid, [(m, map deconTcBnd tcs) | (m, tcs) <- mods]) | (uid, mods) <- moduleTyCons]
     , moduleTopBindings         = map deconTopBinding moduleTopBindings
-    , moduleForeignFiles        = moduleForeignFiles
     }
 
 deconIdBnd :: Binder -> SBinder
@@ -82,7 +81,7 @@ deconArg = \case
 
 deconExpr :: Expr -> SExpr
 deconExpr = \case
-  StgApp idOcc args t dbg -> StgApp (deconIdOcc idOcc) (map deconArg args) t dbg
+  StgApp idOcc args       -> StgApp (deconIdOcc idOcc) (map deconArg args)
   StgLit lit              -> StgLit lit
   StgConApp dcOcc args ts -> StgConApp (deconDcOcc dcOcc) (map deconArg args) ts
   StgOpApp op args t mTc  -> StgOpApp op (map deconArg args) t (fmap deconTcOcc mTc)

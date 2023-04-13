@@ -89,7 +89,11 @@ data GhcStgApp
   , appGhcVersion     :: String
   , appPlatformOS     :: String
   , appUnitDbPaths    :: [FilePath]
-  , appObjFiles       :: [FilePath]
+  , appObjectDir      :: FilePath
+  , appUnitId         :: String
+  , appModules        :: [String]
+  , appMainModuleName :: String
+  , appMainModuleObj  :: FilePath
   , appExtraLdInputs  :: [FilePath]
   , appExtraLibs      :: [String]
   , appExtraLibDirs   :: [FilePath]
@@ -107,7 +111,11 @@ instance FromJSON GhcStgApp where
       <*> v .: "ghc-version"
       <*> v .: "platform-os"
       <*> v .:? "unit-db-paths" .!= []
-      <*> v .:? "o-files" .!= []
+      <*> v .: "object-dir"
+      <*> v .: "app-unit-id"
+      <*> v .: "app-modules"
+      <*> v .: "app-main-module-name"
+      <*> v .:? "app-main-module-object" .!= ""
       <*> v .:? "extra-ld-inputs" .!= []
       <*> v .:? "extra-libraries" .!= []
       <*> v .:? "library-dirs" .!= []
@@ -115,21 +123,33 @@ instance FromJSON GhcStgApp where
       <*> v .:? "app-deps" .!= []
   parseJSON _ = fail "Expected Object for UnitLinkerInfo value"
 
+wpcModpaksPath, wpcCbitsPath, wpcCapiStubsPath, wpcCbitsSourcePath :: String
+wpcModpaksPath    = "extra-compilation-artifacts" </> "wpc-plugin" </> "modpaks"
+wpcCbitsPath      = "extra-compilation-artifacts" </> "wpc-plugin" </> "cbits"
+wpcCapiStubsPath  = "extra-compilation-artifacts" </> "wpc-plugin" </> "capi-stubs"
+wpcWrapperStubsPath = "extra-compilation-artifacts" </> "wpc-plugin" </> "wrapper-stubs"
+wpcCbitsSourcePath  = "extra-compilation-artifacts" </> "wpc-plugin" </> "cbits-source"
+
+readGhcStgApp :: FilePath -> IO GhcStgApp
+readGhcStgApp = Y.decodeFileThrow
+
 getAppModuleMapping :: FilePath -> IO [StgModuleInfo]
 getAppModuleMapping ghcStgAppFname = do
   let showLog = False -- TODO: use RIO ???
   let packageName = "exe:" ++ takeBaseName ghcStgAppFname -- TODO: save package to .ghc_stgapp
-  GhcStgApp{..} <- Y.decodeFileThrow ghcStgAppFname
+  GhcStgApp{..} <- readGhcStgApp ghcStgAppFname
   let modpakExt = "." ++ appObjSuffix ++ "_modpak"
       check f = do
+        --putStrLn $ "check: " ++ f
         exist <- doesFileExist f
         unless exist $ when showLog $ do
           putStrLn $ "modpak does not exist: " ++ f
         pure exist
+
   libModules <- filterM (check . modModpakPath) $
         [ StgModuleInfo
           { modModuleName     = mod
-          , modModpakPath     = dir </> moduleToModpak modpakExt mod
+          , modModpakPath     = dir </> wpcModpaksPath </> moduleToModpak modpakExt mod
           , modPackageName    = unitName
           , modPackageVersion = unitVersion
           , modUnitId         = unitId
@@ -145,19 +165,20 @@ getAppModuleMapping ghcStgAppFname = do
 
         ]
 
-  extraAppModpaks <- filterM check [oPath ++ "_modpak" | oPath <- appExtraLdInputs]
-  let appModpaks = [oPath ++ "_modpak" | oPath <- appObjFiles]
-  -- load app module names from stgbins
-  appModules <- forM (appModpaks ++ extraAppModpaks) $ \modpak -> do
-    (_phase, _unitId, moduleName, _srcPath) <- readModpakL modpak modpakStgbinPath decodeStgbinModuleName
-    pure StgModuleInfo
-          { modModuleName     = BS8.unpack $ getModuleName moduleName
-          , modModpakPath     = modpak
-          , modPackageName    = packageName
-          , modPackageVersion = ""
-          , modUnitId         = "main"
-          }
-  pure $ appModules ++ libModules
+  appMods <- filterM (check . modModpakPath) $
+      [ StgModuleInfo
+        { modModuleName     = mod
+        , modModpakPath     = appObjectDir </> wpcModpaksPath </> modpakRelPath
+        , modPackageName    = appUnitId
+        , modPackageVersion = ""
+        , modUnitId         = appUnitId
+        }
+      | mod <- appModules
+      , let modpakRelPath = if mod == appMainModuleName
+                              then appMainModuleObj -<.> modpakExt
+                              else moduleToModpak modpakExt mod
+      ]
+  pure $ appMods ++ libModules
 
 getAppModpaks :: FilePath -> IO [FilePath]
 getAppModpaks ghcStgAppFname = map modModpakPath <$> getAppModuleMapping ghcStgAppFname
@@ -224,7 +245,6 @@ data StgLibLinkerInfo
   { stglibName            :: String
   , stglibCbitsPaths      :: [FilePath]
   , stglibCapiStubsPaths  :: [FilePath]
-  , stglibAllStubsPaths   :: [FilePath]
   , stglibExtraLibs       :: [String]
   , stglibExtraLibDirs    :: [FilePath]
   , stglibLdOptions       :: [String]
@@ -242,17 +262,23 @@ data StgAppLinkerInfo
   }
   deriving (Eq, Ord, Show)
 
+findIfExists :: RecursionPredicate -> FilterPredicate -> FilePath -> IO [FilePath]
+findIfExists rp fp path = do
+  exists <- doesDirectoryExist path
+  if exists
+    then find rp fp path
+    else pure []
+
 getAppLinkerInfo :: FilePath -> IO (StgAppLinkerInfo, [StgLibLinkerInfo])
 getAppLinkerInfo ghcStgAppFname = do
-  GhcStgApp{..} <- Y.decodeFileThrow ghcStgAppFname
+  GhcStgApp{..} <- readGhcStgApp ghcStgAppFname
 
   -- app info
-  appCbits <- flip filterM (appExtraLdInputs ++ appObjFiles) $ \objName -> do
-    -- ASSUMPTION: if there is no .modpak file then it must be a C like object file
-    let modpakFile = objName ++ "_modpak"
-    not <$> doesFileExist modpakFile
+  -- TODO: use .dyn_o
+  appCbits <- findIfExists always (extension ==? ".o") $ appObjectDir </> wpcCbitsPath
+  appCapiStubs <- findIfExists always (extension ==? ".o") $ appObjectDir </> wpcCapiStubsPath
   let appInfo = StgAppLinkerInfo
-        { stgappCObjects      = appCbits
+        { stgappCObjects      = appCbits ++ appCapiStubs
         , stgappExtraLibs     = appExtraLibs
         , stgappExtraLibDirs  = appExtraLibDirs
         , stgappLdOptions     = appLdOptions
@@ -262,39 +288,23 @@ getAppLinkerInfo ghcStgAppFname = do
 
   -- lib info
   let forceDynamic = True
+      {-
       arExt n = if forceDynamic
         then "-" ++ appGhcName ++ appGhcVersion ++ ".dyn_o" ++ n ++ ".a"
         else "." ++ appObjSuffix ++ n ++ ".a"
+      -}
   libInfoList <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
 
-    let pathList = [path </> libName | path <- unitLibDirs, lib <- unitLibraries, let libName = "lib" ++ lib]
+    cbitsPathList <- forM unitLibDirs $ \path -> do
+      findIfExists always (extension ==? ".dyn_o") $ path </> wpcCbitsPath
 
-    cbitsPathList <- forM pathList $ \path -> do
-      -- FIXME: make cbits and stubs name handling robust, this is a HACK!
-      let cbitsPath = path ++ arExt "_cbits"
-      doesFileExist cbitsPath >>= \case
-        True  -> pure $ Just cbitsPath
-        False -> pure Nothing
-
-    stubsPathList <- forM pathList $ \path -> do
-      -- FIXME: make cbits and stubs name handling robust, this is a HACK!
-      let stubsPath = path ++ arExt "_capi_stubs"
-      doesFileExist stubsPath >>= \case
-        True  -> pure $ Just stubsPath
-        False -> pure Nothing
-
-    allStubsPathList <- forM pathList $ \path -> do
-      -- FIXME: make cbits and stubs name handling robust, this is a HACK!
-      let stubsPath = path ++ arExt "_all_stubs"
-      doesFileExist stubsPath >>= \case
-        True  -> pure $ Just stubsPath
-        False -> pure Nothing
+    capiStubsPathList <- forM unitLibDirs $ \path -> do
+      findIfExists always (extension ==? ".dyn_o") $ path </> wpcCapiStubsPath
 
     pure $ StgLibLinkerInfo
       { stglibName            = unitName
-      , stglibCbitsPaths      = catMaybes cbitsPathList
-      , stglibCapiStubsPaths  = catMaybes stubsPathList
-      , stglibAllStubsPaths   = catMaybes allStubsPathList
+      , stglibCbitsPaths      = concat cbitsPathList
+      , stglibCapiStubsPaths  = concat capiStubsPathList
       , stglibExtraLibs       = unitExtraLibs
       , stglibExtraLibDirs    = unitLibDirs
       , stglibLdOptions       = unitLdOptions
@@ -309,7 +319,7 @@ data StgAppLicenseInfo
 
 getAppLicenseInfo :: FilePath -> IO StgAppLicenseInfo
 getAppLicenseInfo ghcStgAppFname = do
-  GhcStgApp{..} <- Y.decodeFileThrow ghcStgAppFname
+  GhcStgApp{..} <- readGhcStgApp ghcStgAppFname
   confList <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
     let possibleUnitConfs = nubOrd
           [ confPath </> (confName ++ ".conf")
@@ -345,3 +355,41 @@ data StgAppInfo
 getAppInfo :: FilePath -> IO StgAppInfo
 getAppInfo ghcStgAppFname = do
   pure undefined
+
+-- observation of foreign cbits source files
+
+data StgAppForeignSourceInfo
+  = StgAppForeignSourceInfo
+  { stgForeignSourceAbsPath :: FilePath
+  , stgForeignSourceRelPath :: FilePath
+  , stgForeignUnitId        :: String
+  }
+  deriving (Eq, Ord, Show)
+
+getAppForeignFiles :: FilePath -> IO [StgAppForeignSourceInfo]
+getAppForeignFiles ghcStgAppFname = do
+  GhcStgApp{..} <- readGhcStgApp ghcStgAppFname
+  let appSrcDir = appObjectDir </> wpcCbitsSourcePath
+  appCbitsSources <- findIfExists always (fileType ==? RegularFile) appSrcDir
+  let appCbitsInfos =
+        [ StgAppForeignSourceInfo
+          { stgForeignSourceAbsPath = p
+          , stgForeignSourceRelPath = makeRelative appSrcDir p
+          , stgForeignUnitId        = appUnitId
+          }
+        | p <- appCbitsSources
+        ]
+  libsCbitsInfos <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
+    forM unitLibDirs $ \path -> do
+      let libSrcDir = path </> wpcCbitsSourcePath
+      libCbitsSources <- findIfExists always (fileType ==? RegularFile) libSrcDir
+      pure
+        [ StgAppForeignSourceInfo
+          { stgForeignSourceAbsPath = p
+          , stgForeignSourceRelPath = makeRelative libSrcDir p
+          , stgForeignUnitId        = unitId
+          }
+        | p <- libCbitsSources
+        ]
+
+  pure $ appCbitsInfos ++ (concat $ concat libsCbitsInfos)

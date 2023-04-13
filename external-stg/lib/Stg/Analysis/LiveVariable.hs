@@ -56,7 +56,7 @@ visitRhs = \case
 
 visitExpr :: Expr -> (UsedLocal, Expr)
 visitExpr e = case e of
-  StgApp f args _ _ -> (mkUsedLocal $ f : [b | StgVarArg b <- args], e)
+  StgApp f args -> (mkUsedLocal $ f : [b | StgVarArg b <- args], e)
 
   StgLit{} -> (Set.empty, e)
 

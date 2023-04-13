@@ -47,10 +47,9 @@ ppPrimRep = \case
 
 colorBinderExport :: Binder -> Doc -> Doc
 colorBinderExport b = case binderScope b of
-  LocalScope      -> id
-  GlobalScope     -> id
-  HaskellExported -> green
-  ForeignExported -> ondullcyan . green
+  ClosurePrivate  -> id
+  ModulePrivate   -> id
+  ModulePublic    -> green
 
 pprBinder :: Binder -> Doc
 pprBinder b = parens $ (colorBinderExport b . pretty . binderUniqueName $ b) <+> text ":" <+> ppType (binderType b) <+> parens (pretty $ binderTypeSig b) <+> parens (pretty $ show $ binderDetails b) where
@@ -146,7 +145,7 @@ pprExpr' hasParens exp = case exp of
                                , indent 2 $ vcat $ map (pprAlt) alts
                                , "}"
                                ]
-  StgApp f args ty s    -> maybeParens hasParens $ (pprVar f) <+> (hsep $ map (pprArg) args) <+> text "::" <+> (pretty ty)-- <+> comment (pretty s)
+  StgApp f args         -> maybeParens hasParens $ (pprVar f) <+> (hsep $ map (pprArg) args)
   StgOpApp op args ty n -> maybeParens hasParens $ (pprOp op) <+> (hsep $ map (pprArg) args) <+> text "::" <+> (pretty ty) <+> maybe mempty (parens . ppTyConName) n
   StgConApp dc args _t  -> maybeParens hasParens $ (pretty dc) <+> (hsep $ map (pprArg) args)
   StgLet b e            -> maybeParens hasParens $ "let" <+> (align $ pprBinding b) <$$> "in" <+> align (pprExpr' False e)
@@ -215,7 +214,6 @@ pprModule m =
   <$$> vsep (map (pprTopBinding) (moduleTopBindings m))
 
   <$$> pprForeignStubs (moduleForeignStubs m)
-  <$$> pprForeignFiles (moduleForeignFiles m)
 
 instance Pretty Module where
   pretty = pprModule
@@ -228,6 +226,3 @@ pprForeignStubs = \case
                         , text "foreign stub C source {" <$$> green (pretty fsCSource) <$$> text "}"
                         , text "foreign decls {" <$$> (indent 2 $ vsep $ map (text . show) fsDecls) <$$> text "}"
                         ]
-
-pprForeignFiles :: [(ForeignSrcLang, FilePath)] -> Doc
-pprForeignFiles l = text "foreign files" <$$> vsep [indent 2 (text (show t) <+> text p) | (t, p) <- l]
