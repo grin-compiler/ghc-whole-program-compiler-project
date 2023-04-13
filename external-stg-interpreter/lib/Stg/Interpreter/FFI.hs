@@ -48,6 +48,7 @@ import Stg.Syntax
 import Stg.GHC.Symbols
 import Stg.Interpreter.Base
 import Stg.Interpreter.Debug
+import qualified Stg.Interpreter.GC as GC
 import Stg.Interpreter.Rts (globalStoreSymbols)
 
 pattern CharV c   = Literal (LitChar c)
@@ -82,7 +83,7 @@ data CCallConv = CCallConv | CApiConv | StdCallConv | PrimCallConv | JavaScriptC
 -}
 
 rtsSymbolSet :: Set Name
-rtsSymbolSet = Set.fromList $ map BS8.pack rtsSymbols
+rtsSymbolSet = Set.fromList $ map (BS8.pack . getSymbolName) rtsSymbols
 
 getFFISymbol :: Name -> M (FunPtr a)
 getFFISymbol name = do
@@ -103,12 +104,12 @@ mkFFIArg :: Atom -> M (Maybe FFI.Arg)
 mkFFIArg = \case
   Void              -> pure Nothing
   PtrAtom _ p       -> pure . Just $ FFI.argPtr p
-  IntV i            -> pure . Just $ FFI.argInt $ fromIntegral i
+  IntV i            -> pure . Just $ FFI.argInt64 $ fromIntegral i
   Int8V i           -> pure . Just $ FFI.argInt8 $ fromIntegral i
   Int16V i          -> pure . Just $ FFI.argInt16 $ fromIntegral i
   Int32V i          -> pure . Just $ FFI.argInt32 $ fromIntegral i
   Int64V i          -> pure . Just $ FFI.argInt64 $ fromIntegral i
-  WordV w           -> pure . Just $ FFI.argWord $ fromIntegral w
+  WordV w           -> pure . Just $ FFI.argWord64 $ fromIntegral w
   Word8V w          -> pure . Just $ FFI.argWord8 $ fromIntegral w
   Word16V w         -> pure . Just $ FFI.argWord16 $ fromIntegral w
   Word32V w         -> pure . Just $ FFI.argWord32 $ fromIntegral w
@@ -132,7 +133,7 @@ evalForeignCall funPtr cArgs retType = case retType of
     pure []
 
   UnboxedTuple [IntRep] -> do
-    result <- FFI.callFFI funPtr FFI.retInt cArgs
+    result <- FFI.callFFI funPtr FFI.retInt64 cArgs
     pure [IntV $ fromIntegral result]
 
   UnboxedTuple [Int8Rep] -> do
@@ -152,7 +153,7 @@ evalForeignCall funPtr cArgs retType = case retType of
     pure [Int64V $ fromIntegral result]
 
   UnboxedTuple [WordRep] -> do
-    result <- FFI.callFFI funPtr FFI.retWord cArgs
+    result <- FFI.callFFI funPtr FFI.retWord64 cArgs
     pure [WordV $ fromIntegral result]
 
   UnboxedTuple [Word8Rep] -> do
@@ -188,7 +189,7 @@ evalForeignCall funPtr cArgs retType = case retType of
 {-# NOINLINE evalFCallOp #-}
 evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
-    --liftIO $ putStrLn $ "  " ++ show foreignCTarget ++ " " ++ show args
+    --liftIO $ putStrLn $ "[evalFCallOp]  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
 
       ----------------
@@ -243,13 +244,13 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
       StaticTarget _ "lockFile" _ _ -> pure [IntV 0]
       StaticTarget _ "unlockFile" _ _ -> pure [IntV 0]
       StaticTarget _ "rtsSupportsBoundThreads" _ _ -> pure [IntV 0]
-{-
+
       StaticTarget _ "getMonotonicNSec" _ _
         | [Void] <- args
         -> do
           now <- liftIO getCurrentTime
-          pure [WordV nSec]
--}
+          pure [WordV 0]
+
 {-
 StgWord64 getMonotonicNSec(void)
 {
@@ -275,6 +276,26 @@ StgWord64 getMonotonicNSec(void)
 }
 
 -}
+
+{-
+void
+setProgArgv(int argc, char *argv[])
+{
+    freeArgv(prog_argc,prog_argv);
+    prog_argc = argc;
+    prog_argv = copyArgv(argc,argv);
+    setProgName(prog_argv);
+}
+-}
+      StaticTarget _ "setProgArgv" _ _
+        | [IntAtom argc, PtrAtom _ argvPtr, Void] <- args
+        -> do
+          liftIO $ do
+            -- peekCString :: CString -> IO String 
+            argv <- peekArray argc (castPtr argvPtr) >>= mapM peekCString
+            print (argc, argv)
+          -- TODO: save to the env!!
+          pure []
       {-
 void
 getProgArgv(int *argc, char **argv[])
@@ -339,6 +360,8 @@ getProgArgv(int *argc, char **argv[])
           Rts{..} <- gets ssRtsSupport
           liftIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
           pure []
+      StaticTarget _ "errorBelch2" _ _
+        -> stgErrorM $ "unsupported StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
 
       StaticTarget _ "hs_free_stable_ptr" _ _ -> pure []
 
@@ -346,9 +369,8 @@ getProgArgv(int *argc, char **argv[])
       StaticTarget _ "createAdjustor" _ _
         | [ IntV 1
           , PtrAtom StablePtr{} sp
-          , _
-          , PtrAtom (CStringPtr typeCString) _
-          , PtrAtom (CStringPtr hsTypeCString) _
+          , Literal (LitLabel wrapperName _)
+          , PtrAtom CStringPtr{} _
           , Void
           ] <- args
         , UnboxedTuple [AddrRep] <- t
@@ -366,11 +388,15 @@ getProgArgv(int *argc, char **argv[])
             , Void
             ]
           -}
+          cwrapperDesc <- lookupCWrapperHsType wrapperName
           -- FIXME: _freeWrapper needs to be called otherwise it will leak the memory!!!!
-          let Just (typeString, _)    = BS8.unsnoc typeCString
-              Just (hsTypeString, _)  = BS8.unsnoc hsTypeCString
-          (funPtr, _freeWrapper) <- createAdjustor evalOnNewThread fun (BS8.unpack typeString) (BS8.unpack hsTypeString)
+          --let Just (typeString, _)    = BS8.unsnoc typeCString    -- HINT: drop null terminator
+          --liftIO $ putStrLn $ "createAdjustor: (wrapper, hs-ty, c-ty) = " ++ show (wrapperName, hsTypeString, typeString)
+          (funPtr, _freeWrapper) <- createAdjustor evalOnNewThread fun cwrapperDesc
           pure [PtrAtom RawPtr $ castFunPtrToPtr funPtr]
+
+      StaticTarget _ "createAdjustor" _ _
+        -> stgErrorM $ "unsupported StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
 
       -- GHC RTS global store getOrSet function implementation
       StaticTarget _ foreignSymbol _ _
@@ -410,54 +436,6 @@ getProgArgv(int *argc, char **argv[])
 
       _ -> stgErrorM $ "unsupported StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
 
-charToFFIType :: Char -> Ptr FFI.CType
-charToFFIType = \case
-  'v' -> FFI.ffi_type_void
-  'f' -> FFI.ffi_type_float
-  'd' -> FFI.ffi_type_double
-  'L' -> FFI.ffi_type_sint64
-  'l' -> FFI.ffi_type_uint64
-  'W' -> FFI.ffi_type_sint32
-  'w' -> FFI.ffi_type_uint32
-  'S' -> FFI.ffi_type_sint16
-  's' -> FFI.ffi_type_uint16
-  'B' -> FFI.ffi_type_sint8
-  'b' -> FFI.ffi_type_uint8
-  'p' -> FFI.ffi_type_pointer
-  c   -> error $ "charToFFIType: unknown type " ++ show c
-
-charToGetter :: Char -> Ptr FFI.CValue -> IO Atom
-charToGetter c p = case c of
-  'v' -> pure Void
-  'f' -> FloatAtom <$> peek (castPtr p)
-  'd' -> DoubleAtom <$> peek (castPtr p)
-  'L' -> Int64V  . fromIntegral <$> peek (castPtr p :: Ptr Int64)
-  'l' -> Word64V . fromIntegral <$> peek (castPtr p :: Ptr Word64)
-  'W' -> Int32V  . fromIntegral <$> peek (castPtr p :: Ptr Int32)
-  'w' -> Word32V . fromIntegral <$> peek (castPtr p :: Ptr Word32)
-  'S' -> Int16V  . fromIntegral <$> peek (castPtr p :: Ptr Int16)
-  's' -> Word16V . fromIntegral <$> peek (castPtr p :: Ptr Word16)
-  'B' -> Int8V   . fromIntegral <$> peek (castPtr p :: Ptr Int8)
-  'b' -> Word8V  . fromIntegral <$> peek (castPtr p :: Ptr Word8)
-  'p' -> PtrAtom RawPtr <$> peek (castPtr p)
-  x   -> error $ "charToGetter: unknown type " ++ show x
-
-charToSetter :: Char -> Ptr FFI.CValue -> Atom -> IO ()
-charToSetter c p a = case (c, a) of
-  ('v', Void)         -> pure ()
-  ('v', HeapPtr{})    -> pure () -- WTF???
-  ('f', FloatAtom  v) -> poke (castPtr p) v
-  ('d', DoubleAtom v) -> poke (castPtr p) v
-  ('L', Int64V  v)    -> poke (castPtr p :: Ptr Int64)  $ fromIntegral v
-  ('l', Word64V v)    -> poke (castPtr p :: Ptr Word64) $ fromIntegral v
-  ('W', Int32V  v)    -> poke (castPtr p :: Ptr Int32)  $ fromIntegral v
-  ('w', Word32V v)    -> poke (castPtr p :: Ptr Word32) $ fromIntegral v
-  ('S', Int16V  v)    -> poke (castPtr p :: Ptr Int16)  $ fromIntegral v
-  ('s', Word16V v)    -> poke (castPtr p :: Ptr Word16) $ fromIntegral v
-  ('B', Int8V  v)     -> poke (castPtr p :: Ptr Int8)   $ fromIntegral v
-  ('b', Word8V v)     -> poke (castPtr p :: Ptr Word8)  $ fromIntegral v
-  ('p', PtrAtom RawPtr v)  -> poke (castPtr p) v
-  x   -> error $ "charToSetter: unknown type " ++ show x
 
 {-
   rtsTopHandlerRunIO
@@ -545,22 +523,24 @@ INFO_TABLE_RET(stg_forceIO, RET_SMALL, P_ info_ptr)
 -}
 
 {-# NOINLINE ffiCallbackBridge #-}
-ffiCallbackBridge :: HasCallStack => EvalOnNewThread -> MVar StgState -> Atom -> String -> String -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
-ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif retStorage argsStoragePtr _userData = do
-  let (retType : argsType) = typeString
-      ('e' : hsRetType : hsArgsType) = hsTypeString
+ffiCallbackBridge :: HasCallStack => EvalOnNewThread -> MVar StgState -> Atom -> CWrapperDesc -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
+ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argTypeNames) _cif retStorage argsStoragePtr _userData = do
   -- read args from ffi
-  argsStorage <- peekArray (length argsType) argsStoragePtr
-  argAtoms <- zipWithM charToGetter argsType argsStorage
-  {-
-  putStrLn $ "got FFI callback: " ++ show fun ++ " " ++ show argAtoms
-  putStrLn $ " typeString:   " ++ show typeString
-  putStrLn $ " hsTypeString: " ++ show hsTypeString
+  argsStorage <- peekArray (length argTypeNames) argsStoragePtr
+  argAtoms <- zipWithM (ffiRepToGetter . ffiTypeToFFIRep) argTypeNames argsStorage
+  
+  putStrLn $ "got FFI callback, fun: " ++ show fun
+  putStrLn $ " argAtoms: " ++ show argAtoms
+  putStrLn $ " wrapper-desc: " ++ show wd
+  putStrLn $ " wrapper-argTypeNames: " ++ show argTypeNames
 
   putStrLn $ "[callback BEGIN] " ++ show fun
-  -}
+  
   before <- takeMVar stateStore
-  (result, after) <- flip runStateT before $ do
+  (unboxedResult, after) <- flip runStateT before $ do
+    funStr <- GC.debugPrintHeapObject <$> readHeap fun
+    liftIO $ putStrLn $ "  ** fun str ** = " ++ funStr
+    
     {-
     oldThread <- gets ssCurrentThreadId
     -- TODO: properly setup ffi thread
@@ -569,17 +549,28 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
     scheduleToTheEnd tidFFI
     switchToThread tidFFI
     -}
-    evalOnNewThread $ do
+    fuel <- gets ssDebugFuel
+    liftIO $ putStrLn $ "[step 1] fuel = " ++ show fuel
+    boxedResult <- evalOnNewThread $ do
       -- TODO: box FFI arg atoms
       --  i.e. rts_mkWord8
       -- TODO: check how the stubs are generated and what types are need to be boxed
-      boxedArgs <- zipWithM boxFFIAtom hsArgsType argAtoms
+      liftIO $ putStrLn $ "[step 2]"
+      boxedArgs <- zipWithM boxFFIAtom argTypeNames argAtoms
+      liftIO $ putStrLn $ "[step 3] boxedArgs: " ++ show boxedArgs
       -- !!!!!!!!!!!!!!!!!!!!!!!!!!
       -- Q: what stack shall we use here?
       -- !!!!!!!!!!!!!!!!!!!!!!!!!!
-      stackPush $ Apply [] -- force result to WHNF
-      stackPush $ Apply $ boxedArgs ++ [Void]
+      stackPush $ RunScheduler SR_ThreadFinishedFFICallback -- return from callback
+      stackPush $ Apply [] -- force result to WHNF ; is this needed?
+      liftIO $ putStrLn $ "[step 4]"
+      stackPush $ Apply $ boxedArgs ++ if isIOCall then [Void] else []
+      liftIO $ putStrLn $ "[step 5]"
+      --modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
       pure [fun]
+
+    liftIO $ putStrLn $ "[pre - callback END]   " ++ show fun ++ " boxed-result: " ++ show boxedResult
+    zipWithM unboxFFIAtom [retTypeName] boxedResult
 {-
 --=============================================================================
     -- force result to WHNF
@@ -591,125 +582,196 @@ ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString _cif re
 --=============================================================================
     pure finalResult
 -}
+  putStrLn $ "[pre - callback END]   " ++ show fun ++ " result: " ++ show unboxedResult
   putMVar stateStore after
-  --putStrLn $ "[callback END]   " ++ show fun
+  putStrLn $ "[callback END]   " ++ show fun ++ " result: " ++ show unboxedResult
 
   -- HINT: need some kind of channel between the IO world and the interpreters StateT IO
   -- NOTE: stg apply fun argAtoms
-  case result of
+  case unboxedResult of
     []        -> pure ()
     [retAtom] -> do
       -- write result to ffi
       -- NOTE: only single result is supported
-      charToSetter retType retStorage retAtom
+      ffiRepToSetter (ffiTypeToFFIRep retTypeName) retStorage retAtom retTypeName
 
-createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> String -> String -> M (FunPtr a, IO ())
-createAdjustor evalOnNewThread fun typeString hsTypeString = do
-  --liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show typeString ++ " " ++ show hsTypeString
+createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> (Bool, Name, [Name]) -> M (FunPtr a, IO ())
+createAdjustor evalOnNewThread fun cwrapperDesc@(_, retTy, argTys) = do
+  liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show cwrapperDesc
 
-  let (retCType : argsCType) = map charToFFIType typeString
+  let (retCType : argsCType) = map (ffiRepToCType . ffiTypeToFFIRep) $ retTy : argTys
   stateStore <- gets $ unPrintableMVar . ssStateStore
-  liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun typeString hsTypeString)
+  liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun cwrapperDesc)
 
-boxFFIAtom :: Char -> Atom -> M Atom
-boxFFIAtom c a = case (c, a) of
+-- NOTE: LiftedRep and UnliftedRep is not used in FFIRep only AddrRep
+newtype FFIRep = FFIRep {unFFIRep :: PrimRep}
+
+ffiTypeToFFIRep :: Name -> FFIRep
+ffiTypeToFFIRep = FFIRep . \case
+  "()"        -> VoidRep
+  "Char"      -> WordRep
+  "Int"       -> IntRep
+  "Int8"      -> Int8Rep
+  "Int16"     -> Int16Rep
+  "Int32"     -> Int32Rep
+  "Int64"     -> Int64Rep
+  "Word"      -> WordRep
+  "Word8"     -> Word8Rep
+  "Word16"    -> Word16Rep
+  "Word32"    -> Word32Rep
+  "Word64"    -> Word64Rep
+  "Ptr"       -> AddrRep
+  "FunPtr"    -> AddrRep
+  "Float"     -> FloatRep
+  "Double"    -> DoubleRep
+  "StablePtr" -> AddrRep
+  "Bool"      -> AddrRep
+  "String"    -> AddrRep
+
+  -- additional allowed ffi import types
+  "Array#"              -> AddrRep
+  "MutableArray#"       -> AddrRep
+
+  "SmallArray#"         -> AddrRep
+  "MutableSmallArray#"  -> AddrRep
+
+  "ArrayArray#"         -> AddrRep
+  "MutableArrayArray#"  -> AddrRep
+
+  "ByteArray#"          -> AddrRep
+  "MutableByteArray#"   -> AddrRep
+
+  x -> error $ "ffiTypeToFFIRep - unsupported: " ++ show x
+
+ffiRepToCType :: FFIRep -> Ptr FFI.CType
+ffiRepToCType (FFIRep r) = case r of
+  VoidRep     -> FFI.ffi_type_void
+  LiftedRep   -> FFI.ffi_type_pointer
+  UnliftedRep -> FFI.ffi_type_pointer
+  Int8Rep     -> FFI.ffi_type_sint8
+  Int16Rep    -> FFI.ffi_type_sint16
+  Int32Rep    -> FFI.ffi_type_sint32
+  Int64Rep    -> FFI.ffi_type_sint64
+  IntRep      -> FFI.ffi_type_sint64
+  Word8Rep    -> FFI.ffi_type_uint8
+  Word16Rep   -> FFI.ffi_type_uint16
+  Word32Rep   -> FFI.ffi_type_uint32
+  Word64Rep   -> FFI.ffi_type_uint64
+  WordRep     -> FFI.ffi_type_uint64
+  AddrRep     -> FFI.ffi_type_pointer
+  FloatRep    -> FFI.ffi_type_float
+  DoubleRep   -> FFI.ffi_type_double
+  rep         -> error $ "ffiRepToCType - unsupported: " ++ show rep
+
+ffiRepToGetter :: FFIRep -> Ptr FFI.CValue -> IO Atom
+ffiRepToGetter (FFIRep r) p = case r of
+  VoidRep     -> pure Void
+  Int64Rep    -> Int64V  . fromIntegral <$> peek (castPtr p :: Ptr Int64)
+  Int32Rep    -> Int32V  . fromIntegral <$> peek (castPtr p :: Ptr Int32)
+  Int16Rep    -> Int16V  . fromIntegral <$> peek (castPtr p :: Ptr Int16)
+  Int8Rep     -> Int8V   . fromIntegral <$> peek (castPtr p :: Ptr Int8)
+  IntRep      -> IntV    . fromIntegral <$> peek (castPtr p :: Ptr Int)
+  Word64Rep   -> Word64V . fromIntegral <$> peek (castPtr p :: Ptr Word64)
+  Word32Rep   -> Word32V . fromIntegral <$> peek (castPtr p :: Ptr Word32)
+  Word16Rep   -> Word16V . fromIntegral <$> peek (castPtr p :: Ptr Word16)
+  Word8Rep    -> Word8V  . fromIntegral <$> peek (castPtr p :: Ptr Word8)
+  WordRep     -> WordV   . fromIntegral <$> peek (castPtr p :: Ptr Word)
+  AddrRep     -> PtrAtom RawPtr <$> peek (castPtr p)
+  FloatRep    -> FloatAtom <$> peek (castPtr p)
+  DoubleRep   -> DoubleAtom <$> peek (castPtr p)
+  rep         -> error $ "ffiRepToGetter - unsupported: " ++ show rep
+
+ffiRepToSetter :: FFIRep -> Ptr FFI.CValue -> Atom -> Name -> IO ()
+ffiRepToSetter (FFIRep r) p a retTypeName = case (r, a) of
+  (VoidRep,   Void)         -> pure ()
+  (FloatRep,  FloatAtom v)  -> poke (castPtr p) v
+  (DoubleRep, DoubleAtom v) -> poke (castPtr p) v
+  (Int64Rep,  Int64V v)     -> poke (castPtr p :: Ptr Int64)  $ fromIntegral v
+  (Int32Rep,  Int32V v)     -> poke (castPtr p :: Ptr Int32)  $ fromIntegral v
+  (Int16Rep,  Int16V v)     -> poke (castPtr p :: Ptr Int16)  $ fromIntegral v
+  (Int8Rep,   Int8V  v)     -> poke (castPtr p :: Ptr Int8)   $ fromIntegral v
+  (IntRep,    IntV   v)     -> poke (castPtr p :: Ptr Int)    $ fromIntegral v
+  (Word64Rep, Word64V v)    -> poke (castPtr p :: Ptr Word64) $ fromIntegral v
+  (Word32Rep, Word32V v)    -> poke (castPtr p :: Ptr Word32) $ fromIntegral v
+  (Word16Rep, Word16V v)    -> poke (castPtr p :: Ptr Word16) $ fromIntegral v
+  (Word8Rep,  Word8V v)     -> poke (castPtr p :: Ptr Word8)  $ fromIntegral v
+  (WordRep,   WordV v)      -> poke (castPtr p :: Ptr Word)   $ fromIntegral v
+  (AddrRep,   PtrAtom RawPtr v)  -> poke (castPtr p) v
+  x -> error $ "ffiRepToSetter - unsupported: " ++ show (x, retTypeName)
+
+unboxFFIAtom :: Name -> Atom -> M Atom
+unboxFFIAtom hsFFIType a = case (hsFFIType, a) of
+  ("()",      HeapPtr{})  -> pure Void
+  ("Int",     HeapPtr{})  -> con1Unbox
+  ("Int32",   HeapPtr{})  -> con1Unbox
+  ("Double",  HeapPtr{})  -> con1Unbox
+  -- TODO: make this complete
+  x -> error $ "unboxFFIAtom - unknown pattern: " ++ show x
+ where
+  con1Unbox = do
+    readHeap a >>= \case
+      Con{hoConArgs = [x]} -> pure x
+      o -> error $ "unboxFFIAtom " ++ show (hsFFIType, a, o)
+
+boxFFIAtom :: Name -> Atom -> M Atom
+boxFFIAtom hsFFIType a = case (hsFFIType, a) of
   -- boxed Char
-  ('c', WordV _)      -> mkWiredInCon rtsCharCon    [a]
+  ("Char", WordV _)     -> mkWiredInCon rtsCharCon    [a]
 
   -- boxed Ints
-  ('I', IntV _)       -> mkWiredInCon rtsIntCon     [a]
-  ('X', Int8V _)      -> mkWiredInCon rtsInt8Con    [a]
-  ('Y', Int16V _)     -> mkWiredInCon rtsInt16Con   [a]
-  ('Z', Int32V _)     -> mkWiredInCon rtsInt32Con   [a]
-  ('W', Int64V _)     -> mkWiredInCon rtsInt64Con   [a]
+  ("Int", IntV _)       -> mkWiredInCon rtsIntCon     [a]
+  ("Int8", Int8V _)     -> mkWiredInCon rtsInt8Con    [a]
+  ("Int16", Int16V _)   -> mkWiredInCon rtsInt16Con   [a]
+  ("Int32", Int32V _)   -> mkWiredInCon rtsInt32Con   [a]
+  ("Int64", Int64V _)   -> mkWiredInCon rtsInt64Con   [a]
 
   -- boxed Words
-  ('i', WordV _)       -> mkWiredInCon rtsWordCon    [a]
-  ('x', Word8V _)      -> mkWiredInCon rtsWord8Con   [a]
-  ('y', Word16V _)     -> mkWiredInCon rtsWord16Con  [a]
-  ('z', Word32V _)     -> mkWiredInCon rtsWord32Con  [a]
-  ('w', Word64V _)     -> mkWiredInCon rtsWord64Con  [a]
+  ("Word", WordV _)     -> mkWiredInCon rtsWordCon    [a]
+  ("Word8", Word8V _)   -> mkWiredInCon rtsWord8Con   [a]
+  ("Word16", Word16V _) -> mkWiredInCon rtsWord16Con  [a]
+  ("Word32", Word32V _) -> mkWiredInCon rtsWord32Con  [a]
+  ("Word64", Word64V _) -> mkWiredInCon rtsWord64Con  [a]
 
-  ('p', PtrAtom RawPtr _)     -> mkWiredInCon rtsPtrCon     [a]
-  ('*', PtrAtom RawPtr _)     -> mkWiredInCon rtsFunPtrCon  [a]
+  ("Ptr", PtrAtom RawPtr _)       -> mkWiredInCon rtsPtrCon     [a]
+  ("FunPtr", PtrAtom RawPtr _)    -> mkWiredInCon rtsFunPtrCon  [a]
 
-  ('f', FloatAtom _)  -> mkWiredInCon rtsFloatCon   [a]
-  ('d', DoubleAtom _) -> mkWiredInCon rtsDoubleCon  [a]
+  ("Float", FloatAtom _)          -> mkWiredInCon rtsFloatCon   [a]
+  ("Double", DoubleAtom _)        -> mkWiredInCon rtsDoubleCon  [a]
 
-  ('P', PtrAtom RawPtr _)     -> mkWiredInCon rtsStablePtrCon   [a]
-  ('b', IntV i)       -> mkWiredInCon (if i == 0 then rtsFalseCon else rtsTrueCon) []
-  ('s', PtrAtom RawPtr _)     -> error "TODO: support C string FFI arg boxing"
-  x                   -> error $ "boxFFIAtom - unknown pattern: " ++ show x
+  ("StablePtr", PtrAtom RawPtr _) -> mkWiredInCon rtsStablePtrCon   [a]
+  ("Bool", IntV i)                -> mkWiredInCon (if i == 0 then rtsFalseCon else rtsTrueCon) []
+  ("String", PtrAtom RawPtr _)    -> error "TODO: support C string FFI arg boxing"
+
+  x -> error $ "boxFFIAtom - unknown pattern: " ++ show x
 
 mkWiredInCon :: (Rts -> DataCon) -> [Atom] -> M Atom
 mkWiredInCon conFun args = do
   dc <- gets $ conFun . ssRtsSupport
   HeapPtr <$> allocAndStore (Con False dc args)
 
-unboxFFIAtom :: Char -> Atom -> M Atom
-unboxFFIAtom c heapObj = do
-  (Con _ dc args) <- readHeapCon heapObj
-  case (c, args) of
-    -- boxed Char
-    ('c', [v])  -> pure v
-
-    -- boxed Ints
-    ('I', [v])  -> pure v
-    ('X', [v])  -> pure v
-    ('Y', [v])  -> pure v
-    ('Z', [v])  -> pure v
-    ('W', [v])  -> pure v
-
-    -- boxed Words
-    ('i', [v])  -> pure v
-    ('x', [v])  -> pure v
-    ('y', [v])  -> pure v
-    ('z', [v])  -> pure v
-    ('w', [v])  -> pure v
-
-    ('p', [v])  -> pure v
-    ('*', [v])  -> pure v
-
-    ('f', [v])  -> pure v
-    ('d', [v])  -> pure v
-
-    ('P', [v])  -> pure v
-
-    ('b', []) -> do
-      trueCon <- gets $ rtsTrueCon . ssRtsSupport
-      pure . IntV $ if dc == trueCon then 1 else 0
-
-{-
-hsTyDescChar :: Type -> Char
-hsTyDescChar ty
-  | ty `eqType` unitTy = 'v'
-  | otherwise = case showFFIType ty of
-      "Char"      -> 'c'
-      "Int"       -> 'I'
-      "Int8"      -> 'X'
-      "Int16"     -> 'Y'
-      "Int32"     -> 'Z'
-      "Int64"     -> 'W'
-      "Word"      -> 'i'
-      "Word8"     -> 'x'
-      "Word16"    -> 'y'
-      "Word32"    -> 'z'
-      "Word64"    -> 'w'
-
-      "Ptr"       -> 'p'
-      "FunPtr"    -> '*'
-      "Float"     -> 'f'
-      "Double"    -> 'd'
-      "StablePtr" -> 'P'
-      "Bool"      -> 'b'
-      "String"    -> 's'
-      _other -> pprPanic "GHC.HsToCore.Foreign.Decl.hsTyDescChar" (ppr ty)
-
-  hs_type_string  = effect_char : (map hsTyDescChar $ res_hty : arg_htys)
-  effect_char     = if is_IO_res_ty then 'e' else 'p' -- HINT: effectful or pure
--}
-
 foreign import ccall unsafe "__int_encodeDouble"  rts_intEncodeDouble  :: Int  -> Int -> Double
 foreign import ccall unsafe "__word_encodeDouble" rts_wordEncodeDouble :: Word -> Int -> Double
 foreign import ccall unsafe "__int_encodeFloat"   rts_intEncodeFloat   :: Int  -> Int -> Float
 foreign import ccall unsafe "__word_encodeFloat"  rts_wordEncodeFloat  :: Word -> Int -> Float
+
+type CWrapperDesc = (Bool, Name, [Name])
+
+lookupCWrapperHsType :: Name -> M CWrapperDesc
+lookupCWrapperHsType name = do
+  Map.lookup name <$> gets ssCWrapperHsTypeMap >>= \case
+    Nothing -> stgErrorM $ "unknown CWrapper label: " ++ show name
+    Just a  -> pure a
+
+buildCWrapperHsTypeMap :: [Module] -> M ()
+buildCWrapperHsTypeMap mods = do
+  let m = Map.fromListWithKey (\k a b -> error $ "CWrapper name duplication: " ++ show k ++ " with hsTypes: " ++ show (a, b))
+          [ (name, (isIOCall, retType, argTypes))
+          | ForeignStubs{..} <- map moduleForeignStubs mods
+          , StubDeclImport _ (Just (StubImplImportCWrapper name _ isIOCall retType argTypes)) <- fsDecls
+          ]
+  modify' $ \s@StgState{..} -> s {ssCWrapperHsTypeMap = m}
+  {-
+  liftIO $ do
+    putStrLn $ "CWrappers:"
+    forM_ (Map.toList m) $ \(k, v) -> print k >> print v
+  -}

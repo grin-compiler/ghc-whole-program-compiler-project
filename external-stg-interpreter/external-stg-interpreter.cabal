@@ -88,6 +88,7 @@ library
                        unagi-chan,
                        pretty-terminal,
                        souffle-haskell,
+                       external-stg-syntax,
                        external-stg
   default-language:    Haskell2010
 
@@ -145,6 +146,7 @@ test-suite primop-test
   build-depends:       base >=4.11
                      , mtl
                      , external-stg
+                     , external-stg-syntax
                      , external-stg-interpreter
                      , hspec
                      , hspec-core
