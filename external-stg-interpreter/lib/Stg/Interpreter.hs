@@ -46,6 +46,7 @@ import Stg.Interpreter.Debug
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
 import qualified Stg.Interpreter.Debugger        as Debugger
 import qualified Stg.Interpreter.Debugger.Region as Debugger
+import qualified Stg.Interpreter.Debugger.Internal as Debugger
 import qualified Stg.Interpreter.GC as GC
 
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
@@ -75,6 +76,7 @@ import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
 import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
 import qualified Stg.Interpreter.PrimOp.Prefetch      as PrimPrefetch
 import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
+import qualified Stg.Interpreter.PrimOp.STM           as PrimSTM
 import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
 import qualified Stg.Interpreter.PrimOp.TagToEnum     as PrimTagToEnum
 import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
@@ -128,6 +130,7 @@ evalLiteral = \case
   LitNumber LitNumWord32 n  -> pure . WordAtom $ fromIntegral n
   LitNumber LitNumWord64 n  -> pure . WordAtom $ fromIntegral n
   c@LitChar{}               -> pure $ Literal c
+  LitRubbish{} -> pure Rubbish
   l -> error $ "unsupported: " ++ show l
 
 evalArg :: HasCallStack => Env -> Arg -> M Atom
@@ -187,10 +190,11 @@ builtinStgEval so a@HeapPtr{} = do
 
       | otherwise
       -> do
-
         let StgRhsClosure _ uf params e = hoCloBody
             HeapPtr l = a
             extendedEnv = addManyBindersToEnv SO_CloArg params hoCloArgs hoEnv
+        unless (length params == length hoCloArgs) $ do
+          stgErrorM $ "builtinStgEval - Closure - length mismatch: " ++ show (params, hoCloArgs)
 
         modify' $ \s@StgState{..} -> s {ssClosureCallCounter = succ ssClosureCallCounter}
         markExecuted l
@@ -347,6 +351,8 @@ evalOnThread isMainThread setupAction = do
 
   stackPush $ RunScheduler SR_ThreadFinished
   result0 <- setupAction
+  --liftIO $ putStrLn $ "evalOnThread result0 = " ++ show result0
+  --Debugger.reportState
   let loop resultIn = do
         resultOut <- evalStackMachine resultIn
         ThreadState{..} <- getThreadState tid
@@ -357,17 +363,51 @@ evalOnThread isMainThread setupAction = do
             pure tsCurrentResult
   loop result0
 
+
+contextSwitchTimer :: M ()
+contextSwitchTimer = do
+  t0 <- gets ssThreadStepBudget
+  t1 <- if t0 > 0 then pure (pred t0) else do
+    stackPush $ RunScheduler SR_ThreadYield
+    pure 2
+  modify' $ \s -> s {ssThreadStepBudget = t1}
+
 evalStackMachine :: [Atom] -> M [Atom]
 evalStackMachine result = do
+  (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
+  --liftIO $ Unagi.writeChan dbgOut $ DbgOutResult result
+  --liftIO $ putStrLn $ "evalStackMachine resultIn = " ++ show result
+
   stackPop >>= \case
     Nothing         -> pure result
-    Just stackCont  -> evalStackContinuation result stackCont >>= evalStackMachine
+    Just stackCont  -> do
+      --liftIO $ putStrLn $ "stack-cont = " ++ showStackCont stackCont
+      --contextSwitchTimer
+      evalStackContinuation result stackCont >>= evalStackMachine
+
+peekAtom :: Atom -> M String
+peekAtom a = case a of
+  HeapPtr{} -> GC.debugPrintHeapObject <$> readHeap a
+  _ -> pure $ show a
+
+peekAtoms = mapM peekAtom
 
 evalStackContinuation :: [Atom] -> StackContinuation -> M [Atom]
 evalStackContinuation result = \case
   Apply args
     | [fun@HeapPtr{}] <- result
-    -> builtinStgApply SO_ClosureResult fun args
+    -> do
+      argsS <- peekAtoms args
+      resultS <- peekAtoms result
+      --liftIO $ putStrLn $ "evalStackContinuation Apply args: " ++ show args ++ " to " ++ show result
+      --liftIO $ putStrLn $ "evalStackContinuation Apply args: " ++ show argsS ++ " to " ++ show resultS
+      
+      out <- builtinStgApply SO_ClosureResult fun args
+      outS <- peekAtoms out
+
+      --liftIO $ putStrLn $ "evalStackContinuation Apply args: " ++ show args ++ " to " ++ show result ++ " output-result: " ++ show out
+      --liftIO $ putStrLn $ "evalStackContinuation Apply args: " ++ show argsS ++ " to " ++ show resultS ++ " output-result: " ++ show outS
+      pure out
 
   Update dstAddr
     | [src@HeapPtr{}] <- result
@@ -401,10 +441,16 @@ evalStackContinuation result = \case
           d@(Alt AltDefault _ _) : al -> matchFirstLit resultId extendedEnv lit $ al ++ [d]
           _ -> matchFirstLit resultId extendedEnv lit alts
 
-      MultiValAlt _n -> do -- unboxed tuple
+      MultiValAlt n -> do -- unboxed tuple
         -- NOTE: result binder is not assigned
         let [Alt{..}] = alts
-            extendedEnv = addManyBindersToEnv SO_Scrut altBinders result localEnv
+        when (n /= length altBinders) $ do
+          stgErrorM $ "evalStackContinuation - MultiValAlt n broken assumption 2: " ++ show (n, altBinders, result)
+        let extendedEnv = if n == 1 && altBinders == []
+                            then addManyBindersToEnv SO_Scrut [resultBinder] result localEnv
+                            else addManyBindersToEnv SO_Scrut altBinders result localEnv
+        --unless (length altBinders == length result) $ do
+        --  stgErrorM $ "evalStackContinuation - MultiValAlt - length mismatch: " ++ show (n, altBinders, result)
 
         setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
@@ -413,8 +459,12 @@ evalStackContinuation result = \case
         let [Alt{..}]   = alts
             [v]         = result
             extendedEnv = addBinderToEnv SO_Scrut resultBinder v $                 -- HINT: bind the result
-                          addManyBindersToEnv SO_AltArg altBinders result localEnv  -- HINT: bind alt params
-
+                          localEnv
+                          --addManyBindersToEnv SO_AltArg altBinders result localEnv  -- HINT: bind alt params
+        {-
+        unless (length altBinders == length result) $ do
+          stgErrorM $ "evalStackContinuation - PolyAlt - length mismatch: " ++ show (altBinders, result)
+        -}
         setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
 
@@ -426,10 +476,20 @@ evalStackContinuation result = \case
     -- TODO: is anything to do??
     pure result
 
-  RunScheduler sr -> Scheduler.runScheduler result sr
+  Atomically stmAction -> PrimSTM.commitOrRestart stmAction result
+
+  CatchSTM{} -> PrimSTM.mergeNestedOrRestart result -- Q: check how this is implemented in the native RTS
+
+  CatchRetry{} -> PrimSTM.mergeNestedOrRestart result
+
+  RunScheduler sr -> do
+    --liftIO $ print (RunScheduler sr)
+    Scheduler.runScheduler result sr
 
   -- HINT: dataToTag# has an eval call in the middle, that's why we need this continuation, it is the post-returning part of the op implementation
   DataToTagOp -> PrimTagToEnum.dataToTagOp result
+
+  RaiseOp ex -> PrimExceptions.raiseEx ex
 
   KeepAlive{} -> do
     pure result
@@ -472,7 +532,7 @@ evalExpr localEnv = \case
     evalExpr extendedEnv e
 
   -- var (join id)
-  StgApp i [] _t _
+  StgApp i []
     | JoinId 0 _ <- binderDetails i
     -> do
       -- HINT: join id-s are always closures, needs eval
@@ -484,7 +544,7 @@ evalExpr localEnv = \case
     -> stgErrorM $ "join-id var arity error, expected 0, got: " ++ show x ++ " id: " ++ show i
 
   -- var (non join id)
-  StgApp i [] _t _ -> case binderType i of
+  StgApp i [] -> case binderType i of
 
     SingleValue LiftedRep -> do
       -- HINT: must be HeapPtr ; read heap ; check if Con or Closure ; eval if Closure ; return HeapPtr if Con
@@ -506,7 +566,7 @@ evalExpr localEnv = \case
   --  Q: should app always be lifted/unlifted?
   --  Q: what does unlifted app mean? (i.e. no Ap node, but saturated calls to known functions only?)
   --  A: the join id type is for the return value representation and not for the id representation, so it can be unlifted.
-  StgApp i l _t _
+  StgApp i l
     | JoinId _ _ <- binderDetails i
     -> do
       args <- mapM (evalArg localEnv) l
@@ -514,7 +574,7 @@ evalExpr localEnv = \case
       builtinStgApply so v args
 
   {- non-join id -}
-  StgApp i l _t _ -> case binderType i of
+  StgApp i l -> case binderType i of
     SingleValue LiftedRep -> do
       args <- mapM (evalArg localEnv) l
       (so, v) <- lookupEnvSO localEnv i
@@ -535,7 +595,9 @@ evalExpr localEnv = \case
     markPrimOp op
     args <- mapM (evalArg localEnv) l
     tid <- gets ssCurrentThreadId
-    evalPrimOp op args t tc
+    result <- evalPrimOp op args t tc
+    --liftIO $ print (op, args, result)
+    pure result
 
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
     -- check foreign target region and breakpoint
@@ -548,17 +610,36 @@ evalExpr localEnv = \case
     markFFI foreignCall
     args <- case foreignCTarget foreignCall of
       StaticTarget _ "createAdjustor" _ _
-        | [arg0, arg1, arg2, arg3, arg4, arg5] <- l
+        -- void* createAdjustor (int cconv, StgStablePtr hptr, StgFunPtr wptr, char *typeString);
+        | [arg0_cconv, arg1_hptr, StgLitArg arg2_wptr, arg3_typeString, arg4_void] <- l
         -> do
-            -- HINT: do not resolve the unused label pointer that comes from the stub code
-            mapM (evalArg localEnv) [arg0, arg1, StgLitArg LitNullAddr, arg3, arg4, arg5]
+            -- HINT:
+            --  do not resolve the wrapper function label
+            --  the label name is used for FFI type signature lookup
+            [arg0_cconvAtom, arg1_hptrAtom, arg3_typeStringAtom, arg4_voidAtom] <- mapM (evalArg localEnv) [arg0_cconv, arg1_hptr, arg3_typeString, arg4_void]
+            pure [arg0_cconvAtom, arg1_hptrAtom, Literal arg2_wptr, arg3_typeStringAtom, arg4_voidAtom]
+      StaticTarget _ "createAdjustor" _ _
+        -> do
+            liftIO $ do
+              putStrLn "illegal createAdjustor call:"
+              putStrLn $ "  foreignCall: " ++ show foreignCall
+              putStrLn $ "  type:        " ++ show t
+              putStrLn   "  args:"
+              forM_ l $ \a -> do
+                putStrLn $ "    " ++ show a
+            stgErrorM $ "illegal createAdjustor call"
       _ -> mapM (evalArg localEnv) l
-    evalFCallOp evalOnNewThread foreignCall args t tc
+    --liftIO $ print ("executing", foreignCall, args)
+    result <- evalFCallOp evalOnNewThread foreignCall args t tc
+    --liftIO $ print (foreignCall, args, result)
+    pure result
 
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
     markPrimCall primCall
     args <- mapM (evalArg localEnv) l
-    evalPrimCallOp primCall args t tc
+    result <- evalPrimCallOp primCall args t tc
+    liftIO $ print (primCall, args, result)
+    pure result
 
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
@@ -602,7 +683,11 @@ matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
 matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
   []  -> stgErrorM $ "no matching alts for: " ++ show resultId
   Alt{..} : _ -> do
-    let extendedEnv = addManyBindersToEnv SO_AltArg altBinders args localEnv
+    let extendedEnv = case altCon of
+                        AltDataCon{}  -> addManyBindersToEnv SO_AltArg altBinders args localEnv
+                        _             -> localEnv
+    --unless (length altBinders == length args) $ do
+    --  stgErrorM $ "matchFirstCon length mismatch: " ++ show (DC dc, altBinders, args, resultId)
     setProgramPoint $ PP_Alt resultId altCon
     evalExpr extendedEnv altRHS
 
@@ -693,6 +778,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
   let run = do
         when switchCWD $ liftIO $ setCurrentDirectory stgappDir
         declareTopBindings mods
+        buildCWrapperHsTypeMap mods
         initRtsSupport progName progArgs mods
         env <- gets ssStaticGlobalEnv
         let rootMain = unId $ case [i | i <- Map.keys env, show i == "main_:Main.main"] of
@@ -938,6 +1024,7 @@ evalPrimOp =
   PrimNarrowings.evalPrimOp $
   PrimPrefetch.evalPrimOp $
   PrimStablePointer.evalPrimOp $
+  PrimSTM.evalPrimOp $
   PrimWeakPointer.evalPrimOp $
   PrimWord64.evalPrimOp $
   PrimWord32.evalPrimOp $
