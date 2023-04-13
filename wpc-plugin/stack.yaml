@@ -1,0 +1,11 @@
+resolver: nightly-2023-01-02
+allow-newer: true
+
+packages:
+  - .
+  - external-stg-syntax
+
+# HINT: uses GHC 9.6 plugin API
+compiler:       ghc-9.6.1
+compiler-check: newer-minor
+system-ghc: true
