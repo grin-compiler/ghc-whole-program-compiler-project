@@ -207,8 +207,27 @@ raiseAsyncEx lastResult tid exception = do
           let newResult = [HeapPtr addr]
           unwindStack newResult [Apply []] stackTail
 
+        Atomically _stmAction : stackTail -> do
+          error "TODO: figure out how async exception interacts with stm"
+
+        CatchSTM{} : stackTail -> do
+          error "TODO: figure out how async exception interacts with stm"
+
+        CatchRetry{} : stackTail -> do
+          {-
+          -- HINT: pop tlog stack for some extra stg state consistency and validation
+          ts <- getCurrentThreadState
+          tid <- gets ssCurrentThreadId
+          updateThreadState tid $ ts {tsTLogStack = tail $ tsTLogStack ts}
+          unwindStack
+          -}
+          error "TODO: figure out how async exception interacts with stm"
+
         -- collect stack frames for ApStack
-        stackHead : stackTail -> unwindStack result (stackHead : stackPiece) stackTail
+        stackHead : stackTail -> do
+          case stackHead of
+            _ -> pure ()
+          unwindStack result (stackHead : stackPiece) stackTail
 
   unwindStack lastResult [] tsStack
 
