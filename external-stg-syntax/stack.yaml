@@ -1,4 +1,0 @@
-resolver: lts-20.4
-
-packages:
-  - '.'

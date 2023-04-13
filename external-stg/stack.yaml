@@ -1,7 +1,0 @@
-resolver: lts-19.1
-
-packages:
-  - '.'
-
-extra-deps:
-  - zip-1.7.2

@@ -1,16 +1,14 @@
-resolver: lts-19.1
+resolver: lts-20.18
 
 packages:
-  - 'external-stg-compiler'
+  - 'external-stg-syntax'
   - 'external-stg'
+  - 'external-stg-interpreter'
+#  - 'lambda'
+#  - 'external-stg-compiler'
 
 extra-deps:
-  - zip-1.7.2
-  - souffle-haskell-3.3.0
+  - souffle-haskell-3.4.0
+  - type-errors-pretty-0.0.1.2@sha256:9042b64d1ac2f69aa55690576504a2397ebea8a6a55332242c88f54027c7eb57,2781
 
-# use GHC-WPC (whole program compiler)
-compiler:       ghc-9.2.4.1000
-compiler-check: match-exact
-system-ghc:     true
-extra-path:
-  - /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin
+allow-newer: true
