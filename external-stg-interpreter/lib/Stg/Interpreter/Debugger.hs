@@ -101,11 +101,13 @@ processCommandsUntilExit = do
 checkBreakpoint :: Name -> M ()
 checkBreakpoint breakpointName = do
   dbgState <- gets ssDebugState
+  fuel <- gets ssDebugFuel
+  modify' $ \s@StgState{..} -> s {ssDebugFuel = pred ssDebugFuel}
   exit <- processCommandsNonBlocking
   case dbgState of
     DbgStepByStep -> do
       reportState
-      unless exit processCommandsUntilExit
+      unless (fuel > 0) $ unless exit processCommandsUntilExit
     DbgRunProgram -> do
       bkMap <- gets ssBreakpoints
       case Map.lookup breakpointName bkMap of

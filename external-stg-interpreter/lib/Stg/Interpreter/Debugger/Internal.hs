@@ -14,6 +14,7 @@ import Data.Tree
 import System.Console.Pretty
 
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
+import Control.Concurrent (myThreadId)
 
 import Stg.Interpreter.Base
 import Stg.Syntax
@@ -46,7 +47,9 @@ reportState = do
     Nothing -> pure ""
     Just (Id c) -> pure $ binderUniqueName c
   currentClosureAddr <- gets ssCurrentClosureAddr
-  liftIO $ Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts currentClosure currentClosureAddr
+  liftIO $ do
+    ntid <- myThreadId
+    Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts currentClosure currentClosureAddr (show ntid)
 
 showRetainer :: Int -> M ()
 showRetainer i = do
@@ -287,6 +290,15 @@ dbgCommands =
             exportStgState dirName s
             putStrLn "done."
         _ -> pure ()
+    )
+
+  , ( ["fuel"]
+    , "STEP-COUNT - make multiple steps"
+    , \case
+      [countS]
+        | Just stepCount <- Text.readMaybe countS
+        -> modify' $ \s@StgState{..} -> s {ssDebugFuel = stepCount}
+      _ -> pure ()
     )
   ]
 

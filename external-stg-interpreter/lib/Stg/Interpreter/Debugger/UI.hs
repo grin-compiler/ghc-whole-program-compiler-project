@@ -80,6 +80,9 @@ printDebugOutputLoop dbgOutO = do
 
 printDebugOutput :: DebugOutput -> IO ()
 printDebugOutput = \case
+  DbgOutResult result -> do
+    putStrLn $ "result: " ++ show result
+
   DbgOutClosureList closureNames -> do
     mapM_ BS8.putStrLn closureNames
 
@@ -91,8 +94,9 @@ printDebugOutput = \case
       Nothing   -> pure ()
       Just name -> putStrLn $ "source location: " ++ (ppSrcSpan . binderDefLoc . unId $ name)
 
-  DbgOutThreadReport tid ts currentClosureName currentClosureAddr -> do
+  DbgOutThreadReport tid ts currentClosureName currentClosureAddr ntid -> do
     reportThreadIO tid ts
+    putStrLn $ " * printDebugOutput myThreadId = " ++ show ntid
     putStrLn $ " * breakpoint, thread id: " ++ show tid ++ ", current closure: " ++ show currentClosureName ++ ", addr: " ++ show currentClosureAddr
 
   DbgOutHeapObject addr heapObj -> do
