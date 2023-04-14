@@ -41,8 +41,8 @@ The wpc-plugin is a compiler plugin for GHC 9.6 or newer. It exports the STG IR 
    ```
    cabal install zip-cmd
    ```
-2. Compile the `wpc-plugin` with GHC 9.6
-   As of 2023 April, you should have GHC 9.6 installed in your system, becase stack does not currently support GHC 9.6.
+2. Compile the `wpc-plugin` with GHC 9.6.  
+   *As of 2023 April, you should have GHC 9.6 installed in your system, because stack does not currently support GHC 9.6.*
    ```
    cd wpc-plugin
    stack build
