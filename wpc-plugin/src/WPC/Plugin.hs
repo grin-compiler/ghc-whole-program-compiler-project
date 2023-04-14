@@ -156,6 +156,12 @@ runPhaseFun phase = do
           make output_fn relative to odir
           copy output object file to extra-compilation-artifacts/wpc-plugin/cbits/
       -}
+      -- save cbits source as well
+      do
+        let wpcForeignSrc = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "cbits-source" </> input_fn
+        createDirectoryIfMissing True (takeDirectory wpcForeignSrc)
+        copyFile input_fn wpcForeignSrc
+        putStrLn $ " ###### wpc-plugin runPhaseFun copy file (from, to) " ++ show (input_fn, wpcForeignSrc)
       pure output_fn
     T_Hsc _hscEnv modSummary -> do
       modifyIORef globalEnvIORef $ \d -> d {geModSummary = Just modSummary}
