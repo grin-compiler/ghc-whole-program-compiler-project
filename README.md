@@ -1,13 +1,11 @@
 # GHC whole program compiler project
 
-The project consists of **GHC-WPC** and the corresponding **External STG IR** and **tooling**.
+The project consists of GHC **wpc-plugin** and the corresponding **External STG IR** and **tooling**.
 
 
-GHC-WPC is an extended GHC that exports the STG IR `(.modpak)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
+The wpc-plugin is a compiler plugin for GHC 9.6 or newer. It exports the STG IR `(.modpak)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
 
 <img height="350" src="https://user-images.githubusercontent.com/877489/114280753-0d311300-9a3b-11eb-8d50-facad35f0e9a.png"/>
-
-The `external-stg-compiler` package should be compiled with GHC-WPC but the other packages i.e. `external-stg` compiles with vanilla GHC also.
 
 ## Presentation video
 - [Why a GHC Whole Program Compiler Mode Would Be Useful](https://www.youtube.com/watch?v=lAoGF0jlxKI) *([slides](https://docs.google.com/presentation/d/18N8UOw-bexpoKlLLRHzSX-tY-yrbTnA6PQ9WtAVgUV4/edit?usp=sharing))*
@@ -23,32 +21,6 @@ The `external-stg-compiler` package should be compiled with GHC-WPC but the othe
 - `gen-obj` compiles STG IR files `.o_stgbin` to object code `.o`. (gen-exe calls it)
 - `ext-stg` CLI tool for external STG IR, it can pretty print `.o_stgbin` files.
 
-## Sample applications for GHC-WPC
-
-There is a set of prepared applications in the [ghc-wpc-sample-programs](https://github.com/grin-compiler/ghc-wpc-sample-programs) repository that you can compile easily to try out GHC-WPC.
-<!--
-No special preparation needed if you use x64 Debian9, Ubuntu 16.04-17.10. It's only the regular stack based workflow.
-## Usage (user)
-### DOES NOT WORK AT THE MOMENT, NEW BINARY RELEASE OF GHC-WPC IS NEEDED
-### try the GHC-WPC developer usage way
-
-The user of External STG is the one who does not alter the Ext-STG IR, instead just uses it via the `external-stg` package.
-I.e. `external-stg-compiler` is such an example.
-
-**Important:** GHC-WPC has precompiled x64 Debian9, Ubuntu 16.04-17.10 binary release, so the install is straigtforward thanks to stack.
-
-1. Clone this repository.
-   ```
-   git clone git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
-   ```
-2. Install the external stg tooling with the following commands:
-   ```
-   (cd mod-pak ; stack install)
-   stack --stack-root `pwd`/.stack-root install
-   ```
-   *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
-3. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
--->
 ## Why?
 - to make it easy to develop new backends for GHC without extending Cabal with new targets
 - to facilitate compiler/PL research that needs real world programs to analyse
@@ -58,57 +30,46 @@ I.e. `external-stg-compiler` is such an example.
 - to make it easy to focus on the compiler backend development without hacking GHC
 - to allow other compilers to target GHC/STG and the feature rich RTS 
 
+## Build
+#### external stg tooling
+   ```
+   stack install
+   ```
+#### `wpc-plugin`
+
+1. Install zip-cmd, a simple CLI for the `zip` package
+   ```
+   cabal install zip-cmd
+   ```
+2. Compile the `wpc-plugin` with GHC 9.6
+   As of 2023 April, you should have GHC 9.6 installed in your system, becase stack does not currently support GHC 9.6.
+   ```
+   cd wpc-plugin
+   stack build
+   ```
+3. Find the built `libwpc-plugin.so`
+   ```
+   ln -s `find . -name "libwpc-plugin.so" | head -1`
+   ```
+
 ## Usage
-
-**You'll need 13GB of free space** *(Sorry)* 
-
-If you change the External STG IR, then GHC-WPC must be recompiled.
-
-0. Install (exact version):
-   - GHC 8.8.3
-   - happy 1.19.12
-   - alex 3.2.5
-1. Clone this repository.
-   ```
-   git clone --recursive git@github.com:grin-compiler/ghc-whole-program-compiler-project.git
-   ```
-   If you did non-recursive cloning (*when the `ghc-wpc` folder is empty*) then you'll need to init submodules
-   ```
-   git submodule update --init --recursive
-   ```
-2. Install modpak tooling
-   ```
-   (cd mod-pak ; stack install)
-   ```
-3. Compile GHC-WPC in `./ghc-wpc` folder with Hadrian (see [ghc.dev](https://ghc.dev) for details).
-   ```
-   cd ghc-wpc
-   ./boot
-   ./configure
-   hadrian/build-stack -j
-   ```
-   **IMPORTANT:** use hadrian/build-stack
-
-4. **At this point you have a working GHC-WPC.**  
-   The next steps are about the compilation of GHC-WPC tooling and the usage of GHC-WPC.
-
-5. Go back to the repository top folder and set the path to the local GHC-WPC build in the corresponding part of `./stack.yaml`.
-   change the following line to your GHC-WPC build path:
-   ```
-   extra-path:
-     - /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin
-   ```
-   i.e. set the `USER` and `PROJECT` part properly (`./stack.yaml` line 32) 
-   ```
-   extra-path:
-     - /home/USER/PROJECT/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin
-   ```
-6. Install the external stg tooling with the following commands:
-   ```
-   stack --stack-root `pwd`/.stack-root install
-   ```
-   *NOTE:* the stack root is set to the local folder to prevent spamming the global stack sandbox.  
-7. Use `gen-exe` and `ext-stg` from terminal. *(it should be in PATH due to the stack install)*
+#### cabal
+Add the following lines to your project's `cabal.project`:
+```
+package *
+  ghc-options:
+    -fplugin-trustworthy
+    -fplugin-library=PATH_TO/libwpc-plugin.so;wpc-plugin-unit;WPC.Plugin;[]
+```
+#### stack
+Add the following lines to your project's `stack.yaml`:
+```
+apply-ghc-options: everything
+ghc-options:
+  "$everything":
+      -fplugin-trustworthy
+      -fplugin-library=PATH_TO/libwpc-plugin.so;wpc-plugin-unit;WPC.Plugin;[]
+```
 
 ## TODO
 **Ext-STG IR**
