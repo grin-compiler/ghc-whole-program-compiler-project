@@ -79,6 +79,7 @@ writeGhcStgApp dflags unit_env hpt = do
           , ("ld-options",        JSArray $ map (JSString . ST.unpack) unitLinkerOptions)
           , ("exposed-modules",   JSArray $ map (JSString . pp) [mod | (mod, Nothing) <- unitExposedModules])
           , ("hidden-modules",    JSArray $ map (JSString . pp) unitHiddenModules)
+          , ("depends",           JSArray $ map (JSString . pp) unitDepends)
           ]
         | GenericUnitInfo{..} <- dep_unit_infos
         ]
@@ -88,6 +89,19 @@ writeGhcStgApp dflags unit_env hpt = do
                       | Option o <- ldInputs dflags
                       , not $ isPrefixOf "-l" o
                       ]
+      odir          = fromMaybe "." (objectDir dflags)
+      mainModName   = mainModuleNameIs dflags
+      mainModObjs   = [ makeRelative odir o
+                      | HomeModInfo{..} <- home_mod_infos
+                      , mainModName == moduleName (mi_module hm_iface)
+                      , l <- maybeToList $ homeMod_object hm_linkable
+                      , o <- linkableObjs l
+                      ]
+  mainModObj <- case mainModObjs of
+    [o] -> pure $ JSString o
+    l   -> do
+            putStrLn $ "expected a single object file for the main module, got: " ++ show l
+            pure JSNull
   writeFile (output_fn ++ "." ++ objectSuf dflags ++ "_ghc_stgapp") $ showSDoc dflags $ renderYAML $ JSObject
     [ ("ghc-name",          JSString . ghcNameVersion_programName $ ue_namever unit_env)
     , ("ghc-version",       JSString . ghcNameVersion_projectVersion $ ue_namever unit_env)
@@ -98,6 +112,8 @@ writeGhcStgApp dflags unit_env hpt = do
     , ("object-dir",        JSString . toAbsPath $ fromMaybe root (objectDir dflags))
     , ("app-unit-id",       JSString . pp $ ue_current_unit unit_env)
     , ("app-modules",       JSArray $ map (JSString . pp) [moduleName . mi_module $ hm_iface | HomeModInfo{..} <- home_mod_infos])
+    , ("app-main-module-name",    JSString $ pp mainModName)
+    , ("app-main-module-object",  mainModObj)
     , ("extra-ld-inputs",   arrOfAbsPath [f | FileOption _ f <- ldInputs dflags])
     , ("library-dirs",      arrOfAbsPath $ libraryPaths dflags)
     , ("extra-libraries",   arrOfStr [lib | Option ('-':'l':lib) <- ldInputs dflags])
