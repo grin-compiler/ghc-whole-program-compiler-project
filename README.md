@@ -37,22 +37,24 @@ The wpc-plugin is a compiler plugin for GHC 9.6 or newer. It exports the STG IR 
    ```
 #### `wpc-plugin`
 
-1. Install zip-cmd, a simple CLI for the `zip` package
+1. Install [zip-cmd](https://hackage.haskell.org/package/zip-cmd), a simple CLI for the `zip` package
    ```
    cabal install zip-cmd
    ```
-2. Compile the `wpc-plugin` with GHC 9.6.  
-   *As of 2023 April, you should have GHC 9.6 installed in your system, because stack does not currently support GHC 9.6.*
+2. Compile the `wpc-plugin`
+   The `wpc-plugin` has a speparate `stack.yaml` because it uses the plugin API of `GHC 9.6.1`.  
    ```
    cd wpc-plugin
    stack build
    ```
-3. Find the built `libwpc-plugin.so`
+3. Find the built `libwpc-plugin.[so|dylib|dll]`
    ```
-   ln -s `find . -name "libwpc-plugin.so" | head -1`
+   ln -s `find . -type f -name 'libwpc-plugin.so' -o -name 'libwpc-plugin.dylib' -o -name 'libwpc-plugin.dll' | head -1`
    ```
 
 ## Usage
+It is required to use GHC 9.6.1.
+
 #### cabal
 Add the following lines to your project's `cabal.project`:
 ```
@@ -61,6 +63,7 @@ package *
     -fplugin-trustworthy
     -fplugin-library=PATH_TO/libwpc-plugin.so;wpc-plugin-unit;WPC.Plugin;[]
 ```
+
 #### stack
 Add the following lines to your project's `stack.yaml`:
 ```

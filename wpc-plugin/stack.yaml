@@ -5,7 +5,6 @@ packages:
   - .
   - external-stg-syntax
 
-# HINT: uses GHC 9.6 plugin API
+# HINT: wpc-plugin relies on GHC 9.6 plugin API
 compiler:       ghc-9.6.1
-compiler-check: newer-minor
-system-ghc: true
+compiler-check: match-exact
