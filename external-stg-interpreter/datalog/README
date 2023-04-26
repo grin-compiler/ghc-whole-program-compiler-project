@@ -1,0 +1,2 @@
+compile:
+  souffle -g ext-stg-gc.cpp ext-stg-gc.dl
