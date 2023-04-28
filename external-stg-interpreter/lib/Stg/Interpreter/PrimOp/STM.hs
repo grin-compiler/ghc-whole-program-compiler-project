@@ -367,7 +367,8 @@ commitOrRestart stmAction result = do
         -- TODO: wake up threads from tvars wait queues
         --------------------------------------------------
         forM_ (IntSet.toList $ tvdQueue old) $ \waitingTid -> do
-          updateThreadState waitingTid (ts {tsStatus = ThreadRunning})
+          waitingTS <- getThreadState waitingTid
+          updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
           -- Q: should we check the value also?
       pure result
     else do
