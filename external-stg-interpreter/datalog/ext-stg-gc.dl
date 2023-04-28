@@ -1,17 +1,17 @@
 
 // input model
 
-.decl Reference(from : number, to : number)
+.decl Reference(from : symbol, to : symbol)
 .input Reference
 .output Reference
 
-.decl GCRoot(val : number)
+.decl GCRoot(val : symbol)
 .input GCRoot
 .output GCRoot
 
 // output
 
-.decl Live(val : number)
+.decl Live(val : symbol)
 .output Live
 
 // traversal
@@ -22,7 +22,7 @@ Live(to) :-
   Live(from),
   Reference(from, to).
 
-.decl All(val : number)
+.decl All(val : symbol)
 
 All(from),
 All(to) :-
@@ -31,7 +31,7 @@ All(to) :-
 All(val) :-
   GCRoot(val).
 
-.decl Dead(val : number)
+.decl Dead(val : symbol)
 .output Dead
 
 Dead(val) :-
@@ -39,7 +39,7 @@ Dead(val) :-
   !Live(val).
 
 // the inverse of the reference relation, but only for live values
-.decl LiveReferredBy(to : number, from : number)
+.decl LiveReferredBy(to : symbol, from : symbol)
 .output LiveReferredBy
 
 LiveReferredBy(to, from) :-

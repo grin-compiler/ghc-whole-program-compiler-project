@@ -1,7 +1,9 @@
 
 #include "souffle/CompiledSouffle.h"
 
-extern "C" {
+namespace functors {
+ extern "C" {
+}
 }
 
 namespace souffle {
@@ -117,7 +119,7 @@ struct t_comparator_0{
   return (ramBitCast<RamSigned>(a[0]) < ramBitCast<RamSigned>(b[0])) ? -1 : (ramBitCast<RamSigned>(a[0]) > ramBitCast<RamSigned>(b[0])) ? 1 :((ramBitCast<RamSigned>(a[1]) < ramBitCast<RamSigned>(b[1])) ? -1 : (ramBitCast<RamSigned>(a[1]) > ramBitCast<RamSigned>(b[1])) ? 1 :(0));
  }
 bool less(const t_tuple& a, const t_tuple& b) const {
-  return (ramBitCast<RamSigned>(a[0]) < ramBitCast<RamSigned>(b[0]))|| (ramBitCast<RamSigned>(a[0]) == ramBitCast<RamSigned>(b[0])) && ((ramBitCast<RamSigned>(a[1]) < ramBitCast<RamSigned>(b[1])));
+  return (ramBitCast<RamSigned>(a[0]) < ramBitCast<RamSigned>(b[0]))|| ((ramBitCast<RamSigned>(a[0]) == ramBitCast<RamSigned>(b[0])) && ((ramBitCast<RamSigned>(a[1]) < ramBitCast<RamSigned>(b[1]))));
  }
 bool equal(const t_tuple& a, const t_tuple& b) const {
 return (ramBitCast<RamSigned>(a[0]) == ramBitCast<RamSigned>(b[0]))&&(ramBitCast<RamSigned>(a[1]) == ramBitCast<RamSigned>(b[1]));
@@ -232,7 +234,7 @@ struct t_comparator_0{
   return (ramBitCast<RamSigned>(a[0]) < ramBitCast<RamSigned>(b[0])) ? -1 : (ramBitCast<RamSigned>(a[0]) > ramBitCast<RamSigned>(b[0])) ? 1 :((ramBitCast<RamSigned>(a[1]) < ramBitCast<RamSigned>(b[1])) ? -1 : (ramBitCast<RamSigned>(a[1]) > ramBitCast<RamSigned>(b[1])) ? 1 :(0));
  }
 bool less(const t_tuple& a, const t_tuple& b) const {
-  return (ramBitCast<RamSigned>(a[0]) < ramBitCast<RamSigned>(b[0]))|| (ramBitCast<RamSigned>(a[0]) == ramBitCast<RamSigned>(b[0])) && ((ramBitCast<RamSigned>(a[1]) < ramBitCast<RamSigned>(b[1])));
+  return (ramBitCast<RamSigned>(a[0]) < ramBitCast<RamSigned>(b[0]))|| ((ramBitCast<RamSigned>(a[0]) == ramBitCast<RamSigned>(b[0])) && ((ramBitCast<RamSigned>(a[1]) < ramBitCast<RamSigned>(b[1]))));
  }
 bool equal(const t_tuple& a, const t_tuple& b) const {
 return (ramBitCast<RamSigned>(a[0]) == ramBitCast<RamSigned>(b[0]))&&(ramBitCast<RamSigned>(a[1]) == ramBitCast<RamSigned>(b[1]));
@@ -339,7 +341,7 @@ static inline std::string substr_wrapper(const std::string& str, std::size_t idx
 }
 public:
 // -- initialize symbol table --
-SymbolTable symTable;// -- initialize record table --
+SymbolTableImpl symTable;// -- initialize record table --
 SpecializedRecordTable<0> recordTable{};
 // -- Table: GCRoot
 Own<t_btree_i__0__1> rel_1_GCRoot = mk<t_btree_i__0__1>();
@@ -365,12 +367,12 @@ Own<t_btree_ii__0_1__11> rel_8_LiveReferredBy = mk<t_btree_ii__0_1__11>();
 souffle::RelationWrapper<t_btree_ii__0_1__11> wrapper_rel_8_LiveReferredBy;
 public:
 Sf_ext_stg_gc()
-: wrapper_rel_1_GCRoot(0, *rel_1_GCRoot, *this, "GCRoot", std::array<const char *,1>{{"i:number"}}, std::array<const char *,1>{{"val"}}, 0)
-, wrapper_rel_2_Reference(1, *rel_2_Reference, *this, "Reference", std::array<const char *,2>{{"i:number","i:number"}}, std::array<const char *,2>{{"from","to"}}, 0)
-, wrapper_rel_3_All(2, *rel_3_All, *this, "All", std::array<const char *,1>{{"i:number"}}, std::array<const char *,1>{{"val"}}, 0)
-, wrapper_rel_4_Live(3, *rel_4_Live, *this, "Live", std::array<const char *,1>{{"i:number"}}, std::array<const char *,1>{{"val"}}, 0)
-, wrapper_rel_7_Dead(4, *rel_7_Dead, *this, "Dead", std::array<const char *,1>{{"i:number"}}, std::array<const char *,1>{{"val"}}, 0)
-, wrapper_rel_8_LiveReferredBy(5, *rel_8_LiveReferredBy, *this, "LiveReferredBy", std::array<const char *,2>{{"i:number","i:number"}}, std::array<const char *,2>{{"to","from"}}, 0)
+: wrapper_rel_1_GCRoot(0, *rel_1_GCRoot, *this, "GCRoot", std::array<const char *,1>{{"s:symbol"}}, std::array<const char *,1>{{"val"}}, 0)
+, wrapper_rel_2_Reference(1, *rel_2_Reference, *this, "Reference", std::array<const char *,2>{{"s:symbol","s:symbol"}}, std::array<const char *,2>{{"from","to"}}, 0)
+, wrapper_rel_3_All(2, *rel_3_All, *this, "All", std::array<const char *,1>{{"s:symbol"}}, std::array<const char *,1>{{"val"}}, 0)
+, wrapper_rel_4_Live(3, *rel_4_Live, *this, "Live", std::array<const char *,1>{{"s:symbol"}}, std::array<const char *,1>{{"val"}}, 0)
+, wrapper_rel_7_Dead(4, *rel_7_Dead, *this, "Dead", std::array<const char *,1>{{"s:symbol"}}, std::array<const char *,1>{{"val"}}, 0)
+, wrapper_rel_8_LiveReferredBy(5, *rel_8_LiveReferredBy, *this, "LiveReferredBy", std::array<const char *,2>{{"s:symbol","s:symbol"}}, std::array<const char *,2>{{"to","from"}}, 0)
 {
 addRelation("GCRoot", wrapper_rel_1_GCRoot, true, true);
 addRelation("Reference", wrapper_rel_2_Reference, true, true);
@@ -401,7 +403,7 @@ void runFunction(std::string  inputDirectoryArg,
     // set default threads (in embedded mode)
     // if this is not set, and omp is used, the default omp setting of number of cores is used.
 #if defined(_OPENMP)
-    if (0 < getNumThreads()) { omp_set_num_threads(getNumThreads()); }
+    if (0 < getNumThreads()) { omp_set_num_threads(static_cast<int>(getNumThreads())); }
 #endif
 
     signalHandler->set();
@@ -441,51 +443,51 @@ void runAll(std::string inputDirectoryArg = "", std::string outputDirectoryArg =
 }
 public:
 void printAll(std::string outputDirectoryArg = "") override {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","GCRoot"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","GCRoot"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_1_GCRoot);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"auxArity","0"},{"name","Reference"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"i:number\", \"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"auxArity","0"},{"name","Reference"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"s:symbol\", \"s:symbol\"]}}"}});
 if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_2_Reference);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","Live"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","Live"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_4_Live);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","Dead"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","Dead"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_7_Dead);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","to\tfrom"},{"auxArity","0"},{"name","LiveReferredBy"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"to\", \"from\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"i:number\", \"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","to\tfrom"},{"auxArity","0"},{"name","LiveReferredBy"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"to\", \"from\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"s:symbol\", \"s:symbol\"]}}"}});
 if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_8_LiveReferredBy);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
 public:
 void loadAll(std::string inputDirectoryArg = "") override {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"auxArity","0"},{"fact-dir","."},{"name","Reference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"i:number\", \"i:number\"]}}"}});
-if (!inputDirectoryArg.empty()) {directiveMap["fact-dir"] = inputDirectoryArg;}
-IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_2_Reference);
-} catch (std::exception& e) {std::cerr << "Error loading Reference data: " << e.what() << '\n';}
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"fact-dir","."},{"name","GCRoot"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"fact-dir","."},{"name","GCRoot"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!inputDirectoryArg.empty()) {directiveMap["fact-dir"] = inputDirectoryArg;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_1_GCRoot);
 } catch (std::exception& e) {std::cerr << "Error loading GCRoot data: " << e.what() << '\n';}
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"auxArity","0"},{"fact-dir","."},{"name","Reference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"s:symbol\", \"s:symbol\"]}}"}});
+if (!inputDirectoryArg.empty()) {directiveMap["fact-dir"] = inputDirectoryArg;}
+IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_2_Reference);
+} catch (std::exception& e) {std::cerr << "Error loading Reference data: " << e.what() << '\n';}
 }
 public:
 void dumpInputs() override {
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
-rwOperation["name"] = "Reference";
-rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"i:number\", \"i:number\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_2_Reference);
+rwOperation["name"] = "GCRoot";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:symbol\"]}}";
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_1_GCRoot);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
-rwOperation["name"] = "GCRoot";
-rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_1_GCRoot);
+rwOperation["name"] = "Reference";
+rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:symbol\", \"s:symbol\"]}}";
+IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_2_Reference);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
 public:
@@ -493,31 +495,31 @@ void dumpOutputs() override {
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "GCRoot";
-rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:symbol\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_1_GCRoot);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "Reference";
-rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"i:number\", \"i:number\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:symbol\", \"s:symbol\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_2_Reference);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "Live";
-rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:symbol\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_4_Live);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "Dead";
-rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"i:number\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:symbol\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_7_Dead);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "LiveReferredBy";
-rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"i:number\", \"i:number\"]}}";
+rwOperation["types"] = "{\"relation\": {\"arity\": 2, \"auxArity\": 0, \"types\": [\"s:symbol\", \"s:symbol\"]}}";
 IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_8_LiveReferredBy);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
@@ -559,13 +561,13 @@ fatal("unknown subroutine");
 #endif // _MSC_VER
 void subroutine_0(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"fact-dir","."},{"name","GCRoot"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"fact-dir","."},{"name","GCRoot"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_1_GCRoot);
 } catch (std::exception& e) {std::cerr << "Error loading GCRoot data: " << e.what() << '\n';}
 }
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","GCRoot"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","GCRoot"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_1_GCRoot);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
@@ -579,13 +581,13 @@ IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll
 #endif // _MSC_VER
 void subroutine_1(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"auxArity","0"},{"fact-dir","."},{"name","Reference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"i:number\", \"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"auxArity","0"},{"fact-dir","."},{"name","Reference"},{"operation","input"},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"s:symbol\", \"s:symbol\"]}}"}});
 if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_2_Reference);
 } catch (std::exception& e) {std::cerr << "Error loading Reference data: " << e.what() << '\n';}
 }
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"auxArity","0"},{"name","Reference"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"i:number\", \"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","from\tto"},{"auxArity","0"},{"name","Reference"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"from\", \"to\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"s:symbol\", \"s:symbol\"]}}"}});
 if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_2_Reference);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
@@ -600,7 +602,7 @@ IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll
 void subroutine_2(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 signalHandler->setMsg(R"_(All(from) :- 
    Reference(from,_).
-in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [27:1-29:23])_");
+in file ext-stg-gc.dl [27:1-29:23])_");
 if(!(rel_2_Reference->empty())) {
 [&](){
 CREATE_OP_CONTEXT(rel_2_Reference_op_ctxt,rel_2_Reference->createContext());
@@ -613,7 +615,7 @@ rel_3_All->insert(tuple,READ_OP_CONTEXT(rel_3_All_op_ctxt));
 ();}
 signalHandler->setMsg(R"_(All(to) :- 
    Reference(_,to).
-in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [27:1-29:23])_");
+in file ext-stg-gc.dl [27:1-29:23])_");
 if(!(rel_2_Reference->empty())) {
 [&](){
 CREATE_OP_CONTEXT(rel_2_Reference_op_ctxt,rel_2_Reference->createContext());
@@ -626,11 +628,11 @@ rel_3_All->insert(tuple,READ_OP_CONTEXT(rel_3_All_op_ctxt));
 ();}
 signalHandler->setMsg(R"_(All(val) :- 
    GCRoot(val).
-in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [31:1-32:15])_");
+in file ext-stg-gc.dl [31:1-32:15])_");
 if(!(rel_1_GCRoot->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_3_All_op_ctxt,rel_3_All->createContext());
 CREATE_OP_CONTEXT(rel_1_GCRoot_op_ctxt,rel_1_GCRoot->createContext());
+CREATE_OP_CONTEXT(rel_3_All_op_ctxt,rel_3_All->createContext());
 for(const auto& env0 : *rel_1_GCRoot) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
 rel_3_All->insert(tuple,READ_OP_CONTEXT(rel_3_All_op_ctxt));
@@ -647,11 +649,11 @@ rel_3_All->insert(tuple,READ_OP_CONTEXT(rel_3_All_op_ctxt));
 void subroutine_3(const std::vector<RamDomain>& args, std::vector<RamDomain>& ret) {
 signalHandler->setMsg(R"_(Live(ref) :- 
    GCRoot(ref).
-in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [19:1-19:26])_");
+in file ext-stg-gc.dl [19:1-19:26])_");
 if(!(rel_1_GCRoot->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
 CREATE_OP_CONTEXT(rel_1_GCRoot_op_ctxt,rel_1_GCRoot->createContext());
+CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
 for(const auto& env0 : *rel_1_GCRoot) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
 rel_4_Live->insert(tuple,READ_OP_CONTEXT(rel_4_Live_op_ctxt));
@@ -671,11 +673,11 @@ for(;;) {
 signalHandler->setMsg(R"_(Live(to) :- 
    Live(from),
    Reference(from,to).
-in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [21:1-23:23])_");
+in file ext-stg-gc.dl [21:1-23:23])_");
 if(!(rel_5_delta_Live->empty()) && !(rel_2_Reference->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
 CREATE_OP_CONTEXT(rel_2_Reference_op_ctxt,rel_2_Reference->createContext());
+CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
 CREATE_OP_CONTEXT(rel_5_delta_Live_op_ctxt,rel_5_delta_Live->createContext());
 CREATE_OP_CONTEXT(rel_6_new_Live_op_ctxt,rel_6_new_Live->createContext());
 for(const auto& env0 : *rel_5_delta_Live) {
@@ -706,7 +708,7 @@ iter = 0;
 rel_5_delta_Live->purge();
 rel_6_new_Live->purge();
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","Live"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","Live"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_4_Live);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
@@ -723,12 +725,12 @@ void subroutine_4(const std::vector<RamDomain>& args, std::vector<RamDomain>& re
 signalHandler->setMsg(R"_(Dead(val) :- 
    All(val),
    !Live(val).
-in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [37:1-39:14])_");
+in file ext-stg-gc.dl [37:1-39:14])_");
 if(!(rel_3_All->empty())) {
 [&](){
 CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
-CREATE_OP_CONTEXT(rel_7_Dead_op_ctxt,rel_7_Dead->createContext());
 CREATE_OP_CONTEXT(rel_3_All_op_ctxt,rel_3_All->createContext());
+CREATE_OP_CONTEXT(rel_7_Dead_op_ctxt,rel_7_Dead->createContext());
 for(const auto& env0 : *rel_3_All) {
 if( !(rel_4_Live->contains(Tuple<RamDomain,1>{{ramBitCast(env0[0])}},READ_OP_CONTEXT(rel_4_Live_op_ctxt)))) {
 Tuple<RamDomain,1> tuple{{ramBitCast(env0[0])}};
@@ -738,7 +740,7 @@ rel_7_Dead->insert(tuple,READ_OP_CONTEXT(rel_7_Dead_op_ctxt));
 }
 ();}
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","Dead"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","val"},{"auxArity","0"},{"name","Dead"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"val\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_7_Dead);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
@@ -756,11 +758,11 @@ signalHandler->setMsg(R"_(LiveReferredBy(to,from) :-
    Reference(from,to),
    Live(from),
    Live(to).
-in file /home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/external-stg-interpreter/datalog/ext-stg-gc.dl [45:1-48:12])_");
+in file ext-stg-gc.dl [45:1-48:12])_");
 if(!(rel_4_Live->empty()) && !(rel_2_Reference->empty())) {
 [&](){
-CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
 CREATE_OP_CONTEXT(rel_2_Reference_op_ctxt,rel_2_Reference->createContext());
+CREATE_OP_CONTEXT(rel_4_Live_op_ctxt,rel_4_Live->createContext());
 CREATE_OP_CONTEXT(rel_8_LiveReferredBy_op_ctxt,rel_8_LiveReferredBy->createContext());
 for(const auto& env0 : *rel_2_Reference) {
 if( rel_4_Live->contains(Tuple<RamDomain,1>{{ramBitCast(env0[1])}},READ_OP_CONTEXT(rel_4_Live_op_ctxt)) && rel_4_Live->contains(Tuple<RamDomain,1>{{ramBitCast(env0[0])}},READ_OP_CONTEXT(rel_4_Live_op_ctxt))) {
@@ -771,13 +773,13 @@ rel_8_LiveReferredBy->insert(tuple,READ_OP_CONTEXT(rel_8_LiveReferredBy_op_ctxt)
 }
 ();}
 if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","to\tfrom"},{"auxArity","0"},{"name","LiveReferredBy"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"to\", \"from\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"i:number\", \"i:number\"]}}"}});
+try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","to\tfrom"},{"auxArity","0"},{"name","LiveReferredBy"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 2, \"params\": [\"to\", \"from\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 2, \"types\": [\"s:symbol\", \"s:symbol\"]}}"}});
 if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_8_LiveReferredBy);
 } catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
-if (pruneImdtRels) rel_2_Reference->purge();
 if (pruneImdtRels) rel_4_Live->purge();
+if (pruneImdtRels) rel_2_Reference->purge();
 }
 #ifdef _MSC_VER
 #pragma warning(default: 4100)
