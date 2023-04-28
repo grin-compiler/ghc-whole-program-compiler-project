@@ -1,11 +1,15 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.STM where
 
+import GHC.Stack
 import Control.Monad.State
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
+
+import Text.Pretty.Simple (pShowNoColor)
+import qualified Data.Text.Lazy.IO as Text
 
 import Stg.Syntax
 import Stg.Interpreter.Base
@@ -50,7 +54,7 @@ Q: what is the difference between STM and SQL transactions?
 -}
 
 
-evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalPrimOp :: HasCallStack => PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- DONE
@@ -59,26 +63,13 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "atomically#", [stmAction, Void]) -> do
     promptM $ do
       print (op, args)
-    tid <- gets ssCurrentThreadId
-    ts <- getThreadState tid
-    case tsActiveTLog ts of
-      Just{} -> do
-        -- HINT: there is an active TLog, nested atomically operations are not allowed, throw exception
-        Rts{..} <- gets ssRtsSupport
-        stackPush $ RaiseOp rtsNestedAtomically
-        pure []
-      Nothing -> do
-        -- extra validation (optional)
-        when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
-        -- create TLog
-        updateThreadState tid $ ts {tsActiveTLog = Just mempty, tsTLogStack = []}
-        stackPush $ Atomically stmAction
-        stackPush $ Apply [Void]
-        pure [stmAction]
+    atomicallyOp stmAction
 
   -- DONE
   -- retry# :: State# RealWorld -> (# State# RealWorld, a #)
   ( "retry#", [Void]) -> do
+    promptM $ do
+      print (op, args)
     retrySTM
 
   -- DONE
@@ -86,6 +77,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
   --             -> (State# RealWorld -> (# State# RealWorld, a #) )
   --             -> (State# RealWorld -> (# State# RealWorld, a #) )
   ( "catchRetry#", [firstStmAction, altStmAction, Void]) -> do
+    promptM $ do
+      print (op, args)
     tid <- gets ssCurrentThreadId
     ts <- getThreadState tid
     let Just tlog = tsActiveTLog ts
@@ -100,6 +93,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
   --           -> (b -> State# RealWorld -> (# State# RealWorld, a #) )
   --           -> (State# RealWorld -> (# State# RealWorld, a #) )
   ( "catchSTM#", [f, h, w]) -> do
+    promptM $ do
+      print (op, args)
     tid <- gets ssCurrentThreadId
     ts <- getThreadState tid
     let Just tlog = tsActiveTLog ts
@@ -112,11 +107,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- DONE
   -- newTVar# :: a -> State# s -> (# State# s, TVar# s a #)
   ( "newTVar#", [a, _s]) -> do
-    promptM $ print (op, args)
     tVars <- gets ssTVars
     next <- gets ssNextTVar
     let value = TVarDescriptor {tvdValue = a, tvdQueue = mempty}
     modify' $ \s -> s {ssTVars = IntMap.insert next value tVars, ssNextTVar = succ next}
+    promptM $ print (op, args, TVar next)
     pure [TVar next]
 
   -- DONE
@@ -173,6 +168,25 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   _ -> fallback op args t tc
 
+atomicallyOp :: HasCallStack => Atom -> M [Atom]
+atomicallyOp stmAction = do
+  tid <- gets ssCurrentThreadId
+  ts <- getThreadState tid
+  case tsActiveTLog ts of
+    Just{} -> do
+      -- HINT: there is an active TLog, nested atomically operations are not allowed, throw exception
+      Rts{..} <- gets ssRtsSupport
+      stackPush $ RaiseOp rtsNestedAtomically
+      pure []
+    Nothing -> do
+      -- extra validation (optional)
+      when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
+      -- create TLog
+      updateThreadState tid $ ts {tsActiveTLog = Just mempty, tsTLogStack = []}
+      stackPush $ Atomically stmAction
+      stackPush $ Apply [Void]
+      pure [stmAction]
+
 getTLogEntry :: [TLog] -> Int -> M TLogEntry
 getTLogEntry [] tvarId = do
   -- HINT: first access, read from the global state
@@ -186,29 +200,33 @@ getTLogEntry (tlog : tlogStack) tvarId = case IntMap.lookup tvarId tlog of
   Just entry  -> pure entry
 
 -- read: stg_catch_stm_frame
-mergeNestedOrRestart :: [Atom] -> M [Atom]
+mergeNestedOrRestart :: HasCallStack => [Atom] -> M [Atom]
 mergeNestedOrRestart result = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
   let Just tlog = tsActiveTLog ts
-      tlogStack = tsTLogStack ts
+      tlogStack@(tlogStackTop : tlogStackTail) = tsTLogStack ts
   -- validate every tlog
   allValid <- and <$> mapM validateTLog (tlog : tlogStack)
   case allValid of
     False -> do
+      -- drop current transaction
+      updateThreadState tid $ ts
+        { tsActiveTLog  = Just tlogStackTop
+        , tsTLogStack   = tlogStackTail
+        }
       -- restart the whole transaction
       restartSTMFromAtomicallyFrame
     True  -> do
       -- merge nested
-      let tlogStackTop : tlogStackTail = tlogStack
-          mergedTLog = IntMap.unionWith (\a _ -> a) tlog tlogStackTop
+      let mergedTLog = IntMap.unionWith (\a _ -> a) tlog tlogStackTop
       updateThreadState tid $ ts
         { tsActiveTLog  = Just mergedTLog
         , tsTLogStack   = tlogStackTail
         }
       pure result
 
-restartSTMFromAtomicallyFrame :: M [Atom]
+restartSTMFromAtomicallyFrame :: HasCallStack => M [Atom]
 restartSTMFromAtomicallyFrame = unwindStack where
   unwindStack = do
     stackPop >>= \case
@@ -263,7 +281,7 @@ data ThreadStatus
     - subscribe for TVar wait queues
     - suspend thread
 -}
-retrySTM :: M [Atom]
+retrySTM :: HasCallStack => M [Atom]
 retrySTM = unwindStack where
   unwindStack = do
     stackPop >>= \case
@@ -272,7 +290,7 @@ retrySTM = unwindStack where
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
         updateThreadState tid (ts {tsStatus = ThreadDied})
-        promptM $ putStrLn "[STM] retrySTM - unwindStack - ThreadDied"
+        promptM $ putStrLn $ "[STM] retrySTM - unwindStack - ThreadDied, tid: " ++ show tid
         pure []
 
       -- TODO: Q: what about CatchSTM ???
@@ -314,7 +332,7 @@ retrySTM = unwindStack where
 
         if isValid
           then do
-            promptM $ putStrLn "[STM] retry"
+            promptM $ putStrLn $ "[STM] retry, block thread, tid: " ++ show tid
             tid <- gets ssCurrentThreadId
             ts <- getThreadState tid
             -- subscribe to wait queues
@@ -325,7 +343,7 @@ retrySTM = unwindStack where
             -- Q: who will update the tsTLog after the wake up?
             stackPush $ Atomically stmAction
             stackPush $ Apply [Void]
-            stackPush $ RunScheduler SR_ThreadYield
+            stackPush $ RunScheduler SR_ThreadBlocked
             pure [stmAction]
 
           else restartTransaction stmAction
@@ -341,7 +359,7 @@ data TVarDescriptor
 -}
 
 -- Q: where to put unwait?
-commitOrRestart :: Atom -> [Atom] -> M [Atom]
+commitOrRestart :: HasCallStack => Atom -> [Atom] -> M [Atom]
 commitOrRestart stmAction result = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
@@ -352,7 +370,7 @@ commitOrRestart stmAction result = do
   isValid <- validateTLog tlog
   if isValid
     then do
-      promptM $ putStrLn "[STM] commit"
+      promptM $ putStrLn $ "[STM] commit, tid: " ++ show tid ++ ", result = " ++ show result
       -- commit
       updateThreadState tid $ ts {tsActiveTLog = Nothing}
       -- merge to global tvar state
@@ -367,6 +385,7 @@ commitOrRestart stmAction result = do
         -- TODO: wake up threads from tvars wait queues
         --------------------------------------------------
         forM_ (IntSet.toList $ tvdQueue old) $ \waitingTid -> do
+          promptM $ putStrLn $ "[STM commitOrRestart / commit case] - wake up thread: " ++ show waitingTid ++ ", tid: " ++ show tid
           waitingTS <- getThreadState waitingTid
           updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
           -- Q: should we check the value also?
@@ -375,12 +394,14 @@ commitOrRestart stmAction result = do
       -- restart
       restartTransaction stmAction
 
-restartTransaction :: Atom -> M [Atom]
+restartTransaction :: HasCallStack => Atom -> M [Atom]
 restartTransaction stmAction = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
   -- extra validation (optional)
-  when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
+  when (tsTLogStack ts /= []) $ do
+    reportThread tid
+    error $ "internal error: non-empty tsTLogStack: " ++ show (tsTLogStack ts) ++ ", tid: " ++ show tid
   promptM $ putStrLn "[STM] restartTransaction"
   updateThreadState tid $ ts {tsActiveTLog = Just mempty}
   stackPush $ Atomically stmAction
