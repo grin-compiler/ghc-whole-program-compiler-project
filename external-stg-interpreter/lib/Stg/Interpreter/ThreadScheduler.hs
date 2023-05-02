@@ -6,19 +6,32 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Time.Clock
 
+import Text.Pretty.Simple (pShowNoColor)
+import qualified Data.Text.Lazy.IO as Text
+
 import Stg.Interpreter.Base
 import Stg.Interpreter.IOManager
+import qualified Stg.Interpreter.Debugger as Debugger
 
 runScheduler :: [Atom] -> ScheduleReason -> M [Atom]
 runScheduler result sr = do
   tid <- gets ssCurrentThreadId
-  --liftIO $ putStrLn $ " * scheduler: " ++ show sr ++ " thread: " ++ show tid ++ " result: " ++ show result
+  threads <- gets ssThreads
+  promptM $ do
+    putStrLn $ " * scheduler: " ++ show sr ++ " thread: " ++ show tid ++ " result: " ++ show result
+    --Text.putStrLn $ pShowNoColor threads
   case sr of
     SR_ThreadFinished -> do
       -- set thread status to finished
       ts <- getThreadState tid
       updateThreadState tid ts {tsStatus = ThreadFinished}
       yield result
+
+    SR_ThreadFinishedMain -> do
+      -- set thread status to finished
+      ts <- getThreadState tid
+      updateThreadState tid ts {tsStatus = ThreadFinished, tsCurrentResult = result}
+      pure result
 
     SR_ThreadFinishedFFICallback -> do
       -- set thread status to finished
@@ -40,7 +53,6 @@ yield result = do
 
   -- lookup next thread
   nextTid <- getNextRunnableThread
-  --liftIO $ putStrLn $ " * scheduler next runnable thread: " ++ show nextTid
 
   -- switchToThread
   switchToThread nextTid
@@ -53,6 +65,11 @@ yield result = do
   --    the running threads should not store the old "current result" that would prevent garbage collection
   -- HINT: clear value to allow garbage collection
   updateThreadState nextTid nextTS {tsCurrentResult = []}
+
+  threads <- gets ssThreads
+  promptM_ $ do
+    putStrLn $ " * scheduler next runnable thread: " ++ show nextTid
+    --Text.putStrLn $ pShowNoColor threads
 
   pure $ tsCurrentResult nextTS
 
@@ -74,7 +91,7 @@ calculateNewSchedule = do
   wakeUpSleepingThreads
   -- calculate the new scheduling
   tsList <- gets $ IntMap.toList . ssThreads
-  --liftIO $ putStrLn $ "thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
+  promptM_ $ putStrLn $ "[calculateNewSchedule] - thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
 
   let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
   case runnableThreads of
@@ -82,7 +99,7 @@ calculateNewSchedule = do
     newQueue -> do
       -- save the new scheduling
       modify' $ \s -> s {ssScheduledThreadIds = newQueue}
-      --liftIO $ putStrLn $ "new scheduling: " ++ show newQueue
+      promptM_ $ putStrLn $ "[calculateNewSchedule] - new scheduling: " ++ show newQueue
       pure newQueue
 
 wakeUpSleepingThreads :: M ()
@@ -103,22 +120,36 @@ waitAndScheduleBlockedThreads = do
       isBlocked = \case
         ThreadBlocked{} -> True
         _ -> False
-  {-
-  liftIO $ do
-    putStrLn $ " * scheduler no runnable threads"
+  promptM_ $ do
+    putStrLn $ "[waitAndScheduleBlockedThreads] - scheduler no runnable threads"
     putStrLn "blocked threads"
     forM_ blockedThreads $ \(tid, ts) -> do
       putStrLn $ "tid: " ++ show tid ++ " status: " ++ show (tsStatus ts)
-  -}
+
   if null blockedThreads
     then do
-      -- error "TODO: scheduler has n runnable thread to schedule" -- nothing to run, what to do??
-      modify' $ \s -> s {ssScheduledThreadIds = []}
-      -- HACK:
-      pure $ map fst tsList
+      error "TODO: scheduler has n runnable thread to schedule" -- nothing to run, what to do??
     else do
       handleBlockedDelayWait
+      stopIfThereIsNoRunnableThread
       calculateNewSchedule
+
+stopIfThereIsNoRunnableThread :: M ()
+stopIfThereIsNoRunnableThread = do
+  -- check if there is anything to run
+  tsList <- gets $ IntMap.toList . ssThreads
+  let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
+      sleepingThreads = [tid | (tid, ts) <- tsList, isDelayed $ tsStatus ts]
+      isDelayed = \case
+        ThreadBlocked BlockedOnDelay{} -> True
+        _ -> False
+  when (null runnableThreads && null sleepingThreads) $ do
+    promptM_ $ do
+      putStrLn $ "[stopIfThereIsNoRunnableThread] No runnable threads, STOP!"
+      putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
+    dumpStgState
+    modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+    Debugger.checkBreakpoint "thread-scheduler"
 
 {-
   IDEA:

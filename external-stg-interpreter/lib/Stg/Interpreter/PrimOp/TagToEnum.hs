@@ -14,8 +14,8 @@ dataToTagOp [whnf@HeapPtr{}] = do
   -- NOTE: the GHC dataToTag# primop works for any Data Con regardless its arity
   (Con _ dataCon _) <- readHeapCon whnf
 
-  case findIndex (\d -> dcId d == dcId dataCon) (tcDataCons (uncutTyCon $ dcTyCon dataCon)) of
-    Nothing -> stgErrorM $ "Data constructor tag is not found for " ++ show (dcUniqueName dataCon)
+  case findIndex (\d -> dcId d == dcId (unDC dataCon)) (tcDataCons (uncutTyCon $ dcTyCon $ unDC dataCon)) of
+    Nothing -> stgErrorM $ "Data constructor tag is not found for " ++ show (dcUniqueName $ unDC dataCon)
     Just i  -> pure [IntV i]
 dataToTagOp result = stgErrorM $ "dataToTagOp expected [HeapPtr], got: " ++ show result
 
@@ -48,7 +48,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "tagToEnum#", [IntV i]) -> do
     Just tyc <- pure tc
     let dc = tcDataCons tyc !! i
-    loc <- allocAndStore (Con False dc [])
+    loc <- allocAndStore (Con False (DC dc) [])
     pure [HeapPtr loc]
 
   _ -> fallback op args t tc
