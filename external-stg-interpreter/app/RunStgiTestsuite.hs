@@ -139,7 +139,7 @@ runTest skipSet stderrPath = do
       -> do
           testArgOpt <- doesFileExist argsPath >>= \case
             False -> pure []
-            True  -> pure ["--args-file", argsPath]
+            True  -> pure ["--args-file", argsPath, "--ignore-rts-args"]
 
           testInput <- doesFileExist stdinPath >>= \case
             False -> pure ""
