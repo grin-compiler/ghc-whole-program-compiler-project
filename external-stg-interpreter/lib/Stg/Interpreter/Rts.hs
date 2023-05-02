@@ -5,6 +5,8 @@ import GHC.Stack
 import Control.Monad.State
 import Control.Concurrent.MVar
 
+import Foreign.Marshal.Utils
+
 import Data.List (foldl')
 import qualified Data.Set as Set
 import qualified Data.Map as Map
@@ -24,11 +26,21 @@ emptyRts progName progArgs = Rts
   , rtsProgArgs     = progArgs
   }
 
+initRtsCDataSymbols :: M ()
+initRtsCDataSymbols = do
+  sym_enabled_capabilities <- liftIO $ new 2
+  rts0 <- gets ssRtsSupport
+  let rts1 = rts0
+        { rtsDataSymbol_enabled_capabilities = sym_enabled_capabilities
+        }
+  modify' $ \s -> s {ssRtsSupport = rts1}
+
 initRtsSupport :: String -> [String] -> [Module] -> M ()
 initRtsSupport progName progArgs mods = do
 
   -- create empty Rts data con, it is filled gradually
   modify' $ \s@StgState{..} -> s {ssRtsSupport = emptyRts progName progArgs}
+  initRtsCDataSymbols
 
   -- collect rts related modules
   let rtsModSet = Set.fromList $
@@ -115,6 +127,9 @@ wiredInCons =
   , ("base",      "GHC.Stable", "StablePtr",  "StablePtr",  \s dc -> s {rtsStablePtrCon = dc})
   , ("ghc-prim",  "GHC.Types",  "Bool",       "True",       \s dc -> s {rtsTrueCon      = dc})
   , ("ghc-prim",  "GHC.Types",  "Bool",       "False",      \s dc -> s {rtsFalseCon     = dc})
+
+  -- validation for extStgRtsSupportModule
+  , ("ghc-prim",  "GHC.Tuple",  "(,)",        "(,)",        \s _dc -> s)
   ]
 {-
          "-Wl,-u,ghczmprim_GHCziTuple_Z0T_closure"
@@ -174,9 +189,9 @@ extStgRtsSupportModule = reconModule $ Module
   , moduleSourceFilePath      = Nothing
   , moduleForeignStubs        = NoStubs
   , moduleHasForeignExported  = False
-  , moduleDependency          = [(UnitId "ghc-prim", [ModuleName "GHC.Tuple.Prim"])]
+  , moduleDependency          = [(UnitId "ghc-prim", [ModuleName "GHC.Tuple"])]
   , moduleExternalTopIds      = []
-  , moduleTyCons              = [(UnitId "ghc-prim", [(ModuleName "GHC.Tuple.Prim", [tup2STyCon])])]
+  , moduleTyCons              = [(UnitId "ghc-prim", [(ModuleName "GHC.Tuple", [tup2STyCon])])]
   , moduleTopBindings         = [tuple2Proj0, applyFun1Arg]
   } where
       u :: Int -> Unique
@@ -216,7 +231,7 @@ extStgRtsSupportModule = reconModule $ Module
                         , stcDefLoc   = UnhelpfulSpan $ UnhelpfulOther "ext-stg-interpreter-rts"
                         }
 
-      -- code for tuple2Proj0 = \t -> case t of GHC.Tuple.Prim.(,) a b -> a
+      -- code for tuple2Proj0 = \t -> case t of GHC.Tuple.(,) a b -> a
       (aOcc, aBnd)    = localLiftedVanillaId 100 "a"
       (_,    bBnd)    = localLiftedVanillaId 101 "b"
       (tOcc, tBnd)    = localLiftedVanillaId 102 "t"
