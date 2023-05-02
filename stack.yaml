@@ -8,7 +8,7 @@ packages:
 #  - 'external-stg-compiler'
 
 extra-deps:
-  - souffle-haskell-3.4.0
+  - souffle-haskell-3.5.1
   - type-errors-pretty-0.0.1.2@sha256:9042b64d1ac2f69aa55690576504a2397ebea8a6a55332242c88f54027c7eb57,2781
 
 allow-newer: true

@@ -2,16 +2,18 @@
 {-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies, DeriveGeneric #-}
 module Stg.Interpreter.GC.LiveDataAnalysis where
 
-import Data.Int
-import Data.Bits
 import GHC.Generics
 import Control.Monad.State
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import Data.Set (Set)
+import qualified Data.Set as Set
+import System.FilePath
 import System.Directory
 import Foreign.Ptr
+import Text.Printf
 
 import Language.Souffle.Compiled (SouffleM)
 import qualified Language.Souffle.Compiled as Souffle
@@ -19,20 +21,17 @@ import qualified Language.Souffle.Compiled as Souffle
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.GCRef
 
-import qualified Stg.Interpreter.GC.RetainerAnalysis as Live
-
-
 -------- souffle program
 
 data ExtStgGC = ExtStgGC
 
-data GCRoot = GCRoot Int32
+data GCRoot = GCRoot String
   deriving (Eq, Show, Generic)
 
-data Reference = Reference Int32 Int32
+data Reference = Reference String String
   deriving (Eq, Show, Generic)
 
-data Dead = Dead Int32
+data Dead = Dead String
   deriving (Eq, Show, Generic)
 
 instance Souffle.Program ExtStgGC where
@@ -71,7 +70,9 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
       Souffle.setNumThreads prog 2
       Souffle.run prog
 
-      let factPath = "./.gc-datalog-facts"
+      let factPath = if dsKeepGCFacts $ ssDebugSettings stgState
+            then "./.gc-datalog-facts" </> printf "gc-cycle-%03i" (ssGCCounter stgState)
+            else "./.gc-datalog-facts"
       absFactPath <- liftIO $ makeAbsolute factPath
       liftIO $ do
         createDirectoryIfMissing True absFactPath
@@ -83,7 +84,7 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
 
       -- read back result
       --readbackDeadData prog
-      readbackLiveData (ssIsQuiet stgState)
+      readbackLiveData factPath (ssIsQuiet stgState)
 
 ---------------------------
 -- handle input facts
@@ -120,7 +121,7 @@ addGCRootFacts prog StgState{..} localGCRoots = do
 
 addReferenceFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
 addReferenceFacts prog StgState{..} = do
-  let addReference :: Int32 -> Atom -> SouffleM ()
+  let addReference :: String -> Atom -> SouffleM ()
       addReference from a = visitAtom a $ \i -> Souffle.addFact prog $ Reference from i
 
       addRefs :: VisitGCRef a => IntMap a -> RefNamespace -> SouffleM ()
@@ -131,6 +132,7 @@ addReferenceFacts prog StgState{..} = do
   -- HINT: these types are tracked by GC
   addRefs ssHeap                NS_HeapPtr
   addRefs ssWeakPointers        NS_WeakPointer
+  addRefs ssTVars               NS_TVar
   addRefs ssMVars               NS_MVar
   addRefs ssMutVars             NS_MutVar
   addRefs ssArrays              NS_Array
@@ -148,17 +150,17 @@ addReferenceFacts prog StgState{..} = do
 ---------------------------
 -- handle output facts
 ---------------------------
-
+{-
 readbackDeadData :: Souffle.Handle ExtStgGC -> SouffleM RefSet
 readbackDeadData prog = do
   dead :: [Dead] <- Souffle.getFacts prog
   foldM collectDead emptyRefSet dead
+-}
 
 collectDead :: RefSet -> Dead -> SouffleM RefSet
-collectDead dd@RefSet{..} (Dead l) = do
+collectDead dd@RefSet{..} (Dead sym) = do
   -- HINT: decode datalog value
-  let namespace = toEnum $ fromIntegral (l .&. 0xf)
-      idx       = shiftR (fromIntegral l) 4
+  let (namespace, idx) = decodeRef sym
   pure $ case namespace of
     NS_Array              -> dd {rsArrays             = IntSet.insert idx rsArrays}
     NS_ArrayArray         -> dd {rsArrayArrays        = IntSet.insert idx rsArrayArrays}
@@ -167,6 +169,7 @@ collectDead dd@RefSet{..} (Dead l) = do
     NS_MutableArrayArray  -> dd {rsMutableArrayArrays = IntSet.insert idx rsMutableArrayArrays}
     NS_MutableByteArray   -> dd {rsMutableByteArrays  = IntSet.insert idx rsMutableByteArrays}
     NS_MutVar             -> dd {rsMutVars            = IntSet.insert idx rsMutVars}
+    NS_TVar               -> dd {rsTVars              = IntSet.insert idx rsTVars}
     NS_MVar               -> dd {rsMVars              = IntSet.insert idx rsMVars}
     NS_SmallArray         -> dd {rsSmallArrays        = IntSet.insert idx rsSmallArrays}
     NS_SmallMutableArray  -> dd {rsSmallMutableArrays = IntSet.insert idx rsSmallMutableArrays}
@@ -175,7 +178,14 @@ collectDead dd@RefSet{..} (Dead l) = do
     NS_StablePointer      -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
     _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
 
-readbackLiveData :: Bool -> SouffleM RefSet
-readbackLiveData isQuiet = do
-  liveSet <- liftIO $ Live.loadSet isQuiet "Live.csv"
-  foldM (\dd i -> collectDead dd $ Dead i) emptyRefSet $ map fromIntegral $ IntSet.toList liveSet
+readbackLiveData :: FilePath -> Bool -> SouffleM RefSet
+readbackLiveData factDir isQuiet = do
+  liveSet <- liftIO $ loadStringSet isQuiet (factDir </> "Live.csv")
+  foldM (\dd sym -> collectDead dd (Dead sym)) emptyRefSet $ Set.toList liveSet
+
+loadStringSet :: Bool -> String -> IO (Set String)
+loadStringSet isQuiet factPath = do
+  absFactPath <- makeAbsolute factPath
+  unless isQuiet $ do
+    putStrLn $ "loading: " ++ show absFactPath
+  Set.fromList . lines <$> readFile absFactPath

@@ -1,9 +1,8 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, FlexibleInstances #-}
 module Stg.Interpreter.GC.GCRef where
 
-import Data.Int
-import Data.Bits
 import Control.Monad.State
+import Foreign.Ptr
 
 import Language.Souffle.Compiled (SouffleM)
 
@@ -30,19 +29,20 @@ instance VisitGCRef HeapObject where
 
 instance VisitGCRef StackContinuation where
   visitGCRef action = \case
-    CaseOf _ _ env _ _ _  -> visitGCRef action env
-    Update addr           -> pure () -- action $ HeapPtr addr -- TODO/FIXME: this is not a GC root!
-    Apply args            -> visitGCRef action args
-    Catch handler _ _     -> action handler
-    CatchRetry stm alt _  -> action stm >> action alt
-    CatchSTM stm handler  -> action stm >> action handler
-    RestoreExMask{}       -> pure ()
-    RunScheduler{}        -> pure ()
-    Atomically stmAction  -> action stmAction
-    DataToTagOp{}         -> pure ()
-    RaiseOp ex            -> action ex
-    KeepAlive value       -> action value
-    DebugFrame{}          -> pure ()
+    CaseOf _ _ env _ _ _    -> visitGCRef action env
+    Update addr             -> pure () -- action $ HeapPtr addr -- TODO/FIXME: this is not a GC root!
+    Apply args              -> visitGCRef action args
+    Catch handler _ _       -> action handler
+    CatchRetry stm alt _    -> action stm >> action alt
+    CatchSTM stm handler    -> action stm >> action handler
+    RestoreExMask{}         -> pure ()
+    RunScheduler{}          -> pure ()
+    Atomically stmAction    -> action stmAction
+    AtomicallyOp stmAction  -> action stmAction
+    DataToTagOp{}           -> pure ()
+    RaiseOp ex              -> action ex
+    KeepAlive value         -> action value
+    DebugFrame{}            -> pure ()
 
 instance VisitGCRef ThreadState where
   visitGCRef action ThreadState{..} = do
@@ -72,8 +72,10 @@ instance VisitGCRef WeakPtrDescriptor where
 instance VisitGCRef MVarDescriptor where
   visitGCRef action MVarDescriptor{..} = visitGCRef action mvdValue
 
+instance VisitGCRef TVarDescriptor where
+  visitGCRef action TVarDescriptor{..} = visitGCRef action tvdValue
+
 -- datalog ref value encoding:
---  28 bit index value + 4 bit namespace tag ; max 16 namespaces
 data RefNamespace
   = NS_Array
   | NS_ArrayArray
@@ -89,17 +91,15 @@ data RefNamespace
   | NS_StableName
   | NS_StablePointer
   | NS_WeakPointer
-  deriving (Show, Enum)
+  deriving (Show, Read)
 
-encodeRef :: Int -> RefNamespace -> Int32
-encodeRef i ns = shiftL (fromIntegral i) 4 .|. (fromIntegral $ fromEnum ns)
+encodeRef :: Int -> RefNamespace -> String
+encodeRef i ns = show (ns, i)
 
-decodeRef :: Int32 -> (RefNamespace, Int)
-decodeRef n = (namespace, idx)
-  where namespace = toEnum $ fromIntegral (n .&. 0xf)
-        idx       = shiftR (fromIntegral n) 4
+decodeRef :: String -> (RefNamespace, Int)
+decodeRef = read
 
-visitAtom :: Atom -> (Int32 -> SouffleM ()) -> SouffleM ()
+visitAtom :: Atom -> (String -> SouffleM ()) -> SouffleM ()
 visitAtom atom action = case atom of
   HeapPtr i           -> action $ encodeRef i NS_HeapPtr
   MVar i              -> action $ encodeRef i NS_MVar
@@ -118,17 +118,17 @@ visitAtom atom action = case atom of
   PtrAtom (StablePtr i) _ -> action $ encodeRef i NS_StablePointer -- HINT: for debug purposes (track usage) keep this reference
   _                   -> pure ()
 
-arrIdxToRef :: ArrIdx -> Int32
+arrIdxToRef :: ArrIdx -> String
 arrIdxToRef = \case
   MutArrIdx i -> encodeRef i NS_MutableArray
   ArrIdx i    -> encodeRef i NS_Array
 
-smallArrIdxToRef :: SmallArrIdx -> Int32
+smallArrIdxToRef :: SmallArrIdx -> String
 smallArrIdxToRef = \case
   SmallMutArrIdx i  -> encodeRef i NS_SmallMutableArray
   SmallArrIdx i     -> encodeRef i NS_SmallArray
 
-arrayArrIdxToRef :: ArrayArrIdx -> Int32
+arrayArrIdxToRef :: ArrayArrIdx -> String
 arrayArrIdxToRef = \case
   ArrayMutArrIdx i  -> encodeRef i NS_MutableArrayArray
   ArrayArrIdx i     -> encodeRef i NS_ArrayArray

@@ -25,10 +25,13 @@ checkGC localGCRoots = do
   nextAddr <- gets ssNextHeapAddr
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
-  when (not gcIsRunning && nextAddr - lastGCAddr > 3000000) $ do
+  let
+   gcThreshold = 30000000 -- wims tests pass
+   -- gcThreshold = 3000000 -- wims tests fail? yes
+  when (not gcIsRunning && nextAddr - lastGCAddr > gcThreshold) $ do
     exportCallGraph -- HINT: export call graph in case the app does not terminate in the normal way
     a <- getAddressState
-    modify' $ \s@StgState{..} -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True, ssGCMarkers = a : ssGCMarkers}
+    modify' $ \s@StgState{..} -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True, ssGCMarkers = a : ssGCMarkers, ssGCCounter = succ ssGCCounter}
     runGC localGCRoots
     {-
       TODO:
@@ -84,7 +87,8 @@ tryPrune = do
       -- remove dead data from stg state
       liftIO $ putStrLn " * done GC"
       put $ (pruneStgState stgState rsData) {ssGCIsRunning = False}
-      loadRetanerDb
+      reportDeletedCode stgState
+      loadRetainerDb
       isQuiet <- gets ssIsQuiet
       unless isQuiet postGCReport
 
@@ -102,10 +106,14 @@ runGCAsync localGCRoots = do
 runGCSync :: [Atom] -> M ()
 runGCSync localGCRoots = do
   stgState <- get
+  liftIO $ putStrLn $ "[GC] - start, cycle: " ++ show (ssGCCounter stgState)
   rsData <- liftIO $ runLiveDataAnalysis localGCRoots stgState
   put $ (pruneStgState stgState rsData) {ssGCIsRunning = False}
+  liftIO $ putStrLn $ "[GC] - finished, cycle: " ++ show (ssGCCounter stgState)
+  liftIO $ reportAddressCounters stgState
+  reportDeletedCode stgState
   finalizeDeadWeakPointers (rsWeakPointers rsData)
-  loadRetanerDb
+  loadRetainerDb
   isQuiet <- gets ssIsQuiet
   unless isQuiet $ do
     liftIO $ do
@@ -113,10 +121,26 @@ runGCSync localGCRoots = do
       reportAddressCounters stgState
     postGCReport
 
+reportDeletedCode :: StgState -> M ()
+reportDeletedCode old = do
+  new <- get
+  firstHeapAddress <- gets ssHeapStartAddress
+  let f = IntSet.filter (< firstHeapAddress) . IntMap.keysSet . ssHeap
+      newCodeKeys = f new
+      oldCodeKeys = f old
+      deletedCode = IntSet.toList $ IntSet.difference oldCodeKeys newCodeKeys
+  unless (null deletedCode) $ liftIO $ do
+    putStrLn "deleted code:"
+    mapM_ print deletedCode
+
 -- weak pointer handling
 
 finalizeDeadWeakPointers :: IntSet -> M ()
 finalizeDeadWeakPointers rsWeaks = do
+  wdescs <- mapM lookupWeakPointerDescriptor $ IntSet.toList rsWeaks
+  liftIO $ do
+    putStrLn $ " * [TODO] GC - run finalizers for dead weak pointers: " ++ show rsWeaks
+    mapM_ print wdescs
   pure () -- TODO: check how the native GHC RTS calls weak pointer finalizers
 
 -- utils
@@ -124,13 +148,13 @@ finalizeDeadWeakPointers rsWeaks = do
 pruneStgState :: StgState -> RefSet -> StgState
 pruneStgState = pruneStgStateLive
 
+{-
 pruneStgStateDead :: StgState -> RefSet -> StgState
 pruneStgStateDead stgState@StgState{..} RefSet{..} = stgState
   { ssHeap                = IntMap.withoutKeys ssHeap                rsHeap
-{-
   -- TODO: run weak pointer finalizers
-  , ssWeakPointers        = IntMap.withoutKeys ssWeakPointers        rsWeakPointers
--}
+  -- , ssWeakPointers        = IntMap.withoutKeys ssWeakPointers        rsWeakPointers
+  , ssTVars               = IntMap.withoutKeys ssTVars               rsTVars
   , ssMVars               = IntMap.withoutKeys ssMVars               rsMVars
   , ssMutVars             = IntMap.withoutKeys ssMutVars             rsMutVars
   , ssArrays              = IntMap.withoutKeys ssArrays              rsArrays
@@ -143,6 +167,7 @@ pruneStgStateDead stgState@StgState{..} RefSet{..} = stgState
   , ssStableNameMap       = Map.filter (`IntSet.notMember` rsStableNames) ssStableNameMap
 --  , ssThreads             = IntMap.filter (isThreadLive . tsStatus)  ssThreads
   }
+-}
 
 pruneStgStateLive :: StgState -> RefSet -> StgState
 pruneStgStateLive stgState@StgState{..} RefSet{..} = stgState
@@ -152,6 +177,7 @@ pruneStgStateLive stgState@StgState{..} RefSet{..} = stgState
   -- TODO: run weak pointer finalizers
   , ssWeakPointers        = IntMap.restrictKeys ssWeakPointers        rsWeakPointers
 -}
+  , ssTVars               = IntMap.restrictKeys ssTVars               rsTVars
   , ssMVars               = IntMap.restrictKeys ssMVars               rsMVars
   , ssMutVars             = IntMap.restrictKeys ssMutVars             rsMutVars
   , ssArrays              = IntMap.restrictKeys ssArrays              rsArrays
@@ -162,6 +188,7 @@ pruneStgStateLive stgState@StgState{..} RefSet{..} = stgState
   , ssMutableArrayArrays  = IntMap.restrictKeys ssMutableArrayArrays  rsMutableArrayArrays
   , ssMutableByteArrays   = IntMap.restrictKeys ssMutableByteArrays   rsMutableByteArrays
   , ssStableNameMap       = Map.filter (`IntSet.member` rsStableNames) ssStableNameMap
+  -- Q: why?
 --  , ssThreads             = IntMap.filter (isThreadLive . tsStatus)  ssThreads
   }
 
@@ -201,6 +228,7 @@ reportRemovedData StgState{..} RefSet{..} = do
   putStrLn "freed after GC:"
   reportI "ssHeap               " ssHeap rsHeap
   reportI "ssWeakPointers       " ssWeakPointers rsWeakPointers
+  reportI "ssTVars              " ssTVars rsTVars
   reportI "ssMVars              " ssMVars rsMVars
   reportI "ssMutVars            " ssMutVars rsMutVars
   reportI "ssArrays             " ssArrays rsArrays
@@ -230,7 +258,7 @@ lifetimeAnalysis = do
 -}
 debugPrintHeapObject :: HeapObject -> String
 debugPrintHeapObject  = \case
-  Con{..}           -> "Con: " ++ show (dcUniqueName hoCon) ++ " " ++ show hoConArgs
+  Con{..}           -> "Con: " ++ show (dcUniqueName $ unDC hoCon) ++ " " ++ show hoConArgs
   Closure{..}       -> "Clo: " ++ show hoName ++ " args: " ++ show hoCloArgs ++ " env: " ++ show (Map.size hoEnv) ++ " missing: " ++ show hoCloMissing
   BlackHole o       -> "BlackHole - " ++ debugPrintHeapObject o
   ApStack{}         -> "ApStack"
