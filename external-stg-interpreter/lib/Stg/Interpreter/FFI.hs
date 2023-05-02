@@ -50,6 +50,8 @@ import Stg.Interpreter.Base
 import Stg.Interpreter.Debug
 import qualified Stg.Interpreter.GC as GC
 import Stg.Interpreter.Rts (globalStoreSymbols)
+import qualified Stg.Interpreter.RtsFFI as RtsFFI
+import qualified Stg.Interpreter.EmulatedLibFFI as EmulatedLibFFI
 
 pattern CharV c   = Literal (LitChar c)
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
@@ -65,27 +67,23 @@ pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 
-{-
-data ForeignCall
-  = ForeignCall
-  { foreignCTarget  :: !CCallTarget
-  , foreignCConv    :: !CCallConv
-  , foreignCSafety  :: !Safety
-  }
-
-data Safety = PlaySafe | PlayInterruptible | PlayRisky
-
-data CCallTarget
-  = StaticTarget !SourceText !BS8.ByteString !(Maybe UnitId) !Bool
-  | DynamicTarget
-
-data CCallConv = CCallConv | CApiConv | StdCallConv | PrimCallConv | JavaScriptCallConv
--}
+emulatedLibrarySymbolSet :: Set Name
+emulatedLibrarySymbolSet = Set.fromList
+  [ "errorBelch2"
+  , "debugBelch2"
+  ]
 
 rtsSymbolSet :: Set Name
 rtsSymbolSet = Set.fromList $ map (BS8.pack . getSymbolName) rtsSymbols
 
 getFFISymbol :: Name -> M (FunPtr a)
+getFFISymbol name
+  | Set.member name rtsSymbolSet
+  = case name of
+      "enabled_capabilities" -> do
+        gets $ castPtrToFunPtr . rtsDataSymbol_enabled_capabilities . ssRtsSupport
+      _ -> do
+        stgErrorM $ "native RTS symbol dereference is not implemented yet: " ++ BS8.unpack name
 getFFISymbol name = do
   dl <- gets ssCBitsMap
   funPtr <- liftIO . BS8.useAsCString name $ c_dlsym (packDL dl)
@@ -188,182 +186,13 @@ evalForeignCall funPtr cArgs retType = case retType of
 
 {-# NOINLINE evalFCallOp #-}
 evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
+evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t tc = do
     --liftIO $ putStrLn $ "[evalFCallOp]  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
 
       ----------------
-      -- GHC RTS API
+      -- GHC RTS FFI
       ----------------
-
-      -- static pointer API
-      {-
-        hs_spt_lookup
-        hs_spt_insert
-        hs_spt_insert_stableptr
-        hs_spt_remove
-        hs_spt_keys
-        hs_spt_key_count
-      -}
-
-      -- misc
-      StaticTarget _ "__int_encodeDouble" _ _
-        | [IntV j, IntV e, Void] <- args
-        , UnboxedTuple [DoubleRep] <- t
-        -> pure [DoubleV $ rts_intEncodeDouble j e]
-
-      StaticTarget _ "__word_encodeDouble" _ _
-        | [WordV j, IntV e, Void] <- args
-        , UnboxedTuple [DoubleRep] <- t
-        -> pure [DoubleV $ rts_wordEncodeDouble j e]
-
-      StaticTarget _ "__int_encodeFloat" _ _
-        | [IntV j, IntV e, Void] <- args
-        , UnboxedTuple [FloatRep] <- t
-        -> pure [FloatV $ rts_intEncodeFloat j e]
-
-      StaticTarget _ "__word_encodeFloat" _ _
-        | [WordV j, IntV e, Void] <- args
-        , UnboxedTuple [FloatRep] <- t
-        -> pure [FloatV $ rts_wordEncodeFloat j e]
-
-      StaticTarget _ "stg_interp_constr1_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
-      StaticTarget _ "stg_interp_constr2_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
-      StaticTarget _ "stg_interp_constr3_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
-      StaticTarget _ "stg_interp_constr4_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
-      StaticTarget _ "stg_interp_constr5_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
-      StaticTarget _ "stg_interp_constr6_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
-      StaticTarget _ "stg_interp_constr7_entry" _ _ -> stgErrorM $ "not implemented: " ++ show foreignCTarget
-
-      StaticTarget _ "freeHaskellFunctionPtr" _ _ -> pure [] -- TODO
-      StaticTarget _ "performMajorGC" _ _ -> pure []
-      StaticTarget _ "rts_setMainThread" _ _ -> pure [] -- TODO
-
-      StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]                          -- TODO: for testsuite
-
-      StaticTarget _ "lockFile" _ _ -> pure [IntV 0]
-      StaticTarget _ "unlockFile" _ _ -> pure [IntV 0]
-      StaticTarget _ "rtsSupportsBoundThreads" _ _ -> pure [IntV 0]
-
-      StaticTarget _ "getMonotonicNSec" _ _
-        | [Void] <- args
-        -> do
-          now <- liftIO getCurrentTime
-          pure [WordV 0]
-
-{-
-StgWord64 getMonotonicNSec(void)
-{
-#if defined(HAVE_CLOCK_GETTIME)
-    return getClockTime(CLOCK_ID);
-
-#elif defined(darwin_HOST_OS)
-
-    uint64_t time = mach_absolute_time();
-    return (time * timer_scaling_factor_numer) / timer_scaling_factor_denom;
-
-#else // use gettimeofday()
-
-    struct timeval tv;
-
-    if (gettimeofday(&tv, (struct timezone *) NULL) != 0) {
-        debugBlech("getMonotonicNSec: gettimeofday failed: %s", strerror(errno));
-    };
-    return (StgWord64)tv.tv_sec * 1000000000 +
-           (StgWord64)tv.tv_usec * 1000;
-
-#endif
-}
-
--}
-
-{-
-void
-setProgArgv(int argc, char *argv[])
-{
-    freeArgv(prog_argc,prog_argv);
-    prog_argc = argc;
-    prog_argv = copyArgv(argc,argv);
-    setProgName(prog_argv);
-}
--}
-      StaticTarget _ "setProgArgv" _ _
-        | [IntAtom argc, PtrAtom _ argvPtr, Void] <- args
-        -> do
-          liftIO $ do
-            -- peekCString :: CString -> IO String 
-            argv <- peekArray argc (castPtr argvPtr) >>= mapM peekCString
-            print (argc, argv)
-          -- TODO: save to the env!!
-          pure []
-      {-
-void
-getProgArgv(int *argc, char **argv[])
-{
-    if (argc) { *argc = prog_argc; }
-    if (argv) { *argv = prog_argv; }
-}
-      -}
-      StaticTarget _ "getProgArgv" _ _
-        | [PtrAtom (ByteArrayPtr ba1) ptrArgc, PtrAtom (ByteArrayPtr ba2) ptrArgv, Void] <- args
-        -> do
-          Rts{..} <- gets ssRtsSupport
-          liftIO $ do
-            -- HINT: getProgArgv :: Ptr CInt -> Ptr (Ptr CString) -> IO ()
-            poke (castPtr ptrArgc :: Ptr CInt) (fromIntegral $ 1 + length rtsProgArgs)
-
-            -- FIXME: this has a race condition with the GC!!!! because it is pure
-            arr1 <- newCString rtsProgName :: IO CString
-            args <- mapM newCString rtsProgArgs :: IO [CString]
-            arr2 <- newArray (arr1 : args ++ [nullPtr]) :: IO (Ptr CString)
-
-            poke (castPtr ptrArgv :: Ptr (Ptr CString)) arr2--(castPtr arr2 :: Ptr CString )
-          pure []
-
-      StaticTarget _ "shutdownHaskellAndExit" _ _
-        | [IntV retCode, IntV fastExit, Void] <- args
-        , UnboxedTuple [] <- t
-        -> do
-          --showDebug evalOnNewThread
-          --error $ "shutdownHaskellAndExit exit code:  " ++ show retCode ++ ", fast exit: " ++ show fastExit
-          exportCallGraph
-          liftIO . exitWith $ case retCode of
-            0 -> ExitSuccess
-            n -> ExitFailure n
-
-      StaticTarget _ "debugBelch2" _ _
-        | [PtrAtom (ByteArrayPtr bai1) _, PtrAtom (ByteArrayPtr bai2) _, Void] <- args
-        -> do
-          let
-            showByteArray b = do
-              ByteArrayDescriptor{..} <- lookupByteArrayDescriptorI b
-              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
-          formatStr <- showByteArray bai1
-          value <- showByteArray bai2
-          liftIO $ do
-            hPutStr stderr $ printf formatStr value
-            hFlush stderr
-          pure []
-
-      StaticTarget _ "errorBelch" _ _ -> do
-        liftIO $ putStrLn $ "errorBelch: " ++ show args
-        pure []
-      StaticTarget _ "errorBelch2" _ _
-        | [PtrAtom (ByteArrayPtr bai1) _, PtrAtom (ByteArrayPtr bai2) _, Void] <- args
-        -> do
-          let
-            showByteArray b = do
-              ByteArrayDescriptor{..} <- lookupByteArrayDescriptorI b
-              Text.unpack . Text.decodeUtf8 . BS.pack . filter (/=0) . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
-          formatStr <- showByteArray bai1
-          value <- showByteArray bai2
-          Rts{..} <- gets ssRtsSupport
-          liftIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
-          pure []
-      StaticTarget _ "errorBelch2" _ _
-        -> stgErrorM $ "unsupported StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
-
-      StaticTarget _ "hs_free_stable_ptr" _ _ -> pure []
 
       -- support for exporting haskell function (GHC RTS specific)
       StaticTarget _ "createAdjustor" _ _
@@ -375,54 +204,48 @@ getProgArgv(int *argc, char **argv[])
           ] <- args
         , UnboxedTuple [AddrRep] <- t
         -> do
+          --promptM $ putStrLn $ "[createAdjustor FFI]"
           fun@HeapPtr{} <- lookupStablePointerPtr sp
-          {-
-          unsupported StgFCallOp: StgFCallOp
-            (ForeignCall {foreignCTarget = StaticTarget NoSourceText "createAdjustor" Nothing True, foreignCConv = CCallConv, foreignCSafety = PlayRisky})
-            :: UnboxedTuple [AddrRep]
-          args:
-            [ Literal (LitNumber LitNumInt 1)
-            , StablePointer (HeapPtr 120502)
-            , Literal (LitLabel "zdGLUTzm2zi7zi0zi15zm1pzzTWDEZZBcYHcS36qZZ2lppzdGraphicsziUIziGLUTziRawziCallbackszdGLUTzzm2zzi7zzi0zzi15zzm1pzzzzTWDEZZZZBcYHcS36qZZZZ2lppzuGraphicszziUIzziGLUTzziRawzziCallbackszumakeDisplayFunc" (FunctionLabel Nothing))
-            , CStringPtr 0 "\NUL"
-            , Void
-            ]
-          -}
           cwrapperDesc <- lookupCWrapperHsType wrapperName
           -- FIXME: _freeWrapper needs to be called otherwise it will leak the memory!!!!
-          --let Just (typeString, _)    = BS8.unsnoc typeCString    -- HINT: drop null terminator
-          --liftIO $ putStrLn $ "createAdjustor: (wrapper, hs-ty, c-ty) = " ++ show (wrapperName, hsTypeString, typeString)
           (funPtr, _freeWrapper) <- createAdjustor evalOnNewThread fun cwrapperDesc
           pure [PtrAtom RawPtr $ castFunPtrToPtr funPtr]
-
-      StaticTarget _ "createAdjustor" _ _
-        -> stgErrorM $ "unsupported StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
 
       -- GHC RTS global store getOrSet function implementation
       StaticTarget _ foreignSymbol _ _
         | Set.member foreignSymbol globalStoreSymbols
         , [value, Void] <- args
         -> do
+            --promptM $ putStrLn $ "[global store FFI] " ++ show foreignSymbol
             -- HINT: set once with the first value, then return it always, only for the globalStoreSymbols
             store <- gets $ rtsGlobalStore . ssRtsSupport
             case Map.lookup foreignSymbol store of
               Nothing -> state $ \s@StgState{..} -> ([value], s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol value store}})
               Just v  -> pure [v]
 
-------------------------------------------
+      -- calls to GHC RTS
+      StaticTarget _ foreignSymbol _ _
+        | Set.member foreignSymbol rtsSymbolSet
+        -> do
+          --promptM $ putStrLn $ "[GHC RTS FFI] " ++ show foreignSymbol
+          RtsFFI.evalFCallOp evalOnNewThread fCall args t tc
 
+      -- calls to emulated lib native functions
+      StaticTarget _ foreignSymbol _ _
+        | Set.member foreignSymbol emulatedLibrarySymbolSet
+        -> do
+          --promptM $ putStrLn $ "[emulated user FFI] " ++ show foreignSymbol
+          EmulatedLibFFI.evalFCallOp evalOnNewThread fCall args t tc
+
+      --------------
+      -- user FFI
+      --------------
       StaticTarget _ foreignSymbol _ _
         -> do
-          --liftIO $ print foreignSymbol
+          --promptM $ putStrLn $ "[user FFI] " ++ show foreignSymbol
           cArgs <- catMaybes <$> mapM mkFFIArg args
           funPtr <- getFFISymbol foreignSymbol
           liftIOAndBorrowStgState $ do
-            {-
-            when (False || "hs_OpenGLRaw_getProcAddress" == foreignSymbol) $ do
-              print args
-              getLine
-              pure ()
-            -}
             evalForeignCall funPtr cArgs t
 
       DynamicTarget
@@ -432,95 +255,15 @@ getProgArgv(int *argc, char **argv[])
           liftIOAndBorrowStgState $ do
             evalForeignCall (castPtrToFunPtr funPtr) cArgs t
 
-------------------------------------------
-
       _ -> stgErrorM $ "unsupported StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
 
+createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> (Bool, Name, [Name]) -> M (FunPtr a, IO ())
+createAdjustor evalOnNewThread fun cwrapperDesc@(_, retTy, argTys) = do
+  liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show cwrapperDesc
 
-{-
-  rtsTopHandlerRunIO
-  rtsTopHandlerRunNonIO
--}
-
-{-
-void zdGLUTzm2zi7zi0zi15zm1pzzTWDEZZBcYHcS36qZZ2lppzdGraphicsziUIziGLUTziRawziCallbackszdGLUTzzm2zzi7zzi0zzi15zzm1pzzzzTWDEZZZZBcYHcS36qZZZZ2lppzuGraphicszziUIzziGLUTzziRawzziCallbackszumakePositionFunc
-  ( StgStablePtr the_stableptr
-  , HsInt32 a1
-  , HsInt32 a2)
-{
-Capability *cap;
-HaskellObj ret;
-cap = rts_lock();
-rts_evalIO( &cap
-          , rts_apply(cap
-           , (HaskellObj)runIO_closure
-           , rts_apply(cap
-            , rts_apply(cap, (StgClosure*)deRefStablePtr(the_stableptr), rts_mkInt32(cap,a1))
-            , rts_mkInt32(cap,a2))) ,&ret);
-rts_checkSchedStatus("zdGLUTzm2zi7zi0zi15zm1pzzTWDEZZBcYHcS36qZZ2lppzdGraphicsziUIziGLUTziRawziCallbackszdGLUTzzm2zzi7zzi0zzi15zzm1pzzzzTWDEZZZZBcYHcS36qZZZZ2lppzuGraphicszziUIzziGLUTzziRawzziCallbackszumakePositionFunc",cap);
-rts_unlock(cap);
-}
--}
---------------------
-{-
-                 <> ptext (if is_IO_res_ty
-                                then (sLit "runIO_closure")
-                                else (sLit "runNonIO_closure"))
--}
-
-
-{-
-/*
- * rts_evalIO() evaluates a value of the form (IO a), forcing the action's
- * result to WHNF before returning.
- */
-void rts_evalIO (/* inout */ Capability **cap,
-                 /* in    */ HaskellObj p,
-                 /* out */   HaskellObj *ret)
-{
-    StgTSO* tso;
-
-    tso = createStrictIOThread(*cap, RtsFlags.GcFlags.initialStkSize, p);
-    scheduleWaitThread(tso,ret,cap);
-}
-
-/*
- * Same as above, but also evaluate the result of the IO action
- * to whnf while we're at it.
- */
-
-StgTSO *
-createStrictIOThread(Capability *cap, W_ stack_size,  StgClosure *closure)
-{
-  StgTSO *t;
-  t = createThread(cap, stack_size);
-  pushClosure(t, (W_)&stg_forceIO_info);
-  pushClosure(t, (W_)&stg_ap_v_info);
-  pushClosure(t, (W_)closure);
-  pushClosure(t, (W_)&stg_enter_info);
-  return t;
-}
-
-/* -----------------------------------------------------------------------------
-    Strict IO application - performing an IO action and entering its result.
-
-    rts_evalIO() lets you perform Haskell IO actions from outside of
-    Haskell-land, returning back to you their result. Want this result
-    to be evaluated to WHNF by that time, so that we can easily get at
-    the int/char/whatever using the various get{Ty} functions provided
-    by the RTS API.
-
-    stg_forceIO takes care of this, performing the IO action and entering
-    the results that comes back.
-
-    ------------------------------------------------------------------------- */
-
-INFO_TABLE_RET(stg_forceIO, RET_SMALL, P_ info_ptr)
-    return (P_ ret)
-{
-    ENTER(ret);
-}
--}
+  let (retCType : argsCType) = map (ffiRepToCType . ffiTypeToFFIRep) $ retTy : argTys
+  stateStore <- gets $ unPrintableMVar . ssStateStore
+  liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun cwrapperDesc)
 
 {-# NOINLINE ffiCallbackBridge #-}
 ffiCallbackBridge :: HasCallStack => EvalOnNewThread -> MVar StgState -> Atom -> CWrapperDesc -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
@@ -528,19 +271,19 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
   -- read args from ffi
   argsStorage <- peekArray (length argTypeNames) argsStoragePtr
   argAtoms <- zipWithM (ffiRepToGetter . ffiTypeToFFIRep) argTypeNames argsStorage
-  
+
   putStrLn $ "got FFI callback, fun: " ++ show fun
   putStrLn $ " argAtoms: " ++ show argAtoms
   putStrLn $ " wrapper-desc: " ++ show wd
   putStrLn $ " wrapper-argTypeNames: " ++ show argTypeNames
 
   putStrLn $ "[callback BEGIN] " ++ show fun
-  
+
   before <- takeMVar stateStore
   (unboxedResult, after) <- flip runStateT before $ do
     funStr <- GC.debugPrintHeapObject <$> readHeap fun
     liftIO $ putStrLn $ "  ** fun str ** = " ++ funStr
-    
+
     {-
     oldThread <- gets ssCurrentThreadId
     -- TODO: properly setup ffi thread
@@ -594,14 +337,6 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
       -- write result to ffi
       -- NOTE: only single result is supported
       ffiRepToSetter (ffiTypeToFFIRep retTypeName) retStorage retAtom retTypeName
-
-createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> (Bool, Name, [Name]) -> M (FunPtr a, IO ())
-createAdjustor evalOnNewThread fun cwrapperDesc@(_, retTy, argTys) = do
-  liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show cwrapperDesc
-
-  let (retCType : argsCType) = map (ffiRepToCType . ffiTypeToFFIRep) $ retTy : argTys
-  stateStore <- gets $ unPrintableMVar . ssStateStore
-  liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun cwrapperDesc)
 
 -- NOTE: LiftedRep and UnliftedRep is not used in FFIRep only AddrRep
 newtype FFIRep = FFIRep {unFFIRep :: PrimRep}
@@ -699,7 +434,7 @@ ffiRepToSetter (FFIRep r) p a retTypeName = case (r, a) of
   (AddrRep,   PtrAtom RawPtr v)  -> poke (castPtr p) v
   x -> error $ "ffiRepToSetter - unsupported: " ++ show (x, retTypeName)
 
-unboxFFIAtom :: Name -> Atom -> M Atom
+unboxFFIAtom :: HasCallStack => Name -> Atom -> M Atom
 unboxFFIAtom hsFFIType a = case (hsFFIType, a) of
   ("()",      HeapPtr{})  -> pure Void
   ("Int",     HeapPtr{})  -> con1Unbox
@@ -747,12 +482,7 @@ boxFFIAtom hsFFIType a = case (hsFFIType, a) of
 mkWiredInCon :: (Rts -> DataCon) -> [Atom] -> M Atom
 mkWiredInCon conFun args = do
   dc <- gets $ conFun . ssRtsSupport
-  HeapPtr <$> allocAndStore (Con False dc args)
-
-foreign import ccall unsafe "__int_encodeDouble"  rts_intEncodeDouble  :: Int  -> Int -> Double
-foreign import ccall unsafe "__word_encodeDouble" rts_wordEncodeDouble :: Word -> Int -> Double
-foreign import ccall unsafe "__int_encodeFloat"   rts_intEncodeFloat   :: Int  -> Int -> Float
-foreign import ccall unsafe "__word_encodeFloat"  rts_wordEncodeFloat  :: Word -> Int -> Float
+  HeapPtr <$> allocAndStore (Con False (DC dc) args)
 
 type CWrapperDesc = (Bool, Name, [Name])
 

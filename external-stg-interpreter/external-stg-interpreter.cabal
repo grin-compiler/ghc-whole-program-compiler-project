@@ -20,6 +20,8 @@ library
     Stg.Interpreter.FFI
     Stg.Interpreter.PrimCall
     Stg.Interpreter.Rts
+    Stg.Interpreter.RtsFFI
+    Stg.Interpreter.EmulatedLibFFI
     Stg.Interpreter.Debug
     Stg.Interpreter.IOManager
     Stg.Interpreter.ThreadScheduler
@@ -87,6 +89,7 @@ library
                        inline-c,
                        unagi-chan,
                        pretty-terminal,
+                       pretty-simple,
                        souffle-haskell,
                        external-stg-syntax,
                        external-stg
