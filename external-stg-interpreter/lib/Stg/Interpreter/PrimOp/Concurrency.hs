@@ -16,6 +16,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- fork# :: (State# RealWorld -> (# State# RealWorld, t0 #)) -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
   ( "fork#", [ioAction, _s]) -> do
+    promptM $ print (op, args)
     currentTS <- getCurrentThreadState
 
     (newTId, newTS) <- createThread
@@ -37,6 +38,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- forkOn# :: Int# -> (State# RealWorld -> (# State# RealWorld, t0 #)) -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
   ( "forkOn#", [IntV capabilityNo, ioAction, _s]) -> do
+    promptM $ print (op, args)
     currentTS <- getCurrentThreadState
 
     (newTId, newTS) <- createThread
@@ -178,16 +180,17 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
 raiseAsyncEx :: [Atom] -> Int -> Atom -> M ()
 raiseAsyncEx lastResult tid exception = do
-  ts@ThreadState{..} <- getThreadState tid
   let unwindStack result stackPiece = \case
         -- no Catch stack frame is found, kill thread
         [] -> do
+          ts <- getThreadState tid
           updateThreadState tid (ts {tsStack = [], tsStatus = ThreadDied})
           -- TODO: reschedule continuation??
           --stackPush $ RunScheduler SR_ThreadBlocked
 
         -- the thread continues with the excaption handler, also wakes up the thread if necessary
         exStack@(Catch exHandler bEx iEx : _) -> do
+          ts <- getThreadState tid
           updateThreadState tid $ ts
             { tsCurrentResult   = [exception]
             , tsStack           = Apply [] : exStack -- TODO: restore the catch frames exception mask, sync exceptions do it, and according the async ex pape it should be done here also
@@ -207,29 +210,49 @@ raiseAsyncEx lastResult tid exception = do
           let newResult = [HeapPtr addr]
           unwindStack newResult [Apply []] stackTail
 
-        Atomically _stmAction : stackTail -> do
-          error "TODO: figure out how async exception interacts with stm"
-
-        CatchSTM{} : stackTail -> do
-          error "TODO: figure out how async exception interacts with stm"
-
-        CatchRetry{} : stackTail -> do
-          {-
-          -- HINT: pop tlog stack for some extra stg state consistency and validation
+        Atomically stmAction : stackTail -> do
           ts <- getCurrentThreadState
           tid <- gets ssCurrentThreadId
-          updateThreadState tid $ ts {tsTLogStack = tail $ tsTLogStack ts}
-          unwindStack
-          -}
-          error "TODO: figure out how async exception interacts with stm"
+          -- extra validation (optional)
+          when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
+          let Just tlog = tsActiveTLog ts
+          -- abandon transaction
+          updateThreadState tid $ ts {tsActiveTLog = Nothing}
+          unsubscribeTVarWaitQueues tid tlog
+          unwindStack result (AtomicallyOp stmAction : stackPiece) stackTail
+
+        stackHead@(CatchSTM{}) : stackTail -> do
+          -- FIXME: IMO this is smeantically incorrect, but this is how it's done in the native RTS
+          --  this stack frame should not persist in ApStack only AtomicallyOp, it will restart the STM transaction anyway
+          ts <- getCurrentThreadState
+          tid <- gets ssCurrentThreadId
+          let Just tlog = tsActiveTLog ts
+              tlogStackTop : tlogStackTail = tsTLogStack ts
+          -- HINT: abort transaction
+          unsubscribeTVarWaitQueues tid tlog
+          updateThreadState tid $ ts
+            { tsActiveTLog  = Just tlogStackTop
+            , tsTLogStack   = tlogStackTail
+            }
+          unwindStack result (stackHead : stackPiece) stackTail
+
+        stackHead@(CatchRetry{}) : stackTail -> do
+          -- FIXME: IMO this is smeantically incorrect, but this is how it's done in the native RTS
+          --  this stack frame should not persist in ApStack only AtomicallyOp, it will restart the STM transaction anyway
+          -- HINT: abort transaction
+          ts <- getCurrentThreadState
+          tid <- gets ssCurrentThreadId
+          let Just tlog = tsActiveTLog ts
+          unsubscribeTVarWaitQueues tid tlog
+          updateThreadState tid $ ts { tsTLogStack = tail $ tsTLogStack ts }
+          unwindStack result (stackHead : stackPiece) stackTail
 
         -- collect stack frames for ApStack
         stackHead : stackTail -> do
-          case stackHead of
-            _ -> pure ()
           unwindStack result (stackHead : stackPiece) stackTail
 
-  unwindStack lastResult [] tsStack
+  ts <- getThreadState tid
+  unwindStack lastResult [] (tsStack ts)
 
 removeFromQueues :: Int -> M ()
 removeFromQueues tid = do
