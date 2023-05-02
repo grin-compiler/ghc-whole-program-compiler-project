@@ -3,6 +3,7 @@ module Stg.Interpreter.Base where
 
 import Data.Word
 import Foreign.Ptr
+import Foreign.C.Types
 import Control.Monad.State.Strict
 import Data.List (foldl')
 import Data.Set (Set)
@@ -27,6 +28,8 @@ import Control.Concurrent.Chan.Unagi.Bounded
 import Foreign.ForeignPtr.Unsafe
 import Data.Time.Clock
 import System.IO
+import Text.Pretty.Simple (pShowNoColor, pShow)
+import qualified Data.Text.Lazy.IO as Text
 
 import GHC.Stack
 import Text.Printf
@@ -132,20 +135,27 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | ThreadId          !Int
   | LiftedUndefined
   | Rubbish
+  | Unbinded          !Id -- program point that created this value (used for debug purposes)
   deriving (Show, Eq, Ord)
 
 type ReturnValue = [Atom]
 
+newtype CutShow a = CutShow {getCutShowItem :: a}
+  deriving (Eq, Ord)
+
+instance Show (CutShow a) where
+  show _ = "<cut-show>"
+
 data HeapObject
   = Con
     { hoIsLNE       :: Bool
-    , hoCon         :: DataCon
+    , hoCon         :: DC
     , hoConArgs     :: [Atom]
     }
   | Closure
     { hoIsLNE       :: Bool
     , hoName        :: Id
-    , hoCloBody     :: StgRhsClosure
+    , hoCloBody     :: CutShow StgRhsClosure
     , hoEnv         :: Env    -- local environment ; with live variables only, everything else is pruned
     , hoCloArgs     :: [Atom]
     , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
@@ -160,7 +170,7 @@ data HeapObject
 
 data StackContinuation
   -- basic block related
-  = CaseOf  !Int !Id !Env !Binder !AltType ![Alt]  -- closure addr & name (debug) ; pattern match on the result ; carries the closure's local environment
+  = CaseOf  !Int !Id !Env !Id !(CutShow AltType) !(CutShow [Alt])  -- closure addr & name (debug) ; pattern match on the result ; carries the closure's local environment
   -- closure related
   | Update  !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
   | Apply   ![Atom]                       -- apply args on the result heap object
@@ -173,6 +183,9 @@ data StackContinuation
   | Atomically    !Atom
   | CatchRetry    !Atom !Atom !Bool       -- first STM action, alternative STM action, is running alt code?
   | CatchSTM      !Atom !Atom             -- catch STM frame ; stm action, exception handler
+  -- * special primop calling stack frames
+  -- STM + async exception related
+  | AtomicallyOp  !Atom
   -- tag/enum related
   | DataToTagOp
   -- rts helper
@@ -189,6 +202,7 @@ data DebugFrame
 
 data ScheduleReason
   = SR_ThreadFinished
+  | SR_ThreadFinishedMain
   | SR_ThreadFinishedFFICallback
   | SR_ThreadBlocked
   | SR_ThreadYield
@@ -283,6 +297,18 @@ data StaticOrigin
   | SO_ClosureResult
   deriving (Show, Eq, Ord)
 
+data DebugSettings
+  = DebugSettings
+  { dsKeepGCFacts :: Bool
+  }
+  deriving (Show, Eq, Ord)
+
+defaultDebugSettings :: DebugSettings
+defaultDebugSettings
+  = DebugSettings
+  { dsKeepGCFacts = False
+  }
+
 data StgState
   = StgState
   { ssHeap                :: !Heap
@@ -293,6 +319,7 @@ data StgState
   , ssGCInput             :: PrintableMVar ([Atom], StgState)
   , ssGCOutput            :: PrintableMVar RefSet
   , ssGCIsRunning         :: Bool
+  , ssGCCounter           :: Int
 
   -- let-no-escape support
   , ssTotalLNECount       :: !Int
@@ -374,7 +401,8 @@ data StgState
 
   , ssEvaluatedClosures   :: !(Set Name)
   , ssBreakpoints         :: !(Map Name Int)
-  , ssDebugFuel           :: !Int
+  , ssStepCounter         :: !Int
+  , ssDebugFuel           :: !(Maybe Int)
   , ssDebugState          :: DebugState
   , ssStgErrorAction      :: Printable (M ())
 
@@ -385,7 +413,7 @@ data StgState
   -- retainer db
   , ssReferenceMap        :: !(IntMap IntSet)
   , ssRetainerMap         :: !(IntMap IntSet)
-  , ssGCRootSet           :: !IntSet
+  , ssGCRootSet           :: !(Set String)
 
   -- tracing
   , ssTracingState        :: TracingState
@@ -399,12 +427,15 @@ data StgState
   -- tracing primops
   , ssTraceEvents         :: ![(String, AddressState)]
   , ssTraceMarkers        :: ![(String, AddressState)]
+
+  -- internal dev mode debug settings
+  , ssDebugSettings       :: DebugSettings
   }
   deriving (Show)
 
 -- for the primop tests
 emptyUndefinedStgState :: StgState
-emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined undefined DbgRunProgram NoTracing undefined undefined
+emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined undefined DbgRunProgram NoTracing defaultDebugSettings undefined undefined
 
 emptyStgState :: Bool
               -> PrintableMVar StgState
@@ -413,10 +444,11 @@ emptyStgState :: Bool
               -> NextDebugCommand
               -> DebugState
               -> TracingState
+              -> DebugSettings
               -> PrintableMVar ([Atom], StgState)
               -> PrintableMVar RefSet
               -> StgState
-emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut = StgState
+emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState debugSettings gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
 
@@ -425,6 +457,7 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   , ssGCInput             = gcIn
   , ssGCOutput            = gcOut
   , ssGCIsRunning         = False
+  , ssGCCounter           = 0
 
   -- let-no-escape support
   , ssTotalLNECount       = 0
@@ -502,7 +535,8 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   , ssEvaluatedClosures   = Set.empty
   , ssBreakpoints         = mempty
   , ssDebugState          = dbgState
-  , ssDebugFuel           = 0
+  , ssStepCounter         = 0
+  , ssDebugFuel           = Nothing
   , ssStgErrorAction      = Printable $ pure ()
 
   -- region tracker
@@ -512,7 +546,7 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   -- retainer db
   , ssReferenceMap        = mempty
   , ssRetainerMap         = mempty
-  , ssGCRootSet           = IntSet.empty
+  , ssGCRootSet           = Set.empty
 
   -- tracing
   , ssTracingState        = tracingState
@@ -526,6 +560,9 @@ emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcI
   -- tracing primops
   , ssTraceEvents         = []
   , ssTraceMarkers        = []
+
+  -- internal dev mode debug settings
+  , ssDebugSettings       = debugSettings
   }
 
 data Rts
@@ -574,6 +611,9 @@ data Rts
   -- program contants
   , rtsProgName     :: String
   , rtsProgArgs     :: [String]
+
+  -- native C data symbols
+  , rtsDataSymbol_enabled_capabilities  :: Ptr CInt
   }
   deriving (Show)
 
@@ -653,14 +693,18 @@ store a o = do
           - generational
 -}
 
-stgErrorM :: String -> M a
+stgErrorM :: HasCallStack => String -> M a
 stgErrorM msg = do
   tid <- gets ssCurrentThreadId
-  liftIO $ putStrLn $ " * stgErrorM: " ++ show msg
-  liftIO $ putStrLn $ "current thread id: " ++ show tid
+  liftIO $ do
+    putStrLn $ " * stgErrorM: " ++ show msg
+    putStrLn $ "current thread id: " ++ show tid
   reportThread tid
   curClosure <- gets ssCurrentClosure
-  liftIO $ putStrLn $ "current closure: " ++ show curClosure
+  liftIO $ do
+    putStrLn $ "current closure: " ++ show curClosure
+    putStrLn $ " * native estgi call stack:"
+    putStrLn $ prettyCallStack callStack
   action <- unPrintable <$> gets ssStgErrorAction
   action
   error "stgErrorM"
@@ -674,6 +718,7 @@ addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so
 addManyBindersToEnv :: StaticOrigin -> [Binder] -> [Atom] -> Env -> Env
 addManyBindersToEnv so [] [] env = env
 addManyBindersToEnv so (b : binders) (v : values) env = addManyBindersToEnv so binders values $ Map.insert (Id b) (so, v) env
+addManyBindersToEnv so (b : binders) values env = addManyBindersToEnv so binders values $ Map.insert (Id b) (so, Unbinded (Id b)) env
 addManyBindersToEnv so binders values _env = error $ "addManyBindersToEnv - length mismatch: " ++ show (so, [(Id b, binderType b, binderTypeSig b) | b <- binders], values)
 
 lookupEnvSO :: HasCallStack => Env -> Binder -> M (StaticOrigin, Atom)
@@ -892,12 +937,27 @@ getCStringConstantPtrAtom key = do
 -- stm
 
 promptM :: IO () -> M ()
-promptM ioAction = pure ()
 promptM ioAction = do
-  liftIO $ do
+  isQuiet <- gets ssIsQuiet
+  tid <- gets ssCurrentThreadId
+  pp <- gets ssCurrentProgramPoint
+  cc <- gets ssCurrentClosure
+  tsList <- gets $ IntMap.toList . ssThreads
+  liftIO . unless isQuiet $ do
+    putStrLn $ "  tid           = " ++ show tid ++ "    thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
+    putStrLn $ "  program point = " ++ show pp
     ioAction
-    putStrLn "[press enter]"
-    getLine
+    --putStrLn "[press enter]"
+    --getLine
+    pure ()
+
+promptM_ :: IO () -> M ()
+promptM_ ioAction = do
+  isQuiet <- gets ssIsQuiet
+  liftIO . unless isQuiet $ do
+    ioAction
+    --putStrLn "[press enter]"
+    --getLine
     pure ()
 
 data TLogEntry
@@ -1178,13 +1238,12 @@ reportThreadIO :: Int -> ThreadState -> IO ()
 reportThreadIO tid endTS = do
     putStrLn ""
     putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
-    putStrLn "stack:"
-    putStrLn $ unlines $ map show $ zip [0..] $ map showStackCont $ tsStack endTS
+    Text.putStrLn $ pShow endTS
     putStrLn ""
 
 showStackCont :: StackContinuation -> String
 showStackCont = \case
-  CaseOf clAddr clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", addr: " ++ show clAddr ++ ", result var: " ++ show (Id b)
+  CaseOf clAddr clo _ b _ _ -> "CaseOf, closure name: " ++ show clo ++ ", addr: " ++ show clAddr ++ ", result var: " ++ show (b)
   c -> show c
 
 -------------------------
@@ -1194,6 +1253,7 @@ data RefSet
   = RefSet
   { rsHeap                :: !IntSet
   , rsWeakPointers        :: !IntSet
+  , rsTVars               :: !IntSet
   , rsMVars               :: !IntSet
   , rsMutVars             :: !IntSet
   , rsArrays              :: !IntSet
@@ -1211,6 +1271,7 @@ emptyRefSet :: RefSet
 emptyRefSet = RefSet
   { rsHeap                = IntSet.empty
   , rsWeakPointers        = IntSet.empty
+  , rsTVars               = IntSet.empty
   , rsMVars               = IntSet.empty
   , rsMutVars             = IntSet.empty
   , rsArrays              = IntSet.empty
@@ -1321,3 +1382,17 @@ showProgramPoint = \case
     AltDataCon dc -> "AltDataCon " ++ show (DC dc)
     _             -> show pat
   PP_Apply i p    -> "apply " ++ show i ++ ": " ++ show p
+
+dumpStgState :: M ()
+dumpStgState = do
+  firstHeapAddress <- gets ssHeapStartAddress
+  stgState0 <- get
+  let stgState1 = stgState0
+        { ssHeap            = IntMap.withoutKeys (ssHeap stgState0) (IntSet.fromList [0..firstHeapAddress-1])
+        , ssStaticGlobalEnv = mempty
+        , ssOrigin          = mempty
+        }
+  liftIO $ do
+    let fname = "estgi-state-dump.txt"
+    putStrLn $ "dumping stg state to: " ++ fname
+    Text.writeFile fname $ pShowNoColor stgState1

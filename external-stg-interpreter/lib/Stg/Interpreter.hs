@@ -165,16 +165,23 @@ buildCallGraph so hoName = do
       Just cloId  -> addIntraClosureCallGraphEdge (PP_Closure cloId) so progPoint
       _           -> pure ()
   -- write whole program path entry
+  fuel <- gets ssDebugFuel
+  stepCounter <- gets ssStepCounter
   gets ssTracingState >>= \case
     NoTracing     -> pure ()
-    DoTracing{..} -> liftIO $ hPutStrLn thWholeProgramPath $ maybe "<global>" show currentClosure ++ "\t" ++ show progPoint ++ "\t" ++ show hoName
+    DoTracing{..} -> liftIO $ hPutStrLn thWholeProgramPath $ maybe "<global>" show currentClosure ++ "\t" ++ show progPoint ++ "\t" ++ show hoName ++ "\t" ++ show fuel ++ "\t" ++ show stepCounter
 
 builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
 builtinStgEval so a@HeapPtr{} = do
   o <- readHeap a
+  Debugger.checkBreakpoint "eval"
   case o of
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}       -> pure [a]
+    BlackHole t -> do
+      stackPush (Apply [])
+      stackPush $ RunScheduler SR_ThreadYield
+      pure [a]
     {-
     -- TODO: check how the cmm stg machine handles this case
     BlackHole t -> do
@@ -190,7 +197,7 @@ builtinStgEval so a@HeapPtr{} = do
 
       | otherwise
       -> do
-        let StgRhsClosure _ uf params e = hoCloBody
+        let StgRhsClosure _ uf params e = getCutShowItem $ hoCloBody
             HeapPtr l = a
             extendedEnv = addManyBindersToEnv SO_CloArg params hoCloArgs hoEnv
         unless (length params == length hoCloArgs) $ do
@@ -225,7 +232,7 @@ builtinStgEval so a@HeapPtr{} = do
             -- closure will only be entered once, and so need not be updated but may safely be blackholed.
             store l (BlackHole o)
             evalExpr extendedEnv e
-    _ -> stgErrorM $ "expected heap object: " ++ show o
+    _ -> stgErrorM $ "expected evaluable heap object, got: " ++ show o ++ " atom: " ++ show a ++ ", static-origin: " ++ show so
 builtinStgEval so a = stgErrorM $ "expected a thunk, got: " ++ show a ++ ", static-origin: " ++ show so
 
 builtinStgApply :: HasCallStack => StaticOrigin -> Atom -> [Atom] -> M [Atom]
@@ -237,7 +244,11 @@ builtinStgApply so a@HeapPtr{} args = do
   case o of
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}             -> stgErrorM $ "unexpexted con at apply: "-- ++ show o
-    BlackHole t       -> stgErrorM $ "blackhole ; loop in application of : " ++ show t
+    --BlackHole t       -> stgErrorM $ "blackhole ; loop in application of : " ++ show t
+    BlackHole t -> do
+      stackPush (Apply args)
+      stackPush $ RunScheduler SR_ThreadYield
+      pure [a]
     Closure{..}
       -- under saturation
       | hoCloMissing - argCount > 0
@@ -334,6 +345,12 @@ data ThreadStatus
 
 killAllThreads :: M ()
 killAllThreads = do
+  -- TODO: check if there are running threads
+  tsList <- gets $ IntMap.toList . ssThreads
+  let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
+  when (runnableThreads /= []) $ do
+    reportThreads
+    error "killing all running threads"
   pure () -- TODO
 
 evalOnMainThread :: M [Atom] -> M [Atom]
@@ -349,7 +366,7 @@ evalOnThread isMainThread setupAction = do
   scheduleToTheEnd tid
   switchToThread tid
 
-  stackPush $ RunScheduler SR_ThreadFinished
+  stackPush $ RunScheduler $ if isMainThread then SR_ThreadFinishedMain else SR_ThreadFinished
   result0 <- setupAction
   --liftIO $ putStrLn $ "evalOnThread result0 = " ++ show result0
   --Debugger.reportState
@@ -368,8 +385,8 @@ contextSwitchTimer :: M ()
 contextSwitchTimer = do
   t0 <- gets ssThreadStepBudget
   t1 <- if t0 > 0 then pure (pred t0) else do
-    stackPush $ RunScheduler SR_ThreadYield
-    pure 2
+    --stackPush $ RunScheduler SR_ThreadYield
+    pure 2 -- NOTE: step budget
   modify' $ \s -> s {ssThreadStepBudget = t1}
 
 evalStackMachine :: [Atom] -> M [Atom]
@@ -381,18 +398,25 @@ evalStackMachine result = do
   stackPop >>= \case
     Nothing         -> pure result
     Just stackCont  -> do
-      --liftIO $ putStrLn $ "stack-cont = " ++ showStackCont stackCont
-      --contextSwitchTimer
-      evalStackContinuation result stackCont >>= evalStackMachine
+      promptM $ do
+        putStrLn $ "  input result = " ++ show result
+        putStrLn $ "  stack-cont   = " ++ showStackCont stackCont
 
-peekAtom :: Atom -> M String
+      Debugger.checkBreakpoint "stack"
+      nextResult <- evalStackContinuation result stackCont
+      case stackCont of
+        RunScheduler{} -> pure ()
+        _ -> contextSwitchTimer
+      evalStackMachine nextResult
+
+peekAtom :: HasCallStack => Atom -> M String
 peekAtom a = case a of
   HeapPtr{} -> GC.debugPrintHeapObject <$> readHeap a
   _ -> pure $ show a
 
 peekAtoms = mapM peekAtom
 
-evalStackContinuation :: [Atom] -> StackContinuation -> M [Atom]
+evalStackContinuation :: HasCallStack => [Atom] -> StackContinuation -> M [Atom]
 evalStackContinuation result = \case
   Apply args
     | [fun@HeapPtr{}] <- result
@@ -417,7 +441,7 @@ evalStackContinuation result = \case
       pure result
 
   -- HINT: STG IR uses 'case' expressions to chain instructions with strict evaluation
-  CaseOf curClosureAddr curClosure localEnv resultBinder altType alts -> do
+  CaseOf curClosureAddr curClosure localEnv (Id resultBinder) (CutShow altType) alts -> do
     modify' $ \s -> s {ssCurrentClosure = Just curClosure, ssCurrentClosureAddr = curClosureAddr}
     assertWHNF result altType resultBinder
     let resultId = (Id resultBinder)
@@ -428,22 +452,22 @@ evalStackContinuation result = \case
               _   -> error $ "expected a single value: " ++ show result
             extendedEnv = addBinderToEnv SO_Scrut resultBinder v localEnv
         con <- readHeapCon v
-        case alts of
+        case getCutShowItem alts of
           d@(Alt AltDefault _ _) : al -> matchFirstCon resultId extendedEnv con $ al ++ [d]
-          _ -> matchFirstCon resultId extendedEnv con alts
+          _ -> matchFirstCon resultId extendedEnv con $ getCutShowItem alts
 
       PrimAlt _r -> do
         let lit = case result of
               [l] -> l
               _   -> error $ "expected a single value: " ++ show result
             extendedEnv = addBinderToEnv SO_Scrut resultBinder lit localEnv
-        case alts of
+        case getCutShowItem alts of
           d@(Alt AltDefault _ _) : al -> matchFirstLit resultId extendedEnv lit $ al ++ [d]
-          _ -> matchFirstLit resultId extendedEnv lit alts
+          _ -> matchFirstLit resultId extendedEnv lit $ getCutShowItem alts
 
       MultiValAlt n -> do -- unboxed tuple
         -- NOTE: result binder is not assigned
-        let [Alt{..}] = alts
+        let [Alt{..}] = getCutShowItem alts
         when (n /= length altBinders) $ do
           stgErrorM $ "evalStackContinuation - MultiValAlt n broken assumption 2: " ++ show (n, altBinders, result)
         let extendedEnv = if n == 1 && altBinders == []
@@ -456,7 +480,7 @@ evalStackContinuation result = \case
         evalExpr extendedEnv altRHS
 
       PolyAlt -> do
-        let [Alt{..}]   = alts
+        let [Alt{..}]   = getCutShowItem alts
             [v]         = result
             extendedEnv = addBinderToEnv SO_Scrut resultBinder v $                 -- HINT: bind the result
                           localEnv
@@ -489,6 +513,10 @@ evalStackContinuation result = \case
   -- HINT: dataToTag# has an eval call in the middle, that's why we need this continuation, it is the post-returning part of the op implementation
   DataToTagOp -> PrimTagToEnum.dataToTagOp result
 
+  AtomicallyOp stmAction -> do
+    promptM $ putStrLn "[ AtomicallyOp ]"
+    PrimSTM.atomicallyOp stmAction
+
   RaiseOp ex -> PrimExceptions.raiseEx ex
 
   KeepAlive{} -> do
@@ -520,7 +548,7 @@ evalExpr localEnv = \case
     | otherwise
     -> do
       args <- mapM (evalArg localEnv) l
-      loc <- allocAndStore (Con False dc args)
+      loc <- allocAndStore (Con False (DC dc) args)
       pure [HeapPtr loc]
 
   StgLet b e -> do
@@ -585,7 +613,7 @@ evalExpr localEnv = \case
   StgCase e scrutineeResult altType alts -> do
     Just curClosure <- gets ssCurrentClosure
     curClosureAddr <- gets ssCurrentClosureAddr
-    stackPush (CaseOf curClosureAddr curClosure localEnv scrutineeResult altType alts)
+    stackPush (CaseOf curClosureAddr curClosure localEnv (Id scrutineeResult) (CutShow altType) $ CutShow alts)
     setProgramPoint . PP_Scrutinee $ Id scrutineeResult
     evalExpr localEnv e
 
@@ -680,7 +708,7 @@ convertAltLit lit = case lit of
   l -> error $ "unsupported: " ++ show l
 
 matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
-matchFirstCon resultId localEnv (Con _ dc args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
+matchFirstCon resultId localEnv (Con _ (DC dc) args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
   []  -> stgErrorM $ "no matching alts for: " ++ show resultId
   Alt{..} : _ -> do
     let extendedEnv = case altCon of
@@ -721,12 +749,12 @@ storeRhs :: HasCallStack => Bool -> Env -> Binder -> Addr -> Rhs -> M ()
 storeRhs isLetNoEscape localEnv i addr = \case
   StgRhsCon dc l -> do
     args <- mapM (evalArg localEnv) l
-    store addr (Con isLetNoEscape dc args)
+    store addr (Con isLetNoEscape (DC dc) args)
 
   cl@(StgRhsClosure freeVars _ paramNames _) -> do
     let liveSet   = Set.fromList $ map Id freeVars
         prunedEnv = Map.restrictKeys localEnv liveSet -- HINT: do pruning to keep only the live/later referred variables
-    store addr (Closure isLetNoEscape (Id i) cl prunedEnv [] (length paramNames))
+    store addr (Closure isLetNoEscape (Id i) (CutShow cl) prunedEnv [] (length paramNames))
 
 -----------------------
 
@@ -757,18 +785,18 @@ declareTopBindings mods = do
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
 
-loadAndRunProgram :: HasCallStack => Bool -> Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-loadAndRunProgram isQuiet switchCWD fullpak_name progArgs dbgChan dbgState tracing = do
+loadAndRunProgram :: HasCallStack => Bool -> Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> DebugSettings -> IO ()
+loadAndRunProgram isQuiet switchCWD fullpak_name progArgs dbgChan dbgState tracing debugSettings = do
 
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
     ".json"                             -> getJSONModules fullpak_name
     ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
-  runProgram isQuiet switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing
+  runProgram isQuiet switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing debugSettings
 
-runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> IO ()
-runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing = do
+runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> DebugSettings -> IO ()
+runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing debugSettings = do
   let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension progFilePath
 
@@ -836,7 +864,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
             hClose h
           _ -> pure ()
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState gcIn gcOut)
+    s@StgState{..} <- execStateT run (emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState debugSettings gcIn gcOut)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
@@ -878,7 +906,7 @@ loadCbitsSO isQuiet progFilePath = do
 flushStdHandles :: M ()
 flushStdHandles = do
   Rts{..} <- gets ssRtsSupport
-  evalOnNewThread $ do
+  evalOnMainThread $ do
     stackPush $ Apply [] -- HINT: force IO monad result to WHNF
     stackPush $ Apply [Void]
     pure [rtsTopHandlerFlushStdHandles]
