@@ -4,36 +4,34 @@ module Stg.Interpreter.GC.RetainerAnalysis where
 import Control.Monad.State
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 import System.Directory
 import System.FilePath
 import Text.Printf
 
 import Stg.Interpreter.Base
-{-
-loadMap :: String -> IO (IntMap IntSet)
+
+loadMap :: String -> IO (Map GCSymbol (Set GCSymbol))
 loadMap factPath = do
   absFactPath <- makeAbsolute factPath
   putStrLn $ "loading: " ++ show absFactPath
-  refs <- map (map read . words) . lines <$> readFile absFactPath
-  pure $ IntMap.fromListWith IntSet.union [(to, IntSet.singleton from) | [to, from] <- refs]
--}
+  refs <- map words . lines <$> readFile absFactPath
+  pure $ Map.fromListWith Set.union [(GCSymbol to, Set.singleton $ GCSymbol from) | [to, from] <- refs]
 
-loadStringSet :: Bool -> String -> IO (Set String)
+
+loadStringSet :: Bool -> String -> IO (Set GCSymbol)
 loadStringSet isQuiet factPath = do
   absFactPath <- makeAbsolute factPath
   unless isQuiet $ do
     putStrLn $ "loading: " ++ show absFactPath
-  Set.fromList . lines <$> readFile absFactPath
+  Set.fromList . map GCSymbol . lines <$> readFile absFactPath
 
 loadRetainerDb :: M ()
 loadRetainerDb = pure ()
 
 loadRetainerDb2 :: M ()
-loadRetainerDb2 = error "TODO"
-{-
 loadRetainerDb2 = do
   gcCycle <- gets ssGCCounter
   let factDir = "./.gc-datalog-facts" </> printf "gc-cycle-%03i" gcCycle
@@ -46,7 +44,7 @@ loadRetainerDb2 = do
     , ssRetainerMap   = retMap
     , ssGCRootSet     = gcRootSet
     }
--}
+
 clearRetanerDb :: M ()
 clearRetanerDb = do
   modify' $ \s -> s {

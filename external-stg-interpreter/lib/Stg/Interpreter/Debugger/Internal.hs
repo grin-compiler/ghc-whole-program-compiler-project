@@ -29,7 +29,7 @@ showOriginTrace :: Int -> M ()
 showOriginTrace i = do
   origin <- gets ssOrigin
   let go o s = unless (IntSet.member o s) $ do
-        let dlRef = fromIntegral $ GC.encodeRef o GC.NS_HeapPtr
+        let dlRef = GC.encodeRef o GC.NS_HeapPtr
         str <- decodeAndShow dlRef
         case IntMap.lookup o origin of
           Just (oId, oAddr, oTid) -> do
@@ -57,28 +57,28 @@ showRetainer i = do
   rMap <- gets ssRetainerMap
   rootSet <- gets ssGCRootSet
 
-  let dlRef = fromIntegral $ GC.encodeRef i GC.NS_HeapPtr
+  let dlRef = GC.encodeRef i GC.NS_HeapPtr
   liftIO $ do
-    putStrLn $ "retianers of addr: " ++ show i ++ "   dl-ref: " ++ show dlRef ++ if IntSet.member dlRef rootSet then "  * GC-Root *" else ""
-  case IntMap.lookup dlRef rMap of
+    putStrLn $ "retianers of addr: " ++ show i ++ "   dl-ref: " ++ show dlRef ++ if Set.member dlRef rootSet then "  * GC-Root *" else ""
+  case Map.lookup dlRef rMap of
     Nothing   -> liftIO $ putStrLn $ "no retainer for: " ++ show i ++ "   dl-ref: " ++ show dlRef
     Just rSet -> do
-      forM_ (IntSet.toList rSet) $ \o -> case GC.decodeRef $ fromIntegral o of
+      forM_ (Set.toList rSet) $ \o -> case GC.decodeRef o of
         (GC.NS_HeapPtr, r)
           | Just ho <- IntMap.lookup r heap -> liftIO $ putStrLn $ dumpHeapObject r ho
         x -> liftIO $ print x
 
-getRetainers :: Int -> M [Int]
+getRetainers :: GCSymbol -> M [GCSymbol]
 getRetainers dlRef = do
   rootSet <- gets ssGCRootSet
   rMap <- gets ssRetainerMap
-  case IntMap.lookup dlRef rMap of
+  case Map.lookup dlRef rMap of
     Just rSet
-      | IntSet.notMember dlRef rootSet
-      -> pure $ IntSet.toList rSet
+      | Set.notMember dlRef rootSet
+      -> pure $ Set.toList rSet
     _ -> pure []
 
-decodeAndShow :: Int -> M String
+decodeAndShow :: GCSymbol -> M String
 decodeAndShow dlRef = do
   heap <- gets ssHeap
   origin <- gets ssOrigin
@@ -89,17 +89,17 @@ decodeAndShow dlRef = do
       showHeapObj = \case
         Nothing -> ""
         Just ho -> " " ++ GC.debugPrintHeapObject ho
-      str = case GC.decodeRef $ fromIntegral dlRef of
+      str = case GC.decodeRef dlRef of
               x@(GC.NS_HeapPtr, r)  -> markGCRoot (show x ++ showHeapObj (IntMap.lookup r heap)) ++ showOrigin (IntMap.lookup r origin)
               x                     -> markGCRoot (show x)
-      markGCRoot s = if IntSet.member dlRef rootSet
+      markGCRoot s = if Set.member dlRef rootSet
                         then color Yellow $ s ++ "  * GC-Root *"
                         else s
   pure str
 
 getRetainerTree :: Int -> M (Tree String)
 getRetainerTree i = do
-  let dlRef = fromIntegral $ GC.encodeRef i GC.NS_HeapPtr
+  let dlRef = GC.encodeRef i GC.NS_HeapPtr
       go x = (x,) <$> getRetainers x
   tree <- unfoldTreeM go dlRef
   mapM decodeAndShow tree
@@ -124,7 +124,7 @@ dbgCommands =
 
   , ( ["loaddb"]
     , "load retainer db"
-    , \_ -> loadRetanerDb2
+    , \_ -> loadRetainerDb2
     )
 
   , ( ["?"]
@@ -293,11 +293,13 @@ dbgCommands =
     )
 
   , ( ["fuel"]
-    , "STEP-COUNT - make multiple steps"
+    , "STEP-COUNT - make multiple steps ; 'fuel -' - turn off step count check"
     , \case
+      ["-"]
+        -> modify' $ \s@StgState{..} -> s {ssDebugFuel = Nothing}
       [countS]
         | Just stepCount <- Text.readMaybe countS
-        -> modify' $ \s@StgState{..} -> s {ssDebugFuel = stepCount}
+        -> modify' $ \s@StgState{..} -> s {ssDebugFuel = Just stepCount}
       _ -> pure ()
     )
   ]

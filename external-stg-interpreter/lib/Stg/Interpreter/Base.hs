@@ -309,6 +309,9 @@ defaultDebugSettings
   { dsKeepGCFacts = False
   }
 
+newtype GCSymbol = GCSymbol {unGCSymbol :: String}
+  deriving (Show, Eq, Ord)
+
 data StgState
   = StgState
   { ssHeap                :: !Heap
@@ -411,9 +414,9 @@ data StgState
   , ssRegions             :: !(Map Region (Maybe AddressState, CallGraph, [(AddressState, AddressState)]) )
 
   -- retainer db
-  , ssReferenceMap        :: !(IntMap IntSet)
-  , ssRetainerMap         :: !(IntMap IntSet)
-  , ssGCRootSet           :: !(Set String)
+  , ssReferenceMap        :: !(Map GCSymbol (Set GCSymbol))
+  , ssRetainerMap         :: !(Map GCSymbol (Set GCSymbol))
+  , ssGCRootSet           :: !(Set GCSymbol)
 
   -- tracing
   , ssTracingState        :: TracingState

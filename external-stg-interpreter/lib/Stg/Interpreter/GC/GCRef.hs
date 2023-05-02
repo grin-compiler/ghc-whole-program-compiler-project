@@ -93,13 +93,13 @@ data RefNamespace
   | NS_WeakPointer
   deriving (Show, Read)
 
-encodeRef :: Int -> RefNamespace -> String
-encodeRef i ns = show (ns, i)
+encodeRef :: Int -> RefNamespace -> GCSymbol
+encodeRef i ns = GCSymbol $ show (ns, i)
 
-decodeRef :: String -> (RefNamespace, Int)
-decodeRef = read
+decodeRef :: GCSymbol -> (RefNamespace, Int)
+decodeRef = read . unGCSymbol
 
-visitAtom :: Atom -> (String -> SouffleM ()) -> SouffleM ()
+visitAtom :: Atom -> (GCSymbol -> SouffleM ()) -> SouffleM ()
 visitAtom atom action = case atom of
   HeapPtr i           -> action $ encodeRef i NS_HeapPtr
   MVar i              -> action $ encodeRef i NS_MVar
@@ -118,17 +118,17 @@ visitAtom atom action = case atom of
   PtrAtom (StablePtr i) _ -> action $ encodeRef i NS_StablePointer -- HINT: for debug purposes (track usage) keep this reference
   _                   -> pure ()
 
-arrIdxToRef :: ArrIdx -> String
+arrIdxToRef :: ArrIdx -> GCSymbol
 arrIdxToRef = \case
   MutArrIdx i -> encodeRef i NS_MutableArray
   ArrIdx i    -> encodeRef i NS_Array
 
-smallArrIdxToRef :: SmallArrIdx -> String
+smallArrIdxToRef :: SmallArrIdx -> GCSymbol
 smallArrIdxToRef = \case
   SmallMutArrIdx i  -> encodeRef i NS_SmallMutableArray
   SmallArrIdx i     -> encodeRef i NS_SmallArray
 
-arrayArrIdxToRef :: ArrayArrIdx -> String
+arrayArrIdxToRef :: ArrayArrIdx -> GCSymbol
 arrayArrIdxToRef = \case
   ArrayMutArrIdx i  -> encodeRef i NS_MutableArrayArray
   ArrayArrIdx i     -> encodeRef i NS_ArrayArray

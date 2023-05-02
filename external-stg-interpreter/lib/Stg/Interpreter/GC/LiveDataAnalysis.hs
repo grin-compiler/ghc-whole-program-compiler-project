@@ -93,7 +93,7 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
 addGCRootFacts :: Souffle.Handle ExtStgGC -> StgState -> [Atom] -> SouffleM ()
 addGCRootFacts prog StgState{..} localGCRoots = do
   let addGCRoot :: Atom -> SouffleM ()
-      addGCRoot a = visitAtom a $ \i -> Souffle.addFact prog $ GCRoot i
+      addGCRoot a = visitAtom a $ \i -> Souffle.addFact prog $ GCRoot $ unGCSymbol i
 
   -- HINT: the following can be GC roots
   {-
@@ -121,8 +121,8 @@ addGCRootFacts prog StgState{..} localGCRoots = do
 
 addReferenceFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
 addReferenceFacts prog StgState{..} = do
-  let addReference :: String -> Atom -> SouffleM ()
-      addReference from a = visitAtom a $ \i -> Souffle.addFact prog $ Reference from i
+  let addReference :: GCSymbol -> Atom -> SouffleM ()
+      addReference from a = visitAtom a $ \i -> Souffle.addFact prog $ Reference (unGCSymbol from) (unGCSymbol i)
 
       addRefs :: VisitGCRef a => IntMap a -> RefNamespace -> SouffleM ()
       addRefs im ns = do
@@ -160,7 +160,7 @@ readbackDeadData prog = do
 collectDead :: RefSet -> Dead -> SouffleM RefSet
 collectDead dd@RefSet{..} (Dead sym) = do
   -- HINT: decode datalog value
-  let (namespace, idx) = decodeRef sym
+  let (namespace, idx) = decodeRef $ GCSymbol sym
   pure $ case namespace of
     NS_Array              -> dd {rsArrays             = IntSet.insert idx rsArrays}
     NS_ArrayArray         -> dd {rsArrayArrays        = IntSet.insert idx rsArrayArrays}
@@ -181,11 +181,11 @@ collectDead dd@RefSet{..} (Dead sym) = do
 readbackLiveData :: FilePath -> Bool -> SouffleM RefSet
 readbackLiveData factDir isQuiet = do
   liveSet <- liftIO $ loadStringSet isQuiet (factDir </> "Live.csv")
-  foldM (\dd sym -> collectDead dd (Dead sym)) emptyRefSet $ Set.toList liveSet
+  foldM (\dd sym -> collectDead dd (Dead sym)) emptyRefSet . map unGCSymbol $ Set.toList liveSet
 
-loadStringSet :: Bool -> String -> IO (Set String)
+loadStringSet :: Bool -> String -> IO (Set GCSymbol)
 loadStringSet isQuiet factPath = do
   absFactPath <- makeAbsolute factPath
   unless isQuiet $ do
     putStrLn $ "loading: " ++ show absFactPath
-  Set.fromList . lines <$> readFile absFactPath
+  Set.fromList . map GCSymbol . lines <$> readFile absFactPath

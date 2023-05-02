@@ -33,8 +33,8 @@ dumpHeapM h = do
   liftIO $ putStrLn $ "object count: " ++ show (IntMap.size h)
   forM_ (IntMap.toList h) $ \(i, o) -> do
     rootSet <- gets ssGCRootSet
-    let dlRef = fromIntegral $ GC.encodeRef i GC.NS_HeapPtr
-        markGCRoot s = if IntSet.member dlRef rootSet
+    let dlRef = GC.encodeRef i GC.NS_HeapPtr
+        markGCRoot s = if Set.member dlRef rootSet
                           then color Yellow $ s ++ "  * GC-Root *"
                           else s
     originStr <- dumpOriginM i
