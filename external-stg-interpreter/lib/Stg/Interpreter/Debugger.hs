@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.Debugger where
 
+import GHC.Stack
 import Control.Monad.State
 import qualified Data.Set as Set
 import qualified Data.Map as Map
@@ -33,7 +34,7 @@ tryNextDebugCommand = do
       fetchNextDebugCommand
       pure c
 
-runDebugCommand :: DebugCommand -> M ()
+runDebugCommand :: HasCallStack => DebugCommand -> M ()
 runDebugCommand cmd = do
   liftIO $ putStrLn $ "runDebugCommand: " ++ show cmd
   (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
@@ -98,17 +99,23 @@ processCommandsUntilExit = do
     then pure ()
     else processCommandsUntilExit
 
+hasFuel :: M Bool
+hasFuel = do
+  fuel <- gets ssDebugFuel
+  modify' $ \s@StgState{..} -> s {ssDebugFuel = fmap pred ssDebugFuel, ssStepCounter = succ ssStepCounter}
+  pure $ maybe True (> 0) fuel
+
 checkBreakpoint :: Name -> M ()
 checkBreakpoint breakpointName = do
   dbgState <- gets ssDebugState
-  fuel <- gets ssDebugFuel
-  modify' $ \s@StgState{..} -> s {ssDebugFuel = pred ssDebugFuel}
   exit <- processCommandsNonBlocking
+  shouldStep <- hasFuel
   case dbgState of
     DbgStepByStep -> do
       reportState
-      unless (fuel > 0) $ unless exit processCommandsUntilExit
+      unless exit processCommandsUntilExit
     DbgRunProgram -> do
+      unless shouldStep $ modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
       bkMap <- gets ssBreakpoints
       case Map.lookup breakpointName bkMap of
         Nothing -> pure ()
@@ -119,6 +126,7 @@ checkBreakpoint breakpointName = do
 
           | otherwise -> do
               -- HINT: trigger breakpoint
+              liftIO $ putStrLn $ "hit breakpoint: " ++ show breakpointName
               reportState
               modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
               unless exit processCommandsUntilExit

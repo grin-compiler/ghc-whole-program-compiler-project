@@ -26,8 +26,8 @@ ppSrcSpan = \case
     | otherwise
     -> printf "%s:%d:%d-%d:%d" (BS8.unpack srcSpanFile) srcSpanSLine srcSpanSCol srcSpanELine srcSpanECol
 
-debugProgram :: Bool -> [Char] -> [String] -> DebuggerChan -> Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> Maybe String -> IO ()
-debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript = do
+debugProgram :: Bool -> [Char] -> [String] -> DebuggerChan -> Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> Maybe String -> DebugSettings -> IO ()
+debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript debugSettings = do
   case dbgScript of
     Just fname -> do
       dbgScriptLines <- lines <$> readFile fname
@@ -43,7 +43,7 @@ debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript = do
 
 
   putStrLn $ "loading " ++ appPath
-  loadAndRunProgram False switchCWD appPath appArgs dbgChan DbgStepByStep True
+  loadAndRunProgram False switchCWD appPath appArgs dbgChan DbgStepByStep True debugSettings
   putStrLn "program finshed"
 
 startDebuggerReplUI :: Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> IO ()
@@ -106,7 +106,7 @@ printDebugOutput = \case
 printHeapObject :: HeapObject -> IO ()
 printHeapObject = \case
   Con{..} -> do
-    let DataCon{..} = hoCon
+    let DataCon{..} = unDC hoCon
     putStrLn $ BS8.unpack (getModuleName dcModule) ++ "." ++ BS8.unpack dcName ++ " " ++ show hoConArgs
 
   Closure{..} -> do

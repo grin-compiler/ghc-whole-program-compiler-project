@@ -192,7 +192,7 @@ exportStgStateM stgState@StgState{..} = do
   -- heap
   forM_ (IntMap.toList ssHeap) $ \(i, ho) -> case ho of
     Con{..} -> do
-      addFact "Heap_Con" [I i, S (show hoIsLNE), N (dcUniqueName hoCon), I (length hoConArgs)]
+      addFact "Heap_Con" [I i, S (show hoIsLNE), N (dcUniqueName $ unDC hoCon), I (length hoConArgs)]
       forM_ (zip [0..] hoConArgs) $ \(idx, a) -> do
         addFact "Heap_ConArg" [I i, I idx, A a]
 
@@ -296,7 +296,7 @@ emitStack stackId stack = do
           addFact "Stack_ApplyArg" [S stackId, I frame, I argIdx, A a]
 
       CaseOf _ clName env result _ _ -> do
-        addFact "Stack_CaseOf" [S stackId, I frame, ID clName, ID (Id result), I (Map.size env)]
+        addFact "Stack_CaseOf" [S stackId, I frame, ID clName, ID (result), I (Map.size env)]
         forM_ (zip [0..] (Map.toList env)) $ \(envIdx, (n, a)) -> do
           addFact "Stack_CaseOfEnv" [S stackId, I frame, I envIdx, ID n, A $ snd a]
 
