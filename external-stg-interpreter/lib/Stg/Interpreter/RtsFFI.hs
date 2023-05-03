@@ -117,6 +117,11 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
           --error $ show wd
           pure [] -- TODO
 
+      StaticTarget _ "rts_getThreadId" _ _
+        | [ThreadId threadId,Void] <- args
+        -> do
+          pure [Int32V threadId]
+
       StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]                          -- TODO: for testsuite
 
       StaticTarget _ "lockFile" _ _ -> pure [IntV 0]
