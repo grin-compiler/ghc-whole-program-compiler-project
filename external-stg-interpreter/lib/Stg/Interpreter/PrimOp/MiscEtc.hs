@@ -12,6 +12,9 @@ evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
 
   -- getCCSOf# :: a -> State# s -> (# State# s, Addr# #)
+  ( "getCCSOf#", [HeapPtr _, Void]) -> do
+    pure [PtrAtom CostCentreStackPtr nullPtr]
+
 
   -- getCurrentCCS# :: a -> State# s -> (# State# s, Addr# #)
   ( "getCurrentCCS#", [_, _]) -> do
