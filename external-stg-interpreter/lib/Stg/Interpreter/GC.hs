@@ -26,7 +26,7 @@ checkGC localGCRoots = do
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
   let
-   gcThreshold = 30000000 -- wims tests pass
+   gcThreshold    = 15000000 -- wims tests pass
    -- gcThreshold = 3000000 -- wims tests fail? yes
   when (not gcIsRunning && nextAddr - lastGCAddr > gcThreshold) $ do
     exportCallGraph -- HINT: export call graph in case the app does not terminate in the normal way
