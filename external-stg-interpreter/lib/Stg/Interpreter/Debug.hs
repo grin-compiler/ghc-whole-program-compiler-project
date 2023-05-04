@@ -164,11 +164,38 @@ writeCallGraph fname CallGraph{..} = do
         SO_Builtin        -> "known"
         SO_ClosureResult  -> "unknown"
   withFile fname WriteMode $ \h -> do
-    hPutStrLn h $ intercalate "\t" ["count", "static-origin", "call-site-type", "source-name", "target-name", "Source", "Target"]
+    hPutStrLn h $ intercalate "\t"
+      [ "count"
+      , "static-origin"
+      , "call-site-type"
+      , "source-name"
+      , "target-name"
+      , "source -> target"
+      , "Source"
+      , "Target"
+      ]
     forM_ (sortOn (negate . snd) $ StrictMap.toList cgInterClosureCallGraph) $ \((so, from, to), count) -> do
-      hPutStrLn h $ intercalate "\t" [show count, show so, showCallType so, show from, show to, show from, show to]
+      hPutStrLn h $ intercalate "\t"
+        [ show count
+        , show so
+        , showCallType so
+        , show from
+        , show to
+        , show from ++ " -> " ++ show to
+        , show from
+        , show to
+        ]
     forM_ (sortOn (negate . snd) $ StrictMap.toList cgIntraClosureCallGraph) $ \((from, so, to), count) -> do
-      hPutStrLn h $ intercalate "\t" [show count, "direct", "direct", show from, show to, show from, show to]
+      hPutStrLn h $ intercalate "\t"
+        [ show count
+        , "direct"
+        , "direct"
+        , show from
+        , show to
+        , show from ++ " -> " ++ show to
+        , show from
+        , show to
+        ]
 
 writeCallGraphSummary :: FilePath -> CallGraph -> IO ()
 writeCallGraphSummary fname CallGraph{..} = do
