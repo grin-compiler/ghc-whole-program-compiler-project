@@ -73,7 +73,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
         modify' $ \s@StgState{..} -> s {ssMutVars = IntMap.insert m new ssMutVars}
         pure [IntV 0, new]
       else do
-        pure [IntV 1, old]
+        pure [IntV 1, current]
 
   -- OBSOLETE from GHC 9.4
   -- sameMutVar# :: MutVar# s a -> MutVar# s a -> Int#

@@ -148,7 +148,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
         updateSmallArrIdx src (vsrc V.// [(fromIntegral o, new)])
         pure [IntV 0, new]
       else do
-        pure [IntV 1, old]
+        pure [IntV 1, current]
 
   -- OBSOLETE from GHC 9.4
   -- sameSmallMutableArray# :: SmallMutableArray# s a -> SmallMutableArray# s a -> Int#
