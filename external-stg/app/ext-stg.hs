@@ -1,18 +1,9 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 import Control.Monad
-import Data.Maybe
-import Data.List (sortBy, isSuffixOf)
-import Data.Monoid
-import Data.Ord
+import Data.List
 
 import Options.Applicative
-import Text.PrettyPrint.ANSI.Leijen hiding ((<$>), (<>))
-import qualified Text.PrettyPrint.ANSI.Leijen as PP
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 
-import Stg.Syntax
 import Stg.Pretty
 import Stg.IO
 
