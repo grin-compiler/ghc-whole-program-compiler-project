@@ -19,7 +19,6 @@ import Foreign
 import Options.Applicative
 
 import Stg.Syntax
-import Stg.Pretty
 import Stg.Analysis.Closure
 import Stg.Analysis.ForeignInfo
 import Stg.Program

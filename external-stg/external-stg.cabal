@@ -15,6 +15,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:
     Stg.Pretty
+    Stg.IRLocation
     Stg.Reconstruct
     Stg.Deconstruct
     Stg.Program
@@ -43,6 +44,7 @@ library
                        unordered-containers,
                        hashable,
                        ansi-wl-pprint,
+                       final-pretty-printer,
                        zip,
                        text,
                        aeson,

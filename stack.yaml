@@ -10,5 +10,7 @@ packages:
 extra-deps:
   - souffle-haskell-3.5.1
   - type-errors-pretty-0.0.1.2@sha256:9042b64d1ac2f69aa55690576504a2397ebea8a6a55332242c88f54027c7eb57,2781
+  - github: csabahruska/final-pretty-printer
+    commit: 5444974a2e0ee76abb790c85738a38f96696c908
 
 allow-newer: true

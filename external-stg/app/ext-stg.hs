@@ -27,7 +27,7 @@ modes = subparser
               _ | isSuffixOf "modpak" fname -> Stg.IO.readModpakL fname modpakStgbinPath decodeStgbin
               _ | isSuffixOf "stgbin" fname -> decodeStgbin <$> BSL.readFile fname
               _ -> fail "unknown file format"
-            print $ pprModule dump
+            putStrLn . fst . pShowS $ pprModule dump
 
 main :: IO ()
 main = join $ execParser $ info (helper <*> modes) mempty
