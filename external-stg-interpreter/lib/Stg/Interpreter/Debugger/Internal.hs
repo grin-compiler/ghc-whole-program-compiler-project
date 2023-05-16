@@ -302,6 +302,12 @@ dbgCommands =
         -> modify' $ \s@StgState{..} -> s {ssDebugFuel = Just stepCount}
       _ -> pure ()
     )
+
+  , ( ["get-current-thread-state"]
+    , "reports the currently running thread state"
+    , \_ -> reportState
+    )
+
   ]
 
 
