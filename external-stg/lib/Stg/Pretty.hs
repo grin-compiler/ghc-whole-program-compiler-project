@@ -494,9 +494,12 @@ emptyStgPointState = StgPointState
 type M = State StgPointState
 
 -- check if there is no new line in text
-validateTextChunk :: Text -> M ()
-validateTextChunk t = when (T.elem '\n' t) $ do
-  error $ "invalid text chunk, it must not contain newlines: " ++ show t
+replaceNewlines :: Text -> Text
+replaceNewlines = T.map $
+  \case
+    '\n' -> ' '
+    '\r' -> ' '
+    c    -> c
 
 addOutput :: Text -> M ()
 addOutput t = modify' $ \s@StgPointState{..} -> s
@@ -517,7 +520,7 @@ pShow doc = (T.concat . reverse $ spsOutput result, spsStgPoints result)
 
     renderChunk :: Chunk Int -> M ()
     renderChunk = \case
-      CText t   -> addOutput t >> validateTextChunk t
+      CText t   -> addOutput $ replaceNewlines t
       CSpace w  -> addOutput . T.pack $ replicate w ' '
 
     renderAtom :: Atom Int -> M ()
