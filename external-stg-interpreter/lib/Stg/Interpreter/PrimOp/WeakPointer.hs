@@ -3,9 +3,12 @@ module Stg.Interpreter.PrimOp.WeakPointer where
 
 import Control.Monad.State
 import qualified Data.IntMap as IntMap
+import Data.Maybe
+import Foreign.Ptr
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+import qualified Stg.Interpreter.FFI as FFI
 
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
@@ -51,7 +54,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
       Nothing -> pure [IntV 0, LiftedUndefined]
 
   -- finalizeWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, (State# RealWorld -> (# State# RealWorld, b #) ) #)
-  -- TODO
+  ( "finalizeWeak#", [WeakPointer wpId, _w]) -> do
+    finalizeWeak wpId
 
   -- touch# :: o -> State# RealWorld -> State# RealWorld
   ( "touch#", [_o, _s]) -> do
@@ -60,17 +64,24 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   _ -> fallback op args t tc
 
-{-
+finalizeWeak :: Int -> M [Atom]
+finalizeWeak wpId = do
+  wpd@WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
+  case wpdValue of
+    Nothing -> pure [IntV 0, LiftedUndefined]
+    Just v  -> do
+      let finalizedWpd = wpd {wpdValue = Nothing}
+      modify' $ \s@StgState{..} -> s {ssWeakPointers = IntMap.insert wpId finalizedWpd ssWeakPointers}
+      mapM_ runCFinalizer wpdCFinalizers
+      case wpdFinalizer of
+        Nothing -> pure [IntV 0, LiftedUndefined]
+        Just f  -> pure [IntV 1, f]
 
-primop  FinalizeWeakOp "finalizeWeak#" GenPrimOp
-   Weak# a -> State# RealWorld -> (# State# RealWorld, Int#,
-              (State# RealWorld -> (# State# RealWorld, b #) ) #)
-   { Finalize a weak pointer. The return value is an unboxed tuple
-     containing the new state of the world and an "unboxed Maybe",
-     represented by an {\tt Int#} and a (possibly invalid) finalization
-     action. An {\tt Int#} of {\tt 1} indicates that the finalizer is valid. The
-     return value {\tt b} from the finalizer should be ignored. }
-   with
-   has_side_effects = True
-   out_of_line      = True
--}
+runCFinalizer :: (Atom, Maybe Atom, Atom) -> M ()
+runCFinalizer (PtrAtom _ cFunPtr, mCEnv, cData) = do
+  cArgs <- catMaybes <$> mapM FFI.mkFFIArg (maybeToList mCEnv ++ [cData])
+  liftIOAndBorrowStgState $ do
+    let cRetType = UnboxedTuple []
+    FFI.evalForeignCall (castPtrToFunPtr cFunPtr) cArgs cRetType
+  pure ()
+runCFinalizer f = error $ "unsupported weakptr c finalizer: " ++ show f
