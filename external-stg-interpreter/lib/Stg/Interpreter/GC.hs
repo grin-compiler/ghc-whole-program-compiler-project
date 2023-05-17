@@ -19,20 +19,34 @@ import qualified Stg.Interpreter.PrimOp.WeakPointer as PrimWeakPointer
 
 import Stg.Interpreter.GC.RetainerAnalysis
 
+import Data.Time.Clock
+
 checkGC :: [Atom] -> M ()
 checkGC localGCRoots = do
   tryPrune
   nextAddr <- gets ssNextHeapAddr
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
+
+  lastGCTime <- gets ssLastGCTime
+  t0 <- liftIO getCurrentTime
+
   let
    gcThreshold    = 15000000 -- wims tests pass
    -- gcThreshold = 3000000 -- wims tests fail? yes
-  when (not gcIsRunning && nextAddr - lastGCAddr > gcThreshold) $ do
+  when (not gcIsRunning && (nextAddr - lastGCAddr > gcThreshold {- || t0 `diffUTCTime` lastGCTime > 60 -})) $ do
     exportCallGraph -- HINT: export call graph in case the app does not terminate in the normal way
     a <- getAddressState
-    modify' $ \s@StgState{..} -> s {ssLastGCAddr = nextAddr, ssGCIsRunning = True, ssGCMarkers = a : ssGCMarkers, ssGCCounter = succ ssGCCounter}
+    modify' $ \s@StgState{..} -> s
+      { ssLastGCAddr  = nextAddr
+      , ssLastGCTime  = t0
+      , ssGCIsRunning = True
+      , ssGCMarkers   = a : ssGCMarkers
+      , ssGCCounter   = succ ssGCCounter
+      }
     runGC localGCRoots
+    t0 <- liftIO getCurrentTime
+    modify' $ \s@StgState{..} -> s {ssLastGCTime = t0}
     {-
       TODO:
         done - send the current state for live data analysis (async channel) if the GC condition triggers
@@ -137,11 +151,12 @@ reportDeletedCode old = do
 
 finalizeDeadWeakPointers :: IntSet -> M ()
 finalizeDeadWeakPointers rsWeaks = do
-  wdescs <- mapM lookupWeakPointerDescriptor $ IntSet.toList rsWeaks
+  let deadWeaks = IntSet.toList rsWeaks
+  wdescs <- mapM lookupWeakPointerDescriptor deadWeaks
   liftIO $ do
-    putStrLn $ " * [TODO] GC - run finalizers for dead weak pointers: " ++ show rsWeaks
+    putStrLn $ " * GC - run finalizers for dead weak pointers: " ++ show rsWeaks
     mapM_ print wdescs
-  pure () -- TODO: check how the native GHC RTS calls weak pointer finalizers
+  forM_ deadWeaks PrimWeakPointer.finalizeWeak
 
 -- utils
 
@@ -256,13 +271,6 @@ lifetimeAnalysis = do
     printf "the first %d younger than %d (age) non-static heap objects:\n" n age
     forM_ some $ \(i, o) -> printf "%-8d %3s  %s\n" i (ppLNE o) (debugPrintHeapObject o)
 -}
-debugPrintHeapObject :: HeapObject -> String
-debugPrintHeapObject  = \case
-  Con{..}           -> "Con: " ++ show (dcUniqueName $ unDC hoCon) ++ " " ++ show hoConArgs
-  Closure{..}       -> "Clo: " ++ show hoName ++ " args: " ++ show hoCloArgs ++ " env: " ++ show (Map.size hoEnv) ++ " missing: " ++ show hoCloMissing
-  BlackHole o       -> "BlackHole - " ++ debugPrintHeapObject o
-  ApStack{}         -> "ApStack"
-  RaiseException ex -> "RaiseException: " ++ show ex
 
 ppLNE :: HeapObject -> String
 ppLNE = \case
