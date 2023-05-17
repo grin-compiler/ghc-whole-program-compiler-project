@@ -24,7 +24,7 @@ evalOp op args = run $ do
       dummyTyCon  = Nothing
       dummyFun    = \_ _ _ _ -> pure []
       value = evalPrimOp dummyFun op args dummyType dummyTyCon
-  evalStateT value emptyUndefinedStgState
+  evalStateT value fakeStgStateForPrimopTests
 
 evalOp2 :: Name -> [Atom] -> IO [Atom]
 evalOp2 op args = do
@@ -32,7 +32,7 @@ evalOp2 op args = do
       dummyTyCon  = Nothing
       dummyFun    = \_ _ _ _ -> pure []
       value = evalPrimOp dummyFun op args dummyType dummyTyCon
-  evalStateT value emptyUndefinedStgState
+  evalStateT value fakeStgStateForPrimopTests
 
 unboxFloat :: Float -> Float#
 unboxFloat (F# x) = x

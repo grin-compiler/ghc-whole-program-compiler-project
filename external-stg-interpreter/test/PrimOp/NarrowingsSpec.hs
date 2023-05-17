@@ -24,7 +24,7 @@ evalOp op args = run $ do
       dummyTyCon  = Nothing
       dummyFun    = \_ _ _ _ -> pure []
       value = evalPrimOp dummyFun op args dummyType dummyTyCon
-  evalStateT value emptyUndefinedStgState
+  evalStateT value fakeStgStateForPrimopTests
 
 unboxInt :: Int -> Int#
 unboxInt (I# x) = x
