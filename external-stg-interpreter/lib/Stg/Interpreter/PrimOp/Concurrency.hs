@@ -192,8 +192,8 @@ raiseAsyncEx lastResult tid exception = do
         exStack@(Catch exHandler bEx iEx : _) -> do
           ts <- getThreadState tid
           updateThreadState tid $ ts
-            { tsCurrentResult   = [exception]
-            , tsStack           = Apply [] : exStack -- TODO: restore the catch frames exception mask, sync exceptions do it, and according the async ex pape it should be done here also
+            { tsCurrentResult   = [exHandler]
+            , tsStack           = Apply [exception, Void] : exStack -- TODO: restore the catch frames exception mask, sync exceptions do it, and according the async ex pape it should be done here also
             , tsStatus          = ThreadRunning -- HINT: whatever blocked this thread now that operation got cancelled by the async exception
             -- NOTE: Ensure that async exceptions are blocked now, so we don't get a surprise exception before we get around to executing the handler.
             , tsBlockExceptions = True
