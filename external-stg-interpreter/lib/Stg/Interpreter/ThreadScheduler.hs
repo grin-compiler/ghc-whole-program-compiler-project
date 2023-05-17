@@ -66,12 +66,88 @@ yield result = do
   -- HINT: clear value to allow garbage collection
   updateThreadState nextTid nextTS {tsCurrentResult = []}
 
+
   threads <- gets ssThreads
   promptM_ $ do
     putStrLn $ " * scheduler next runnable thread: " ++ show nextTid
     --Text.putStrLn $ pShowNoColor threads
 
-  pure $ tsCurrentResult nextTS
+  -- TODO: try to raise async exceptions from the queue if possible
+  if (tsBlockExceptions nextTS == False || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
+    then case tsBlockedExceptions nextTS of
+      []          -> pure $ tsCurrentResult nextTS
+      waitingTids -> do
+        -- try wake up thread
+        -- raise exception
+        error $ " * scheduler tsBlockedExceptions: " ++ show waitingTids
+    else
+      pure $ tsCurrentResult nextTS
+
+interruptible :: ThreadStatus -> Bool
+interruptible = \case
+  ThreadFinished  -> False
+  ThreadDied      -> False
+  ThreadRunning   -> True
+  ThreadBlocked r -> case r of
+    BlockedOnMVar{}         -> True
+    BlockedOnMVarRead{}     -> True
+    BlockedOnThrowAsyncEx{} -> True
+    BlockedOnSTM{}          -> True
+    BlockedOnRead{}         -> True
+    BlockedOnWrite{}        -> True
+    BlockedOnDelay{}        -> True
+    BlockedOnBlackHole{}    -> False
+    BlockedOnForeignCall{}  -> False
+
+{-
+interruptible(StgTSO *t)
+{
+  switch (t->why_blocked) {
+  case BlockedOnMVar:
+  case BlockedOnSTM:
+  case BlockedOnMVarRead:
+  case BlockedOnMsgThrowTo:
+  case BlockedOnRead:
+  case BlockedOnWrite:
+#if defined(mingw32_HOST_OS)
+  case BlockedOnDoProc:
+#endif
+  case BlockedOnDelay:
+    return 1;
+  // NB. Threaded blocked on foreign calls (BlockedOnCCall) are
+  // *not* interruptible.  We can't send these threads an exception.
+  default:
+    return 0;
+  }
+}
+-}
+{-
+
+data BlockReason
+  = BlockedOnMVar         Int (Maybe Atom) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
+  | BlockedOnMVarRead     Int       -- mvar id
+  | BlockedOnBlackHole
+  | BlockedOnThrowAsyncEx Int Atom  -- target thread id, exception
+  | BlockedOnSTM
+  | BlockedOnForeignCall            -- RTS name: BlockedOnCCall
+  | BlockedOnRead         Int       -- file descriptor
+  | BlockedOnWrite        Int       -- file descriptor
+  | BlockedOnDelay        UTCTime   -- target time to wake up thread
+  deriving (Eq, Ord, Show)
+
+data ThreadStatus
+  = ThreadRunning
+  | ThreadBlocked   BlockReason
+  | ThreadFinished  -- RTS name: ThreadComplete
+  | ThreadDied      -- RTS name: ThreadKilled
+
+  , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
+  , tsBlockExceptions   :: !Bool  -- block async exceptions
+  , tsInterruptible     :: !Bool  -- interruptible blocking of async exception
+-}
+tryRaiseBlockedException :: [Atom] -> M [Atom]
+tryRaiseBlockedException result = do
+  pure []
 
 getNextRunnableThread :: M Int
 getNextRunnableThread = do

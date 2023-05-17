@@ -61,6 +61,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ts@ThreadState{..} <- getCurrentThreadState
     tid <- gets ssCurrentThreadId
 
+    ------------------------ debug
+    liftIO $ print (tid, op, args)
+    unless (null tsBlockedExceptions) $ do
+      reportThreads
+    ------------------------ debug
+
     -- set new masking state
     unless (tsBlockExceptions == True && tsInterruptible == True) $ do
       updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = True}
@@ -76,6 +82,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- get async exception masking state
     ts@ThreadState{..} <- getCurrentThreadState
     tid <- gets ssCurrentThreadId
+
+    ------------------------ debug
+    liftIO $ print (tid, op, args)
+    unless (null tsBlockedExceptions) $ do
+      reportThreads
+    ------------------------ debug
 
     -- set new masking state
     unless (tsBlockExceptions == True && tsInterruptible == False) $ do
@@ -93,10 +105,24 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ts@ThreadState{..} <- getCurrentThreadState
     tid <- gets ssCurrentThreadId
 
+    ------------------------ debug
+    liftIO $ print (tid, op, args)
+    wps <- gets ssWeakPointers
+    liftIO $ print wps
+    unless (null tsBlockedExceptions) $ do
+      reportThreads
+    ------------------------ debug
+
     -- set new masking state
     unless (tsBlockExceptions == False && tsInterruptible == False) $ do
       updateThreadState tid $ ts {tsBlockExceptions = False, tsInterruptible = False}
       stackPush $ RestoreExMask tsBlockExceptions tsInterruptible
+      {-
+        TODO:
+          - raise exception in
+          - wake up the blocked thread ()
+      -}
+      -- TODO: implement this
       {-
         -- TODO: raise async exception eagerly, then run the io action
         maybePerformBlockedException ; non-zero (one) if an exception was raised, zero otherwise
