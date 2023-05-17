@@ -397,7 +397,7 @@ pprExpr' hasParens exp = do
     StgConApp dc args _t  -> maybeParens hasParens $ (pretty dc) <+> (hsep $ map (pprArg) args)
     StgLet b e            -> maybeParens hasParens $ text "let" <+> (align $ pprBinding b) <$$> text "in" <+> align (withStgPoint (SP_LetExpr stgPoint) $ pprExpr' False e)
     StgLetNoEscape b e    -> maybeParens hasParens $ text "lettail" <+> (align $ pprBinding b) <$$> text "in" <+> align (withStgPoint (SP_LetNoEscapeExpr stgPoint) $ pprExpr' False e)
-    StgTick tickish e    -> withStgPoint (SP_TickExpr stgPoint tickish) $ pprExpr' hasParens e
+    StgTick tickish e     -> pprExpr' hasParens e
 
 instance Pretty Expr where
   pretty = pprExpr
