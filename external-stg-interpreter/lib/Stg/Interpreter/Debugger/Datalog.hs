@@ -204,7 +204,7 @@ exportStgStateM stgState@StgState{..} = do
         addFact "Heap_ClosureEnv" [I i, I idx, ID n, A $ snd a]
 
     BlackHole o -> do
-      addFact "Heap_BlackHole" [I i, S (GC.debugPrintHeapObject o)]
+      addFact "Heap_BlackHole" [I i, S (debugPrintHeapObject o)]
 
     ApStack{..} -> do
       let stackId = printf "$ApStackStack(%d)" i

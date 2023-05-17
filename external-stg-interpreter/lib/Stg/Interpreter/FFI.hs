@@ -48,7 +48,6 @@ import Stg.Syntax
 import Stg.GHC.Symbols
 import Stg.Interpreter.Base
 import Stg.Interpreter.Debug
-import qualified Stg.Interpreter.GC as GC
 import Stg.Interpreter.Rts (globalStoreSymbols)
 import qualified Stg.Interpreter.RtsFFI as RtsFFI
 import qualified Stg.Interpreter.EmulatedLibFFI as EmulatedLibFFI
@@ -281,7 +280,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
 
   before <- takeMVar stateStore
   (unboxedResult, after) <- flip runStateT before $ do
-    funStr <- GC.debugPrintHeapObject <$> readHeap fun
+    funStr <- debugPrintHeapObject <$> readHeap fun
     liftIO $ putStrLn $ "  ** fun str ** = " ++ funStr
 
     {-

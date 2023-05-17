@@ -19,7 +19,7 @@ import qualified Stg.Interpreter.GC as GC
 import qualified Stg.Interpreter.GC.GCRef as GC
 
 dumpHeapObject :: Int -> HeapObject -> String
-dumpHeapObject i o = printf "%-8d %3s  %s" i (GC.ppLNE o) (GC.debugPrintHeapObject o)
+dumpHeapObject i o = printf "%-8d %3s  %s" i (GC.ppLNE o) (debugPrintHeapObject o)
 
 dumpOriginM :: Int -> M String
 dumpOriginM i = do

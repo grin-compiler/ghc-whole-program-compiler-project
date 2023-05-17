@@ -319,6 +319,7 @@ data StgState
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
 
   -- GC
+  , ssLastGCTime          :: !UTCTime
   , ssLastGCAddr          :: !Int
   , ssGCInput             :: PrintableMVar ([Atom], StgState)
   , ssGCOutput            :: PrintableMVar RefSet
@@ -438,10 +439,11 @@ data StgState
   deriving (Show)
 
 -- for the primop tests
-emptyUndefinedStgState :: StgState
-emptyUndefinedStgState = emptyStgState undefined undefined undefined undefined undefined DbgRunProgram NoTracing defaultDebugSettings undefined undefined
+fakeStgStateForPrimopTests :: StgState
+fakeStgStateForPrimopTests = emptyStgState undefined undefined undefined undefined undefined undefined DbgRunProgram NoTracing defaultDebugSettings undefined undefined
 
-emptyStgState :: Bool
+emptyStgState :: UTCTime
+              -> Bool
               -> PrintableMVar StgState
               -> DL
               -> DebuggerChan
@@ -452,11 +454,12 @@ emptyStgState :: Bool
               -> PrintableMVar ([Atom], StgState)
               -> PrintableMVar RefSet
               -> StgState
-emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState debugSettings gcIn gcOut = StgState
+emptyStgState now isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState debugSettings gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
 
   -- GC
+  , ssLastGCTime          = now
   , ssLastGCAddr          = 0
   , ssGCInput             = gcIn
   , ssGCOutput            = gcOut
@@ -948,6 +951,8 @@ promptM ioAction = do
   cc <- gets ssCurrentClosure
   tsList <- gets $ IntMap.toList . ssThreads
   liftIO . unless isQuiet $ do
+    now <- getCurrentTime
+    putStrLn $ "  now           = " ++ show now
     putStrLn $ "  tid           = " ++ show tid ++ "    thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
     putStrLn $ "  program point = " ++ show pp
     ioAction
@@ -1400,3 +1405,11 @@ dumpStgState = do
     let fname = "estgi-state-dump.txt"
     putStrLn $ "dumping stg state to: " ++ fname
     Text.writeFile fname $ pShowNoColor stgState1
+
+debugPrintHeapObject :: HeapObject -> String
+debugPrintHeapObject  = \case
+  Con{..}           -> "Con: " ++ show (dcUniqueName $ unDC hoCon) ++ " " ++ show hoConArgs
+  Closure{..}       -> "Clo: " ++ show hoName ++ " args: " ++ show hoCloArgs ++ " env: " ++ show (Map.size hoEnv) ++ " missing: " ++ show hoCloMissing
+  BlackHole o       -> "BlackHole - " ++ debugPrintHeapObject o
+  ApStack{}         -> "ApStack"
+  RaiseException ex -> "RaiseException: " ++ show ex

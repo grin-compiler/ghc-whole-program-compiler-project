@@ -88,7 +88,7 @@ decodeAndShow dlRef = do
         Just (oId,oAddr,_) -> (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
       showHeapObj = \case
         Nothing -> ""
-        Just ho -> " " ++ GC.debugPrintHeapObject ho
+        Just ho -> " " ++ debugPrintHeapObject ho
       str = case GC.decodeRef dlRef of
               x@(GC.NS_HeapPtr, r)  -> markGCRoot (show x ++ showHeapObj (IntMap.lookup r heap)) ++ showOrigin (IntMap.lookup r origin)
               x                     -> markGCRoot (show x)
