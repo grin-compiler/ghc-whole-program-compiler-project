@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.MiscEtc where
 
 import Control.Monad.State
@@ -7,6 +7,8 @@ import Foreign.Ptr
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+
+pattern Int64V i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -40,6 +42,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- setThreadAllocationCounter# :: Int64# -> State# RealWorld -> State# RealWorld
+  ( "setThreadAllocationCounter#", [Int64V n, _s]) -> do
+    -- TODO
+    pure []
 
   _ -> fallback op args t tc
 

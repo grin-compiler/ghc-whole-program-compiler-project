@@ -41,7 +41,6 @@ import Stg.Syntax
 import Stg.GHC.Symbols
 import Stg.Interpreter.Base
 import Stg.Interpreter.Debug
-import qualified Stg.Interpreter.GC as GC
 import Stg.Interpreter.Rts (globalStoreSymbols)
 
 pattern CharV c   = Literal (LitChar c)
@@ -110,6 +109,24 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
       StaticTarget _ "freeHaskellFunctionPtr" _ _ -> pure [] -- TODO
       StaticTarget _ "performMajorGC" _ _ -> pure []
 
+      StaticTarget _ "setNumCapabilities" _ _
+        | [WordV num_caps, Void] <- args
+        -> do
+          pure [] -- TODO
+
+      StaticTarget _ "eq_thread" _ _
+        | [ThreadId a, ThreadId b, Void] <- args
+        , UnboxedTuple [Word8Rep] <- t
+        -> do
+          pure [Word8V $ if a == b then 1 else 0]
+
+      {-
+      StaticTarget _ "rts_enableThreadAllocationLimit" _ _
+        | [ThreadId tid, Void] <- args
+        -> do
+          pure [] -- TODO
+      -}
+
       StaticTarget _ "rts_setMainThread" _ _
         | [WeakPointer weakId, Void] <- args
         -> do
@@ -121,6 +138,8 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
         | [ThreadId threadId,Void] <- args
         -> do
           pure [Int32V threadId]
+
+      StaticTarget _ "getRTSStatsEnabled" _ _ -> pure [IntV 0]
 
       StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]                          -- TODO: for testsuite
 
