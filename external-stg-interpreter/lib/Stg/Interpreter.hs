@@ -27,6 +27,8 @@ import qualified Data.ByteString.Internal as BS
 import System.Posix.DynamicLinker
 import Codec.Archive.Zip
 
+import Data.Time.Clock
+
 import System.FilePath
 import System.IO
 import System.Directory
@@ -176,6 +178,9 @@ builtinStgEval so a@HeapPtr{} = do
   o <- readHeap a
   Debugger.checkBreakpoint "eval"
   case o of
+    ApStack{..} -> do
+      mapM_ stackPush (reverse hoStack)
+      pure hoResult
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}       -> pure [a]
     BlackHole t -> do
@@ -348,7 +353,8 @@ killAllThreads = do
   -- TODO: check if there are running threads
   tsList <- gets $ IntMap.toList . ssThreads
   let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
-  when (runnableThreads /= []) $ do
+  isQuiet <- gets ssIsQuiet
+  unless isQuiet $ when (runnableThreads /= []) $ do
     reportThreads
     error "killing all running threads"
   pure () -- TODO
@@ -411,7 +417,7 @@ evalStackMachine result = do
 
 peekAtom :: HasCallStack => Atom -> M String
 peekAtom a = case a of
-  HeapPtr{} -> GC.debugPrintHeapObject <$> readHeap a
+  HeapPtr{} -> debugPrintHeapObject <$> readHeap a
   _ -> pure $ show a
 
 peekAtoms = mapM peekAtom
@@ -492,7 +498,23 @@ evalStackContinuation result = \case
         setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
 
-  RestoreExMask b i -> do
+  s@(RestoreExMask b i) -> do
+    tid <- gets ssCurrentThreadId
+    liftIO $ print (tid, s)
+    ts@ThreadState{..} <- getCurrentThreadState
+    unless (null tsBlockedExceptions) $ do
+      reportThreads
+    {-
+    stgErrorM $ show s
+    ts@ThreadState{..} <- getCurrentThreadState
+    when (tsBlockExceptions == False) $ do
+      unless (null tsBlockedExceptions) $ do
+        stgErrorM $ "RestoreExMask - raise async ex: " ++ show tsBlockedExceptions
+    -}
+    {-
+      tsBlockedExceptions
+    tsBlockExceptions
+    -}
     -- TODO
     pure result
 
@@ -864,7 +886,8 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
             hClose h
           _ -> pure ()
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
-    s@StgState{..} <- execStateT run (emptyStgState isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState debugSettings gcIn gcOut)
+    now <- getCurrentTime
+    s@StgState{..} <- execStateT run (emptyStgState now isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState debugSettings gcIn gcOut)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
