@@ -4,6 +4,7 @@ module Stg.Interpreter.Debugger.UI where
 import System.Exit
 import System.Posix.Process
 import Control.Concurrent
+import Control.Concurrent.MVar
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS8
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
@@ -26,37 +27,37 @@ ppSrcSpan = \case
     | otherwise
     -> printf "%s:%d:%d-%d:%d" (BS8.unpack srcSpanFile) srcSpanSLine srcSpanSCol srcSpanELine srcSpanECol
 
-debugProgram :: Bool -> [Char] -> [String] -> DebuggerChan -> Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> Maybe String -> DebugSettings -> IO ()
-debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript debugSettings = do
+debugProgram :: Bool -> [Char] -> [String] -> DebuggerChan -> Maybe String -> DebugSettings -> IO ()
+debugProgram switchCWD appPath appArgs dbgChan dbgScript debugSettings = do
   case dbgScript of
     Just fname -> do
       dbgScriptLines <- lines <$> readFile fname
       forkIO $ do
-        runDebugScript dbgCmdI dbgOutO dbgScriptLines
+        runDebugScript dbgChan dbgScriptLines
         -- HINT: start REPL when the script is finished
-        startDebuggerReplUI dbgCmdI dbgOutO
+        startDebuggerReplUI dbgChan
       pure ()
 
     Nothing -> do
       -- start debug REPL UI
-      startDebuggerReplUI dbgCmdI dbgOutO
+      startDebuggerReplUI dbgChan
 
 
   putStrLn $ "loading " ++ appPath
   loadAndRunProgram False switchCWD appPath appArgs dbgChan DbgStepByStep True debugSettings
   putStrLn "program finshed"
 
-startDebuggerReplUI :: Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> IO ()
-startDebuggerReplUI dbgCmdI dbgOutO = do
+startDebuggerReplUI :: DebuggerChan -> IO ()
+startDebuggerReplUI dbgChan@DebuggerChan{..} = do
   putStrLn "simple debugger"
   printHelp
-  Unagi.writeChan dbgCmdI (CmdInternal "?") -- HINT: print internal debug commands at start
+  putMVar dbgSyncRequest (CmdInternal "?") -- HINT: print internal debug commands at start
 
   forkIO $ do
-    printDebugOutputLoop dbgOutO
+    printDebugOutputLoop dbgChan
 
   forkIO $ do
-    debugger dbgCmdI
+    debugger dbgChan
 
   pure ()
 
@@ -73,10 +74,10 @@ printEnv env = do
       str = List.sort $ map showItem $ Map.toList env
   putStrLn $ unlines str
 
-printDebugOutputLoop :: Unagi.OutChan DebugOutput -> IO ()
-printDebugOutputLoop dbgOutO = do
-  Unagi.readChan dbgOutO >>= printDebugOutput
-  printDebugOutputLoop dbgOutO
+printDebugOutputLoop :: DebuggerChan -> IO ()
+printDebugOutputLoop dbgChan@DebuggerChan{..} = do
+  takeMVar dbgSyncResponse >>= printDebugOutput
+  printDebugOutputLoop dbgChan
 
 printDebugOutput :: DebugOutput -> IO ()
 printDebugOutput = \case
@@ -146,41 +147,41 @@ printHelp = do
   putStrLn " help                     - print reified debug commands"
   putStrLn " ?                        - print internal debug commands"
 
-debugger :: Unagi.InChan DebugCommand -> IO ()
-debugger dbgCmdI = do
+debugger :: DebuggerChan -> IO ()
+debugger dbgChan = do
   line <- getLine
-  parseDebugCommand line dbgCmdI
-  debugger dbgCmdI
+  parseDebugCommand line dbgChan
+  debugger dbgChan
 
-parseDebugCommand :: String -> Unagi.InChan DebugCommand -> IO ()
-parseDebugCommand line dbgCmdI = do
+parseDebugCommand :: String -> DebuggerChan -> IO ()
+parseDebugCommand line dbgChan@DebuggerChan{..} = do
   case words line of
-    ["help"]      -> printHelp >> Unagi.writeChan dbgCmdI (CmdInternal "?")
-    ["+b", name]        -> Unagi.writeChan dbgCmdI $ CmdAddBreakpoint (BS8.pack name) 0
-    ["+b", name, fuel]  -> Unagi.writeChan dbgCmdI $ CmdAddBreakpoint (BS8.pack name) (fromMaybe 0 $ readMaybe fuel)
-    ["-b", name]  -> Unagi.writeChan dbgCmdI $ CmdRemoveBreakpoint $ BS8.pack name
-    ["list"]      -> Unagi.writeChan dbgCmdI $ CmdListClosures
-    ["clear"]     -> Unagi.writeChan dbgCmdI $ CmdClearClosureList
-    ["step"]      -> Unagi.writeChan dbgCmdI $ CmdStep
-    ["s"]         -> Unagi.writeChan dbgCmdI $ CmdStep
-    ["continue"]  -> Unagi.writeChan dbgCmdI $ CmdContinue
-    ["c"]         -> Unagi.writeChan dbgCmdI $ CmdContinue
-    ["k"]         -> Unagi.writeChan dbgCmdI $ CmdCurrentClosure
+    ["help"]      -> printHelp >> putMVar dbgSyncRequest (CmdInternal "?")
+    ["+b", name]        -> putMVar dbgSyncRequest $ CmdAddBreakpoint (BS8.pack name) 0
+    ["+b", name, fuel]  -> putMVar dbgSyncRequest $ CmdAddBreakpoint (BS8.pack name) (fromMaybe 0 $ readMaybe fuel)
+    ["-b", name]  -> putMVar dbgSyncRequest $ CmdRemoveBreakpoint $ BS8.pack name
+    ["list"]      -> putMVar dbgSyncRequest $ CmdListClosures
+    ["clear"]     -> putMVar dbgSyncRequest $ CmdClearClosureList
+    ["step"]      -> putMVar dbgSyncRequest $ CmdStep
+    ["s"]         -> putMVar dbgSyncRequest $ CmdStep
+    ["continue"]  -> putMVar dbgSyncRequest $ CmdContinue
+    ["c"]         -> putMVar dbgSyncRequest $ CmdContinue
+    ["k"]         -> putMVar dbgSyncRequest $ CmdCurrentClosure
     ["e"]         -> do
-      Unagi.writeChan dbgCmdI $ CmdCurrentClosure
-      Unagi.writeChan dbgCmdI $ CmdStep
+      putMVar dbgSyncRequest $ CmdCurrentClosure
+      putMVar dbgSyncRequest $ CmdStep
     ["quit"]        -> exitImmediately ExitSuccess
-    ["stop"]        -> Unagi.writeChan dbgCmdI CmdStop
-    ["peek", addr]  -> Unagi.writeChan dbgCmdI $ CmdPeekHeap $ read addr
-    ["p",    addr]  -> Unagi.writeChan dbgCmdI $ CmdPeekHeap $ read addr
+    ["stop"]        -> putMVar dbgSyncRequest CmdStop
+    ["peek", addr]  -> putMVar dbgSyncRequest $ CmdPeekHeap $ read addr
+    ["p",    addr]  -> putMVar dbgSyncRequest $ CmdPeekHeap $ read addr
     [] -> pure ()
 
-    _ -> Unagi.writeChan dbgCmdI $ CmdInternal line
+    _ -> putMVar dbgSyncRequest $ CmdInternal line
 
-runDebugScript :: Unagi.InChan DebugCommand -> Unagi.OutChan DebugOutput -> [String] -> IO ()
-runDebugScript dbgCmdI dbgOutO lines = do
+runDebugScript :: DebuggerChan -> [String] -> IO ()
+runDebugScript dbgChan@DebuggerChan{..} lines = do
   let waitBreakpoint = do
-        msg <- Unagi.readChan dbgOutO
+        msg <- Unagi.readChan dbgAsyncEventOut
         case msg of
           DbgOutThreadReport{}  -> printDebugOutput msg
           _                     -> printDebugOutput msg >> waitBreakpoint
@@ -189,4 +190,4 @@ runDebugScript dbgCmdI dbgOutO lines = do
     putStrLn cmd
     case words cmd of
       ["wait-b"] -> waitBreakpoint
-      _ -> parseDebugCommand cmd dbgCmdI
+      _ -> parseDebugCommand cmd dbgChan

@@ -221,17 +221,21 @@ newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
 instance Show (PrintableMVar a) where
   show _ = "MVar"
 
-newtype DebuggerChan = DebuggerChan {getDebuggerChan :: (OutChan DebugCommand, InChan DebugOutput)} deriving Eq
+data DebuggerChan
+  = DebuggerChan
+  { dbgSyncRequest    :: MVar DebugRequest
+  , dbgSyncResponse   :: MVar DebugResponse
+  , dbgAsyncEventIn   :: InChan DebugEvent
+  , dbgAsyncEventOut  :: OutChan DebugEvent
+  }
+  deriving Eq
+
 instance Show DebuggerChan where
   show _ = "DebuggerChan"
 
-newtype NextDebugCommand = NextDebugCommand (Element DebugCommand, IO DebugCommand)
-instance Show NextDebugCommand where
-  show _ = "NextDebugCommand"
-instance Eq NextDebugCommand where
-   _ == _ = True
-instance Ord NextDebugCommand where
-   compare _ _ = EQ
+type DebugRequest = DebugCommand
+type DebugResponse = DebugOutput
+type DebugEvent = DebugOutput
 
 data DebugCommand
   = CmdListClosures
@@ -252,6 +256,7 @@ data DebugOutput
   | DbgOutThreadReport    !Int !ThreadState !Name !Addr String
   | DbgOutHeapObject      !Addr !HeapObject
   | DbgOutResult          ![Atom]
+  | DbgOut
   deriving (Show)
 
 data DebugState
@@ -402,7 +407,6 @@ data StgState
 
   -- debugger API
   , ssDebuggerChan        :: DebuggerChan
-  , ssNextDebugCommand    :: NextDebugCommand
 
   , ssEvaluatedClosures   :: !(Set Name)
   , ssBreakpoints         :: !(Map Name Int)
@@ -440,21 +444,20 @@ data StgState
 
 -- for the primop tests
 fakeStgStateForPrimopTests :: StgState
-fakeStgStateForPrimopTests = emptyStgState undefined undefined undefined undefined undefined undefined DbgRunProgram NoTracing defaultDebugSettings undefined undefined
+fakeStgStateForPrimopTests = emptyStgState undefined undefined undefined undefined undefined DbgRunProgram NoTracing defaultDebugSettings undefined undefined
 
 emptyStgState :: UTCTime
               -> Bool
               -> PrintableMVar StgState
               -> DL
               -> DebuggerChan
-              -> NextDebugCommand
               -> DebugState
               -> TracingState
               -> DebugSettings
               -> PrintableMVar ([Atom], StgState)
               -> PrintableMVar RefSet
               -> StgState
-emptyStgState now isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState debugSettings gcIn gcOut = StgState
+emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSettings gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
 
@@ -537,7 +540,6 @@ emptyStgState now isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState
 
   -- debugger api
   , ssDebuggerChan        = dbgChan
-  , ssNextDebugCommand    = nextDbgCmd
 
   , ssEvaluatedClosures   = Set.empty
   , ssBreakpoints         = mempty

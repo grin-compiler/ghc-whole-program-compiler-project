@@ -15,6 +15,7 @@ import System.Console.Pretty
 
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 import Control.Concurrent (myThreadId)
+import Control.Concurrent.MVar
 
 import Stg.Interpreter.Base
 import Stg.Syntax
@@ -38,18 +39,28 @@ showOriginTrace i = do
           _ -> liftIO $ putStrLn str
   go i IntSet.empty
 
-reportState :: M ()
-reportState = do
-  (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
+reportStateSync :: M ()
+reportStateSync = do
+  DebuggerChan{..} <- gets ssDebuggerChan
+  msg <- getThreadReport
+  liftIO $ putMVar dbgSyncResponse msg
+
+reportStateAsync :: M ()
+reportStateAsync = do
+  DebuggerChan{..} <- gets ssDebuggerChan
+  msg <- getThreadReport
+  liftIO $ Unagi.writeChan dbgAsyncEventIn msg
+
+getThreadReport :: M DebugOutput
+getThreadReport = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
   currentClosure <- gets ssCurrentClosure >>= \case
     Nothing -> pure ""
     Just (Id c) -> pure $ binderUniqueName c
   currentClosureAddr <- gets ssCurrentClosureAddr
-  liftIO $ do
-    ntid <- myThreadId
-    Unagi.writeChan dbgOut $ DbgOutThreadReport tid ts currentClosure currentClosureAddr (show ntid)
+  ntid <- liftIO $ myThreadId
+  pure $ DbgOutThreadReport tid ts currentClosure currentClosureAddr (show ntid)
 
 showRetainer :: Int -> M ()
 showRetainer i = do
@@ -305,7 +316,7 @@ dbgCommands =
 
   , ( ["get-current-thread-state"]
     , "reports the currently running thread state"
-    , \_ -> reportState
+    , \_ -> reportStateSync
     )
 
   ]

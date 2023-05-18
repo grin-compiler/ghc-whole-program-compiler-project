@@ -397,10 +397,6 @@ contextSwitchTimer = do
 
 evalStackMachine :: [Atom] -> M [Atom]
 evalStackMachine result = do
-  (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
-  --liftIO $ Unagi.writeChan dbgOut $ DbgOutResult result
-  --liftIO $ putStrLn $ "evalStackMachine resultIn = " ++ show result
-
   stackPop >>= \case
     Nothing         -> pure result
     Just stackCont  -> do
@@ -861,9 +857,6 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
         when (dbgState == DbgStepByStep) $ do
           Debugger.processCommandsUntilExit
 
-  let (dbgCmdO, _) = getDebuggerChan dbgChan
-  nextDbgCmd <- NextDebugCommand <$> Unagi.tryReadChan dbgCmdO
-
   tracingState <- case tracing of
     False -> pure NoTracing
     True  -> do
@@ -887,7 +880,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
           _ -> pure ()
   flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
     now <- getCurrentTime
-    s@StgState{..} <- execStateT run (emptyStgState now isQuiet stateStore dl dbgChan nextDbgCmd dbgState tracingState debugSettings gcIn gcOut)
+    s@StgState{..} <- execStateT run (emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSettings gcIn gcOut)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 

@@ -7,50 +7,40 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
+import Control.Concurrent.MVar
 
 import Stg.Interpreter.Base
 import Stg.Syntax
 
 import Stg.Interpreter.Debugger.Internal
 
-fetchNextDebugCommand :: M ()
-fetchNextDebugCommand = do
-  (dbgCmd, _dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
-  nextCmd <- liftIO $ Unagi.tryReadChan dbgCmd
-  modify' $ \s@StgState{..} -> s {ssNextDebugCommand = NextDebugCommand nextCmd}
-
 getNextDebugCommand :: M DebugCommand
 getNextDebugCommand = do
-  NextDebugCommand (_, nextCmd) <- gets ssNextDebugCommand
-  fetchNextDebugCommand
-  liftIO nextCmd
+  DebuggerChan{..} <- gets ssDebuggerChan
+  liftIO $ takeMVar dbgSyncRequest
 
 tryNextDebugCommand :: M (Maybe DebugCommand)
 tryNextDebugCommand = do
-  NextDebugCommand (nextCmd, _) <- gets ssNextDebugCommand
-  liftIO (Unagi.tryRead nextCmd) >>= \case
-    Nothing -> pure Nothing
-    c@Just{} -> do
-      fetchNextDebugCommand
-      pure c
+  DebuggerChan{..} <- gets ssDebuggerChan
+  liftIO (tryTakeMVar dbgSyncRequest)
 
 runDebugCommand :: HasCallStack => DebugCommand -> M ()
 runDebugCommand cmd = do
   liftIO $ putStrLn $ "runDebugCommand: " ++ show cmd
-  (_, dbgOut) <- getDebuggerChan <$> gets ssDebuggerChan
+  DebuggerChan{..} <- gets ssDebuggerChan
   case cmd of
     CmdCurrentClosure -> do
       currentClosure <- gets ssCurrentClosure
       currentClosureAddr <- gets ssCurrentClosureAddr
       closureEnv <- gets ssCurrentClosureEnv
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutCurrentClosure currentClosure currentClosureAddr closureEnv
+      liftIO $ putMVar dbgSyncResponse $ DbgOutCurrentClosure currentClosure currentClosureAddr closureEnv
 
     CmdClearClosureList -> do
       modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = Set.empty}
 
     CmdListClosures -> do
       closures <- gets ssEvaluatedClosures
-      liftIO $ Unagi.writeChan dbgOut $ DbgOutClosureList $ Set.toList closures
+      liftIO $ putMVar dbgSyncResponse $ DbgOutClosureList $ Set.toList closures
 
     CmdAddBreakpoint n i -> do
       modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.insert n i ssBreakpoints}
@@ -67,7 +57,7 @@ runDebugCommand cmd = do
       heap <- gets ssHeap
       when (IntMap.member addr heap) $ do
         ho <- readHeap $ HeapPtr addr
-        liftIO $ Unagi.writeChan dbgOut $ DbgOutHeapObject addr ho
+        liftIO $ putMVar dbgSyncResponse $ DbgOutHeapObject addr ho
 
     CmdStop -> do
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
@@ -112,7 +102,7 @@ checkBreakpoint breakpointName = do
   shouldStep <- hasFuel
   case dbgState of
     DbgStepByStep -> do
-      reportState
+      reportStateAsync
       unless exit processCommandsUntilExit
     DbgRunProgram -> do
       unless shouldStep $ modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
@@ -127,6 +117,6 @@ checkBreakpoint breakpointName = do
           | otherwise -> do
               -- HINT: trigger breakpoint
               liftIO $ putStrLn $ "hit breakpoint: " ++ show breakpointName
-              reportState
+              reportStateAsync
               modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
               unless exit processCommandsUntilExit

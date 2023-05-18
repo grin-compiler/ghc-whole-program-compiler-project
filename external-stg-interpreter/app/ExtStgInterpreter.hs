@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase, RecordWildCards #-}
 
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
+import Control.Concurrent.MVar
 
 import Options.Applicative
 import Data.Semigroup ((<>))
@@ -60,12 +61,18 @@ main = do
         { dsKeepGCFacts = keepGCFacts
         }
 
-  (dbgCmdI, dbgCmdO) <- Unagi.newChan 100
-  (dbgOutI, dbgOutO) <- Unagi.newChan 100
-  let dbgChan = DebuggerChan (dbgCmdO, dbgOutI)
+  (dbgAsyncI, dbgAsyncO) <- Unagi.newChan 100
+  dbgRequestMVar <- newEmptyMVar
+  dbgResponseMVar <- newEmptyMVar
+  let dbgChan = DebuggerChan
+        { dbgSyncRequest    = dbgRequestMVar
+        , dbgSyncResponse   = dbgResponseMVar
+        , dbgAsyncEventIn   = dbgAsyncI
+        , dbgAsyncEventOut  = dbgAsyncO
+        }
 
   case runDebugger of
-    True  -> debugProgram switchCWD appPath appArgs dbgChan dbgCmdI dbgOutO dbgScript debugSettings
+    True  -> debugProgram switchCWD appPath appArgs dbgChan dbgScript debugSettings
     False -> loadAndRunProgram isQuiet switchCWD appPath appArgs dbgChan DbgRunProgram doTracing debugSettings
 
 dropRtsOpts :: [String] -> [String]
