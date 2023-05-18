@@ -45,12 +45,6 @@ reportStateSync = do
   msg <- getThreadReport
   liftIO $ putMVar dbgSyncResponse msg
 
-reportStateAsync :: M ()
-reportStateAsync = do
-  DebuggerChan{..} <- gets ssDebuggerChan
-  msg <- getThreadReport
-  liftIO $ Unagi.writeChan dbgAsyncEventIn msg
-
 getThreadReport :: M DebugOutput
 getThreadReport = do
   tid <- gets ssCurrentThreadId
@@ -120,32 +114,38 @@ showRetainerTree i = do
   tree <- getRetainerTree i
   liftIO $ putStrLn $ drawTree tree
 
+wrapWithDbgOut :: ([String] -> M ()) -> [String] -> M ()
+wrapWithDbgOut cmdM args = do
+  cmdM args
+  DebuggerChan{..} <- gets ssDebuggerChan
+  liftIO $ putMVar dbgSyncResponse DbgOut
+
 dbgCommands :: [([String], String, [String] -> M ())]
 dbgCommands =
   [ ( ["gc"]
     , "run sync. garbage collector"
-    , \_ -> do
+    , wrapWithDbgOut $ \_ -> do
         curClosureAddr <- gets ssCurrentClosureAddr
         GC.runGCSync [HeapPtr curClosureAddr]
     )
   , ( ["cleardb"]
     , "clear retainer db"
-    , \_ -> clearRetanerDb
+    , wrapWithDbgOut $ \_ -> clearRetanerDb
     )
 
   , ( ["loaddb"]
     , "load retainer db"
-    , \_ -> loadRetainerDb2
+    , wrapWithDbgOut $ \_ -> loadRetainerDb2
     )
 
   , ( ["?"]
     , "show debuggers' all internal commands"
-    , \_ -> printHelp
+    , wrapWithDbgOut $ \_ -> printHelp
     )
 
   , ( ["report"]
     , "report some internal data"
-    , \_ -> do
+    , wrapWithDbgOut $ \_ -> do
         heapStart <- gets ssHeapStartAddress
         liftIO $ do
           putStrLn $ "heap start address: " ++ show heapStart
@@ -153,7 +153,7 @@ dbgCommands =
 
   , ( ["query", "??"]
     , "queries a given list of NAME_PATTERNs in static global env as substring"
-    , \patterns -> do
+    , wrapWithDbgOut $ \patterns -> do
         env <- gets ssStaticGlobalEnv
         let filterPattern pat resultList = [n | n <- resultList, List.isInfixOf pat n]
             matches = foldr filterPattern (map show $ Map.keys env) patterns
@@ -162,14 +162,14 @@ dbgCommands =
 
   , ( ["?b"]
     , "list breakpoints"
-    , \_ -> do
+    , wrapWithDbgOut $ \_ -> do
         bks <- Map.toList <$> gets ssBreakpoints
         liftIO $ putStrLn $ unlines [printf "%-40s  %d [fuel]" (BS8.unpack name) fuel | (name, fuel) <- bks]
     )
 
   , ( ["?r"]
     , "[START] [END] list a given region or all regions if the arguments are omitted"
-    , \case
+    , wrapWithDbgOut $ \case
       [] -> do
         regions <- Map.keys <$> gets ssRegions
         liftIO $ putStrLn $ unlines $ map show regions
@@ -180,7 +180,7 @@ dbgCommands =
 
   , ( ["?r-dump"]
     , "[START] [END] dump all heap object from the given region"
-    , \case
+    , wrapWithDbgOut $ \case
       [start]       -> showRegion True start start
       [start, end]  -> showRegion True start end
       _ -> pure ()
@@ -188,7 +188,7 @@ dbgCommands =
 
   , ( ["+r"]
     , "add region: +r START_CLOSURE_NAME [END_CLOSURE_NAME] ; if only the start is provided then it will be the end marker also"
-    , \case
+    , wrapWithDbgOut $ \case
         [start]       -> addRegion start start
         [start, end]  -> addRegion start end
         _             -> pure ()
@@ -196,7 +196,7 @@ dbgCommands =
 
   , ( ["-r"]
     , "del region: -r START_CLOSURE_NAME [END_CLOSURE_NAME] ; if only the start is provided then it will be the end marker also"
-    , \case
+    , wrapWithDbgOut $ \case
         [start]       -> delRegion start start
         [start, end]  -> delRegion start end
         _             -> pure ()
@@ -204,7 +204,7 @@ dbgCommands =
 
   , ( ["peek-range", "pr"]
     , "ADDR_START ADDR_END [COUNT] - list all heap objects in the given heap address region, optionally show only the first (COUNT) elements"
-    , \case
+    , wrapWithDbgOut $ \case
       [start, end]
         | Just s <- Text.readMaybe start
         , Just e <- Text.readMaybe end
@@ -223,7 +223,7 @@ dbgCommands =
 
   , ( ["count-range", "cr"]
     , "ADDR_START ADDR_END - count heap objects in the given heap address region"
-    , \case
+    , wrapWithDbgOut $ \case
       [start, end]
         | Just s <- Text.readMaybe start
         , Just e <- Text.readMaybe end
@@ -235,7 +235,7 @@ dbgCommands =
 
   , ( ["retainer", "ret"]
     , "ADDR - show the retainer objects (heap objects that refer to the queried object"
-    , \case
+    , wrapWithDbgOut $ \case
         [addrS]
           | Just addr <- Text.readMaybe addrS
           -> showRetainer addr
@@ -244,7 +244,7 @@ dbgCommands =
 
   , ( ["ret-tree", "rt"]
     , "ADDR - show the retainer tree of an object"
-    , \case
+    , wrapWithDbgOut $ \case
         [addrS]
           | Just addr <- Text.readMaybe addrS
           -> showRetainerTree addr
@@ -253,7 +253,7 @@ dbgCommands =
 
   , ( ["trace-origin", "to"]
     , "ADDR - traces back heap object origin until the first dead object"
-    , \case
+    , wrapWithDbgOut $ \case
         [addrS]
           | Just addr <- Text.readMaybe addrS
           -> showOriginTrace addr
@@ -262,14 +262,14 @@ dbgCommands =
 
   , ( ["?e"]
     , "list all trace events and heap address state"
-    , \_-> do
+    , wrapWithDbgOut $ \_-> do
         events <- gets ssTraceEvents
         forM_ (reverse events) $ \(msg, AddressState{..}) -> liftIO $ printf "%-10d  %s\n" asNextHeapAddr (show msg)
     )
 
   , ( ["?e-dump"]
     , "list all trace events and the whole address state"
-    , \_-> do
+    , wrapWithDbgOut $ \_-> do
         events <- gets ssTraceEvents
         forM_ (reverse events) $ \(msg, a) -> liftIO $ do
           print msg
@@ -278,14 +278,14 @@ dbgCommands =
 
   , ( ["?m"]
     , "list all trace markers and heap address state"
-    , \_-> do
+    , wrapWithDbgOut $ \_-> do
         markers <- gets ssTraceMarkers
         forM_ (reverse markers) $ \(msg, AddressState{..}) -> liftIO $ printf "%-10d  %s\n" asNextHeapAddr (show msg)
     )
 
   , ( ["?m-dump"]
     , "list all trace markers and the whole address state"
-    , \_-> do
+    , wrapWithDbgOut $ \_-> do
         markers <- gets ssTraceMarkers
         forM_ (reverse markers) $ \(msg, a) -> liftIO $ do
           print msg
@@ -294,7 +294,7 @@ dbgCommands =
 
   , ( ["save-state"]
     , "DIR_NAME - save stg state as datalog facts to the given directory"
-    , \case
+    , wrapWithDbgOut $ \case
         [dirName] -> do
           s <- get
           liftIO $ do
@@ -305,7 +305,7 @@ dbgCommands =
 
   , ( ["fuel"]
     , "STEP-COUNT - make multiple steps ; 'fuel -' - turn off step count check"
-    , \case
+    , wrapWithDbgOut $ \case
       ["-"]
         -> modify' $ \s@StgState{..} -> s {ssDebugFuel = Nothing}
       [countS]

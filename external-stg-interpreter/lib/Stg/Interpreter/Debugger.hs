@@ -14,6 +14,11 @@ import Stg.Syntax
 
 import Stg.Interpreter.Debugger.Internal
 
+sendDebugEvent :: DebugEvent -> M ()
+sendDebugEvent dbgEvent = do
+  DebuggerChan{..} <- gets ssDebuggerChan
+  liftIO $ Unagi.writeChan dbgAsyncEventIn dbgEvent
+
 getNextDebugCommand :: M DebugCommand
 getNextDebugCommand = do
   DebuggerChan{..} <- gets ssDebuggerChan
@@ -37,6 +42,7 @@ runDebugCommand cmd = do
 
     CmdClearClosureList -> do
       modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = Set.empty}
+      liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdListClosures -> do
       closures <- gets ssEvaluatedClosures
@@ -44,23 +50,30 @@ runDebugCommand cmd = do
 
     CmdAddBreakpoint n i -> do
       modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.insert n i ssBreakpoints}
+      liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdRemoveBreakpoint n -> do
       modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.delete n ssBreakpoints}
+      liftIO $ putMVar dbgSyncResponse DbgOut
 
-    CmdStep -> pure ()
+    CmdStep -> liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdContinue -> do
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgRunProgram}
+      liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdPeekHeap addr -> do
       heap <- gets ssHeap
-      when (IntMap.member addr heap) $ do
-        ho <- readHeap $ HeapPtr addr
-        liftIO $ putMVar dbgSyncResponse $ DbgOutHeapObject addr ho
+      case IntMap.member addr heap of
+        True -> do
+          ho <- readHeap $ HeapPtr addr
+          liftIO $ putMVar dbgSyncResponse $ DbgOutHeapObject addr ho
+        False -> do
+          liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdStop -> do
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+      liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdInternal cmd -> do
       runInternalCommand cmd
@@ -102,7 +115,7 @@ checkBreakpoint breakpointName = do
   shouldStep <- hasFuel
   case dbgState of
     DbgStepByStep -> do
-      reportStateAsync
+      sendDebugEvent DbgEventStopped
       unless exit processCommandsUntilExit
     DbgRunProgram -> do
       unless shouldStep $ modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
@@ -117,6 +130,6 @@ checkBreakpoint breakpointName = do
           | otherwise -> do
               -- HINT: trigger breakpoint
               liftIO $ putStrLn $ "hit breakpoint: " ++ show breakpointName
-              reportStateAsync
+              sendDebugEvent $ DbgEventHitBreakpoint breakpointName
               modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
               unless exit processCommandsUntilExit

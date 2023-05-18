@@ -104,6 +104,12 @@ printDebugOutput = \case
     putStrLn $ "addr: " ++ show addr
     printHeapObject heapObj
 
+  DbgOutString msg -> putStrLn msg
+
+  DbgOutByteString msg -> BS8.putStrLn msg
+
+  DbgOut -> pure ()
+
 printHeapObject :: HeapObject -> IO ()
 printHeapObject = \case
   Con{..} -> do
@@ -182,9 +188,10 @@ runDebugScript :: DebuggerChan -> [String] -> IO ()
 runDebugScript dbgChan@DebuggerChan{..} lines = do
   let waitBreakpoint = do
         msg <- Unagi.readChan dbgAsyncEventOut
+        print msg
         case msg of
-          DbgOutThreadReport{}  -> printDebugOutput msg
-          _                     -> printDebugOutput msg >> waitBreakpoint
+          DbgEventHitBreakpoint{} -> putMVar dbgSyncRequest $ CmdInternal "get-current-thread-state"
+          _                       -> waitBreakpoint
 
   forM_ lines $ \cmd -> do
     putStrLn cmd

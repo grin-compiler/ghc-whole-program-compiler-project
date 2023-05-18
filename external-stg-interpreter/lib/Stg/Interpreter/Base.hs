@@ -223,8 +223,8 @@ instance Show (PrintableMVar a) where
 
 data DebuggerChan
   = DebuggerChan
-  { dbgSyncRequest    :: MVar DebugRequest
-  , dbgSyncResponse   :: MVar DebugResponse
+  { dbgSyncRequest    :: MVar DebugCommand
+  , dbgSyncResponse   :: MVar DebugOutput
   , dbgAsyncEventIn   :: InChan DebugEvent
   , dbgAsyncEventOut  :: OutChan DebugEvent
   }
@@ -233,9 +233,10 @@ data DebuggerChan
 instance Show DebuggerChan where
   show _ = "DebuggerChan"
 
-type DebugRequest = DebugCommand
-type DebugResponse = DebugOutput
-type DebugEvent = DebugOutput
+data DebugEvent
+  = DbgEventHitBreakpoint !Name
+  | DbgEventStopped
+  deriving (Show)
 
 data DebugCommand
   = CmdListClosures
@@ -256,6 +257,8 @@ data DebugOutput
   | DbgOutThreadReport    !Int !ThreadState !Name !Addr String
   | DbgOutHeapObject      !Addr !HeapObject
   | DbgOutResult          ![Atom]
+  | DbgOutString          !String
+  | DbgOutByteString      !ByteString
   | DbgOut
   deriving (Show)
 
