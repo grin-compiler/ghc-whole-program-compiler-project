@@ -344,10 +344,10 @@ instance Pretty Binder where
 pprExpr :: Expr -> Doc
 pprExpr = pprExpr' False
 
-pprAlt :: Name -> Int -> Alt -> Doc
-pprAlt scrutName idx (Alt con bndrs rhs) =
+pprAlt :: Id -> Int -> Alt -> Doc
+pprAlt scrutId idx (Alt con bndrs rhs) =
   (hsep (pretty con : map (pprBinder) bndrs) <+> smallRArrow) <$$>
-  indent 2 (withStgPoint (SP_AltExpr scrutName idx) $ pprExpr' False rhs)
+  indent 2 (withStgPoint (SP_AltExpr scrutId idx) $ pprExpr' False rhs)
 
 pprArg :: Arg -> Doc
 pprArg = \case
@@ -382,14 +382,14 @@ pprExpr' hasParens exp = do
     StgLit l            -> pretty l
     StgCase x b at alts -> maybeParens hasParens
                            $ sep [ hsep [ text "case"
-                                        , withStgPoint (SP_CaseScrutineeExpr $ binderUniqueName b) $
+                                        , withStgPoint (SP_CaseScrutineeExpr $ Id b) $
                                           pprExpr' False x
                                         , text "of"
                                         , pprBinder b
                                         , text ":"
                                         , parens (pretty at)
                                         , text "{" ]
-                                 , indent 2 $ vcat $ [pprAlt (binderUniqueName b) idx a | (idx, a) <- zip [0..] alts]
+                                 , indent 2 $ vcat $ [pprAlt (Id b) idx a | (idx, a) <- zip [0..] alts]
                                  , "}"
                                  ]
     StgApp f args         -> maybeParens hasParens $ (pprVar f) <+> (hsep $ map (pprArg) args)
@@ -402,10 +402,10 @@ pprExpr' hasParens exp = do
 instance Pretty Expr where
   pretty = pprExpr
 
-pprRhs :: Name -> Rhs -> Doc
-pprRhs rhsBinderName = \case
-  StgRhsClosure _ u bs e -> text "\\closure" <+> hsep (map pprBinder bs) <+> text "->" <+> braces (line <> (withStgPoint (SP_RhsClosureExpr rhsBinderName) $ pprExpr e))
-  StgRhsCon d vs -> annotate (SP_RhsCon rhsBinderName) $ pretty d <+> (hsep $ map (pprArg) vs)
+pprRhs :: Id -> Rhs -> Doc
+pprRhs rhsId = \case
+  StgRhsClosure _ u bs e -> text "\\closure" <+> hsep (map pprBinder bs) <+> text "->" <+> braces (line <> (withStgPoint (SP_RhsClosureExpr rhsId) $ pprExpr e))
+  StgRhsCon d vs -> annotate (SP_RhsCon rhsId) $ pretty d <+> (hsep $ map (pprArg) vs)
 
 pprBinding :: Binding -> Doc
 pprBinding = \case
@@ -413,7 +413,7 @@ pprBinding = \case
   StgRec bs      -> text "rec" <+> braces (line <> vsep (map pprTopBind bs))
   where
     pprTopBind (b,rhs) =
-      (pprBinder b <+> equals <$$> (indent 2 $ pprRhs (binderUniqueName b) rhs))
+      (pprBinder b <+> equals <$$> (indent 2 $ pprRhs (Id b) rhs))
       <> line
 
 pprTopBinding :: TopBinding -> Doc
@@ -424,7 +424,7 @@ pprTopBinding = \case
   where
     pprTopBind = pprTopBind' pprRhs
     pprTopBind' f (b,rhs) =
-      (pprBinder b <+> equals <$$> (indent 2 $ f (binderUniqueName b) rhs))
+      (pprBinder b <+> equals <$$> (indent 2 $ f (Id b) rhs))
       <> line
 
 instance Pretty TopBinding where

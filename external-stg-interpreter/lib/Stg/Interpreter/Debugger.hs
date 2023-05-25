@@ -11,6 +11,7 @@ import Control.Concurrent.MVar
 
 import Stg.Interpreter.Base
 import Stg.Syntax
+import Stg.IRLocation
 
 import Stg.Interpreter.Debugger.Internal
 
@@ -108,8 +109,8 @@ hasFuel = do
   modify' $ \s@StgState{..} -> s {ssDebugFuel = fmap pred ssDebugFuel, ssStepCounter = succ ssStepCounter}
   pure $ maybe True (> 0) fuel
 
-checkBreakpoint :: Name -> M ()
-checkBreakpoint breakpointName = do
+checkBreakpoint :: Breakpoint -> M ()
+checkBreakpoint breakpoint = do
   dbgState <- gets ssDebugState
   exit <- processCommandsNonBlocking
   shouldStep <- hasFuel
@@ -120,16 +121,17 @@ checkBreakpoint breakpointName = do
     DbgRunProgram -> do
       unless shouldStep $ modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
       bkMap <- gets ssBreakpoints
-      case Map.lookup breakpointName bkMap of
+      case Map.lookup breakpoint bkMap of
         Nothing -> pure ()
         Just i
           | i > 0 -> do
               -- HINT: the breakpoint can postpone triggering for the requested time
-              modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.adjust pred breakpointName ssBreakpoints}
+              modify' $ \s@StgState{..} -> s {ssBreakpoints = Map.adjust pred breakpoint ssBreakpoints}
 
           | otherwise -> do
               -- HINT: trigger breakpoint
-              liftIO $ putStrLn $ "hit breakpoint: " ++ show breakpointName
-              sendDebugEvent $ DbgEventHitBreakpoint breakpointName
+              liftIO $ putStrLn $ "hit breakpoint: " ++ show breakpoint
+              Just currentClosure <- gets ssCurrentClosure
+              sendDebugEvent $ DbgEventHitBreakpoint breakpoint
               modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
               unless exit processCommandsUntilExit

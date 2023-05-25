@@ -39,6 +39,12 @@ showOriginTrace i = do
           _ -> liftIO $ putStrLn str
   go i IntSet.empty
 
+reportStgStateSync :: M ()
+reportStgStateSync = do
+  DebuggerChan{..} <- gets ssDebuggerChan
+  stgState <- get
+  liftIO . putMVar dbgSyncResponse $ DbgOutStgState stgState
+
 reportStateSync :: M ()
 reportStateSync = do
   DebuggerChan{..} <- gets ssDebuggerChan
@@ -164,7 +170,7 @@ dbgCommands =
     , "list breakpoints"
     , wrapWithDbgOut $ \_ -> do
         bks <- Map.toList <$> gets ssBreakpoints
-        liftIO $ putStrLn $ unlines [printf "%-40s  %d [fuel]" (BS8.unpack name) fuel | (name, fuel) <- bks]
+        liftIO $ putStrLn $ unlines [printf "%-40s  %d [fuel]" (show name) fuel | (name, fuel) <- bks]
     )
 
   , ( ["?r"]
@@ -314,9 +320,23 @@ dbgCommands =
       _ -> pure ()
     )
 
+  , ( ["ret-tree", "rt"]
+    , "ADDR - show the retainer tree of an object"
+    , wrapWithDbgOut $ \case
+        [addrS]
+          | Just addr <- Text.readMaybe addrS
+          -> showRetainerTree addr
+        _ -> pure ()
+    )
+
   , ( ["get-current-thread-state"]
     , "reports the currently running thread state"
     , \_ -> reportStateSync
+    )
+
+  , ( ["get-stg-state"]
+    , "reports the stg state"
+    , \_ -> reportStgStateSync
     )
 
   ]

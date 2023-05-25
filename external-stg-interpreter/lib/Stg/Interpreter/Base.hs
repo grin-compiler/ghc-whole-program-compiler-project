@@ -35,6 +35,7 @@ import GHC.Stack
 import Text.Printf
 import Debug.Trace
 import Stg.Syntax
+import Stg.IRLocation
 
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
 
@@ -234,16 +235,23 @@ instance Show DebuggerChan where
   show _ = "DebuggerChan"
 
 data DebugEvent
-  = DbgEventHitBreakpoint !Name
+  = DbgEventHitBreakpoint !Breakpoint
   | DbgEventStopped
   deriving (Show)
+
+data Breakpoint
+  = BkpStgPoint   StgPoint
+  | BkpPrimOp     Name
+  | BkpFFISymbol  Name
+  | BkpCustom     Name
+  deriving (Eq, Ord, Show)
 
 data DebugCommand
   = CmdListClosures
   | CmdClearClosureList
   | CmdCurrentClosure
-  | CmdAddBreakpoint    Name Int
-  | CmdRemoveBreakpoint Name
+  | CmdAddBreakpoint    Breakpoint Int
+  | CmdRemoveBreakpoint Breakpoint
   | CmdStep
   | CmdContinue
   | CmdPeekHeap         Addr
@@ -255,6 +263,7 @@ data DebugOutput
   = DbgOutCurrentClosure  !(Maybe Id) !Addr !Env
   | DbgOutClosureList     ![Name]
   | DbgOutThreadReport    !Int !ThreadState !Name !Addr String
+  | DbgOutStgState        !StgState
   | DbgOutHeapObject      !Addr !HeapObject
   | DbgOutResult          ![Atom]
   | DbgOutString          !String
@@ -412,7 +421,7 @@ data StgState
   , ssDebuggerChan        :: DebuggerChan
 
   , ssEvaluatedClosures   :: !(Set Name)
-  , ssBreakpoints         :: !(Map Name Int)
+  , ssBreakpoints         :: !(Map Breakpoint Int)
   , ssStepCounter         :: !Int
   , ssDebugFuel           :: !(Maybe Int)
   , ssDebugState          :: DebugState

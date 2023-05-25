@@ -17,6 +17,7 @@ import Data.Maybe
 import Stg.Interpreter.Base
 import Stg.Interpreter
 import Stg.Syntax
+import Stg.IRLocation
 
 ppSrcSpan :: SrcSpan -> String
 ppSrcSpan = \case
@@ -108,6 +109,10 @@ printDebugOutput = \case
 
   DbgOutByteString msg -> BS8.putStrLn msg
 
+  DbgOutStgState stgState -> do
+    putStrLn $ "stg state: TODO"
+    pure ()
+
   DbgOut -> pure ()
 
 printHeapObject :: HeapObject -> IO ()
@@ -163,9 +168,9 @@ parseDebugCommand :: String -> DebuggerChan -> IO ()
 parseDebugCommand line dbgChan@DebuggerChan{..} = do
   case words line of
     ["help"]      -> printHelp >> putMVar dbgSyncRequest (CmdInternal "?")
-    ["+b", name]        -> putMVar dbgSyncRequest $ CmdAddBreakpoint (BS8.pack name) 0
-    ["+b", name, fuel]  -> putMVar dbgSyncRequest $ CmdAddBreakpoint (BS8.pack name) (fromMaybe 0 $ readMaybe fuel)
-    ["-b", name]  -> putMVar dbgSyncRequest $ CmdRemoveBreakpoint $ BS8.pack name
+    --["+b", name]        -> putMVar dbgSyncRequest $ CmdAddBreakpoint (BkpStgPoint . SP_RhsClosureExpr $ BS8.pack name) 0
+    --["+b", name, fuel]  -> putMVar dbgSyncRequest $ CmdAddBreakpoint (BkpStgPoint . SP_RhsClosureExpr $ BS8.pack name) (fromMaybe 0 $ readMaybe fuel)
+    --["-b", name]  -> putMVar dbgSyncRequest $ CmdRemoveBreakpoint $ BkpStgPoint . SP_RhsClosureExpr $ BS8.pack name
     ["list"]      -> putMVar dbgSyncRequest $ CmdListClosures
     ["clear"]     -> putMVar dbgSyncRequest $ CmdClearClosureList
     ["step"]      -> putMVar dbgSyncRequest $ CmdStep

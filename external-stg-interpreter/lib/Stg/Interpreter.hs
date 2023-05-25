@@ -34,6 +34,7 @@ import System.IO
 import System.Directory
 import System.Exit
 
+import Stg.IRLocation
 import Stg.Syntax
 import Stg.Program
 import Stg.JSON
@@ -176,7 +177,7 @@ buildCallGraph so hoName = do
 builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
 builtinStgEval so a@HeapPtr{} = do
   o <- readHeap a
-  Debugger.checkBreakpoint "eval"
+  Debugger.checkBreakpoint $ BkpCustom "eval"
   case o of
     ApStack{..} -> do
       mapM_ stackPush (reverse hoStack)
@@ -219,7 +220,7 @@ builtinStgEval so a@HeapPtr{} = do
         -- check breakpoints and region entering
         let closureName = binderUniqueName $ unId hoName
         markClosure closureName -- HINT: this list can be deleted by a debugger command, so this is not the same as `markExecutedId`
-        Debugger.checkBreakpoint closureName
+        Debugger.checkBreakpoint . BkpStgPoint $ SP_RhsClosureExpr hoName
         Debugger.checkRegion closureName
         GC.checkGC [a] -- HINT: add local env as GC root
 
@@ -404,7 +405,7 @@ evalStackMachine result = do
         putStrLn $ "  input result = " ++ show result
         putStrLn $ "  stack-cont   = " ++ showStackCont stackCont
 
-      Debugger.checkBreakpoint "stack"
+      Debugger.checkBreakpoint $ BkpCustom "stack"
       nextResult <- evalStackContinuation result stackCont
       case stackCont of
         RunScheduler{} -> pure ()
@@ -636,7 +637,7 @@ evalExpr localEnv = \case
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
-    Debugger.checkBreakpoint op
+    Debugger.checkBreakpoint $ BkpPrimOp op
     Debugger.checkRegion op
     markPrimOp op
     args <- mapM (evalArg localEnv) l
@@ -649,7 +650,7 @@ evalExpr localEnv = \case
     -- check foreign target region and breakpoint
     case foreignCTarget foreignCall of
       StaticTarget _ targetName _ _ -> do
-        Debugger.checkBreakpoint targetName
+        Debugger.checkBreakpoint $ BkpFFISymbol targetName
         Debugger.checkRegion targetName
       _ -> pure ()
 
