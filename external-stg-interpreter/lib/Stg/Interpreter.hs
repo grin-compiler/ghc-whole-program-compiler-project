@@ -854,6 +854,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
 
         exportCallGraph
 
+        Debugger.checkBreakpoint $ BkpCustom "program finished"
         -- HINT: start debugger REPL in debug mode
         when (dbgState == DbgStepByStep) $ do
           Debugger.processCommandsUntilExit
