@@ -216,7 +216,6 @@ a <+> b = a >> char ' ' >> b
 
 x <$$> y = x <> newline <> y
 
-line = newline
 hang i d = align (nest i d)
 indent i d = hang i (textS (spaces i) <> d)
 
@@ -229,31 +228,9 @@ spaces :: Int -> String
 spaces n        | n <= 0    = ""
                 | otherwise = replicate n ' '
 
-
 textS = text . T.pack
-textBS = text . T.pack . BS.unpack
 
 --------------------------------------------------------
-
-replaceNewlineBS :: ByteString -> ByteString
-replaceNewlineBS = BS.map f where
-  f = \case
-    '\r' -> ' '
-    '\n' -> ' '
-    c    -> c
-
-{-
-data ForeignCall
-data PrimCall = PrimCall -- Name Name
-data UpdateFlag = ReEntrant | Updatable | SingleEntry
--}
-
-smallRArrow :: Doc
-smallRArrow = "->"
-
-maybeParens :: Bool -> Doc -> Doc
-maybeParens True  = parens
-maybeParens False = id
 
 ppType :: Type -> Doc
 ppType t = red $ case t of
@@ -272,23 +249,28 @@ colorBinderExport b = case binderScope b of
   ModulePrivate   -> id
   ModulePublic    -> green
 
+pprBinderTypeSig :: Binder -> Doc
+pprBinderTypeSig b = pprVar b <+> text "::" <+> ppType (binderType b)
 
 pprBinder :: Binder -> Doc
-pprBinder b = parens $
-  pprVar b <+> text ":" <+>
-  ppType (binderType b) <+>
-  parens (pretty $ replaceNewlineBS $ binderTypeSig b) <+>
-  parens (pretty $ show $ binderDetails b)
-    where
-      BinderId u  = binderId b
+pprBinder b = pprVar b
 
+{-
+  name handling design:
+  + show normal (binder name for public functions)
+  + show only the unique id for module local names, to keep the code short
+    the module local names are GHC generated most of the time anyway
+    the binder name could be displayed in the hover
+-}
 pprVar :: Binder -> Doc
 pprVar b@Binder{..}
   | binderScope == ModulePublic
-  = colorBinderExport b . pretty $ binderUniqueName
+  = colorBinderExport b . pretty $ binderName
   | otherwise
-  = colorBinderExport b . pretty $ binderName <> BS.pack ('_' : show u)
-  where BinderId u  = binderId
+--  = colorBinderExport b . pretty $ binderName <> BS.pack ('_' : show u)
+  = colorBinderExport b . pretty $ BS.pack (show u)
+  where
+    BinderId u = binderId
 
 instance Pretty Type where
     pretty = ppType
@@ -316,19 +298,19 @@ instance Pretty LitNumType where
     LitNumWord64  -> "Word64"
 
 instance Pretty Lit where
-    pretty (LitChar x) = "'" <> char x <> "'#"
-    pretty (LitString x) = "\"" <> textBS x <> "\"#"
+    pretty (LitChar x) = text (T.pack $ show x)
+    pretty (LitString x) = text (T.pack $ show x)
     pretty LitNullAddr = "nullAddr#"
-    pretty (LitFloat x) = "FLOAT" <> parens (pprRational x)
-    pretty (LitDouble x) = "DOUBLE" <> parens (pprRational x)
-    pretty (LitLabel x s) = "LABEL"<> parens (pretty x) <+> textS (show s)
-    pretty (LitNumber t i) = "#" <> pretty t <> "#" <> pretty i
+    pretty (LitFloat x) = (pprRational x)
+    pretty (LitDouble x) = (pprRational x)
+    pretty (LitLabel x s) = text "LABEL" <+> parens (pretty x) <+> textS (show s)
+    pretty (LitNumber t i) = pretty i
     pretty (LitRubbish t) = text "#Rubbish" <+> pretty t
 
 instance Pretty AltCon where
-    pretty (AltDataCon dc) = pretty dc
+    pretty (AltDataCon dc) = pprDataConName dc
     pretty (AltLit l) = pretty l
-    pretty AltDefault = text "DEFAULT"
+    pretty AltDefault = text "_"
 
 instance Pretty AltType where
     pretty = \case
@@ -341,13 +323,10 @@ instance Pretty Binder where
     pretty = pprBinder
 
 
-pprExpr :: Expr -> Doc
-pprExpr = pprExpr' False
-
 pprAlt :: Id -> Int -> Alt -> Doc
 pprAlt scrutId idx (Alt con bndrs rhs) =
-  (hsep (pretty con : map (pprBinder) bndrs) <+> smallRArrow) <$$>
-  indent 2 (withStgPoint (SP_AltExpr scrutId idx) $ pprExpr' False rhs)
+  (hsep (pretty con : map (pprBinder) bndrs) <+> text "-> do") <$$>
+  indent 2 (withStgPoint (SP_AltExpr scrutId idx) $ pprExpr rhs)
 
 pprArg :: Arg -> Doc
 pprArg = \case
@@ -371,92 +350,170 @@ instance Pretty PrimCall where
 
 pprOp :: StgOp -> Doc
 pprOp = \case
-  StgPrimOp op    -> text "_stg_prim_" <> pretty op
-  StgPrimCallOp p -> text "_stg_prim_call" <> pretty p
-  StgFCallOp f    -> text "_stg_foreign_call" <+> pretty f
+  StgPrimOp op -> text "primop" <+> pretty (show op)
+  StgPrimCallOp (PrimCall sym uid) -> text "cmmcall" <+> pretty (show sym)-- <+> text "-- from package:" <+> pretty uid
+  StgFCallOp ForeignCall{..} -> case foreignCTarget of
+    StaticTarget _ sym _ _ -> text "foreigncall" <+> pretty (show sym)
+    DynamicTarget -> text "foreigncall dynamic_call_target"
 
-pprExpr' :: Bool -> Expr -> Doc
-pprExpr' hasParens exp = do
+{-
+  - put infix names to parenthesis
+  done - do not use fully qualified names
+  done - omit parenthesis from: sat_srv @ (_)
+  - show in hower:
+      + type
+      + unit
+      + module
+      + id details
+
+  - add jump to definition where possible
+      + display first few lines of definition
+
+  done - show type signatures for top level binders
+
+  done - use import "network" Network.Socket
+    done + use import list
+
+  done - use normal let syntax for let no escape, add comment that it is stack allocated
+  done - use haskell data definition syntax
+  done - show only the module's data type definitons
+  done - add comment for stack allocated unboxed tuples: -- stack allocated
+  done - simple printer for foreign calls
+  - do not show dead binders
+-}
+
+putDefaultLast :: [Alt] -> [Doc] -> [Doc]
+putDefaultLast (Alt AltDefault _ _ : _) (first : rest) = rest ++ [first]
+putDefaultLast _ l = l
+
+pprExpr :: Expr -> Doc
+pprExpr exp = do
   stgPoint <- getStgPoint
   annotate stgPoint $ case exp of
     StgLit l            -> pretty l
-    StgCase x b at alts -> maybeParens hasParens
-                           $ sep [ hsep [ text "case"
-                                        , withStgPoint (SP_CaseScrutineeExpr $ Id b) $
-                                          pprExpr' False x
-                                        , text "of"
-                                        , pprBinder b
-                                        , text ":"
-                                        , parens (pretty at)
-                                        , text "{" ]
-                                 , indent 2 $ vcat $ [pprAlt (Id b) idx a | (idx, a) <- zip [0..] alts]
-                                 , "}"
-                                 ]
-    StgApp f args         -> maybeParens hasParens $ (pprVar f) <+> (hsep $ map (pprArg) args)
-    StgOpApp op args ty n -> maybeParens hasParens $ (pprOp op) <+> (hsep $ map (pprArg) args) <+> text "::" <+> (pretty ty) <+> maybe mempty (parens . ppTyConName) n
-    StgConApp dc args _t  -> maybeParens hasParens $ (pretty dc) <+> (hsep $ map (pprArg) args)
-    StgLet b e            -> maybeParens hasParens $ text "let" <+> (align $ pprBinding b) <$$> text "in" <+> align (withStgPoint (SP_LetExpr stgPoint) $ pprExpr' False e)
-    StgLetNoEscape b e    -> maybeParens hasParens $ text "lettail" <+> (align $ pprBinding b) <$$> text "in" <+> align (withStgPoint (SP_LetNoEscapeExpr stgPoint) $ pprExpr' False e)
-    StgTick tickish e     -> pprExpr' hasParens e
+    StgCase x b at [Alt AltDefault [] rhs] -> sep
+                            [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
+                                pprBinder b <+> text "<-" <+> pprExpr x
+                            , withStgPoint (SP_AltExpr (Id b) 0) $
+                                pprExpr rhs
+                            ]
+    StgCase x b at [Alt con bndrs rhs] -> sep
+                            [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
+                                pprBinder b <+> text "@" <+> parens (hsep $ pretty con : map (pprBinder) bndrs) <+> text "<-" <+> pprExpr x
+                            , withStgPoint (SP_AltExpr (Id b) 0) $
+                                pprExpr rhs
+                            ]
+    StgCase x b at alts -> sep
+                            [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
+                                pprBinder b <+> text "<-" <+> pprExpr x
+                            , text "case" <+> pprVar b <+> text "of"
+                            , indent 2 $ vcat $ putDefaultLast alts [pprAlt (Id b) idx a | (idx, a) <- zip [0..] alts]
+                            ]
+    StgApp f args         -> (pprVar f) <+> (hsep $ map (pprArg) args)
+    StgOpApp op args ty n -> (pprOp op) <+> (hsep $ map (pprArg) args){- <+> text "::" <+> (pretty ty) <+> maybe mempty (parens . ppTyConName) n -}
+    StgConApp dc args _t  -> addUnboxedCommentIfNecessary dc $ (pprDataConName dc) <+> (hsep $ map (pprArg) args)
+    StgLet b e            -> text "let" <+> (align $ pprBinding b) <$$> align (withStgPoint (SP_LetExpr stgPoint) $ pprExpr e)
+    StgLetNoEscape b e    -> vsep
+      [ text "-- stack allocating let"
+      , text "let" <+> (align $ pprBinding b) <$$> align (withStgPoint (SP_LetNoEscapeExpr stgPoint) $ pprExpr e)
+      ]
+    StgTick tickish e     -> pprExpr e
 
 instance Pretty Expr where
   pretty = pprExpr
 
+addUnboxedCommentIfNecessary :: DataCon -> Doc -> Doc
+addUnboxedCommentIfNecessary DataCon{..} doc = case dcRep of
+  UnboxedTupleCon{} -> doc -- vsep [text "-- stack allocated unboxed tuple", doc]
+  _ -> doc
+
 pprRhs :: Id -> Rhs -> Doc
-pprRhs rhsId = \case
-  StgRhsClosure _ u bs e -> text "\\closure" <+> hsep (map pprBinder bs) <+> text "->" <+> braces (line <> (withStgPoint (SP_RhsClosureExpr rhsId) $ pprExpr e))
-  StgRhsCon d vs -> annotate (SP_RhsCon rhsId) $ pretty d <+> (hsep $ map (pprArg) vs)
+pprRhs rhsId@(Id rhsBinder) = \case
+  StgRhsClosure _ u bs e -> pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do" <+> (newline <> (indent 2 $ withStgPoint (SP_RhsClosureExpr rhsId) $ pprExpr e))
+  StgRhsCon dc vs -> annotate (SP_RhsCon rhsId) $ do
+    pprBinder rhsBinder <+> text "=" <+> addUnboxedCommentIfNecessary dc (pprDataConName dc <+> (hsep $ map (pprArg) vs))
 
 pprBinding :: Binding -> Doc
 pprBinding = \case
-  StgNonRec b r  -> pprTopBind (b,r)
-  StgRec bs      -> text "rec" <+> braces (line <> vsep (map pprTopBind bs))
+  StgNonRec b r  -> pprBind (b,r)
+  StgRec bs      -> vsep (map pprBind bs)
   where
-    pprTopBind (b,rhs) =
-      (pprBinder b <+> equals <$$> (indent 2 $ pprRhs (Id b) rhs))
-      <> line
+    pprBind (b,rhs) =
+      (pprRhs (Id b) rhs)
 
 pprTopBinding :: TopBinding -> Doc
 pprTopBinding = \case
   StgTopLifted (StgNonRec b r)  -> pprTopBind (b,r)
-  StgTopLifted (StgRec bs)      -> text "rec" <+> braces (line <> vsep (map pprTopBind bs))
-  StgTopStringLit b s           -> pprTopBind' (const $ textS . show) (b,s)
+  StgTopLifted (StgRec bs)      -> vsep (map pprTopBind bs)
+  StgTopStringLit b s           -> pprTopBind' (\(Id b) str -> pprBinder b <+> text "=" <+> (textS . show $ str)) (b,s)
   where
     pprTopBind = pprTopBind' pprRhs
-    pprTopBind' f (b,rhs) =
-      (pprBinder b <+> equals <$$> (indent 2 $ f (Id b) rhs))
-      <> line
+    pprTopBind' f (b, rhs) = sep
+      [ pprBinderTypeSig b
+      , f (Id b) rhs
+      , mempty
+      ]
 
 instance Pretty TopBinding where
   pretty = pprTopBinding
 
 ppTyConName :: TyCon -> Doc
-ppTyConName TyCon{..} = pretty tcUnitId <> text "_" <> pretty tcModule <> text "." <> pretty tcName
+ppTyConName TyCon{..} = {-pretty tcUnitId <> text "_" <> pretty tcModule <> text "." <> -}pretty tcName
 
 pprTyCon :: TyCon -> Doc
-pprTyCon TyCon{..} = pretty tcUnitId <> text "_" <> pretty tcModule <> text "." <> pretty tcName <$$> (indent 2 $ vsep (map pretty tcDataCons)) <> line where
+pprTyCon TyCon{..} = {-pretty tcUnitId <> text "_" <> pretty tcModule <> text "." <> -}
+  text "data" <+> pretty tcName <$$> (indent 2 $ vsep ([text c <+> pprDataConDef dc | (dc, c) <- zip tcDataCons ("=" : repeat "|")]))
 
-pprDataCon :: DataCon -> Doc
-pprDataCon DataCon{..} = pretty dcUnitId <> text "_" <> pretty dcModule <> text "." <> pretty dcName <+> text "::" <+> textS (show dcRep) <+> parens (textS (show dcId))
+pprDataConDef :: DataCon -> Doc
+pprDataConDef DataCon{..} = case dcRep of
+  AlgDataCon dcArgsRep -> pretty dcName <+> hsep (map ppPrimRep dcArgsRep)
+  x -> textS $ "-- " ++ show x
 
+pprDataConName :: DataCon -> Doc
+pprDataConName DataCon{..} = {-pretty dcUnitId <> text "_" <> pretty dcModule <> text "." <> -}pretty dcName{- <+> text "::" <+> textS (show dcRep) <+> parens (textS (show dcId))-}
+
+{-
 instance Pretty DataCon where
     pretty = pprDataCon
-
+-}
 pprModule :: Module -> Doc
-pprModule m =
-  comment (pretty $ modulePhase m)
-  <$$> text "package" <+> pretty (moduleUnitId m)
-  <$$> text "module" <+> pretty (moduleName m) <+> "where" <> line
+pprModule Module{..} = vsep
+  [ text "-- package:" <+> pretty moduleUnitId
+  , text "module" <+> pretty moduleName
+  , indent 2 $ pprExportList moduleTopBindings
+  , "  ) where"
+  , mempty
+  , vsep [pprImportList u mod il | (u, ml) <- moduleExternalTopIds, (mod, il) <- ml]
+  , mempty
+  , vsep
+    [ pprTyCon tc <> newline
+    | (uid, ml) <- moduleTyCons
+    , uid == moduleUnitId
+    , (modName, tl) <- ml
+    , modName == moduleName
+    , tc <- tl
+    ]
+  , vsep (map (pprTopBinding) moduleTopBindings)
+  ]
 
-  <$$> vsep [text "using" <+> pretty u <+> text ":" <+> pretty mod | (u, ml) <- moduleDependency m, mod <- ml] <> line
+pprImportList :: UnitId -> ModuleName -> [Binder] -> Doc
+pprImportList u mod bl = text "import" <+> text "\"" <> pretty u <> text "\"" <+> pretty mod <+> align (collection "(" ")" "," $ map pprVar bl)
 
-  <$$> text "externals" <$$> vsep [indent 2 $ vsep (map pprBinder bl) | (_, ml) <- moduleExternalTopIds m, (_, bl) <- ml] <> line
+pprExportList :: [TopBinding] -> Doc
+pprExportList l = vsep
+  [ text t <+> pprVar b
+  | (b, t) <- zip exportedBinders ("(" : repeat ",")
+  ]
+  where
+    exportedBinders = filter ((ModulePublic ==) . binderScope) $ getTopBinders l
 
-  <$$> text "type" <$$> vsep [indent 2 $ vsep (map pprTyCon tl) | (_, ml) <- moduleTyCons m, (_, tl) <- ml] <> line
-
-  <$$> vsep (map (pprTopBinding) (moduleTopBindings m))
-
---  <$$> pprForeignStubs (moduleForeignStubs m)
+getTopBinders :: [TopBinding] -> [Binder]
+getTopBinders topBindings = concatMap go topBindings
+  where
+    go = \case
+      StgTopStringLit b _ -> [b]
+      StgTopLifted (StgNonRec b _) -> [b]
+      StgTopLifted (StgRec l) -> map fst l
 
 instance Pretty Module where
   pretty = pprModule
