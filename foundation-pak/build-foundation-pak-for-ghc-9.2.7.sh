@@ -4,8 +4,7 @@ set -x -e
 # setup
 ############
 
-cabal update
-cabal install --overwrite-policy=always alex-3.2.6 happy-1.20.0 zip-cmd-1.0.1
+stack --resolver lts-20.24 install alex-3.2.6 happy-1.20.0 zip-cmd-1.0.1
 
 ############
 # checkout GHC source and build
