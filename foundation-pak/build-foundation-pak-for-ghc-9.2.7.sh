@@ -13,6 +13,8 @@ case "${unameOut}" in
 
     Darwin*)
       machine=Mac
+      brew install basictex
+      export PATH="/usr/local/texlive/2023basic/bin/universal-darwin:$PATH"
       brew install python@3.11
       pip3 install sphinx==4.3.2
       ;;
