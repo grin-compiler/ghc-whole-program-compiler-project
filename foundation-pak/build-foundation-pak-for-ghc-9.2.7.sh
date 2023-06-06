@@ -4,6 +4,34 @@ set -x -e
 # setup
 ############
 
+unameOut="$(uname -s)"
+case "${unameOut}" in
+    Linux*)
+      machine=Linux
+      sudo apt install python3-sphinx
+      ;;
+
+    Darwin*)
+      machine=Mac
+      brew install sphinx-doc
+      ;;
+
+    CYGWIN*)
+      machine=Cygwin
+      ;;
+
+    MINGW*)
+      machine=MinGw
+      ;;
+
+    MSYS_NT*)
+      machine=Git
+      ;;
+
+    *)
+      machine="UNKNOWN:${unameOut}"
+esac
+
 stack --resolver lts-20.24 install alex-3.2.6 happy-1.20.0 zip-cmd-1.0.1
 
 ############
