@@ -14,6 +14,8 @@ case "${unameOut}" in
     Darwin*)
       machine=Mac
 
+      cp macos-data/fonts/* ~/Library/Fonts
+
       brew install basictex
       export PATH="/usr/local/texlive/2023basic/bin/universal-darwin:$PATH"
       sudo tlmgr update --self
