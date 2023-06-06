@@ -13,8 +13,22 @@ case "${unameOut}" in
 
     Darwin*)
       machine=Mac
+
       brew install basictex
       export PATH="/usr/local/texlive/2023basic/bin/universal-darwin:$PATH"
+      sudo tlmgr update --self
+      sudo tlmgr install texliveonfly
+      sudo tlmgr install xelatex
+      sudo tlmgr install adjustbox
+      sudo tlmgr install tcolorbox
+      sudo tlmgr install collectbox
+      sudo tlmgr install ucs
+      sudo tlmgr install environ
+      sudo tlmgr install trimspaces
+      sudo tlmgr install titling
+      sudo tlmgr install enumitem
+      sudo tlmgr install rsfs
+
       brew install python@3.11
       pip3 install sphinx==4.3.2
       ;;
