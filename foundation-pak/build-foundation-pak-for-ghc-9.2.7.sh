@@ -14,6 +14,7 @@ case "${unameOut}" in
     Darwin*)
       machine=Mac
       brew install sphinx-doc
+      brew link sphinx-doc --force
       ;;
 
     CYGWIN*)
