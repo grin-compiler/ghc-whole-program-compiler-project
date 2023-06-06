@@ -25,6 +25,7 @@ case "${unameOut}" in
       sudo tlmgr install framed
       sudo tlmgr install needspace
       sudo tlmgr install tabulary
+      sudo tlmgr install varwidth
       sudo tlmgr install adjustbox
       sudo tlmgr install tcolorbox
       sudo tlmgr install collectbox
