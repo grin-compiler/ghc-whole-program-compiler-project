@@ -18,7 +18,7 @@ case "${unameOut}" in
       export PATH="/usr/local/texlive/2023basic/bin/universal-darwin:$PATH"
       sudo tlmgr update --self
       sudo tlmgr install texliveonfly
-      sudo tlmgr install xelatex
+      sudo tlmgr install tex-gyre
       sudo tlmgr install adjustbox
       sudo tlmgr install tcolorbox
       sudo tlmgr install collectbox
