@@ -13,8 +13,8 @@ case "${unameOut}" in
 
     Darwin*)
       machine=Mac
-      brew install sphinx-doc
-      brew link sphinx-doc --force
+      brew install python@3.11
+      pip3 install sphinx==4.3.2
       ;;
 
     CYGWIN*)
