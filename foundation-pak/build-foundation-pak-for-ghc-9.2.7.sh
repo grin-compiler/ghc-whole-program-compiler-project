@@ -23,6 +23,7 @@ case "${unameOut}" in
       sudo tlmgr install wrapfig
       sudo tlmgr install capt-of
       sudo tlmgr install framed
+      sudo tlmgr install needspace
       sudo tlmgr install adjustbox
       sudo tlmgr install tcolorbox
       sudo tlmgr install collectbox
