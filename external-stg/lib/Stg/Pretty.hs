@@ -380,6 +380,8 @@ pprOp = \case
   done - add comment for stack allocated unboxed tuples: -- stack allocated
   done - simple printer for foreign calls
   - do not show dead binders
+  - include used data constructors in import lists
+  - include local data constructor in export lists?
 -}
 
 putDefaultLast :: [Alt] -> [Doc] -> [Doc]
