@@ -1,5 +1,21 @@
 {-# LANGUAGE TupleSections, LambdaCase, RecordWildCards, OverloadedStrings #-}
-module Stg.Program where
+module Stg.Program
+  ( getGhcStgAppModules
+  , StgAppLinkerInfo(..)
+  , StgLibLinkerInfo(..)
+  , getAppLinkerInfo
+  , StgModuleInfo(..)
+  , getFullpakModules
+  , getJSONModules
+  , StgAppLicenseInfo(..)
+  , StgAppForeignSourceInfo(..)
+  , collectProgramModules
+  , getAppLicenseInfo
+  , getAppForeignFiles
+  , printSection
+  --
+  , getAppModuleMapping
+  ) where
 
 import Control.Monad.IO.Class
 import Control.Monad
@@ -63,6 +79,7 @@ data UnitLinkerInfo =
   , unitLdOptions       :: [String]
   , unitExposedModules  :: [String]
   , unitHiddenModules   :: [String]
+  , unitArtifactsDir    :: Maybe FilePath
   } deriving (Eq, Show)
 
 instance FromJSON UnitLinkerInfo where
@@ -78,6 +95,7 @@ instance FromJSON UnitLinkerInfo where
       <*> v .:? "ld-options" .!= []
       <*> v .:? "exposed-modules" .!= []
       <*> v .:? "hidden-modules" .!= []
+      <*> pure Nothing
   parseJSON _ = fail "Expected Object for UnitLinkerInfo value"
 
 data GhcStgApp
@@ -87,6 +105,7 @@ data GhcStgApp
   , appNoHsMain       :: Bool
   , appGhcName        :: String
   , appGhcVersion     :: String
+  , appTargetPlatform :: String
   , appPlatformOS     :: String
   , appUnitDbPaths    :: [FilePath]
   , appObjectDir      :: FilePath
@@ -109,6 +128,7 @@ instance FromJSON GhcStgApp where
       <*> v .: "no-hs-main"
       <*> v .: "ghc-name"
       <*> v .: "ghc-version"
+      <*> v .: "target-platform"
       <*> v .: "platform-os"
       <*> v .:? "unit-db-paths" .!= []
       <*> v .: "object-dir"
@@ -129,9 +149,6 @@ wpcCbitsPath      = "extra-compilation-artifacts" </> "wpc-plugin" </> "cbits"
 wpcCapiStubsPath  = "extra-compilation-artifacts" </> "wpc-plugin" </> "capi-stubs"
 wpcWrapperStubsPath = "extra-compilation-artifacts" </> "wpc-plugin" </> "wrapper-stubs"
 wpcCbitsSourcePath  = "extra-compilation-artifacts" </> "wpc-plugin" </> "cbits-source"
-
-readGhcStgApp :: FilePath -> IO GhcStgApp
-readGhcStgApp = Y.decodeFileThrow
 
 getAppModuleMapping :: FilePath -> IO [StgModuleInfo]
 getAppModuleMapping ghcStgAppFname = do
@@ -155,7 +172,7 @@ getAppModuleMapping ghcStgAppFname = do
           , modUnitId         = unitId
           }
         | UnitLinkerInfo{..} <- appLibDeps
-        , dir <- unitImportDirs
+        , Just dir <- [unitArtifactsDir]
         , mod <- unitExposedModules ++ unitHiddenModules
 
         -- TODO: make this better somehow
@@ -295,10 +312,10 @@ getAppLinkerInfo ghcStgAppFname = do
       -}
   libInfoList <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
 
-    cbitsPathList <- forM unitLibDirs $ \path -> do
+    cbitsPathList <- forM (maybeToList unitArtifactsDir) $ \path -> do
       findIfExists always (extension ==? ".dyn_o") $ path </> wpcCbitsPath
 
-    capiStubsPathList <- forM unitLibDirs $ \path -> do
+    capiStubsPathList <- forM (maybeToList unitArtifactsDir) $ \path -> do
       findIfExists always (extension ==? ".dyn_o") $ path </> wpcCapiStubsPath
 
     pure $ StgLibLinkerInfo
@@ -380,7 +397,7 @@ getAppForeignFiles ghcStgAppFname = do
         | p <- appCbitsSources
         ]
   libsCbitsInfos <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
-    forM unitLibDirs $ \path -> do
+    forM (maybeToList unitArtifactsDir) $ \path -> do
       let libSrcDir = path </> wpcCbitsSourcePath
       libCbitsSources <- findIfExists always (fileType ==? RegularFile) libSrcDir
       pure
@@ -393,3 +410,105 @@ getAppForeignFiles ghcStgAppFname = do
         ]
 
   pure $ appCbitsInfos ++ (concat $ concat libsCbitsInfos)
+
+readGhcStgApp :: FilePath -> IO GhcStgApp
+readGhcStgApp fname = do
+  ghcStgApp <- Y.decodeFileThrow fname
+  PakYaml{..} <- getFoundationPakForGhcStgApp fname
+  let foundationUnitMap = Map.fromList
+        [ (pakUnitId, pakUnitDir)
+        | PakUnitInfo{..} <- pakyamlPackages
+        ]
+
+      wiredInUnitIds = Set.fromList
+        [ "base"
+        , "ghc"
+        , "ghc-bignum"
+        , "ghc-prim"
+        , "rts"
+        , "template-haskell"
+        ]
+
+      -- HINT: create versioned unit-id
+      calculateUnitId UnitLinkerInfo{..}
+        -- handle wired-in units
+        | Set.member unitId wiredInUnitIds
+        = unitName ++ "-" ++ unitVersion
+
+        | otherwise
+        = unitId
+
+  pure $ ghcStgApp
+    { appLibDeps =
+        [ uli {unitArtifactsDir = Just $ Map.findWithDefault (head unitImportDirs) (calculateUnitId uli) foundationUnitMap}
+        | uli@UnitLinkerInfo{..} <- appLibDeps ghcStgApp
+        ]
+    }
+
+-- foundation-pak handling
+
+foundationPakCachePath :: IO FilePath
+foundationPakCachePath = do
+  home <- getHomeDirectory
+  pure $ home </> ".estg/foundation-pak"
+
+-- example URL: https://github.com/haskell/haskell-language-server/releases/download/2.0.0.0/haskell-language-server-2.0.0.0-aarch64-apple-darwin.tar.xz
+
+foundationPakURL :: String -> String
+foundationPakURL ghcVersion = "https://github.com/grin-compiler/foundation-pak/releases/download/" ++ ghcVersion
+
+getFoundationPakForGhcStgApp :: FilePath -> IO PakYaml
+getFoundationPakForGhcStgApp ghcstgapp = do
+  GhcStgApp{..} <- Y.decodeFileThrow ghcstgapp
+  root <- foundationPakCachePath
+  -- foundation-pak name schema: `ghc-name`-`ghc-version`-`target-platform`.pak.zip
+  let foundationPakName = printf "%s-%s-%s" appGhcName appGhcVersion appTargetPlatform
+      foundationPakPath = root </> foundationPakName
+  {-
+    TODO:
+      check foundationPakPath locally
+      if not present, create URL and download it to foundationPakPath
+      load the content from foundationPakPath
+  -}
+  let prefixPakUnitDirs :: FilePath -> PakYaml -> PakYaml
+      prefixPakUnitDirs dir p@PakYaml{..} = p
+        { pakyamlPackages =
+            [ u {pakUnitDir = dir </> pakUnitDir}
+            | u@PakUnitInfo{..} <- pakyamlPackages
+            ]
+        }
+
+  pakYaml <- Y.decodeFileThrow (foundationPakPath </> "pak.yaml")
+  pure $ prefixPakUnitDirs foundationPakPath pakYaml
+
+data PakUnitInfo
+  = PakUnitInfo
+  { pakUnitName     :: String
+  , pakUnitVersion  :: String
+  , pakUnitId       :: String
+  , pakUnitDir      :: FilePath
+  }
+  deriving (Eq, Ord, Show)
+
+instance FromJSON PakUnitInfo where
+  parseJSON (Y.Object v) =
+    PakUnitInfo
+      <$> v .: "name"
+      <*> v .: "version"
+      <*> v .: "id"
+      <*> v .: "dir"
+  parseJSON _ = fail "Expected Object for PakUnitInfo value"
+
+data PakYaml
+  = PakYaml
+  { pakyamlPathPrefix :: FilePath
+  , pakyamlPackages   :: [PakUnitInfo]
+  }
+  deriving (Eq, Ord, Show)
+
+instance FromJSON PakYaml where
+  parseJSON (Y.Object v) =
+    PakYaml
+      <$> v .: "path-prefix"
+      <*> v .: "packages"
+  parseJSON _ = fail "Expected Object for PakYaml value"
