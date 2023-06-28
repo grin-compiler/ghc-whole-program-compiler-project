@@ -105,6 +105,7 @@ writeGhcStgApp dflags unit_env hpt = do
   writeFile (output_fn ++ "." ++ objectSuf dflags ++ "_ghc_stgapp") $ showSDoc dflags $ renderYAML $ JSObject
     [ ("ghc-name",          JSString . ghcNameVersion_programName $ ue_namever unit_env)
     , ("ghc-version",       JSString . ghcNameVersion_projectVersion $ ue_namever unit_env)
+    , ("target-platform",   JSString . platformMisc_targetPlatformString $ platformMisc dflags)
     , ("platform-os",       JSString . stringEncodeOS . platformOS $ targetPlatform dflags)
     , ("no-hs-main",        JSBool $ gopt Opt_NoHsMain dflags)
     , ("o-suffix",          JSString $ objectSuf dflags)
