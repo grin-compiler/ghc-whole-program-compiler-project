@@ -31,6 +31,7 @@ import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Aeson as Aeson
 
+import System.Process
 import System.Directory
 import System.FilePath
 import System.FilePath.Find
@@ -452,10 +453,6 @@ foundationPakCachePath = do
   home <- getHomeDirectory
   pure $ home </> ".estg/foundation-pak"
 
--- example URL: https://github.com/haskell/haskell-language-server/releases/download/2.0.0.0/haskell-language-server-2.0.0.0-aarch64-apple-darwin.tar.xz
-
-foundationPakURL :: String -> String
-foundationPakURL ghcVersion = "https://github.com/grin-compiler/foundation-pak/releases/download/" ++ ghcVersion
 
 getFoundationPakForGhcStgApp :: FilePath -> IO PakYaml
 getFoundationPakForGhcStgApp ghcstgapp = do
@@ -464,12 +461,15 @@ getFoundationPakForGhcStgApp ghcstgapp = do
   -- foundation-pak name schema: `ghc-name`-`ghc-version`-`target-platform`.pak.zip
   let foundationPakName = printf "%s-%s-%s" appGhcName appGhcVersion appTargetPlatform
       foundationPakPath = root </> foundationPakName
+      ghcVersionString  = printf "%s-%s" appGhcName appGhcVersion
+
   {-
-    TODO:
       check foundationPakPath locally
       if not present, create URL and download it to foundationPakPath
       load the content from foundationPakPath
   -}
+  downloadFoundationPakIfMissing ghcVersionString foundationPakPath
+
   let prefixPakUnitDirs :: FilePath -> PakYaml -> PakYaml
       prefixPakUnitDirs dir p@PakYaml{..} = p
         { pakyamlPackages =
@@ -512,3 +512,20 @@ instance FromJSON PakYaml where
       <$> v .: "path-prefix"
       <*> v .: "packages"
   parseJSON _ = fail "Expected Object for PakYaml value"
+
+-- example URL: https://github.com/grin-compiler/foundation-pak/releases/download/ghc-9.2.7/ghc-9.2.7-x86_64-unknown-linux.pak.tar.xz
+foundationPakURL :: String
+foundationPakURL = "https://github.com/grin-compiler/foundation-pak/releases/download/"
+
+downloadFoundationPakIfMissing :: String -> FilePath -> IO ()
+downloadFoundationPakIfMissing ghcVersionString foundationPakPath = do
+  exists <- doesDirectoryExist foundationPakPath
+  when (not exists) $ do
+    let (pakDir, pakName) = splitFileName foundationPakPath
+        pakFileName       = pakName <.> ".pak.tar.xz"
+        pakURL            = foundationPakURL </> ghcVersionString </> pakFileName
+    printf "downloading %s into %s\n" pakURL pakDir
+    createDirectoryIfMissing True pakDir
+    callCommand $ printf "(cd %s ; curl -L %s -o %s)" pakDir pakURL pakFileName
+    callCommand $ printf "(cd %s ; tar xf %s)"  pakDir pakFileName
+    callCommand $ printf "(cd %s ; rm %s)"      pakDir pakFileName
