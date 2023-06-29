@@ -1,21 +1,5 @@
 {-# LANGUAGE TupleSections, LambdaCase, RecordWildCards, OverloadedStrings #-}
-module Stg.Program
-  ( getGhcStgAppModules
-  , StgAppLinkerInfo(..)
-  , StgLibLinkerInfo(..)
-  , getAppLinkerInfo
-  , StgModuleInfo(..)
-  , getFullpakModules
-  , getJSONModules
-  , StgAppLicenseInfo(..)
-  , StgAppForeignSourceInfo(..)
-  , collectProgramModules
-  , getAppLicenseInfo
-  , getAppForeignFiles
-  , printSection
-  --
-  , getAppModuleMapping
-  ) where
+module Stg.Program where
 
 import Control.Monad.IO.Class
 import Control.Monad
