@@ -87,5 +87,5 @@ git submodule update --init --recursive
 # output foundation pak and ghc-9.2.7-wpc bindist
 ############
 
-ls -lah `pwd`/_build/foundation-pak/*.zip
+ls -lah `pwd`/_build/foundation-pak/*.xz
 ls -lah `pwd`/_build/bindist/*.xz
