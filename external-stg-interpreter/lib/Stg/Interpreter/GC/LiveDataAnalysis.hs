@@ -3,6 +3,7 @@
 module Stg.Interpreter.GC.LiveDataAnalysis where
 
 import GHC.Generics
+import Control.Monad (foldM, forM_, unless)
 import Control.Monad.State
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map

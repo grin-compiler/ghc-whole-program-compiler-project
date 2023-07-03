@@ -4,6 +4,7 @@ module Stg.Interpreter.Base where
 import Data.Word
 import Foreign.Ptr
 import Foreign.C.Types
+import Control.Monad (unless, forM, forM_)
 import Control.Monad.State.Strict
 import Data.List (foldl')
 import Data.Set (Set)

@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.Debug where
 
+import Control.Monad (forM_, unless)
 import qualified GHC.Exts as Exts
 import qualified Data.Set as Set
 import qualified Data.IntMap as IntMap

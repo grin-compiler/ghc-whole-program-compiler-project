@@ -2,6 +2,7 @@
 module Stg.Interpreter.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
 
 import GHC.Stack
+import Control.Monad (forM_)
 import Control.Monad.State
 import Control.Concurrent.MVar
 

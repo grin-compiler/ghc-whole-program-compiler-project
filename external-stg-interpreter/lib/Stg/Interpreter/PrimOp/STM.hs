@@ -2,6 +2,7 @@
 module Stg.Interpreter.PrimOp.STM where
 
 import GHC.Stack
+import Control.Monad (forM_, when)
 import Control.Monad.State
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
@@ -44,7 +45,7 @@ TODO:
   - read paper from 6.1 transaction logs
 
 Q: is there a new tlog entry for each tvar operation or is it one entry per tvar?
-A: 
+A:
 
 Q: what is the difference between STM and SQL transactions?
     is it the value sampling?
