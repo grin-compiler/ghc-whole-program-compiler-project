@@ -1,0 +1,18 @@
+resolver: nightly-2023-07-17
+
+packages:
+  - 'external-stg-syntax'
+  - 'external-stg'
+  - 'external-stg-interpreter'
+#  - 'lambda'
+#  - 'external-stg-compiler'
+
+extra-deps:
+  - github: luc-tielen/souffle-haskell
+    commit: bcd7e3c058c9036d8495cf114520663917b7ac81
+  - github: david-christiansen/final-pretty-printer
+    commit: 048e8fa2d8b2b7a6f9e4e209db4f67361321eec8
+  - inline-c-0.9.1.8@sha256:88ad57e7e08ecdfd18c2468019650aeb0a87da189ecb5891d6873e28162bc46f,3303
+  - ansi-wl-pprint-0.6.9 # See: https://github.com/fpco/inline-c/issues/144
+
+allow-newer: true
