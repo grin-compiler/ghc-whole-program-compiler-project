@@ -974,10 +974,10 @@ promptM ioAction = do
     --getLine
     pure ()
 
-promptM_ :: IO () -> M ()
+promptM_ :: M () -> M ()
 promptM_ ioAction = do
   isQuiet <- gets ssIsQuiet
-  liftIO . unless isQuiet $ do
+  unless isQuiet $ do
     ioAction
     --putStrLn "[press enter]"
     --getLine
@@ -1034,7 +1034,7 @@ data ThreadState
   , tsInterruptible     :: !Bool  -- interruptible blocking of async exception
 --  , tsAsyncExMask     :: !AsyncExceptionMask
   , tsBound             :: !Bool
-  , tsLocked            :: !Bool  -- Q: what is this for? is this necessary?
+  , tsLocked            :: !Bool  -- NOTE: can the thread be moved across capabilities? this is related to multicore haskell's load balancing
   , tsCapability        :: !Int   -- NOTE: the thread is running on this capability ; Q: is this necessary?
   , tsLabel             :: !(Maybe ByteString)
   -- STM
