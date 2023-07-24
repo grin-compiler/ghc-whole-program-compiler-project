@@ -497,7 +497,7 @@ evalStackContinuation result = \case
 
   s@(RestoreExMask b i) -> do
     tid <- gets ssCurrentThreadId
-    liftIO $ print (tid, s)
+    --liftIO $ print (tid, s)
     ts@ThreadState{..} <- getCurrentThreadState
     unless (null tsBlockedExceptions) $ do
       reportThreads
@@ -685,7 +685,7 @@ evalExpr localEnv = \case
     markPrimCall primCall
     args <- mapM (evalArg localEnv) l
     result <- evalPrimCallOp primCall args t tc
-    liftIO $ print (primCall, args, result)
+    --liftIO $ print (primCall, args, result)
     pure result
 
   StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t

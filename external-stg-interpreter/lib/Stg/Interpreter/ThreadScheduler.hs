@@ -68,7 +68,7 @@ yield result = do
 
 
   threads <- gets ssThreads
-  promptM_ $ do
+  promptM_ $ liftIO $ do
     putStrLn $ " * scheduler next runnable thread: " ++ show nextTid
     --Text.putStrLn $ pShowNoColor threads
 
@@ -167,7 +167,7 @@ calculateNewSchedule = do
   wakeUpSleepingThreads
   -- calculate the new scheduling
   tsList <- gets $ IntMap.toList . ssThreads
-  promptM_ $ putStrLn $ "[calculateNewSchedule] - thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
+  promptM_ $ liftIO $ putStrLn $ "[calculateNewSchedule] - thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
 
   let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
   case runnableThreads of
@@ -175,7 +175,7 @@ calculateNewSchedule = do
     newQueue -> do
       -- save the new scheduling
       modify' $ \s -> s {ssScheduledThreadIds = newQueue}
-      promptM_ $ putStrLn $ "[calculateNewSchedule] - new scheduling: " ++ show newQueue
+      promptM_ $ liftIO $ putStrLn $ "[calculateNewSchedule] - new scheduling: " ++ show newQueue
       pure newQueue
 
 wakeUpSleepingThreads :: M ()
@@ -196,7 +196,7 @@ waitAndScheduleBlockedThreads = do
       isBlocked = \case
         ThreadBlocked{} -> True
         _ -> False
-  promptM_ $ do
+  promptM_ $ liftIO $ do
     putStrLn $ "[waitAndScheduleBlockedThreads] - scheduler no runnable threads"
     putStrLn "blocked threads"
     forM_ blockedThreads $ \(tid, ts) -> do
@@ -220,7 +220,7 @@ stopIfThereIsNoRunnableThread = do
         ThreadBlocked BlockedOnDelay{} -> True
         _ -> False
   when (null runnableThreads && null sleepingThreads) $ do
-    promptM_ $ do
+    promptM_ $ liftIO $ do
       putStrLn $ "[stopIfThereIsNoRunnableThread] No runnable threads, STOP!"
       putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
     dumpStgState

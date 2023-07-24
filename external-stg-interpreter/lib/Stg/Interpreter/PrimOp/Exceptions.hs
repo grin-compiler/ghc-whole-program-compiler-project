@@ -62,9 +62,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     tid <- gets ssCurrentThreadId
 
     ------------------------ debug
-    liftIO $ print (tid, op, args)
-    unless (null tsBlockedExceptions) $ do
-      reportThreads
+    promptM_ $ do
+      liftIO $ print (tid, op, args)
+      unless (null tsBlockedExceptions) $ do
+        reportThreads
     ------------------------ debug
 
     -- set new masking state
@@ -84,9 +85,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     tid <- gets ssCurrentThreadId
 
     ------------------------ debug
-    liftIO $ print (tid, op, args)
-    unless (null tsBlockedExceptions) $ do
-      reportThreads
+    promptM_ $ do
+      liftIO $ print (tid, op, args)
+      unless (null tsBlockedExceptions) $ do
+        reportThreads
     ------------------------ debug
 
     -- set new masking state
@@ -106,11 +108,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
     tid <- gets ssCurrentThreadId
 
     ------------------------ debug
-    liftIO $ print (tid, op, args)
-    wps <- gets ssWeakPointers
-    liftIO $ print wps
-    unless (null tsBlockedExceptions) $ do
-      reportThreads
+    promptM_ $ do
+      liftIO $ print (tid, op, args)
+      wps <- gets ssWeakPointers
+      liftIO $ print wps
+      unless (null tsBlockedExceptions) $ do
+        reportThreads
     ------------------------ debug
 
     -- set new masking state
