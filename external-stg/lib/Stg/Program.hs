@@ -425,7 +425,11 @@ readGhcStgApp fname = do
 
   pure $ ghcStgApp
     { appLibDeps =
-        [ uli {unitArtifactsDir = Just $ Map.findWithDefault (head unitImportDirs) (calculateUnitId uli) foundationUnitMap}
+        [ uli
+          { unitArtifactsDir = case Map.lookup (calculateUnitId uli) foundationUnitMap of
+            Just dir -> Just dir
+            _        -> listToMaybe unitImportDirs
+          }
         | uli@UnitLinkerInfo{..} <- appLibDeps ghcStgApp
         ]
     }
