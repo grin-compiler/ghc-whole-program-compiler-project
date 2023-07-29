@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, FlexibleInstances #-}
 module Stg.Interpreter.GC.GCRef where
 
+import Control.Monad (forM_)
 import Control.Monad.State
 import Foreign.Ptr
 

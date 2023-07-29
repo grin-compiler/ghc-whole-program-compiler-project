@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ByteArray where
 
+import Control.Monad (when)
 import Data.Bits
 import Data.Int
 import Data.Word

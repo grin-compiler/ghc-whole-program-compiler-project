@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.GC.RetainerAnalysis where
 
+import Control.Monad (unless)
 import Control.Monad.State
 import Data.Set (Set)
 import qualified Data.Set as Set

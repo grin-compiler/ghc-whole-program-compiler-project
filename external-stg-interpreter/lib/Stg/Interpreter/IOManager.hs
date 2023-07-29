@@ -2,6 +2,7 @@
 {-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
 module Stg.Interpreter.IOManager where
 
+import Control.Monad (forM_, unless, when)
 import Control.Monad.State
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap

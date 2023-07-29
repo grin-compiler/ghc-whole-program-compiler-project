@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Exceptions where
 
+import Control.Monad (unless, when)
 import Control.Monad.State
 
 import Stg.Syntax

@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, Strict #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, Strict, CPP #-}
 module Stg.Interpreter.PrimOp.Double where
 
 import GHC.Word
@@ -123,6 +123,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "decodeDouble_Int64#", [DoubleV (D# x)]) -> do
     -- NOTE: map back to GHC primop
     let !(# a, b #) = decodeDouble_Int64# x
-    pure [Int64V (I# a), IntV (I# b)]
+#if MIN_VERSION_base(4,18,0)
+    let a' = int64ToInt# a
+#else
+    let a' = a
+#endif
+    pure [Int64V (I# a'), IntV (I# b)]
 
   _ -> fallback op args t tc
