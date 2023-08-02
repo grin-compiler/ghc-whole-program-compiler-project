@@ -12,9 +12,11 @@ import qualified Data.Text.Lazy.IO as Text
 import Stg.Interpreter.Base
 import Stg.Interpreter.IOManager
 import qualified Stg.Interpreter.Debugger as Debugger
+import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
 
 runScheduler :: [Atom] -> ScheduleReason -> M [Atom]
 runScheduler result sr = do
+  --debugAsyncExceptions
   tid <- gets ssCurrentThreadId
   threads <- gets ssThreads
   promptM $ do
@@ -72,14 +74,28 @@ yield result = do
     putStrLn $ " * scheduler next runnable thread: " ++ show nextTid
     --Text.putStrLn $ pShowNoColor threads
 
+
+  -- validate ex mask state
+  when (tsInterruptible nextTS && tsBlockExceptions nextTS == False) $ do
+    reportThreads
+    error $ "invalid ex mask: " ++ show (nextTid, tsBlockExceptions nextTS, tsInterruptible nextTS)
+
   -- TODO: try to raise async exceptions from the queue if possible
   if (tsBlockExceptions nextTS == False || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
     then case tsBlockedExceptions nextTS of
       []          -> pure $ tsCurrentResult nextTS
-      waitingTids -> do
+      (thowingTid, exception) : waitingTids -> do
+
         -- try wake up thread
+        throwingTS <- getThreadState thowingTid
+        when (tsStatus throwingTS == ThreadBlocked (BlockedOnThrowAsyncEx nextTid)) $ do
+          updateThreadState thowingTid throwingTS {tsStatus = ThreadRunning}
         -- raise exception
-        error $ " * scheduler tsBlockedExceptions: " ++ show waitingTids
+        updateThreadState nextTid nextTS {tsBlockedExceptions = waitingTids}
+        PrimConcurrency.raiseAsyncEx (tsCurrentResult nextTS) nextTid exception
+        pure []
+        -- IMPLEMENT THIS AND HOPE THAT IT WILL FIX THE ISSUE
+        --error $ " * scheduler tsBlockedExceptions: " ++ show waitingTids
     else
       pure $ tsCurrentResult nextTS
 
