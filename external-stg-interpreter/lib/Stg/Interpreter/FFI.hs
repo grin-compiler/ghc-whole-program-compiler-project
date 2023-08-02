@@ -124,7 +124,14 @@ mkFFIArg = \case
 
 
 evalForeignCall :: FunPtr a -> [FFI.Arg] -> Type -> IO [Atom]
-evalForeignCall funPtr cArgs retType = case retType of
+evalForeignCall funPtr cArgs retType = do
+  --BS8.putStrLn "[FFI.callFFI - start]"
+  result <- evalForeignCall0 funPtr cArgs retType
+  --BS8.putStrLn "[FFI.callFFI - end]"
+  pure result
+
+evalForeignCall0 :: FunPtr a -> [FFI.Arg] -> Type -> IO [Atom]
+evalForeignCall0 funPtr cArgs retType = case retType of
   UnboxedTuple [] -> do
     _result <- FFI.callFFI funPtr FFI.retVoid cArgs
     pure []
