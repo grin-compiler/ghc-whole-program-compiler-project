@@ -398,6 +398,7 @@ contextSwitchTimer = do
 
 evalStackMachine :: [Atom] -> M [Atom]
 evalStackMachine result = do
+  --debugAsyncExceptions
   stackPop >>= \case
     Nothing         -> pure result
     Just stackCont  -> do
@@ -495,12 +496,18 @@ evalStackContinuation result = \case
         setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
 
-  s@(RestoreExMask b i) -> do
+  s@(RestoreExMask oldMask b i) -> do
     tid <- gets ssCurrentThreadId
-    --liftIO $ print (tid, s)
     ts@ThreadState{..} <- getCurrentThreadState
-    unless (null tsBlockedExceptions) $ do
-      reportThreads
+    when (b == False || i) $ do
+      when (tsBlockedExceptions /= []) $ do
+        reportThreads
+        error $ "RestoreExMask - raise async ex: " ++ show tsBlockedExceptions
+    updateThreadState tid $ ts {tsBlockExceptions = b, tsInterruptible = i}
+    --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " evalStackContinuation: " ++ show s
+
+    --unless (null tsBlockedExceptions) $ do
+    --  reportThreads
     {-
     stgErrorM $ show s
     ts@ThreadState{..} <- getCurrentThreadState
@@ -517,6 +524,10 @@ evalStackContinuation result = \case
 
   Catch h b i -> do
     -- TODO: is anything to do??
+    -- TODO: assert if current mask is the same as the one in stack frame
+    ts@ThreadState{..} <- getCurrentThreadState
+    when (tsBlockExceptions /= b || tsInterruptible /= i) $ do
+      error $ "Catch frame assertion failure - ex mask mismatch, expected: " ++ show (b, i) ++ " got: " ++ show (tsBlockExceptions, tsInterruptible)
     pure result
 
   Atomically stmAction -> PrimSTM.commitOrRestart stmAction result
@@ -804,6 +815,16 @@ declareTopBindings mods = do
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
 
+usesMultiThreadedRts :: FilePath -> IO Bool
+usesMultiThreadedRts fullpak_name = do
+  case takeExtension fullpak_name of
+    ".fullpak"                          -> error "TODO: read ghc stg app from fullpak"
+    ".json"                             -> error "TODO: read rts concurrency mode from json"
+    ext | isSuffixOf "_ghc_stgapp" ext  -> do
+                                            GhcStgApp{..} <- readGhcStgApp fullpak_name
+                                            pure $ "WayThreaded" `elem` appWays
+    _                                   -> error "unknown input file format"
+
 loadAndRunProgram :: HasCallStack => Bool -> Bool -> String -> [String] -> DebuggerChan -> DebugState -> Bool -> DebugSettings -> IO ()
 loadAndRunProgram isQuiet switchCWD fullpak_name progArgs dbgChan dbgState tracing debugSettings = do
 
@@ -818,6 +839,10 @@ runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> 
 runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing debugSettings = do
   let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension progFilePath
+
+  usesMultiThreadedRts progFilePath >>= \case
+    True  -> error "TODO: implement concurrent FFI semantics"
+    False -> pure ()
 
   currentDir <- liftIO getCurrentDirectory
   stgappDir <- makeAbsolute $ takeDirectory progFilePath
