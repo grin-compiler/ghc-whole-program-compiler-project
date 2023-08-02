@@ -61,6 +61,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ts@ThreadState{..} <- getCurrentThreadState
     tid <- gets ssCurrentThreadId
 
+    when (tsBlockedExceptions /= []) $ do
+      reportThreads
+      error $ "TODO: maskAsyncExceptions# - raise async exceptions getting from threads: " ++ show tsBlockedExceptions
+
     ------------------------ debug
     promptM_ $ do
       liftIO $ print (tid, op, args)
@@ -71,7 +75,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- set new masking state
     unless (tsBlockExceptions == True && tsInterruptible == True) $ do
       updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = True}
-      stackPush $ RestoreExMask tsBlockExceptions tsInterruptible
+      --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " maskAsyncExceptions# b:True i:True"
+      stackPush $ RestoreExMask (True, True) tsBlockExceptions tsInterruptible
 
     -- run action
     stackPush $ Apply [w]
@@ -94,7 +99,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- set new masking state
     unless (tsBlockExceptions == True && tsInterruptible == False) $ do
       updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = False}
-      stackPush $ RestoreExMask tsBlockExceptions tsInterruptible
+      --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " maskUninterruptible# b:True i:False"
+      stackPush $ RestoreExMask (True, False) tsBlockExceptions tsInterruptible
 
     -- run action
     stackPush $ Apply [w]
@@ -107,6 +113,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ts@ThreadState{..} <- getCurrentThreadState
     tid <- gets ssCurrentThreadId
 
+
+    when (tsBlockedExceptions /= []) $ do
+      reportThreads
+      error $ "TODO: unmaskAsyncExceptions# - raise async exceptions getting from threads: " ++ show tsBlockedExceptions
     ------------------------ debug
     promptM_ $ do
       liftIO $ print (tid, op, args)
@@ -119,7 +129,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- set new masking state
     unless (tsBlockExceptions == False && tsInterruptible == False) $ do
       updateThreadState tid $ ts {tsBlockExceptions = False, tsInterruptible = False}
-      stackPush $ RestoreExMask tsBlockExceptions tsInterruptible
+      --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " unmaskAsyncExceptions# b:False i:False"
+      stackPush $ RestoreExMask (False, False) tsBlockExceptions tsInterruptible
       {-
         TODO:
           - raise exception in
@@ -158,6 +169,39 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   _ -> fallback op args t tc
 
+{-
+  async exception related primops
+    getMaskingState# - verified, looks good
+
+    unmaskAsyncExceptions#  - set mask to (tsBlockExceptions = False, tsInterruptible = False) and places the reverse op on stack that restores the previous masking state
+                              raise blocked async exceptions
+
+    maskUninterruptible#    - set mask to (tsBlockExceptions = True, tsInterruptible = False) and places the reverse op on stack that restores the previous masking state
+    maskAsyncExceptions#    - set mask to (tsBlockExceptions = True, tsInterruptible = True)  and places the reverse op on stack that restores the previous masking state
+    BOTH ops leaves exception mask restore operation of the stack, that can raise blocked async exceptions at unmasking
+      possible reverse ops (stack continuations):
+        stg_unmaskAsyncExceptionszh_ret_info  - raise blocked async exceptions
+        stg_maskUninterruptiblezh_ret_info    - set mask to (tsBlockExceptions = True, tsInterruptible = False)
+        stg_maskAsyncExceptionszh_ret_info    - set mask to (tsBlockExceptions = True, tsInterruptible = True)
+
+int maybePerformBlockedException (Capability *cap, StgTSO *tso) -- Returns: non-zero if an exception was raised, zero otherwise.
+  check:
+    throwToSingleThreaded
+    doneWithMsgThrowTo
+    tryWakeupThread
+
+
+  check misc:
+    rts_lock
+    rts_unlock
+    lockClosure
+    unlockClosure
+--------------
+  throwToSingleThreaded (Capability *cap, StgTSO *tso, StgClosure *exception) { throwToSingleThreaded__(cap, tso, exception, false, NULL);}
+    calls "raiseAsync"
+
+-}
+
 raiseEx :: Atom -> M [Atom]
 raiseEx ex = unwindStack where
   unwindStack = do
@@ -175,8 +219,8 @@ raiseEx ex = unwindStack where
           -- mask async excpetions before running the handler
           ts <- getCurrentThreadState
           tid <- gets ssCurrentThreadId
-          updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = iEx}
-          stackPush $ RestoreExMask bEx iEx
+          updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = if bEx then iEx else True}
+          stackPush $ RestoreExMask (True, if bEx then iEx else True) bEx iEx
 
         -- run the exception handler
         stackPush $ Apply [ex, Void]
