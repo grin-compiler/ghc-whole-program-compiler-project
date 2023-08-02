@@ -28,6 +28,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       , tsBlockExceptions = tsBlockExceptions currentTS
       , tsInterruptible   = tsInterruptible currentTS
       }
+    --liftIO $ putStrLn $ "set mask - " ++ show newTId ++ " fork# b:" ++ show (tsBlockExceptions currentTS) ++ " i:" ++ show (tsInterruptible currentTS)
 
     scheduleToTheEnd newTId
 
@@ -54,6 +55,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       , tsLocked          = True          -- HINT: do not move this thread across capabilities
       , tsCapability      = capabilityNo
       }
+    --liftIO $ putStrLn $ "set mask - " ++ show newTId ++ " forkOn# b:" ++ show (tsBlockExceptions currentTS) ++ " i:" ++ show (tsInterruptible currentTS)
 
     scheduleToTheEnd newTId
 
@@ -96,10 +98,15 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
             block = do
               -- add our thread id and exception to target's blocked excpetions queue
-              updateThreadState tidTarget (targetTS {tsBlockedExceptions = tid : tsBlockedExceptions targetTS})
+              updateThreadState tidTarget (targetTS {tsBlockedExceptions = (tid, exception) : tsBlockedExceptions targetTS})
               -- block our thread
               myTS <- getCurrentThreadState
-              updateThreadState tid (myTS {tsStatus = ThreadBlocked $ BlockedOnThrowAsyncEx tidTarget exception})
+              updateThreadState tid (myTS {tsStatus = ThreadBlocked $ BlockedOnThrowAsyncEx tidTarget})
+
+              when False $ do
+                reportThread tidTarget
+                error $ "BlockedOnThrowAsyncEx, targetTS.tsStatus = " ++ show (tsStatus targetTS) ++ " targetTS.mask: " ++ show (tsBlockExceptions targetTS, tsInterruptible targetTS)
+
               --liftIO $ putStrLn $ " * killThread#, blocked tid: " ++ show tid
               -- push reschedule continuation, reason: block
               stackPush $ RunScheduler SR_ThreadBlocked
@@ -189,17 +196,17 @@ raiseAsyncEx lastResult tid exception = do
           --stackPush $ RunScheduler SR_ThreadBlocked
 
         -- the thread continues with the excaption handler, also wakes up the thread if necessary
-        exStack@(Catch exHandler bEx iEx : _) -> do
+        exStack@(Catch _ bEx iEx : _) -> do
           ts <- getThreadState tid
           updateThreadState tid $ ts
-            { tsCurrentResult   = [exHandler]
-            , tsStack           = Apply [exception, Void] : exStack
-            -- TODO: restore the catch frames exception mask, sync exceptions do it, and according the async ex pape it should be done here also
+            { tsCurrentResult   = []
+            , tsStack           = RaiseOp exception : exStack
             , tsStatus          = ThreadRunning -- HINT: whatever blocked this thread now that operation got cancelled by the async exception
             -- NOTE: Ensure that async exceptions are blocked now, so we don't get a surprise exception before we get around to executing the handler.
             , tsBlockExceptions = True
-            , tsInterruptible   = iEx
+            , tsInterruptible   = if bEx then iEx else True
             }
+          --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " raiseAsyncEx b:True i:" ++ show (if bEx then iEx else True)
 
         -- replace Update with ApStack
         Update addr : stackTail -> do
