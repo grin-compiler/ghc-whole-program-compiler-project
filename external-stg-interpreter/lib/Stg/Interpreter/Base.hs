@@ -177,8 +177,8 @@ data StackContinuation
   | Update  !Addr                         -- update Addr with the result heap object ; NOTE: maybe this is irrelevant as the closure interpreter will perform the update if necessary
   | Apply   ![Atom]                       -- apply args on the result heap object
   -- exception related
-  | Catch         !Atom !Bool !Bool       -- catch frame ; exception handler, block async exceptions, interruptible
-  | RestoreExMask !Bool !Bool             -- saved: block async exceptions, interruptible
+  | Catch         !Atom !Bool !Bool         -- catch frame ; exception handler, block async exceptions, interruptible
+  | RestoreExMask  (Bool, Bool) !Bool !Bool -- saved: block async exceptions, interruptible -- old -> new-to-restore-to
   -- thread related
   | RunScheduler  !ScheduleReason
   -- stm related
@@ -342,6 +342,7 @@ data StgState
   , ssGCOutput            :: PrintableMVar RefSet
   , ssGCIsRunning         :: Bool
   , ssGCCounter           :: Int
+  , ssRequestMajorGC      :: Bool
 
   -- let-no-escape support
   , ssTotalLNECount       :: !Int
@@ -480,6 +481,7 @@ emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSetti
   , ssGCOutput            = gcOut
   , ssGCIsRunning         = False
   , ssGCCounter           = 0
+  , ssRequestMajorGC      = False
 
   -- let-no-escape support
   , ssTotalLNECount       = 0
@@ -1029,7 +1031,7 @@ data ThreadState
   { tsCurrentResult     :: [Atom] -- Q: do we need this? A: yes, i.e. MVar read primops can write this after unblocking the thread
   , tsStack             :: ![StackContinuation]
   , tsStatus            :: !ThreadStatus
-  , tsBlockedExceptions :: [Int] -- ids of the threads waitng to send an async exception
+  , tsBlockedExceptions :: [(Int, Atom)] -- ids of the threads waiting to send an async exception + exception
   , tsBlockExceptions   :: !Bool  -- block async exceptions
   , tsInterruptible     :: !Bool  -- interruptible blocking of async exception
 --  , tsAsyncExMask     :: !AsyncExceptionMask
@@ -1146,7 +1148,7 @@ data BlockReason
   = BlockedOnMVar         Int (Maybe Atom) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
   | BlockedOnMVarRead     Int       -- mvar id
   | BlockedOnBlackHole
-  | BlockedOnThrowAsyncEx Int Atom  -- target thread id, exception
+  | BlockedOnThrowAsyncEx Int       -- target thread id
   | BlockedOnSTM
   | BlockedOnForeignCall            -- RTS name: BlockedOnCCall
   | BlockedOnRead         Int       -- file descriptor
@@ -1261,7 +1263,7 @@ reportThreadIO :: Int -> ThreadState -> IO ()
 reportThreadIO tid endTS = do
     putStrLn ""
     putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
-    Text.putStrLn $ pShow endTS
+    Text.putStrLn $ pShowNoColor endTS
     putStrLn ""
 
 showStackCont :: StackContinuation -> String
@@ -1427,3 +1429,14 @@ debugPrintHeapObject  = \case
   BlackHole o       -> "BlackHole - " ++ debugPrintHeapObject o
   ApStack{}         -> "ApStack"
   RaiseException ex -> "RaiseException: " ++ show ex
+
+----------------
+
+debugAsyncExceptions :: M ()
+debugAsyncExceptions = do
+  tid <- gets ssCurrentThreadId
+  threads <- gets ssThreads
+  when (any (\ts -> tsBlockedExceptions ts /= []) threads) $ do
+    liftIO $ putStrLn $ "current thread: " ++ show tid
+    reportThreads
+    error "TODO: deliver async exception"
