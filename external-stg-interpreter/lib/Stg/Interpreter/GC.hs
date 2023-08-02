@@ -30,19 +30,20 @@ checkGC localGCRoots = do
 
   lastGCTime <- gets ssLastGCTime
   t0 <- liftIO getCurrentTime
-
+  requestMajorGC <- gets ssRequestMajorGC
   let
    gcThreshold    = 15000000 -- wims tests pass
    -- gcThreshold = 3000000 -- wims tests fail? yes
-  when (not gcIsRunning && (nextAddr - lastGCAddr > gcThreshold {- || t0 `diffUTCTime` lastGCTime > 60 -})) $ do
+  when (not gcIsRunning && (nextAddr - lastGCAddr > gcThreshold || requestMajorGC {- || t0 `diffUTCTime` lastGCTime > 60 -})) $ do
     exportCallGraph -- HINT: export call graph in case the app does not terminate in the normal way
     a <- getAddressState
     modify' $ \s@StgState{..} -> s
-      { ssLastGCAddr  = nextAddr
-      , ssLastGCTime  = t0
-      , ssGCIsRunning = True
-      , ssGCMarkers   = a : ssGCMarkers
-      , ssGCCounter   = succ ssGCCounter
+      { ssLastGCAddr      = nextAddr
+      , ssLastGCTime      = t0
+      , ssGCIsRunning     = True
+      , ssGCMarkers       = a : ssGCMarkers
+      , ssGCCounter       = succ ssGCCounter
+      , ssRequestMajorGC  = False
       }
     runGC localGCRoots
     t0 <- liftIO getCurrentTime
