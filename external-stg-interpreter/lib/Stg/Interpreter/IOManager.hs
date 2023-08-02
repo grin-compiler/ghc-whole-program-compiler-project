@@ -29,7 +29,7 @@ waitForFDs :: V.Vector CInt -> V.Vector CInt -> CInt -> IO (CInt, CInt)
 waitForFDs readFDV writeFDV maxfd = do
   C.withPtr $ \selectResult -> do
     [C.block| int {
-      struct timeval *ptv = NULL; // TODO
+      struct timeval tv = {.tv_sec = 0, .tv_usec = 1}; // TODO
       fd_set rfd, wfd;
       int fd;
 
@@ -48,7 +48,7 @@ waitForFDs readFDV writeFDV maxfd = do
 
       int numFound;
 
-      while ((numFound = select( $(int maxfd) + 1, &rfd, &wfd, NULL, ptv)) < 0) {
+      while ((numFound = select( $(int maxfd) + 1, &rfd, &wfd, NULL, &tv)) < 0) {
         if (errno != EINTR) break;
       }
 
@@ -160,7 +160,7 @@ handleBlockedDelayWait = do
       fdList      = readFDs ++ writeFDs
       maxFD       = maximum fdList
   -- TODO: detect deadlocks
-  if maxDelay == 0 then pure () else unless (null fdList) $ do
+  unless (null fdList) $ do
     -- query file descriptors
     (selectResult, errorNo) <- liftIO $ waitForFDs (V.fromList readFDs) (V.fromList writeFDs) maxFD
     when (selectResult < 0) $ error $ "select error, errno: " ++ show errorNo
@@ -178,5 +178,3 @@ handleBlockedDelayWait = do
           ts <- getThreadState tid
           updateThreadState tid ts {tsStatus = ThreadRunning}
         _ -> pure () -- TODO
-
-    pure ()
