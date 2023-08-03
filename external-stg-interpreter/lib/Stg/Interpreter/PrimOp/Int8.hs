@@ -24,7 +24,7 @@ evalPrimOp fallback op args t tc = do
   ( "int8ToInt#",    [Int8V a])           -> pure [IntV a]
 
   -- intToInt8# :: Int# -> Int8#
-  ( "int8ToInt#",    [IntV a])            -> pure [Int8V . i $ i8 a]
+  ( "intToInt8#",    [IntV a])            -> pure [Int8V . i $ i8 a]
 
   -- negateInt8# :: Int8# -> Int8#
   ( "negateInt8#",   [Int8V a])           -> pure [Int8V . i . negate $ i8 a]
