@@ -287,6 +287,7 @@ removeFromQueues tid = do
     ThreadBlocked BlockedOnSTM          -> do
       let Just tlog = tsActiveTLog
       unsubscribeTVarWaitQueues tid tlog
+    ThreadBlocked BlockedOnDelay{}      -> pure () -- HINT: no queue for delays
     _ -> error $ "TODO: removeFromQueues " ++ show tsStatus
 
 removeFromMVarQueue :: Int -> Int -> M ()
