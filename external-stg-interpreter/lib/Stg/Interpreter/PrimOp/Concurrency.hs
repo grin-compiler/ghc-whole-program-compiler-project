@@ -219,10 +219,15 @@ raiseAsyncEx lastResult tid exception = do
           unwindStack newResult [Apply []] stackTail
 
         Atomically stmAction : stackTail -> do
-          ts <- getCurrentThreadState
-          tid <- gets ssCurrentThreadId
+          ts <- getThreadState tid
           -- extra validation (optional)
           when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
+          case tsActiveTLog ts of
+            Nothing -> do
+              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show tid
+              reportThread tid
+              error "internal error"
+            _ -> pure ()
           let Just tlog = tsActiveTLog ts
           -- abandon transaction
           updateThreadState tid $ ts {tsActiveTLog = Nothing}
@@ -232,8 +237,13 @@ raiseAsyncEx lastResult tid exception = do
         stackHead@(CatchSTM{}) : stackTail -> do
           -- FIXME: IMO this is smeantically incorrect, but this is how it's done in the native RTS
           --  this stack frame should not persist in ApStack only AtomicallyOp, it will restart the STM transaction anyway
-          ts <- getCurrentThreadState
-          tid <- gets ssCurrentThreadId
+          ts <- getThreadState tid
+          case tsActiveTLog ts of
+            Nothing -> do
+              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show tid
+              reportThread tid
+              error "internal error"
+            _ -> pure ()
           let Just tlog = tsActiveTLog ts
               tlogStackTop : tlogStackTail = tsTLogStack ts
           -- HINT: abort transaction
@@ -248,8 +258,13 @@ raiseAsyncEx lastResult tid exception = do
           -- FIXME: IMO this is smeantically incorrect, but this is how it's done in the native RTS
           --  this stack frame should not persist in ApStack only AtomicallyOp, it will restart the STM transaction anyway
           -- HINT: abort transaction
-          ts <- getCurrentThreadState
-          tid <- gets ssCurrentThreadId
+          ts <- getThreadState tid
+          case tsActiveTLog ts of
+            Nothing -> do
+              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show tid
+              reportThread tid
+              error "internal error"
+            _ -> pure ()
           let Just tlog = tsActiveTLog ts
           unsubscribeTVarWaitQueues tid tlog
           updateThreadState tid $ ts { tsTLogStack = tail $ tsTLogStack ts }
@@ -266,9 +281,13 @@ removeFromQueues :: Int -> M ()
 removeFromQueues tid = do
   ThreadState{..} <- getThreadState tid
   case tsStatus of
+    ThreadRunning                       -> pure ()
     ThreadBlocked (BlockedOnMVar m _)   -> removeFromMVarQueue tid m
     ThreadBlocked (BlockedOnMVarRead m) -> removeFromMVarQueue tid m
-    _                                   -> pure ()
+    ThreadBlocked BlockedOnSTM          -> do
+      let Just tlog = tsActiveTLog
+      unsubscribeTVarWaitQueues tid tlog
+    _ -> error $ "TODO: removeFromQueues " ++ show tsStatus
 
 removeFromMVarQueue :: Int -> Int -> M ()
 removeFromMVarQueue tid m = do
