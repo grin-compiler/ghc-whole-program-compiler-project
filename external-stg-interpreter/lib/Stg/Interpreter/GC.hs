@@ -121,11 +121,11 @@ runGCAsync localGCRoots = do
 runGCSync :: [Atom] -> M ()
 runGCSync localGCRoots = do
   stgState <- get
-  liftIO $ putStrLn $ "[GC] - start, cycle: " ++ show (ssGCCounter stgState)
+  promptM_ $ liftIO $ putStrLn $ "[GC] - start, cycle: " ++ show (ssGCCounter stgState)
   rsData <- liftIO $ runLiveDataAnalysis localGCRoots stgState
   put $ (pruneStgState stgState rsData) {ssGCIsRunning = False}
-  liftIO $ putStrLn $ "[GC] - finished, cycle: " ++ show (ssGCCounter stgState)
-  liftIO $ reportAddressCounters stgState
+  promptM_ $ liftIO $ putStrLn $ "[GC] - finished, cycle: " ++ show (ssGCCounter stgState)
+  promptM_ $ liftIO $ reportAddressCounters stgState
   reportDeletedCode stgState
   finalizeDeadWeakPointers (rsWeakPointers rsData)
   loadRetainerDb
@@ -154,7 +154,7 @@ finalizeDeadWeakPointers :: IntSet -> M ()
 finalizeDeadWeakPointers rsWeaks = do
   let deadWeaks = IntSet.toList rsWeaks
   wdescs <- mapM lookupWeakPointerDescriptor deadWeaks
-  liftIO $ do
+  promptM_ $ liftIO $ do
     putStrLn $ " * GC - run finalizers for dead weak pointers: " ++ show rsWeaks
     mapM_ print wdescs
   forM_ deadWeaks PrimWeakPointer.finalizeWeak
