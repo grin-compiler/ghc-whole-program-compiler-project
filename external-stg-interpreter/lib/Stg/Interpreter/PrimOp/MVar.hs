@@ -23,12 +23,12 @@ handleTakeMVar_ValueFullCase m mvd@MVarDescriptor{..} = do
       -- NOTE: finished and dead threads are not present in the waiting queue
       -- wake up thread
       ts <- getThreadState tid
-      updateThreadState tid (ts {tsStatus = ThreadRunning})
-      --liftIO $ putStrLn $ " * (handleTakeMVar_ValueFullCase) mvar unblock, unblocked tid: " ++ show tid
-      -- put the thread's new value to mvar
-      let ThreadBlocked (BlockedOnMVar _ (Just v)) = tsStatus ts
-          newValue = mvd {mvdValue = Just v, mvdQueue = tidTail}
-      modify' $ \s@StgState{..} -> s {ssMVars = IntMap.insert m newValue ssMVars }
+      case tsStatus ts of
+        ThreadBlocked (BlockedOnMVar _ (Just v)) -> do
+          updateThreadState tid (ts {tsStatus = ThreadRunning})
+          let newValue = mvd {mvdValue = Just v, mvdQueue = tidTail}
+          modify' $ \s@StgState{..} -> s {ssMVars = IntMap.insert m newValue ssMVars }
+        _ -> error $ "internal error - invalid thread status: " ++ show (tsStatus ts)
 
 handlePutMVar_ValueEmptyCase :: Int -> MVarDescriptor -> Atom -> M ()
 handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
@@ -58,7 +58,13 @@ handlePutMVar_ValueEmptyCase m mvd@MVarDescriptor{..} v = do
       -- NOTE: finished and dead threads are not present in the waiting queue
       -- wake up thread and pass the new vale to the thread as a result of the blocked takeMVar
       ts <- getThreadState tid
-      updateThreadState tid (ts {tsStatus = ThreadRunning, tsCurrentResult = [v]})
+      case tsStatus ts of
+        ThreadBlocked (BlockedOnMVar i Nothing) | i == m
+          -> updateThreadState tid (ts {tsStatus = ThreadRunning, tsCurrentResult = [v]})
+        _ -> error $ "internal error - invalid thread status, expected 'ThreadBlocked (BlockedOnMVar " ++ show m ++ " Nothing)', got: " ++ show (tsStatus ts)
+      -- Q: what if the thread was killed by now?
+      -- A: killed threads are always removed from waiting queues
+
       --liftIO $ putStrLn $ " * (handlePutMVar_ValueEmptyCase) mvar unblock, unblocked tid: " ++ show tid
 
       -- update wait queue

@@ -382,12 +382,16 @@ commitOrRestart stmAction result = do
               }
         modify' $ \s@StgState{..} -> s {ssTVars = IntMap.insert tvar newValue ssTVars}
         --------------------------------------------------
-        -- TODO: wake up threads from tvars wait queues
+        -- wake up threads from tvars wait queues
         --------------------------------------------------
         forM_ (IntSet.toList $ tvdQueue old) $ \waitingTid -> do
           promptM $ putStrLn $ "[STM commitOrRestart / commit case] - wake up thread: " ++ show waitingTid ++ ", tid: " ++ show tid
           waitingTS <- getThreadState waitingTid
-          updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
+          -- Q: what if the thread was killed by now?
+          -- A: killed threads are always removed from waiting queues
+          case tsStatus waitingTS of
+            ThreadBlocked BlockedOnSTM  -> updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
+            _                           -> error $ "internal error - invalid thread status: " ++ show (tsStatus waitingTS)
           -- Q: should we check the value also?
       pure result
     else do

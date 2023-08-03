@@ -265,6 +265,8 @@ raiseEx ex = unwindStack where
             unwindStack
           False -> do
             -- restart transaction due to invalid STM state
+            -- Q: what about async exceptions?
+            -- A: async exceptions has it's own stack unwind implementation, it does not use this code
             updateThreadState tid $ ts {tsActiveTLog = Just mempty}
             stackPush $ Atomically stmAction
             stackPush $ Apply [Void]
