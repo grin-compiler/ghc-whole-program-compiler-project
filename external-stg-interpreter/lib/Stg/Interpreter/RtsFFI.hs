@@ -145,8 +145,20 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
 
       StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]                          -- TODO: for testsuite
 
-      StaticTarget _ "lockFile" _ _ -> pure [IntV 0]
-      StaticTarget _ "unlockFile" _ _ -> pure [IntV 0]
+      StaticTarget _ "lockFile" _ _
+        | [Word64V id, Word64V dev, Word64V ino, Int32V for_writing, Void] <- args
+        , UnboxedTuple [Int32Rep] <- t
+        -> do
+          result <- liftIO $ lockFile (fromIntegral id) (fromIntegral dev) (fromIntegral ino) (fromIntegral for_writing)
+          pure [Int32V $ fromIntegral result]
+
+      StaticTarget _ "unlockFile" _ _
+        | [Word64V id, Void] <- args
+        , UnboxedTuple [Int32Rep] <- t
+        -> do
+          result <- liftIO $ unlockFile (fromIntegral id)
+          pure [Int32V $ fromIntegral result]
+
       StaticTarget _ "rtsSupportsBoundThreads" _ _ -> pure [IntV 0]
 
       StaticTarget _ "getMonotonicNSec" _ _
@@ -245,3 +257,6 @@ foreign import ccall unsafe "__int_encodeDouble"  rts_intEncodeDouble  :: Int  -
 foreign import ccall unsafe "__word_encodeDouble" rts_wordEncodeDouble :: Word -> Int -> Double
 foreign import ccall unsafe "__int_encodeFloat"   rts_intEncodeFloat   :: Int  -> Int -> Float
 foreign import ccall unsafe "__word_encodeFloat"  rts_wordEncodeFloat  :: Word -> Int -> Float
+
+foreign import ccall unsafe "lockFile"    lockFile    :: Word64 -> Word64 -> Word64 -> CInt -> IO CInt
+foreign import ccall unsafe "unlockFile"  unlockFile  :: Word64 -> IO CInt
