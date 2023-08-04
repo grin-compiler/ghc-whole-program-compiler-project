@@ -496,35 +496,28 @@ evalStackContinuation result = \case
         setProgramPoint $ PP_Alt resultId altCon
         evalExpr extendedEnv altRHS
 
-  s@(RestoreExMask oldMask b i) -> do
+  s@(RestoreExMask oldMask blockAsyncEx isInterruptible) -> do
     tid <- gets ssCurrentThreadId
-    ts@ThreadState{..} <- getCurrentThreadState
-    when (b == False || i) $ do
-      when (tsBlockedExceptions /= []) $ do
-        reportThreads
-        error $ "RestoreExMask - raise async ex: " ++ show tsBlockedExceptions
-    updateThreadState tid $ ts {tsBlockExceptions = b, tsInterruptible = i}
-    --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " evalStackContinuation: " ++ show s
-
-    --unless (null tsBlockedExceptions) $ do
-    --  reportThreads
-    {-
-    stgErrorM $ show s
-    ts@ThreadState{..} <- getCurrentThreadState
-    when (tsBlockExceptions == False) $ do
-      unless (null tsBlockedExceptions) $ do
-        stgErrorM $ "RestoreExMask - raise async ex: " ++ show tsBlockedExceptions
-    -}
-    {-
-      tsBlockedExceptions
-    tsBlockExceptions
-    -}
-    -- TODO
+    ts <- getCurrentThreadState
+    updateThreadState tid $ ts {tsBlockExceptions = blockAsyncEx, tsInterruptible = isInterruptible}
+    case tsBlockedExceptions ts of
+      (thowingTid, exception) : waitingTids
+        | blockAsyncEx == False
+        -> do
+          -- try wake up thread
+          throwingTS <- getThreadState thowingTid
+          when (tsStatus throwingTS == ThreadBlocked (BlockedOnThrowAsyncEx tid)) $ do
+            updateThreadState thowingTid throwingTS {tsStatus = ThreadRunning}
+          -- raise exception
+          ts <- getCurrentThreadState
+          updateThreadState tid ts {tsBlockedExceptions = waitingTids}
+          PrimConcurrency.raiseAsyncEx (tsCurrentResult ts) tid exception
+      _ -> pure ()
     pure result
 
   Catch h b i -> do
     -- TODO: is anything to do??
-    -- TODO: assert if current mask is the same as the one in stack frame
+    -- assert if current mask is the same as the one in stack frame
     ts@ThreadState{..} <- getCurrentThreadState
     when (tsBlockExceptions /= b || tsInterruptible /= i) $ do
       error $ "Catch frame assertion failure - ex mask mismatch, expected: " ++ show (b, i) ++ " got: " ++ show (tsBlockExceptions, tsInterruptible)
