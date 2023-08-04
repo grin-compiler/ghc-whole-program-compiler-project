@@ -265,7 +265,7 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t tc = do
 
 createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> (Bool, Name, [Name]) -> M (FunPtr a, IO ())
 createAdjustor evalOnNewThread fun cwrapperDesc@(_, retTy, argTys) = do
-  liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show cwrapperDesc
+  --liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show cwrapperDesc
 
   let (retCType : argsCType) = map (ffiRepToCType . ffiTypeToFFIRep) $ retTy : argTys
   stateStore <- gets $ unPrintableMVar . ssStateStore
@@ -278,17 +278,18 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
   argsStorage <- peekArray (length argTypeNames) argsStoragePtr
   argAtoms <- zipWithM (ffiRepToGetter . ffiTypeToFFIRep) argTypeNames argsStorage
 
+  {-
   putStrLn $ "got FFI callback, fun: " ++ show fun
   putStrLn $ " argAtoms: " ++ show argAtoms
   putStrLn $ " wrapper-desc: " ++ show wd
   putStrLn $ " wrapper-argTypeNames: " ++ show argTypeNames
 
   putStrLn $ "[callback BEGIN] " ++ show fun
-
+  -}
   before <- takeMVar stateStore
   (unboxedResult, after) <- flip runStateT before $ do
     funStr <- debugPrintHeapObject <$> readHeap fun
-    liftIO $ putStrLn $ "  ** fun str ** = " ++ funStr
+    --liftIO $ putStrLn $ "  ** fun str ** = " ++ funStr
 
     {-
     oldThread <- gets ssCurrentThreadId
@@ -299,26 +300,26 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
     switchToThread tidFFI
     -}
     fuel <- gets ssDebugFuel
-    liftIO $ putStrLn $ "[step 1] fuel = " ++ show fuel
+    --liftIO $ putStrLn $ "[step 1] fuel = " ++ show fuel
     boxedResult <- evalOnNewThread $ do
       -- TODO: box FFI arg atoms
       --  i.e. rts_mkWord8
       -- TODO: check how the stubs are generated and what types are need to be boxed
-      liftIO $ putStrLn $ "[step 2]"
+      --liftIO $ putStrLn $ "[step 2]"
       boxedArgs <- zipWithM boxFFIAtom argTypeNames argAtoms
-      liftIO $ putStrLn $ "[step 3] boxedArgs: " ++ show boxedArgs
+      --liftIO $ putStrLn $ "[step 3] boxedArgs: " ++ show boxedArgs
       -- !!!!!!!!!!!!!!!!!!!!!!!!!!
       -- Q: what stack shall we use here?
       -- !!!!!!!!!!!!!!!!!!!!!!!!!!
       stackPush $ RunScheduler SR_ThreadFinishedFFICallback -- return from callback
       stackPush $ Apply [] -- force result to WHNF ; is this needed?
-      liftIO $ putStrLn $ "[step 4]"
+      --liftIO $ putStrLn $ "[step 4]"
       stackPush $ Apply $ boxedArgs ++ if isIOCall then [Void] else []
-      liftIO $ putStrLn $ "[step 5]"
+      --liftIO $ putStrLn $ "[step 5]"
       --modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
       pure [fun]
 
-    liftIO $ putStrLn $ "[pre - callback END]   " ++ show fun ++ " boxed-result: " ++ show boxedResult
+    --liftIO $ putStrLn $ "[pre - callback END]   " ++ show fun ++ " boxed-result: " ++ show boxedResult
     zipWithM unboxFFIAtom [retTypeName] boxedResult
 {-
 --=============================================================================
@@ -331,9 +332,9 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
 --=============================================================================
     pure finalResult
 -}
-  putStrLn $ "[pre - callback END]   " ++ show fun ++ " result: " ++ show unboxedResult
+  --putStrLn $ "[pre - callback END]   " ++ show fun ++ " result: " ++ show unboxedResult
   putMVar stateStore after
-  putStrLn $ "[callback END]   " ++ show fun ++ " result: " ++ show unboxedResult
+  --putStrLn $ "[callback END]   " ++ show fun ++ " result: " ++ show unboxedResult
 
   -- HINT: need some kind of channel between the IO world and the interpreters StateT IO
   -- NOTE: stg apply fun argAtoms

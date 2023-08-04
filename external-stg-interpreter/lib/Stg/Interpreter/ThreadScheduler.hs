@@ -80,7 +80,7 @@ yield result = do
     reportThreads
     error $ "invalid ex mask: " ++ show (nextTid, tsBlockExceptions nextTS, tsInterruptible nextTS)
 
-  -- TODO: try to raise async exceptions from the queue if possible
+  -- try to raise async exceptions from the queue if possible
   if (tsBlockExceptions nextTS == False || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
     then case tsBlockedExceptions nextTS of
       []          -> pure $ tsCurrentResult nextTS
