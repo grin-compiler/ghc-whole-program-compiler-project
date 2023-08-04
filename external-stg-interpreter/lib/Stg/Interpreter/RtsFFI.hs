@@ -141,6 +141,18 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
         -> do
           pure [Int32V threadId]
 
+      StaticTarget _ "cmp_thread" _ _
+        | [ThreadId id1, ThreadId id2, Void] <- args
+        , UnboxedTuple [Int32Rep] <- t
+        -> do
+          pure [Int32V $ if id1 == id2 then 0 else if id1 < id2 then -1 else 1]
+
+      StaticTarget _ "eq_thread" _ _
+        | [ThreadId id1, ThreadId id2, Void] <- args
+        , UnboxedTuple [Int32Rep] <- t
+        -> do
+          pure [Int32V $ if id1 == id2 then 1 else 0]
+
       StaticTarget _ "getRTSStatsEnabled" _ _ -> pure [IntV 0]
 
       StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]                          -- TODO: for testsuite
