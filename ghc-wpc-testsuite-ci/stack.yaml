@@ -1,0 +1,27 @@
+resolver: lts-20.24
+
+packages:
+  - 'hello'
+
+extra-deps:
+  - random-1.2.1.1
+  - vector-0.12.3.1
+
+# use custom ext-stg whole program compiler GHC
+compiler:       ghc-9.2.7
+compiler-check: match-exact
+ghc-variant:    wpc
+setup-info:
+  ghc:
+    linux64-custom-wpc:
+      9.2.7:
+        url: "https://github.com/grin-compiler/foundation-pak/releases/download/ghc-9.2.7/ghc-9.2.7-x86_64-unknown-linux.tar.xz"
+    linux64-custom-wpc-tinfo6:
+      9.2.7:
+        url: "https://github.com/grin-compiler/foundation-pak/releases/download/ghc-9.2.7/ghc-9.2.7-x86_64-unknown-linux.tar.xz"
+    macosx-custom-wpc:
+      9.2.7:
+        url: "https://github.com/grin-compiler/foundation-pak/releases/download/ghc-9.2.7/ghc-9.2.7-x86_64-apple-darwin.tar.xz"
+    macosx-aarch64-custom-wpc:
+      9.2.7:
+        url: "https://github.com/grin-compiler/foundation-pak/releases/download/ghc-9.2.7/ghc-9.2.7-aarch64-apple-darwin.tar.xz"

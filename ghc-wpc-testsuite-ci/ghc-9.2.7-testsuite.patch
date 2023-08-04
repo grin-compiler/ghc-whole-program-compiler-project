@@ -1,0 +1,89 @@
+diff --git a/testsuite/driver/testglobals.py b/testsuite/driver/testglobals.py
+index 81885ac6fb..17cd446607 100644
+--- a/testsuite/driver/testglobals.py
++++ b/testsuite/driver/testglobals.py
+@@ -27,6 +27,9 @@ class TestConfig:
+         # Directories below which to look for test description files (foo.T)
+         self.rootdirs = []
+ 
++        # Run only the runnable tests
++        self.runnable_only = True
++
+         # Run these tests only (run all tests if empty)
+         self.run_only_some_tests = False
+         self.only = set()
+diff --git a/testsuite/driver/testlib.py b/testsuite/driver/testlib.py
+index 8b58084921..188a31971b 100644
+--- a/testsuite/driver/testlib.py
++++ b/testsuite/driver/testlib.py
+@@ -935,6 +935,11 @@ def test(name: TestName,
+     if not re.match('^[0-9]*[a-zA-Z][a-zA-Z0-9._-]*$', name):
+         framework_fail(name, None, 'This test has an invalid name')
+ 
++    # NOTE: ExtStg special!, run only the 'compile_and_run' like tests
++    if config.runnable_only:
++      if func not in [compile_and_run, multi_compile_and_run, multimod_compile_and_run]:
++        return
++
+     if config.run_only_some_tests:
+         if name not in config.only:
+             return
+@@ -1708,6 +1713,11 @@ def simple_run(name: TestName, way: WayName, prog: str, extra_run_opts: str) ->
+     else:
+         stdin_arg = None
+ 
++    if stdin_arg and stdin_arg.is_file():
++      in_testdir(name, 'run.stdin').write_bytes(stdin_arg.read_bytes())
++    if extra_run_opts:
++      in_testdir(name, 'run.args').write_text(extra_run_opts)
++
+     stdout_arg = in_testdir(name, 'run.stdout')
+     if opts.combined_output:
+         stderr_arg = subprocess.STDOUT # type: Union[int, Path]
+@@ -1739,6 +1749,10 @@ def simple_run(name: TestName, way: WayName, prog: str, extra_run_opts: str) ->
+     # run the command
+     exit_code = runCmd(cmd, stdin_arg, stdout_arg, stderr_arg, opts.run_timeout_multiplier)
+ 
++    # save exit code
++    in_testdir(name, 'run.exitcode').write_text(str(exit_code))
++    in_testdir(name, 'expected.exitcode').write_text(str(opts.exit_code))
++
+     # check the exit code
+     if exit_code != opts.exit_code:
+         if config.verbose >= 1 and _expect_pass(way):
+diff --git a/testsuite/mk/test.mk b/testsuite/mk/test.mk
+index bf0785116d..1fd9657b30 100644
+--- a/testsuite/mk/test.mk
++++ b/testsuite/mk/test.mk
+@@ -234,6 +234,14 @@ ifneq "$(TEST_ENV)" ""
+ RUNTEST_OPTS += --test-env="$(TEST_ENV)"
+ endif
+ 
++ifeq "$(RUNNABLE_ONLY)" "1"
++RUNTEST_OPTS += -e config.runnable_only=True
++else ifeq "$(RUNNABLE_ONLY)" "YES"
++RUNTEST_OPTS += -e config.runnable_only=True
++else
++RUNTEST_OPTS += -e config.runnable_only=False
++endif
++
+ ifeq "$(CLEANUP)" "0"
+ RUNTEST_OPTS += -e config.cleanup=False
+ else ifeq "$(CLEANUP)" "NO"
+diff --git a/testsuite/tests/Makefile b/testsuite/tests/Makefile
+index 3b2ce49a3d..7cc19339ad 100644
+--- a/testsuite/tests/Makefile
++++ b/testsuite/tests/Makefile
+@@ -11,6 +11,12 @@ ifeq "$(findstring base,$(LIBRARIES))" ""
+ $(error base library does not seem to be installed)
+ endif
+ 
++ifneq "$(LIBRARIES_TO_TEST)" ""
++LIBRARIES := $(LIBRARIES_TO_TEST)
++endif
++
++$(info  LIBRARIES is  $(value LIBRARIES) )
++
+ # Now find the "tests" directories of those libraries, where they exist
+ LIBRARY_TEST_PATHS := $(wildcard $(patsubst %, $(TOP)/../libraries/%/tests, $(LIBRARIES))) \
+       $(wildcard $(patsubst %, $(TOP)/../libraries/%/tests-ghc, $(LIBRARIES)))
