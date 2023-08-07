@@ -26,6 +26,7 @@ import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Internal as BS
 import System.Posix.DynamicLinker
 import Codec.Archive.Zip
+import qualified Data.Yaml as Y
 
 import Data.Time.Clock
 
@@ -36,6 +37,7 @@ import System.Exit
 
 import Stg.IRLocation
 import Stg.Syntax
+import Stg.IO
 import Stg.Program
 import Stg.JSON
 import Stg.Analysis.LiveVariable
@@ -248,8 +250,12 @@ builtinStgApply so a@HeapPtr{} args = do
       HeapPtr addr  = a
   o <- readHeap a
   case o of
+    ApStack{..} -> do
+      stackPush (Apply args)
+      mapM_ stackPush (reverse hoStack)
+      pure hoResult
     RaiseException ex -> PrimExceptions.raiseEx ex
-    Con{}             -> stgErrorM $ "unexpexted con at apply: "-- ++ show o
+    Con{}             -> stgErrorM $ "unexpexted con at apply: " ++ show o ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
     --BlackHole t       -> stgErrorM $ "blackhole ; loop in application of : " ++ show t
     BlackHole t -> do
       stackPush (Apply args)
@@ -277,6 +283,7 @@ builtinStgApply so a@HeapPtr{} args = do
         newAp <- freshHeapAddress
         store newAp (o {hoCloArgs = hoCloArgs ++ args, hoCloMissing = hoCloMissing - argCount})
         builtinStgEval so (HeapPtr newAp)
+    _ -> stgErrorM $ "builtinStgApply - expected closure, got: " ++ show o ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
 
 builtinStgApply so a args = stgErrorM $ "builtinStgApply - expected a closure (ptr), got: " ++
   show a ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
@@ -392,7 +399,7 @@ contextSwitchTimer :: M ()
 contextSwitchTimer = do
   t0 <- gets ssThreadStepBudget
   t1 <- if t0 > 0 then pure (pred t0) else do
-    --stackPush $ RunScheduler SR_ThreadYield
+    stackPush $ RunScheduler SR_ThreadYield
     pure 2 -- NOTE: step budget
   modify' $ \s -> s {ssThreadStepBudget = t1}
 
@@ -811,7 +818,10 @@ declareTopBindings mods = do
 usesMultiThreadedRts :: FilePath -> IO Bool
 usesMultiThreadedRts fullpak_name = do
   case takeExtension fullpak_name of
-    ".fullpak"                          -> error "TODO: read ghc stg app from fullpak"
+    ".fullpak"                          -> do
+                                            bs <- readModpakS fullpak_name "app.ghc_stgapp" id
+                                            GhcStgApp{..} <- Y.decodeThrow bs
+                                            pure $ "WayThreaded" `elem` appWays
     ".json"                             -> error "TODO: read rts concurrency mode from json"
     ext | isSuffixOf "_ghc_stgapp" ext  -> do
                                             GhcStgApp{..} <- readGhcStgApp fullpak_name

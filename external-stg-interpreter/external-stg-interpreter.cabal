@@ -80,6 +80,7 @@ library
                        directory,
                        libffi,
                        zip,
+                       yaml,
                        text,
                        bytestring,
                        containers,
