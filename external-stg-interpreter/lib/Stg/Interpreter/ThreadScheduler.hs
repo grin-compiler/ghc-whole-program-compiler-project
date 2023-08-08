@@ -5,6 +5,7 @@ import Control.Monad.State
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Time.Clock
+import System.IO
 
 import Text.Pretty.Simple (pShowNoColor)
 import qualified Data.Text.Lazy.IO as Text
@@ -70,6 +71,24 @@ yield result = do
 
 
   threads <- gets ssThreads
+
+  gets ssTracingState >>= \case
+    NoTracing     -> pure ()
+    DoTracing{..} -> do
+      tid <- gets ssCurrentThreadId
+      ts <- getCurrentThreadState
+      liftIO $ hPutStrLn thWholeProgramPath $ show [(i, tsStatus t) | (i, t) <- IntMap.toList threads]
+
+  when False $ do
+    now <- liftIO $ getCurrentTime
+    --putStrLn $ show now ++ " * scheduler next runnable thread: " ++ show nextTid ++ " " ++ show [(i, tsStatus t) | (i, t) <- IntMap.toList threads, tsStatus t == ThreadRunning]
+    liftIO $ putStrLn $ show now ++ " * scheduler next runnable thread: " ++ show nextTid ++ " " ++ show [(i, tsStatus t, tsLabel t) | (i, t) <- IntMap.toList threads]
+    forM_ [(i, tsStatus t) | (i, t) <- IntMap.toList threads] $ \(i, status) -> case status of
+      ThreadBlocked (BlockedOnMVar mid _) -> do
+        md <- lookupMVar mid
+        liftIO $ putStrLn $ "mvarId: " ++ show mid ++ " " ++ show md
+      _ -> pure ()
+
   promptM_ $ liftIO $ do
     putStrLn $ " * scheduler next runnable thread: " ++ show nextTid
     --Text.putStrLn $ pShowNoColor threads
@@ -231,12 +250,14 @@ stopIfThereIsNoRunnableThread = do
   -- check if there is anything to run
   tsList <- gets $ IntMap.toList . ssThreads
   let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
-      sleepingThreads = [tid | (tid, ts) <- tsList, isDelayed $ tsStatus ts]
-      isDelayed = \case
-        ThreadBlocked BlockedOnDelay{} -> True
+      sleepingThreads = [tid | (tid, ts) <- tsList, canWakeUp $ tsStatus ts]
+      canWakeUp = \case
+        ThreadBlocked BlockedOnDelay{}  -> True
+        ThreadBlocked BlockedOnRead{}   -> True
+        ThreadBlocked BlockedOnWrite{}  -> True
         _ -> False
   when (null runnableThreads && null sleepingThreads) $ do
-    promptM_ $ liftIO $ do
+    liftIO $ do
       putStrLn $ "[stopIfThereIsNoRunnableThread] No runnable threads, STOP!"
       putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
     dumpStgState
