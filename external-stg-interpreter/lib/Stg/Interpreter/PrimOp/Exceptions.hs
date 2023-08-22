@@ -5,6 +5,7 @@ import Control.Monad.State
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
 
 pattern IntV i = IntAtom i
 
@@ -29,26 +30,32 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "raise#", [ex]) -> do
     -- for debug only
     --liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
+    mylog $ show (op, args)
 
     raiseEx ex -- implementation
 
   -- raiseDivZero# :: Void# -> o
   ( "raiseDivZero#", [_s]) -> do
+    mylog $ show (op, args)
     Rts{..} <- gets ssRtsSupport
     raiseEx rtsDivZeroException
 
   -- raiseUnderflow# :: Void# -> o
   ( "raiseUnderflow#", [_s]) -> do
+    mylog $ show (op, args)
     Rts{..} <- gets ssRtsSupport
     raiseEx rtsUnderflowException
 
   -- raiseOverflow# :: Void# -> o
   ( "raiseOverflow#", [_s]) -> do
+    mylog $ show (op, args)
     Rts{..} <- gets ssRtsSupport
     raiseEx rtsOverflowException
 
   -- raiseIO# :: a -> State# RealWorld -> (# State# RealWorld, b #)
   ( "raiseIO#", [ex, s]) -> do
+    tid <- gets ssCurrentThreadId
+    mylog $ show (tid, op, args)
     -- for debug only
     --liftIO $ putStrLn $ show (evalStack) ++ " " ++ show op ++ " " ++ show args ++ " = ..."
 
@@ -110,10 +117,34 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "unmaskAsyncExceptions#", [f, w]) -> do
 
     -- get async exception masking state
-    ts@ThreadState{..} <- getCurrentThreadState
+    ts <- getCurrentThreadState
     tid <- gets ssCurrentThreadId
 
+    case tsBlockedExceptions ts of
+      (thowingTid, exception) : waitingTids
+        -> do
+          -- try wake up thread
+          throwingTS <- getThreadState thowingTid
+          when (tsStatus throwingTS == ThreadBlocked (BlockedOnThrowAsyncEx tid)) $ do
+            updateThreadState thowingTid throwingTS {tsStatus = ThreadRunning}
+          -- raise exception
+          ts <- getCurrentThreadState
+          updateThreadState tid ts {tsBlockedExceptions = waitingTids}
+          PrimConcurrency.raiseAsyncEx (tsCurrentResult ts) tid exception
+          pure []
+      [] -> do
+          -- set new masking state
+          unless (tsBlockExceptions ts == False && tsInterruptible ts == False) $ do
+            updateThreadState tid $ ts {tsBlockExceptions = False, tsInterruptible = False}
+            --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " unmaskAsyncExceptions# b:False i:False"
+            stackPush $ RestoreExMask (False, False) (tsBlockExceptions ts) (tsInterruptible ts)
+          pure ()
+          -- run action
+          stackPush $ Apply [w]
+          pure [f]
 
+{-
+    -----------------
     when (tsBlockedExceptions /= []) $ do
       reportThreads
       error $ "TODO: unmaskAsyncExceptions# - raise async exceptions getting from threads: " ++ show tsBlockedExceptions
@@ -131,19 +162,19 @@ evalPrimOp fallback op args t tc = case (op, args) of
       updateThreadState tid $ ts {tsBlockExceptions = False, tsInterruptible = False}
       --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " unmaskAsyncExceptions# b:False i:False"
       stackPush $ RestoreExMask (False, False) tsBlockExceptions tsInterruptible
-      {-
+      { -
         TODO:
           - raise exception in
           - wake up the blocked thread ()
-      -}
+      - }
       -- TODO: implement this
-      {-
+      { -
         -- TODO: raise async exception eagerly, then run the io action
         maybePerformBlockedException ; non-zero (one) if an exception was raised, zero otherwise
           foreach in the blocked exceptions queue:
             throwToSingleThreaded (target, alias me) ; 1. remove from queues ; 2. raise async
             tryWakeupThread (source) ; NOTE: recheck blocking conditions, turns thread into running state if the blocker has disappeared
-      -}
+      - }
       -- !!!!!!!!!!!!!!!!!!!!!!!!!!!
       pure () -- TODO
       -- !!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -151,6 +182,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     -- run action
     stackPush $ Apply [w]
     pure [f]
+-}
 
   -- getMaskingState# :: State# RealWorld -> (# State# RealWorld, Int# #)
   ( "getMaskingState#", [_s]) -> do
@@ -203,23 +235,33 @@ int maybePerformBlockedException (Capability *cap, StgTSO *tso) -- Returns: non-
 -}
 
 raiseEx :: Atom -> M [Atom]
-raiseEx ex = unwindStack where
+raiseEx a = do
+  tid <- gets ssCurrentThreadId
+  --mylog $ "pre - raiseEx, current-result: " ++ show a
+  --reportThread tid
+  result <- raiseEx0 a
+  --mylog $ "post - raiseEx, next-result: " ++ show result
+  --reportThread tid
+  pure result
+
+raiseEx0 :: Atom -> M [Atom]
+raiseEx0 ex = unwindStack where
   unwindStack = do
     stackPop >>= \case
       Nothing -> do
         -- the stack is empty, kill the thread
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid (ts {tsStatus = ThreadDied})
+        updateThreadState tid (ts {tsStack = [RunScheduler SR_ThreadYield], tsStatus = ThreadDied})
         pure []
 
       Just (Catch exHandler bEx iEx) -> do
         -- HINT: the catch primop does not modify the async exception masking, so the following code is needed only when the async exceptions are not masked
+        -- mask async exceptions before running the handler
+        ts <- getCurrentThreadState
+        tid <- gets ssCurrentThreadId
+        updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = if bEx then iEx else True}
         unless bEx $ do
-          -- mask async excpetions before running the handler
-          ts <- getCurrentThreadState
-          tid <- gets ssCurrentThreadId
-          updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = if bEx then iEx else True}
           stackPush $ RestoreExMask (True, if bEx then iEx else True) bEx iEx
 
         -- run the exception handler
@@ -231,6 +273,7 @@ raiseEx ex = unwindStack where
         tid <- gets ssCurrentThreadId
         let tlogStackTop : tlogStackTail = tsTLogStack ts
         -- HINT: abort current nested transaction, and reload the parent tlog then run the exception handler in it
+        --mylog $ show tid ++ " ** CatchSTM"
         updateThreadState tid $ ts
           { tsActiveTLog  = Just tlogStackTop
           , tsTLogStack   = tlogStackTail
@@ -248,6 +291,8 @@ raiseEx ex = unwindStack where
       Just (Update addr) -> do
         -- update the (balckholed/running) thunk with the exception value
         store addr $ RaiseException ex
+        ctid <- gets ssCurrentThreadId
+        --mylog $ "raiseEx - Update " ++ show addr ++ " current-tid: " ++ show ctid
         unwindStack
 
       Just (Atomically stmAction) -> do
@@ -260,10 +305,12 @@ raiseEx ex = unwindStack where
         case isValid of
           True -> do
             -- abandon transaction
+            --mylog $ show tid ++ " ** Atomically - valid"
             updateThreadState tid $ ts {tsActiveTLog = Nothing}
-            unsubscribeTVarWaitQueues tid tlog
+            --unsubscribeTVarWaitQueues tid tlog
             unwindStack
           False -> do
+            --mylog $ show tid ++ " ** Atomically - invalid"
             -- restart transaction due to invalid STM state
             -- Q: what about async exceptions?
             -- A: async exceptions has it's own stack unwind implementation, it does not use this code
