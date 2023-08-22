@@ -22,7 +22,7 @@ import System.FilePath.Find
 import Codec.Archive.Zip
 
 import qualified Data.Yaml as Y
-import Data.Yaml (FromJSON(..), (.:), (.:?), (.!=))
+import Data.Yaml (ToJSON(..), FromJSON(..), (.:), (.:?), (.!=), (.=), object)
 
 import Stg.Syntax
 import Stg.IO
@@ -220,10 +220,9 @@ getFullpakModules :: FilePath -> IO [Module]
 getFullpakModules fullpakPath = do
   withArchive fullpakPath $ do
     appinfoSelector <- liftIO $ mkEntrySelector fullpakAppInfoPath
-    content <- lines . BS8.unpack <$> getEntry appinfoSelector
-    let modules = parseSection content "modules:"
-    forM modules $ \m -> do
-      s <- liftIO $ mkEntrySelector $ m </> modpakStgbinPath
+    AppInfo{..} <- getEntry appinfoSelector >>= Y.decodeThrow
+    forM aiLiveCode $ \CodeInfo{..} -> do
+      s <- liftIO $ mkEntrySelector $ "haskell" </> ciPackageName </> ciModuleName </> modpakStgbinPath
       decodeStgbin . BSL.fromStrict <$> getEntry s
 
 -- .ghc_stgapp
@@ -517,3 +516,44 @@ downloadFoundationPakIfMissing ghcVersionString foundationPakPath = do
     callCommand $ printf "(cd %s ; curl -L %s -o %s)" pakDir pakURL pakFileName
     callCommand $ printf "(cd %s ; tar xf %s)"  pakDir pakFileName
     callCommand $ printf "(cd %s ; rm %s)"      pakDir pakFileName
+
+-- fullpak related
+
+data CodeInfo
+  = CodeInfo
+  { ciPackageName :: String
+  , ciModuleName  :: String
+  }
+  deriving (Eq, Ord, Show)
+
+instance FromJSON CodeInfo where
+  parseJSON (Y.Object v) =
+    CodeInfo
+      <$> v .: "package-name"
+      <*> v .: "module-name"
+  parseJSON _ = fail "Expected Object for CodeInfo value"
+
+instance ToJSON CodeInfo where
+  toJSON CodeInfo{..} =
+    object
+      [ "package-name"  .= ciPackageName
+      , "module-name"   .= ciModuleName
+      ]
+
+data AppInfo
+  = AppInfo
+  { aiLiveCode :: [CodeInfo]
+  }
+  deriving (Eq, Ord, Show)
+
+instance FromJSON AppInfo where
+  parseJSON (Y.Object v) =
+    AppInfo
+      <$> v .: "live-code"
+  parseJSON _ = fail "Expected Object for AppInfo value"
+
+instance ToJSON AppInfo where
+  toJSON AppInfo{..} =
+    object
+      [ "live-code"  .= aiLiveCode
+      ]

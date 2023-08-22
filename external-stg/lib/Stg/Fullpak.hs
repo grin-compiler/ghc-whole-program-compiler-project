@@ -12,6 +12,7 @@ import Codec.Archive.Zip.Unix
 import Text.Printf
 
 import qualified Data.Map as Map
+import qualified Data.Yaml as Y
 
 import Stg.Program
 import Stg.Foreign.Linker
@@ -60,9 +61,16 @@ mkFullpak ghcstgappPath stgbinsOnly includeAll fullpakName = do
   putStrLn $ "creating " ++ fullpakName
   createArchive fullpakName $ do
     -- top level info
-    let content = BS8.pack $ unlines
-          [ "modules:", printSection $ map modModuleName fullpakModules
-          ]
+    let content = Y.encode $
+          AppInfo
+          { aiLiveCode =
+              [ CodeInfo
+                { ciPackageName = modPackageName
+                , ciModuleName  = modModuleName
+                }
+              | StgModuleInfo{..} <- fullpakModules
+              ]
+          }
     appinfo <- mkEntrySelector "app.info"
     addEntry Deflate content appinfo
     setExternalFileAttrs (fromFileMode 0o0644) appinfo
@@ -103,6 +111,6 @@ mkFullpak ghcstgappPath stgbinsOnly includeAll fullpakName = do
             ]
       existingFiles <- withArchive modModpakPath $ mapM mkEntrySelector files >>= filterM doesEntryExist
       forM_ existingFiles $ \src -> do
-        dst <- mkEntrySelector (modModuleName </> unEntrySelector src)
+        dst <- mkEntrySelector ("haskell" </> modPackageName </> modModuleName </> unEntrySelector src)
         copyEntry modModpakPath src dst
         setExternalFileAttrs (fromFileMode 0o0644) dst
