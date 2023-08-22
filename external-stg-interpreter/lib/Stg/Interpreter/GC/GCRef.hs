@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, FlexibleInstances #-}
 module Stg.Interpreter.GC.GCRef where
 
+import Data.Maybe
 import Control.Monad.State
 import Foreign.Ptr
 
@@ -23,7 +24,7 @@ instance VisitGCRef HeapObject where
   visitGCRef action = \case
     Con{..}           -> visitGCRef action hoConArgs
     Closure{..}       -> visitGCRef action hoCloArgs >> visitGCRef action hoEnv
-    BlackHole o       -> pure ()
+    BlackHole _ o     -> pure ()
     ApStack{..}       -> visitGCRef action hoResult >> visitGCRef action hoStack
     RaiseException ex -> action ex
 
@@ -33,7 +34,7 @@ instance VisitGCRef StackContinuation where
     Update addr             -> pure () -- action $ HeapPtr addr -- TODO/FIXME: this is not a GC root!
     Apply args              -> visitGCRef action args
     Catch handler _ _       -> action handler
-    CatchRetry stm alt _    -> action stm >> action alt
+    CatchRetry stm alt _ _  -> action stm >> action alt
     CatchSTM stm handler    -> action stm >> action handler
     RestoreExMask{}         -> pure ()
     RunScheduler{}          -> pure ()
@@ -50,6 +51,26 @@ instance VisitGCRef ThreadState where
     visitGCRef action tsStack
     visitGCRef action tsActiveTLog
     visitGCRef action tsTLogStack
+    visitGCRef action tsStatus
+    visitGCRef action $ map snd tsBlockedExceptions
+
+instance VisitGCRef ThreadStatus where
+  visitGCRef action = \case
+    ThreadRunning   -> pure ()
+    ThreadFinished  -> pure ()
+    ThreadDied      -> pure ()
+    ThreadBlocked r -> case r of
+      BlockedOnMVar mvarId mAtom      -> visitGCRef action $ MVar mvarId : maybeToList mAtom
+      BlockedOnMVarRead mvarId        -> visitGCRef action $ MVar mvarId
+      BlockedOnBlackHole              -> pure ()
+      BlockedOnThrowAsyncEx targetTid -> visitGCRef action $ ThreadId targetTid
+      BlockedOnSTM{}                  -> pure ()
+      BlockedOnForeignCall            -> pure ()
+      BlockedOnRead _fd               -> pure ()
+      BlockedOnWrite _fd              -> pure ()
+      BlockedOnDelay _targetTime      -> pure ()
+      e -> error $ show e
+    e -> error $ show e
 
 instance VisitGCRef TLogEntry where
   visitGCRef action TLogEntry{..} = do
