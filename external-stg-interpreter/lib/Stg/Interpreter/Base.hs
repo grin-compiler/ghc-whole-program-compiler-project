@@ -162,7 +162,7 @@ data HeapObject
     , hoCloArgs     :: [Atom]
     , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
     }
-  | BlackHole HeapObject
+  | BlackHole Int HeapObject
   | ApStack                   -- HINT: needed for the async exceptions
     { hoResult      :: [Atom]
     , hoStack       :: [StackContinuation]
@@ -183,7 +183,7 @@ data StackContinuation
   | RunScheduler  !ScheduleReason
   -- stm related
   | Atomically    !Atom
-  | CatchRetry    !Atom !Atom !Bool       -- first STM action, alternative STM action, is running alt code?
+  | CatchRetry    !Atom !Atom !Bool !TLog      -- first STM action, alternative STM action, is running alt code?
   | CatchSTM      !Atom !Atom             -- catch STM frame ; stm action, exception handler
   -- * special primop calling stack frames
   -- STM + async exception related
@@ -200,6 +200,7 @@ data StackContinuation
 
 data DebugFrame
   = RestoreProgramPoint !(Maybe Id) !ProgramPoint
+  | DisablePrimOpTrace
   deriving (Show, Eq, Ord)
 
 data ScheduleReason
@@ -413,6 +414,7 @@ data StgState
   , ssExecutedPrimCalls   :: !(Set PrimCall)
   , ssHeapStartAddress    :: !Int
   , ssClosureCallCounter  :: !Int
+  , ssPrimOpTrace         :: !Bool
 
   -- call graph
   , ssCallGraph           :: !CallGraph
@@ -547,6 +549,7 @@ emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSetti
   , ssExecutedPrimCalls   = Set.empty
   , ssHeapStartAddress    = 0
   , ssClosureCallCounter  = 0
+  , ssPrimOpTrace         = False
 
   -- call graph
   , ssCallGraph           = emptyCallGraph
@@ -1149,7 +1152,7 @@ data BlockReason
   | BlockedOnMVarRead     Int       -- mvar id
   | BlockedOnBlackHole
   | BlockedOnThrowAsyncEx Int       -- target thread id
-  | BlockedOnSTM
+  | BlockedOnSTM          TLog
   | BlockedOnForeignCall            -- RTS name: BlockedOnCCall
   | BlockedOnRead         Int       -- file descriptor
   | BlockedOnWrite        Int       -- file descriptor
@@ -1251,7 +1254,8 @@ data BlockedStatus
 reportThreads :: M ()
 reportThreads = do
   threadIds <- IntMap.keys <$> gets ssThreads
-  liftIO $ putStrLn $ "thread Ids: " ++ show threadIds
+  ctid <- gets ssCurrentThreadId
+  liftIO $ putStrLn $ "thread Ids: " ++ show threadIds ++ " current tid: " ++ show ctid
   mapM_ reportThread threadIds
 
 reportThread :: Int -> M ()
@@ -1422,11 +1426,18 @@ dumpStgState = do
     putStrLn $ "dumping stg state to: " ++ fname
     Text.writeFile fname $ pShowNoColor stgState1
 
+debugPrintAtom :: Atom -> M String
+debugPrintAtom = \case
+  a@HeapPtr{} -> do
+    heapObjStr <- debugPrintHeapObject <$> readHeap a
+    pure $ show a ++ " -> " ++ heapObjStr
+  a -> pure $ show a
+
 debugPrintHeapObject :: HeapObject -> String
 debugPrintHeapObject  = \case
   Con{..}           -> "Con: " ++ show (dcUniqueName $ unDC hoCon) ++ " " ++ show hoConArgs
   Closure{..}       -> "Clo: " ++ show hoName ++ " args: " ++ show hoCloArgs ++ " env: " ++ show (Map.size hoEnv) ++ " missing: " ++ show hoCloMissing
-  BlackHole o       -> "BlackHole - " ++ debugPrintHeapObject o
+  BlackHole t o     -> "BlackHole - tid: " ++ show t ++ " "  ++ debugPrintHeapObject o
   ApStack{}         -> "ApStack"
   RaiseException ex -> "RaiseException: " ++ show ex
 
@@ -1440,3 +1451,20 @@ debugAsyncExceptions = do
     liftIO $ putStrLn $ "current thread: " ++ show tid
     reportThreads
     error "TODO: deliver async exception"
+
+traceLog :: String -> M ()
+traceLog msg = do
+  gets ssTracingState >>= \case
+    NoTracing     -> pure ()
+    DoTracing{..} -> do
+      tid <- gets ssCurrentThreadId
+      ts <- getCurrentThreadState
+      liftIO $ hPutStrLn thWholeProgramPath $ maybe "" BS8.unpack (tsLabel ts) ++ "\t" ++  show tid ++ "\t" ++ msg
+
+mylog :: String -> M ()
+mylog msg = do
+  ctid <- gets ssCurrentThreadId
+  pp <- gets ssCurrentProgramPoint
+  liftIO $ do
+    BS8.putStrLn . BS8.pack $ msg ++ " " ++ show pp ++ " " ++ show ctid
+    hFlush stdout
