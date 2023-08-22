@@ -10,6 +10,7 @@ import qualified Data.IntSet as IntSet
 
 import Text.Pretty.Simple (pShowNoColor)
 import qualified Data.Text.Lazy.IO as Text
+import Data.Maybe
 
 import Stg.Syntax
 import Stg.Interpreter.Base
@@ -84,7 +85,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     let Just tlog = tsActiveTLog ts
     -- push tlog, start fresh active tlog for the nested transaction
     updateThreadState tid $ ts {tsActiveTLog = Just mempty, tsTLogStack = tlog : tsTLogStack ts}
-    stackPush $ CatchRetry firstStmAction altStmAction False
+    stackPush $ CatchRetry firstStmAction altStmAction False mempty
     stackPush $ Apply [Void]
     pure [firstStmAction]
 
@@ -297,22 +298,28 @@ retrySTM = unwindStack where
       Just CatchSTM{} -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid $ ts {tsTLogStack = tail $ tsTLogStack ts}
+        updateThreadState tid $ ts
+          { tsTLogStack = tail $ tsTLogStack ts
+          , tsActiveTLog = Just $ IntMap.unionsWith (\a _ -> a) $ maybeToList (tsActiveTLog ts) ++ [head $ tsTLogStack ts]
+          }
         unwindStack
 
       -- TODO: Q: what about CatchRetry alternative code and tlog stack popping?
-      Just (CatchRetry _firstStmAction _altStmAction True) -> do
+      Just (CatchRetry _firstStmAction _altStmAction True firstTLog) -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid $ ts {tsTLogStack = tail $ tsTLogStack ts}
+        updateThreadState tid $ ts
+          { tsTLogStack   = tail $ tsTLogStack ts
+          , tsActiveTLog  = Just $ IntMap.unionsWith (\a _ -> a) $ maybeToList (tsActiveTLog ts) ++ [head $ tsTLogStack ts, firstTLog]
+          }
         unwindStack
 
-      Just (CatchRetry firstStmAction altStmAction False) -> do
+      Just (CatchRetry firstStmAction altStmAction False _) -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
         -- abort current stm branch and run alternative stm action
         updateThreadState tid $ ts {tsActiveTLog = Just mempty}
-        stackPush $ CatchRetry firstStmAction altStmAction True
+        stackPush $ CatchRetry firstStmAction altStmAction True (fromJust $ tsActiveTLog ts)
         stackPush $ Apply [Void]
         pure [altStmAction]
 
@@ -337,16 +344,18 @@ retrySTM = unwindStack where
             ts <- getThreadState tid
             -- subscribe to wait queues
             let Just tlog = tsActiveTLog ts
+            when (IntMap.size tlog == 0) $ error "internal error: IntMap.sie tlog == 0 on BlockedOnSTM"
             subscribeTVarWaitQueues tid tlog
             -- suspend thread
-            updateThreadState tid (ts {tsStatus = ThreadBlocked BlockedOnSTM, tsActiveTLog = Just mempty})
+            updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnSTM tlog), tsActiveTLog = Just mempty})
             -- Q: who will update the tsTLog after the wake up?
             stackPush $ Atomically stmAction
             stackPush $ Apply [Void]
             stackPush $ RunScheduler SR_ThreadBlocked
             pure [stmAction]
 
-          else restartTransaction stmAction
+          else do
+            restartTransaction stmAction
 
       _ -> unwindStack -- HINT: discard stack frames
 
@@ -390,8 +399,10 @@ commitOrRestart stmAction result = do
           -- Q: what if the thread was killed by now?
           -- A: killed threads are always removed from waiting queues
           case tsStatus waitingTS of
-            ThreadBlocked BlockedOnSTM  -> updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
-            _                           -> error $ "internal error - invalid thread status: " ++ show (tsStatus waitingTS)
+            ThreadBlocked (BlockedOnSTM waitingTLog) -> do
+              unsubscribeTVarWaitQueues waitingTid waitingTLog
+              updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
+            _ -> error $ "internal error - invalid thread status: " ++ show (tsStatus waitingTS)
           -- Q: should we check the value also?
       pure result
     else do
