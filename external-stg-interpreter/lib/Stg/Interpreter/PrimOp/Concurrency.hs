@@ -29,6 +29,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       , tsInterruptible   = tsInterruptible currentTS
       }
     --liftIO $ putStrLn $ "set mask - " ++ show newTId ++ " fork# b:" ++ show (tsBlockExceptions currentTS) ++ " i:" ++ show (tsInterruptible currentTS)
+    mylog $ "fork# new-tid: " ++ show newTId
 
     scheduleToTheEnd newTId
 
@@ -39,6 +40,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- forkOn# :: Int# -> (State# RealWorld -> (# State# RealWorld, t0 #)) -> State# RealWorld -> (# State# RealWorld, ThreadId# #)
   ( "forkOn#", [IntV capabilityNo, ioAction, _s]) -> do
+    mylog "forkOn#"
     promptM $ print (op, args)
     currentTS <- getCurrentThreadState
 
@@ -67,8 +69,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- killThread# :: ThreadId# -> a -> State# RealWorld -> State# RealWorld
   ( "killThread#", [ThreadId tidTarget, exception, _s]) -> do
     tid <- gets ssCurrentThreadId
+    mylog $ "killThread# current-tid: " ++ show tid ++ " target-tid: " ++ show tidTarget
     case tid == tidTarget of
       True -> do
+        mylog "killMyself"
         -- killMyself
         {-
           the thread might survive
@@ -86,6 +90,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       False -> do
         -- kill other thread
         targetTS <- getThreadState tidTarget
+        mylog $ "kill other thread " ++ show tidTarget ++ " " ++ show (tsStatus targetTS, tsBlockExceptions targetTS, tsInterruptible targetTS)
 
         let blockIfNotInterruptible_raiseOtherwise
               | tsBlockExceptions targetTS
@@ -97,6 +102,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
               | otherwise                   = raise
 
             block = do
+              mylog "block"
               -- add our thread id and exception to target's blocked excpetions queue
               updateThreadState tidTarget (targetTS {tsBlockedExceptions = (tid, exception) : tsBlockedExceptions targetTS})
               -- block our thread
@@ -110,11 +116,16 @@ evalPrimOp fallback op args t tc = case (op, args) of
               --liftIO $ putStrLn $ " * killThread#, blocked tid: " ++ show tid
               -- push reschedule continuation, reason: block
               stackPush $ RunScheduler SR_ThreadBlocked
+              mylog "block - end"
+              --reportThread tid
+              --reportThread tidTarget
               pure []
 
             raise = do
+              mylog "raise"
               removeFromQueues tidTarget
               raiseAsyncEx (tsCurrentResult targetTS) tidTarget exception
+              mylog "raise - end"
               pure []
 
         case tsStatus targetTS of
@@ -173,7 +184,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
             BlockedOnMVar{}         -> 1
             BlockedOnMVarRead{}     -> 14
             BlockedOnBlackHole      -> 2
-            BlockedOnSTM            -> 6
+            BlockedOnSTM{}          -> 6
             BlockedOnForeignCall    -> 10
             BlockedOnRead{}         -> 3
             BlockedOnWrite{}        -> 4
@@ -186,19 +197,17 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
 
 raiseAsyncEx :: [Atom] -> Int -> Atom -> M ()
-raiseAsyncEx lastResult tid exception = do
+raiseAsyncEx lastResult targetTid exception = do
   let unwindStack result stackPiece = \case
         -- no Catch stack frame is found, kill thread
         [] -> do
-          ts <- getThreadState tid
-          updateThreadState tid (ts {tsStack = [], tsStatus = ThreadDied})
-          -- TODO: reschedule continuation??
-          --stackPush $ RunScheduler SR_ThreadBlocked
+          ts <- getThreadState targetTid
+          updateThreadState targetTid (ts {tsStack = [RunScheduler SR_ThreadYield], tsStatus = ThreadDied})
 
         -- the thread continues with the excaption handler, also wakes up the thread if necessary
         exStack@(Catch _ bEx iEx : _) -> do
-          ts <- getThreadState tid
-          updateThreadState tid $ ts
+          ts <- getThreadState targetTid
+          updateThreadState targetTid $ ts
             { tsCurrentResult   = []
             , tsStack           = RaiseOp exception : exStack
             , tsStatus          = ThreadRunning -- HINT: whatever blocked this thread now that operation got cancelled by the async exception
@@ -206,7 +215,7 @@ raiseAsyncEx lastResult tid exception = do
             , tsBlockExceptions = True
             , tsInterruptible   = if bEx then iEx else True
             }
-          --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " raiseAsyncEx b:True i:" ++ show (if bEx then iEx else True)
+          --liftIO $ putStrLn $ "set mask - " ++ show targetTid ++ " raiseAsyncEx b:True i:" ++ show (if bEx then iEx else True)
 
         -- replace Update with ApStack
         Update addr : stackTail -> do
@@ -216,39 +225,42 @@ raiseAsyncEx lastResult tid exception = do
                 }
           store addr apStack
           let newResult = [HeapPtr addr]
+          ctid <- gets ssCurrentThreadId
+          mylog $ "raiseAsyncEx - Update " ++ show addr ++ " current-tid: " ++ show ctid ++ " target-tid: " ++ show targetTid
           unwindStack newResult [Apply []] stackTail
 
         Atomically stmAction : stackTail -> do
-          ts <- getThreadState tid
+          ts <- getThreadState targetTid
           -- extra validation (optional)
           when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
           case tsActiveTLog ts of
             Nothing -> do
-              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show tid
-              reportThread tid
+              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show targetTid
+              reportThread targetTid
               error "internal error"
             _ -> pure ()
           let Just tlog = tsActiveTLog ts
           -- abandon transaction
-          updateThreadState tid $ ts {tsActiveTLog = Nothing}
-          unsubscribeTVarWaitQueues tid tlog
+          updateThreadState targetTid $ ts {tsActiveTLog = Nothing}
+          --unsubscribeTVarWaitQueues targetTid tlog
           unwindStack result (AtomicallyOp stmAction : stackPiece) stackTail
 
         stackHead@(CatchSTM{}) : stackTail -> do
           -- FIXME: IMO this is smeantically incorrect, but this is how it's done in the native RTS
           --  this stack frame should not persist in ApStack only AtomicallyOp, it will restart the STM transaction anyway
-          ts <- getThreadState tid
+          ts <- getThreadState targetTid
           case tsActiveTLog ts of
             Nothing -> do
-              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show tid
-              reportThread tid
+              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show targetTid
+              reportThread targetTid
               error "internal error"
             _ -> pure ()
           let Just tlog = tsActiveTLog ts
               tlogStackTop : tlogStackTail = tsTLogStack ts
           -- HINT: abort transaction
-          unsubscribeTVarWaitQueues tid tlog
-          updateThreadState tid $ ts
+          --unsubscribeTVarWaitQueues targetTid tlog
+          mylog $ show targetTid ++ " ** raiseAsyncEx - CatchSTM"
+          updateThreadState targetTid $ ts
             { tsActiveTLog  = Just tlogStackTop
             , tsTLogStack   = tlogStackTail
             }
@@ -258,23 +270,23 @@ raiseAsyncEx lastResult tid exception = do
           -- FIXME: IMO this is smeantically incorrect, but this is how it's done in the native RTS
           --  this stack frame should not persist in ApStack only AtomicallyOp, it will restart the STM transaction anyway
           -- HINT: abort transaction
-          ts <- getThreadState tid
+          ts <- getThreadState targetTid
           case tsActiveTLog ts of
             Nothing -> do
-              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show tid
-              reportThread tid
+              liftIO $ putStrLn $ "internal error, tsActiveTLog == Nothing for tid: " ++ show targetTid
+              reportThread targetTid
               error "internal error"
             _ -> pure ()
           let Just tlog = tsActiveTLog ts
-          unsubscribeTVarWaitQueues tid tlog
-          updateThreadState tid $ ts { tsTLogStack = tail $ tsTLogStack ts }
+          --unsubscribeTVarWaitQueues targetTid tlog
+          updateThreadState targetTid $ ts { tsTLogStack = tail $ tsTLogStack ts }
           unwindStack result (stackHead : stackPiece) stackTail
 
         -- collect stack frames for ApStack
         stackHead : stackTail -> do
           unwindStack result (stackHead : stackPiece) stackTail
 
-  ts <- getThreadState tid
+  ts <- getThreadState targetTid
   unwindStack lastResult [] (tsStack ts)
 
 removeFromQueues :: Int -> M ()
@@ -284,8 +296,7 @@ removeFromQueues tid = do
     ThreadRunning                       -> pure ()
     ThreadBlocked (BlockedOnMVar m _)   -> removeFromMVarQueue tid m
     ThreadBlocked (BlockedOnMVarRead m) -> removeFromMVarQueue tid m
-    ThreadBlocked BlockedOnSTM          -> do
-      let Just tlog = tsActiveTLog
+    ThreadBlocked (BlockedOnSTM tlog)   -> do
       unsubscribeTVarWaitQueues tid tlog
     ThreadBlocked BlockedOnDelay{}      -> pure () -- HINT: no queue for delays
     _ -> error $ "TODO: removeFromQueues " ++ show tsStatus
