@@ -9,6 +9,7 @@ import System.IO
 
 import Text.Pretty.Simple (pShowNoColor)
 import qualified Data.Text.Lazy.IO as Text
+import Data.List
 
 import Stg.Interpreter.Base
 import Stg.Interpreter.IOManager
@@ -28,18 +29,21 @@ runScheduler result sr = do
       -- set thread status to finished
       ts <- getThreadState tid
       updateThreadState tid ts {tsStatus = ThreadFinished}
+      mylog $ show tid ++ " ** SR_ThreadFinished"
       yield result
 
     SR_ThreadFinishedMain -> do
       -- set thread status to finished
       ts <- getThreadState tid
       updateThreadState tid ts {tsStatus = ThreadFinished, tsCurrentResult = result}
+      mylog $ show tid ++ " ** SR_ThreadFinishedMain"
       pure result
 
     SR_ThreadFinishedFFICallback -> do
       -- set thread status to finished
       ts <- getThreadState tid
       updateThreadState tid ts {tsStatus = ThreadFinished, tsStack = [], tsCurrentResult = result}
+      mylog $ show tid ++ " ** SR_ThreadFinishedFFICallback"
       pure result
 
     SR_ThreadBlocked  -> yield result
@@ -71,13 +75,8 @@ yield result = do
 
 
   threads <- gets ssThreads
-
-  gets ssTracingState >>= \case
-    NoTracing     -> pure ()
-    DoTracing{..} -> do
-      tid <- gets ssCurrentThreadId
-      ts <- getCurrentThreadState
-      liftIO $ hPutStrLn thWholeProgramPath $ show [(i, tsStatus t) | (i, t) <- IntMap.toList threads]
+  let status = sortOn (\(_, a, _, _, _) -> a) [(i, tsStatus t, tsBlockExceptions t, tsInterruptible t, maybe "" id (tsLabel t)) | (i, t) <- IntMap.toList threads]
+  traceLog $ show status
 
   when False $ do
     now <- liftIO $ getCurrentTime
@@ -99,8 +98,9 @@ yield result = do
     reportThreads
     error $ "invalid ex mask: " ++ show (nextTid, tsBlockExceptions nextTS, tsInterruptible nextTS)
 
+  -- TODO: rethink, validate, reimplement this correctly, check how it is done in native
   -- try to raise async exceptions from the queue if possible
-  if (tsBlockExceptions nextTS == False || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
+  if (tsBlockExceptions nextTS == False) --  || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
     then case tsBlockedExceptions nextTS of
       []          -> pure $ tsCurrentResult nextTS
       (thowingTid, exception) : waitingTids -> do
@@ -122,7 +122,7 @@ interruptible :: ThreadStatus -> Bool
 interruptible = \case
   ThreadFinished  -> False
   ThreadDied      -> False
-  ThreadRunning   -> True
+  ThreadRunning   -> False
   ThreadBlocked r -> case r of
     BlockedOnMVar{}         -> True
     BlockedOnMVarRead{}     -> True
@@ -222,6 +222,18 @@ wakeUpSleepingThreads = do
       | wakeupTime <= now -> do
           --liftIO $ putStrLn $ "wake up: " ++ show tid
           updateThreadState tid ts {tsStatus = ThreadRunning}
+    ThreadBlocked (BlockedOnThrowAsyncEx targetTid) -> do
+      targetTS <- getThreadState targetTid
+      when (tsStatus targetTS `elem` [ThreadFinished, ThreadDied]) $ do
+          updateThreadState tid ts {tsStatus = ThreadRunning}
+
+    -- hack
+    {-
+    ThreadBlocked BlockedOnSTM
+      -> do
+          --liftIO $ putStrLn $ "wake up: " ++ show tid
+          updateThreadState tid ts {tsStatus = ThreadRunning}
+    -}
     _ -> pure ()
 
 waitAndScheduleBlockedThreads :: M [Int]
@@ -257,9 +269,12 @@ stopIfThereIsNoRunnableThread = do
         ThreadBlocked BlockedOnWrite{}  -> True
         _ -> False
   when (null runnableThreads && null sleepingThreads) $ do
+    --reportThreads
     liftIO $ do
       putStrLn $ "[stopIfThereIsNoRunnableThread] No runnable threads, STOP!"
-      putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
+      putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: "
+      forM_ tsList $ \(tid, ts) -> do
+        putStrLn $ show (tid, tsStatus ts, tsBlockExceptions ts, tsInterruptible ts, tsBlockedExceptions ts, tsLabel ts)
     dumpStgState
     modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
     Debugger.checkBreakpoint $ BkpCustom "thread-scheduler"
