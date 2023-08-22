@@ -25,7 +25,7 @@ genStubs ghcstgappFname = do
         ] ++
         -- code symbols
         [ "\n// code RTS symbols"] ++
-        [ "void reportCalledRtsSymbol(const char *msg) { printf(\"trap for: %s\\n\", msg); exit(1); }\n"] ++
+        [ "void reportCalledRtsSymbol(const char *msg) { printf(\"trap for: %s\\n\", msg);  }\n"] ++
         [ "void " ++ funName ++ "() { reportCalledRtsSymbol(" ++ show funName ++ "); }"
         | s <- rtsSymbols
         , let funName = getSymbolName s
