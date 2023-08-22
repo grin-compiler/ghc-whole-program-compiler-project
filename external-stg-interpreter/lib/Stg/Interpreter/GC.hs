@@ -32,9 +32,10 @@ checkGC localGCRoots = do
   t0 <- liftIO getCurrentTime
   requestMajorGC <- gets ssRequestMajorGC
   let
-   gcThreshold    = 15000000 -- wims tests pass
+   gcThreshold    = 85000000 -- wims tests pass
    -- gcThreshold = 3000000 -- wims tests fail? yes
-  when (not gcIsRunning && (nextAddr - lastGCAddr > gcThreshold || requestMajorGC {- || t0 `diffUTCTime` lastGCTime > 60 -})) $ do
+   timeTrigger    = False -- t0 `diffUTCTime` lastGCTime > 20
+  when (not gcIsRunning && (nextAddr - lastGCAddr > gcThreshold || requestMajorGC || timeTrigger)) $ do
     exportCallGraph -- HINT: export call graph in case the app does not terminate in the normal way
     a <- getAddressState
     modify' $ \s@StgState{..} -> s
@@ -121,10 +122,10 @@ runGCAsync localGCRoots = do
 runGCSync :: [Atom] -> M ()
 runGCSync localGCRoots = do
   stgState <- get
-  promptM_ $ liftIO $ putStrLn $ "[GC] - start, cycle: " ++ show (ssGCCounter stgState)
+  mylog $ "[GC] - start, cycle: " ++ show (ssGCCounter stgState)
   rsData <- liftIO $ runLiveDataAnalysis localGCRoots stgState
   put $ (pruneStgState stgState rsData) {ssGCIsRunning = False}
-  promptM_ $ liftIO $ putStrLn $ "[GC] - finished, cycle: " ++ show (ssGCCounter stgState)
+  mylog $ "[GC] - finished, cycle: " ++ show (ssGCCounter stgState)
   promptM_ $ liftIO $ reportAddressCounters stgState
   reportDeletedCode stgState
   finalizeDeadWeakPointers (rsWeakPointers rsData)
@@ -154,10 +155,11 @@ finalizeDeadWeakPointers :: IntSet -> M ()
 finalizeDeadWeakPointers rsWeaks = do
   let deadWeaks = IntSet.toList rsWeaks
   wdescs <- mapM lookupWeakPointerDescriptor deadWeaks
-  promptM_ $ liftIO $ do
+  liftIO $ do
     putStrLn $ " * GC - run finalizers for dead weak pointers: " ++ show rsWeaks
     mapM_ print wdescs
-  forM_ deadWeaks PrimWeakPointer.finalizeWeak
+  -- TODO: implement it right
+  --forM_ deadWeaks PrimWeakPointer.finalizeWeak
 
 -- utils
 
