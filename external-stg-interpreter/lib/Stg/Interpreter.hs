@@ -172,9 +172,10 @@ buildCallGraph so hoName = do
   -- write whole program path entry
   fuel <- gets ssDebugFuel
   stepCounter <- gets ssStepCounter
-  gets ssTracingState >>= \case
-    NoTracing     -> pure ()
-    DoTracing{..} -> liftIO $ hPutStrLn thWholeProgramPath $ maybe "<global>" show currentClosure ++ "\t" ++ show progPoint ++ "\t" ++ show hoName ++ "\t" ++ show fuel ++ "\t" ++ show stepCounter
+
+  ts <- getCurrentThreadState
+  unless (tsLabel ts == Just "resource-pool: reaper") $ do
+    traceLog $ maybe "<global>" show currentClosure ++ "\t" ++ show progPoint ++ "\t" ++ show hoName ++ "\t" ++ show fuel ++ "\t" ++ show stepCounter
 
 builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
 builtinStgEval so a@HeapPtr{} = do
@@ -182,14 +183,17 @@ builtinStgEval so a@HeapPtr{} = do
   Debugger.checkBreakpoint $ BkpCustom "eval"
   case o of
     ApStack{..} -> do
+      stackPush (Apply []) -- ensure WHNF
       mapM_ stackPush (reverse hoStack)
       pure hoResult
-    RaiseException ex -> PrimExceptions.raiseEx ex
+    RaiseException ex -> mylog (show o) >> PrimExceptions.raiseEx ex
     Con{}       -> pure [a]
-    BlackHole t -> do
-      stackPush (Apply [])
+    
+    BlackHole _ t -> do
+      stackPush (Apply []) -- retry evaluation next time also
       stackPush $ RunScheduler SR_ThreadYield
       pure [a]
+    
     {-
     -- TODO: check how the cmm stg machine handles this case
     BlackHole t -> do
@@ -205,6 +209,18 @@ builtinStgEval so a@HeapPtr{} = do
 
       | otherwise
       -> do
+        {-
+        when ("estgiObserve" == binderName (unId hoName) || "$westgiObserve" == binderName (unId hoName)) $ do
+          modify' $ \s -> s {ssPrimOpTrace = True}
+          traceLog "full-trace-on"
+          argStrs <- mapM debugPrintAtom hoCloArgs
+          tid <- gets ssCurrentThreadId
+          liftIO $ do
+            BS8.putStrLn (binderName $ unId hoName)
+            BS8.putStrLn . BS8.pack $ "tid: " ++ show tid ++ " estgiObserve " ++ show hoCloArgs
+            BS8.putStrLn . BS8.pack $ unlines argStrs
+            hFlush stdout
+        -}
         let StgRhsClosure _ uf params e = getCutShowItem $ hoCloBody
             HeapPtr l = a
             extendedEnv = addManyBindersToEnv SO_CloArg params hoCloArgs hoEnv
@@ -232,15 +248,23 @@ builtinStgEval so a@HeapPtr{} = do
             -- closure may be entered multiple times, but should not be updated or blackholed.
             evalExpr extendedEnv e
           Updatable -> do
+            tid <- gets ssCurrentThreadId
             -- closure should be updated after evaluation (and may be blackholed during evaluation).
+            -- Q: what is eager and lazy blackholing?
+            --  read: http://mainisusuallyafunction.blogspot.com/2011/10/thunks-and-lazy-blackholes-introduction.html
+            --  read: https://www.microsoft.com/en-us/research/wp-content/uploads/2005/09/2005-haskell.pdf
             stackPush (Update l)
-            store l (BlackHole o)
+            --store l (BlackHole tid o)
             evalExpr extendedEnv e
           SingleEntry -> do
+            tid <- gets ssCurrentThreadId
+            -- TODO: investigate how does single-entry blackholing cause problem (estgi does not have racy memops as it is mentioned in GHC Note below)
+            -- no backholing, see: GHC Note [Black-holing non-updatable thunks]
             -- closure will only be entered once, and so need not be updated but may safely be blackholed.
-            store l (BlackHole o)
+            --stackPush (Update l) -- FIX??? Q: what will remove the backhole if there is no update? Q: is the value linear?
+            --store l (BlackHole tid o) -- Q: is this a bug?
             evalExpr extendedEnv e
-    _ -> stgErrorM $ "expected evaluable heap object, got: " ++ show o ++ " atom: " ++ show a ++ ", static-origin: " ++ show so
+    _ -> stgErrorM $ "expected evaluable heap object, got: " ++ show a ++ " heap-object: " ++ show o ++ " static-origin: " ++ show so
 builtinStgEval so a = stgErrorM $ "expected a thunk, got: " ++ show a ++ ", static-origin: " ++ show so
 
 builtinStgApply :: HasCallStack => StaticOrigin -> Atom -> [Atom] -> M [Atom]
@@ -254,13 +278,15 @@ builtinStgApply so a@HeapPtr{} args = do
       stackPush (Apply args)
       mapM_ stackPush (reverse hoStack)
       pure hoResult
-    RaiseException ex -> PrimExceptions.raiseEx ex
-    Con{}             -> stgErrorM $ "unexpexted con at apply: " ++ show o ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
+    RaiseException ex -> mylog (show o) >> PrimExceptions.raiseEx ex
+    Con{}             -> stgErrorM $ "unexpected con at apply: " ++ show o ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
     --BlackHole t       -> stgErrorM $ "blackhole ; loop in application of : " ++ show t
+    {-
     BlackHole t -> do
       stackPush (Apply args)
       stackPush $ RunScheduler SR_ThreadYield
       pure [a]
+    -}
     Closure{..}
       -- under saturation
       | hoCloMissing - argCount > 0
@@ -358,6 +384,7 @@ data ThreadStatus
 
 killAllThreads :: M ()
 killAllThreads = do
+  liftIO $ putStrLn "[estgi] - killAllThreads"
   -- TODO: check if there are running threads
   tsList <- gets $ IntMap.toList . ssThreads
   let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
@@ -390,7 +417,9 @@ evalOnThread isMainThread setupAction = do
         case isThreadLive tsStatus of
           True  -> loop resultOut -- HINT: the new scheduling is ready
           False -> do
-            when isMainThread killAllThreads
+            when isMainThread $ do
+              liftIO $ putStrLn "[estgi] - main hs thread finished"
+              killAllThreads
             pure tsCurrentResult
   loop result0
 
@@ -400,7 +429,8 @@ contextSwitchTimer = do
   t0 <- gets ssThreadStepBudget
   t1 <- if t0 > 0 then pure (pred t0) else do
     stackPush $ RunScheduler SR_ThreadYield
-    pure 2 -- NOTE: step budget
+    pure 500 -- NOTE: step budget
+    --pure 1 -- NOTE: step budget
   modify' $ \s -> s {ssThreadStepBudget = t1}
 
 evalStackMachine :: [Atom] -> M [Atom]
@@ -412,6 +442,11 @@ evalStackMachine result = do
       promptM $ do
         putStrLn $ "  input result = " ++ show result
         putStrLn $ "  stack-cont   = " ++ showStackCont stackCont
+
+      doTrace <- gets ssPrimOpTrace
+      do -- when doTrace $ do
+        resultStr <- mapM debugPrintAtom result
+        traceLog $ showStackCont stackCont ++ " current-result: " ++ show resultStr
 
       Debugger.checkBreakpoint $ BkpCustom "stack"
       nextResult <- evalStackContinuation result stackCont
@@ -547,7 +582,10 @@ evalStackContinuation result = \case
     promptM $ putStrLn "[ AtomicallyOp ]"
     PrimSTM.atomicallyOp stmAction
 
-  RaiseOp ex -> PrimExceptions.raiseEx ex
+  RaiseOp ex -> do
+    ctid <- gets ssCurrentThreadId
+    mylog $ "ctid: " ++ show ctid ++ " " ++ show (RaiseOp ex)
+    PrimExceptions.raiseEx ex
 
   KeepAlive{} -> do
     pure result
@@ -561,6 +599,10 @@ evalDebugFrame result = \case
   RestoreProgramPoint currentClosure progPoint -> do
     modify' $ \s -> s {ssCurrentClosure = currentClosure}
     setProgramPoint progPoint
+    pure result
+  DisablePrimOpTrace -> do
+    modify' $ \s -> s {ssPrimOpTrace = False}
+    traceLog "full-trace-off"
     pure result
 
   x -> error $ "unsupported debug-frame: " ++ show x ++ ", result: " ++ show result
@@ -654,7 +696,8 @@ evalExpr localEnv = \case
     args <- mapM (evalArg localEnv) l
     tid <- gets ssCurrentThreadId
     result <- evalPrimOp op args t tc
-    --liftIO $ print (op, args, result)
+    doTrace <- gets ssPrimOpTrace
+    when doTrace $ traceLog $ show (op, args)
     pure result
 
   StgOpApp (StgFCallOp foreignCall) l t tc -> do
@@ -687,9 +730,9 @@ evalExpr localEnv = \case
                 putStrLn $ "    " ++ show a
             stgErrorM $ "illegal createAdjustor call"
       _ -> mapM (evalArg localEnv) l
-    --liftIO $ print ("executing", foreignCall, args)
+    --mylog $ show ("executing", foreignCall, args)
     result <- evalFCallOp evalOnNewThread foreignCall args t tc
-    --liftIO $ print (foreignCall, args, result)
+    --mylog $ show (foreignCall, args, result)
     pure result
 
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
@@ -876,6 +919,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
         rts_evalLazyIO(&cap, main_closure, NULL);
         rts_unlock(cap);
         -}
+        mylog " *** flushStdHandles"
         flushStdHandles
         --showDebug evalOnNewThread
         -- TODO: do everything that 'hs_exit_' does
@@ -892,8 +936,10 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
     True  -> do
       let tracePath = ".extstg-trace" </> takeFileName progName
       createDirectoryIfMissing True tracePath
+      fd <- openFile (progName ++ ".whole-program-path.tsv") WriteMode
+      hSetBuffering fd LineBuffering
       DoTracing <$> openFile (tracePath </> "originDB.tsv") WriteMode
-                <*> openFile (progName ++ ".whole-program-path.tsv") WriteMode
+                <*> pure fd
 
   stateStore <- PrintableMVar <$> newEmptyMVar
   (gcThreadId, gcIn', gcOut') <- GC.init
