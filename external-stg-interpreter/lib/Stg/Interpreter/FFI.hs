@@ -248,7 +248,20 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t tc = do
       --------------
       StaticTarget _ foreignSymbol _ _
         -> do
+          let blacklist =
+                [ "__gmpn"
+                ]
+          {-
+          unless (any (`BS8.isPrefixOf` foreignSymbol) blacklist) $ do
+            liftIO $ do
+              now <- getCurrentTime
+              putStrLn $ "[foreign call]  " ++ show now ++ "  " ++ show foreignSymbol ++ " " ++ show args ++ show foreignCTarget
+          -}
           --promptM $ putStrLn $ "[user FFI] " ++ show foreignSymbol
+          ts <- getCurrentThreadState
+          unless (tsLabel ts == Just "resource-pool: reaper") $ do
+            traceLog $ show foreignSymbol ++ "\t" ++ show args
+
           cArgs <- catMaybes <$> mapM mkFFIArg args
           funPtr <- getFFISymbol foreignSymbol
           liftIOAndBorrowStgState $ do
