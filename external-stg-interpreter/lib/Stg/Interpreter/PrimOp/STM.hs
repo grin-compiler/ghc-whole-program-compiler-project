@@ -287,24 +287,21 @@ retrySTM = unwindStack where
   unwindStack = do
     stackPop >>= \case
       Nothing -> do
-        -- the stack is empty, kill the thread
-        ts <- getCurrentThreadState
-        tid <- gets ssCurrentThreadId
-        updateThreadState tid (ts {tsStatus = ThreadDied})
-        promptM $ putStrLn $ "[STM] retrySTM - unwindStack - ThreadDied, tid: " ++ show tid
-        pure []
+        error "internal error - hit the stack bottom in retrySTM, no Atomically or CatchRetry frame found"
 
-      -- TODO: Q: what about CatchSTM ???
       Just CatchSTM{} -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
+        -- HINT: pop tlog stack, merge the old stack top to the active tlog (it is needed for TVar subscription on STM suspend)
         updateThreadState tid $ ts
           { tsTLogStack = tail $ tsTLogStack ts
           , tsActiveTLog = Just $ IntMap.unionsWith (\a _ -> a) $ maybeToList (tsActiveTLog ts) ++ [head $ tsTLogStack ts]
           }
         unwindStack
 
-      -- TODO: Q: what about CatchRetry alternative code and tlog stack popping?
+      -- Q: what about CatchRetry alternative code and tlog stack popping?
+      -- A: the tlog stack is popped, the stack top becomes the new active tlog merged with the old active tlog and the tlog stack top
+      --    this is needed to subscribe all TVars that was used so far when stm transaction gets suspended
       Just (CatchRetry _firstStmAction _altStmAction True firstTLog) -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
@@ -319,6 +316,7 @@ retrySTM = unwindStack where
         tid <- gets ssCurrentThreadId
         -- abort current stm branch and run alternative stm action
         updateThreadState tid $ ts {tsActiveTLog = Just mempty}
+        -- HINT: save the current active tlog, it is needed for TVar subscriptions on STM suspend
         stackPush $ CatchRetry firstStmAction altStmAction True (fromJust $ tsActiveTLog ts)
         stackPush $ Apply [Void]
         pure [altStmAction]
