@@ -240,9 +240,8 @@ raiseAsyncEx lastResult targetTid exception = do
               error "internal error"
             _ -> pure ()
           let Just tlog = tsActiveTLog ts
-          -- abandon transaction
+          -- HINT: abort transaction, do not need to unsubscribe, because it was already done in killThread# before it called raiseAsyncEx
           updateThreadState targetTid $ ts {tsActiveTLog = Nothing}
-          --unsubscribeTVarWaitQueues targetTid tlog
           unwindStack result (AtomicallyOp stmAction : stackPiece) stackTail
 
         stackHead@(CatchSTM{}) : stackTail -> do
@@ -257,8 +256,7 @@ raiseAsyncEx lastResult targetTid exception = do
             _ -> pure ()
           let Just tlog = tsActiveTLog ts
               tlogStackTop : tlogStackTail = tsTLogStack ts
-          -- HINT: abort transaction
-          --unsubscribeTVarWaitQueues targetTid tlog
+          -- HINT: abort transaction, do not need to unsubscribe, because it was already done in killThread# before it called raiseAsyncEx
           mylog $ show targetTid ++ " ** raiseAsyncEx - CatchSTM"
           updateThreadState targetTid $ ts
             { tsActiveTLog  = Just tlogStackTop
@@ -269,7 +267,7 @@ raiseAsyncEx lastResult targetTid exception = do
         stackHead@(CatchRetry{}) : stackTail -> do
           -- FIXME: IMO this is smeantically incorrect, but this is how it's done in the native RTS
           --  this stack frame should not persist in ApStack only AtomicallyOp, it will restart the STM transaction anyway
-          -- HINT: abort transaction
+          -- HINT: abort transaction, do not need to unsubscribe, because it was already done in killThread# before it called raiseAsyncEx
           ts <- getThreadState targetTid
           case tsActiveTLog ts of
             Nothing -> do
@@ -278,7 +276,6 @@ raiseAsyncEx lastResult targetTid exception = do
               error "internal error"
             _ -> pure ()
           let Just tlog = tsActiveTLog ts
-          --unsubscribeTVarWaitQueues targetTid tlog
           updateThreadState targetTid $ ts { tsTLogStack = tail $ tsTLogStack ts }
           unwindStack result (stackHead : stackPiece) stackTail
 
@@ -299,6 +296,8 @@ removeFromQueues tid = do
     ThreadBlocked (BlockedOnSTM tlog)   -> do
       unsubscribeTVarWaitQueues tid tlog
     ThreadBlocked BlockedOnDelay{}      -> pure () -- HINT: no queue for delays
+    ThreadBlocked BlockedOnRead{}       -> pure () -- HINT: no queue for file read
+    ThreadBlocked BlockedOnWrite{}      -> pure () -- HINT: no queue for file write
     _ -> error $ "TODO: removeFromQueues " ++ show tsStatus
 
 removeFromMVarQueue :: Int -> Int -> M ()
