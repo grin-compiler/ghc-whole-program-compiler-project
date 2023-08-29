@@ -328,7 +328,7 @@ defaultDebugSettings
   { dsKeepGCFacts = False
   }
 
-newtype GCSymbol = GCSymbol {unGCSymbol :: String}
+newtype GCSymbol = GCSymbol {unGCSymbol :: ByteString}
   deriving (Show, Eq, Ord)
 
 data StgState
@@ -626,6 +626,10 @@ data Rts
 
   -- closures used by the STM primitives
   , rtsNestedAtomically   :: Atom -- (exception)
+
+  -- closures used by the GC deadlock detection
+  , rtsBlockedIndefinitelyOnMVar  :: Atom -- (exception)
+  , rtsBlockedIndefinitelyOnSTM   :: Atom -- (exception)
 
   -- rts helper custom closures
   , rtsApplyFun1Arg :: Atom
@@ -1294,6 +1298,7 @@ data RefSet
   , rsMutableByteArrays   :: !IntSet
   , rsStableNames         :: !IntSet
   , rsStablePointers      :: !IntSet
+  , rsThreads             :: !IntSet
   }
 
 emptyRefSet :: RefSet
@@ -1312,6 +1317,7 @@ emptyRefSet = RefSet
   , rsMutableByteArrays   = IntSet.empty
   , rsStableNames         = IntSet.empty
   , rsStablePointers      = IntSet.empty
+  , rsThreads             = IntSet.empty
   }
 
 -- Debugger

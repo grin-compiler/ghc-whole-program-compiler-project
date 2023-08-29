@@ -34,6 +34,7 @@ library
     Stg.Interpreter.GC.GCRef
     Stg.Interpreter.GC.LiveDataAnalysis
     Stg.Interpreter.GC.RetainerAnalysis
+    Stg.Interpreter.GC.DeadlockAnalysis
     Stg.Interpreter.PrimOp.Addr
     Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array
