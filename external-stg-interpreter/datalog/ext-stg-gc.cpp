@@ -278,7 +278,7 @@ Sf_ext_stg_gc()
 addRelation("GCRoot", wrapper_rel_1_GCRoot, true, false);
 addRelation("Reference", wrapper_rel_2_Reference, true, false);
 addRelation("LiveStep0", wrapper_rel_3_LiveStep0, false, false);
-addRelation("MaybeDeadlockingThread", wrapper_rel_6_MaybeDeadlockingThread, true, true);
+addRelation("MaybeDeadlockingThread", wrapper_rel_6_MaybeDeadlockingThread, true, false);
 addRelation("DeadlockingThread", wrapper_rel_7_DeadlockingThread, false, true);
 addRelation("Live", wrapper_rel_8_Live, false, true);
 }
@@ -344,10 +344,6 @@ void runAll(std::string inputDirectoryArg = "", std::string outputDirectoryArg =
 }
 public:
 void printAll(std::string outputDirectoryArg = "") override {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","threadId"},{"auxArity","0"},{"name","MaybeDeadlockingThread"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"threadId\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
-if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
-IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_6_MaybeDeadlockingThread);
-} catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","threadId"},{"auxArity","0"},{"name","DeadlockingThread"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"threadId\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
 if (!outputDirectoryArg.empty()) {directiveMap["output-dir"] = outputDirectoryArg;}
 IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_7_DeadlockingThread);
@@ -395,12 +391,6 @@ IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(
 }
 public:
 void dumpOutputs() override {
-try {std::map<std::string, std::string> rwOperation;
-rwOperation["IO"] = "stdout";
-rwOperation["name"] = "MaybeDeadlockingThread";
-rwOperation["types"] = "{\"relation\": {\"arity\": 1, \"auxArity\": 0, \"types\": [\"s:symbol\"]}}";
-IOSystem::getInstance().getWriter(rwOperation, symTable, recordTable)->writeAll(*rel_6_MaybeDeadlockingThread);
-} catch (std::exception& e) {std::cerr << e.what();exit(1);}
 try {std::map<std::string, std::string> rwOperation;
 rwOperation["IO"] = "stdout";
 rwOperation["name"] = "DeadlockingThread";
@@ -568,12 +558,6 @@ try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeN
 if (!inputDirectory.empty()) {directiveMap["fact-dir"] = inputDirectory;}
 IOSystem::getInstance().getReader(directiveMap, symTable, recordTable)->readAll(*rel_6_MaybeDeadlockingThread);
 } catch (std::exception& e) {std::cerr << "Error loading MaybeDeadlockingThread data: " << e.what() << '\n';}
-}
-if (performIO) {
-try {std::map<std::string, std::string> directiveMap({{"IO","file"},{"attributeNames","threadId"},{"auxArity","0"},{"name","MaybeDeadlockingThread"},{"operation","output"},{"output-dir","."},{"params","{\"records\": {}, \"relation\": {\"arity\": 1, \"params\": [\"threadId\"]}}"},{"types","{\"ADTs\": {}, \"records\": {}, \"relation\": {\"arity\": 1, \"types\": [\"s:symbol\"]}}"}});
-if (!outputDirectory.empty()) {directiveMap["output-dir"] = outputDirectory;}
-IOSystem::getInstance().getWriter(directiveMap, symTable, recordTable)->writeAll(*rel_6_MaybeDeadlockingThread);
-} catch (std::exception& e) {std::cerr << e.what();exit(1);}
 }
 }
 #ifdef _MSC_VER
