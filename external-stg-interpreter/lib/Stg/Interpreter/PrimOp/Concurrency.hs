@@ -289,6 +289,7 @@ raiseAsyncEx lastResult targetTid exception = do
 removeFromQueues :: Int -> M ()
 removeFromQueues tid = do
   ThreadState{..} <- getThreadState tid
+  -- Q: what about the async exception queue?
   case tsStatus of
     ThreadRunning                       -> pure ()
     ThreadBlocked (BlockedOnMVar m _)   -> removeFromMVarQueue tid m
