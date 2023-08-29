@@ -10,6 +10,7 @@ import qualified Data.Map as Map
 import System.Directory
 import System.FilePath
 import Text.Printf
+import qualified Data.ByteString.Char8 as BS8
 
 import Stg.Interpreter.Base
 
@@ -17,7 +18,7 @@ loadMap :: String -> IO (Map GCSymbol (Set GCSymbol))
 loadMap factPath = do
   absFactPath <- makeAbsolute factPath
   putStrLn $ "loading: " ++ show absFactPath
-  refs <- map words . lines <$> readFile absFactPath
+  refs <- map BS8.words . BS8.lines <$> BS8.readFile absFactPath
   pure $ Map.fromListWith Set.union [(GCSymbol to, Set.singleton $ GCSymbol from) | [to, from] <- refs]
 
 
@@ -26,7 +27,7 @@ loadStringSet isQuiet factPath = do
   absFactPath <- makeAbsolute factPath
   unless isQuiet $ do
     putStrLn $ "loading: " ++ show absFactPath
-  Set.fromList . map GCSymbol . lines <$> readFile absFactPath
+  Set.fromList . map GCSymbol . BS8.lines <$> BS8.readFile absFactPath
 
 loadRetainerDb :: M ()
 loadRetainerDb = pure ()
