@@ -4,6 +4,7 @@ module Stg.Interpreter.GC.LiveDataAnalysis where
 
 import GHC.Generics
 import Control.Monad.State
+import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)
@@ -14,6 +15,8 @@ import System.FilePath
 import System.Directory
 import Foreign.Ptr
 import Text.Printf
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BS8
 
 import Language.Souffle.Compiled (SouffleM)
 import qualified Language.Souffle.Compiled as Souffle
@@ -31,11 +34,11 @@ data GCRoot = GCRoot String
 data Reference = Reference String String
   deriving (Eq, Show, Generic)
 
-data Dead = Dead String
+data MaybeDeadlockingThread = MaybeDeadlockingThread String
   deriving (Eq, Show, Generic)
 
 instance Souffle.Program ExtStgGC where
-  type ProgramFacts ExtStgGC = [GCRoot, Reference, Dead]
+  type ProgramFacts ExtStgGC = [GCRoot, Reference, MaybeDeadlockingThread]
   programName = const "ext_stg_gc"
 
 instance Souffle.Fact GCRoot where
@@ -46,19 +49,19 @@ instance Souffle.Fact Reference where
   type FactDirection Reference = 'Souffle.Input
   factName = const "Reference"
 
-instance Souffle.Fact Dead where
-  type FactDirection Dead = 'Souffle.Output
-  factName = const "Dead"
+instance Souffle.Fact MaybeDeadlockingThread where
+  type FactDirection MaybeDeadlockingThread = 'Souffle.Input
+  factName = const "MaybeDeadlockingThread"
 
 instance Souffle.Marshal GCRoot
 instance Souffle.Marshal Reference
-instance Souffle.Marshal Dead
+instance Souffle.Marshal MaybeDeadlockingThread
 
 ---------------------------
 -- analysis api
 ---------------------------
 
-runLiveDataAnalysis :: [Atom] -> StgState -> IO RefSet
+runLiveDataAnalysis :: [Atom] -> StgState -> IO (RefSet, IntSet)
 runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybeProgram -> do  -- Initializes the Souffle program.
   case maybeProgram of
     Nothing -> liftIO $ fail "Failed to load ext-stg-gc datalog program."
@@ -66,8 +69,9 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
       -- populate input facts
       addGCRootFacts prog stgState extraGCRoots
       addReferenceFacts prog stgState
+      addMaybeDeadlockingThreadFacts prog stgState
       -- run analysis
-      Souffle.setNumThreads prog 2
+      Souffle.setNumThreads prog 8
       Souffle.run prog
 
       let factPath = if dsKeepGCFacts $ ssDebugSettings stgState
@@ -84,7 +88,8 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
 
       -- read back result
       --readbackDeadData prog
-      readbackLiveData factPath (ssIsQuiet stgState)
+      (,) <$> readbackLiveData factPath (ssIsQuiet stgState)
+          <*> readbackDeadlockingThreadData factPath (ssIsQuiet stgState)
 
 ---------------------------
 -- handle input facts
@@ -93,7 +98,7 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
 addGCRootFacts :: Souffle.Handle ExtStgGC -> StgState -> [Atom] -> SouffleM ()
 addGCRootFacts prog StgState{..} localGCRoots = do
   let addGCRoot :: Atom -> SouffleM ()
-      addGCRoot a = visitAtom a $ \i -> Souffle.addFact prog $ GCRoot $ unGCSymbol i
+      addGCRoot a = visitAtom a $ \i -> Souffle.addFact prog $ GCRoot $ BS8.unpack $ unGCSymbol i
 
   -- HINT: the following can be GC roots
   {-
@@ -115,14 +120,25 @@ addGCRootFacts prog StgState{..} localGCRoots = do
   visitGCRef addGCRoot ssStaticGlobalEnv
 
   -- stack continuations of live threads
-  forM_ ssThreads $ \ts -> case isThreadLive (tsStatus ts) of
-    False -> pure ()
-    True  -> visitGCRef addGCRoot ts
+  forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of
+    ThreadFinished  -> pure ()
+    ThreadDied      -> pure ()
+    ThreadRunning   -> visitGCRef addGCRoot $ ThreadId tid
+    ThreadBlocked r -> case r of
+      BlockedOnMVar{}         -> pure () -- will be referred by the mvar wait queue
+      BlockedOnMVarRead{}     -> pure () -- will be referred by the mvar wait queue
+      BlockedOnBlackHole{}    -> error "not implemented yet"
+      BlockedOnThrowAsyncEx{} -> pure () -- will be referred by the target thread's blocked exceptions queue
+      BlockedOnSTM{}          -> pure () -- will be referred by the tvar wait queue
+      BlockedOnForeignCall{}  -> error "not implemented yet"
+      BlockedOnRead{}         -> visitGCRef addGCRoot $ ThreadId tid
+      BlockedOnWrite{}        -> visitGCRef addGCRoot $ ThreadId tid
+      BlockedOnDelay{}        -> visitGCRef addGCRoot $ ThreadId tid
 
 addReferenceFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
 addReferenceFacts prog StgState{..} = do
   let addReference :: GCSymbol -> Atom -> SouffleM ()
-      addReference from a = visitAtom a $ \i -> Souffle.addFact prog $ Reference (unGCSymbol from) (unGCSymbol i)
+      addReference from a = visitAtom a $ \i -> Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from) (BS8.unpack $ unGCSymbol i)
 
       addRefs :: VisitGCRef a => IntMap a -> RefNamespace -> SouffleM ()
       addRefs im ns = do
@@ -142,10 +158,32 @@ addReferenceFacts prog StgState{..} = do
   addRefs ssArrayArrays         NS_ArrayArray
   addRefs ssMutableArrayArrays  NS_MutableArrayArray
   addRefs ssStablePointers      NS_StablePointer
+  addRefs ssThreads             NS_Thread
 
   -- stable name references
   let stableNames = Map.toList ssStableNameMap
   forM_ stableNames $ \(v, i) -> visitGCRef (addReference (encodeRef i NS_StableName)) v
+
+addMaybeDeadlockingThreadFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
+addMaybeDeadlockingThreadFacts prog StgState{..} = do
+  let addMaybeDeadlockingThread :: Atom -> SouffleM ()
+      addMaybeDeadlockingThread a = visitAtom a $ \i -> Souffle.addFact prog $ MaybeDeadlockingThread $ BS8.unpack $ unGCSymbol i
+
+  -- potentially deadlocking threads to check
+  forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of
+    ThreadFinished  -> pure ()
+    ThreadDied      -> pure ()
+    ThreadRunning   -> pure ()
+    ThreadBlocked r -> case r of
+      BlockedOnMVar{}         -> addMaybeDeadlockingThread $ ThreadId tid
+      BlockedOnMVarRead{}     -> addMaybeDeadlockingThread $ ThreadId tid
+      BlockedOnBlackHole{}    -> error "not implemented yet"
+      BlockedOnThrowAsyncEx{} -> error "TODO: what is this case? figure it out"
+      BlockedOnSTM{}          -> addMaybeDeadlockingThread $ ThreadId tid
+      BlockedOnForeignCall{}  -> error "not implemented yet"
+      BlockedOnRead{}         -> pure ()
+      BlockedOnWrite{}        -> pure ()
+      BlockedOnDelay{}        -> pure ()
 
 ---------------------------
 -- handle output facts
@@ -154,13 +192,13 @@ addReferenceFacts prog StgState{..} = do
 readbackDeadData :: Souffle.Handle ExtStgGC -> SouffleM RefSet
 readbackDeadData prog = do
   dead :: [Dead] <- Souffle.getFacts prog
-  foldM collectDead emptyRefSet dead
+  foldM collectGCSymbol emptyRefSet dead
 -}
 
-collectDead :: RefSet -> Dead -> SouffleM RefSet
-collectDead dd@RefSet{..} (Dead sym) = do
+collectGCSymbol :: RefSet -> GCSymbol -> SouffleM RefSet
+collectGCSymbol dd@RefSet{..} sym = do
   -- HINT: decode datalog value
-  let (namespace, idx) = decodeRef $ GCSymbol sym
+  let (namespace, idx) = decodeRef sym
   pure $ case namespace of
     NS_Array              -> dd {rsArrays             = IntSet.insert idx rsArrays}
     NS_ArrayArray         -> dd {rsArrayArrays        = IntSet.insert idx rsArrayArrays}
@@ -176,16 +214,22 @@ collectDead dd@RefSet{..} (Dead sym) = do
     NS_StableName         -> dd {rsStableNames        = IntSet.insert idx rsStableNames}
     NS_WeakPointer        -> dd {rsWeakPointers       = IntSet.insert idx rsWeakPointers}
     NS_StablePointer      -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
+    NS_Thread             -> dd {rsThreads            = IntSet.insert idx rsThreads}
     _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
 
 readbackLiveData :: FilePath -> Bool -> SouffleM RefSet
 readbackLiveData factDir isQuiet = do
   liveSet <- liftIO $ loadStringSet isQuiet (factDir </> "Live.csv")
-  foldM (\dd sym -> collectDead dd (Dead sym)) emptyRefSet . map unGCSymbol $ Set.toList liveSet
+  foldM (\dd sym -> collectGCSymbol dd sym) emptyRefSet $ Set.toList liveSet
+
+readbackDeadlockingThreadData :: FilePath -> Bool -> SouffleM IntSet
+readbackDeadlockingThreadData factDir isQuiet = do
+  deadlockingSet <- liftIO $ loadStringSet isQuiet (factDir </> "DeadlockingThread.csv")
+  rsThreads <$> foldM (\dd sym -> collectGCSymbol dd sym) emptyRefSet (Set.toList deadlockingSet)
 
 loadStringSet :: Bool -> String -> IO (Set GCSymbol)
 loadStringSet isQuiet factPath = do
   absFactPath <- makeAbsolute factPath
   unless isQuiet $ do
     putStrLn $ "loading: " ++ show absFactPath
-  Set.fromList . map GCSymbol . lines <$> readFile absFactPath
+  Set.fromList . map GCSymbol . BS8.lines <$> BS8.readFile absFactPath

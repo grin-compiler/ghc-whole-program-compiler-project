@@ -4,6 +4,8 @@ module Stg.Interpreter.GC.GCRef where
 import Data.Maybe
 import Control.Monad.State
 import Foreign.Ptr
+import qualified Data.IntSet as IntSet
+import qualified Data.ByteString.Char8 as BS8
 
 import Language.Souffle.Compiled (SouffleM)
 
@@ -49,11 +51,13 @@ instance VisitGCRef ThreadState where
   visitGCRef action ThreadState{..} = do
     visitGCRef action tsCurrentResult
     visitGCRef action tsStack
-    visitGCRef action tsActiveTLog
-    visitGCRef action tsTLogStack
-    visitGCRef action tsStatus
-    visitGCRef action $ map snd tsBlockedExceptions
-
+    --visitGCRef action tsActiveTLog  -- not GC related
+    --visitGCRef action tsTLogStack   -- not GC related
+    --visitGCRef action tsStatus      -- not GC related
+    forM_ tsBlockedExceptions $ \(throwerTid, ex) -> do
+      visitGCRef action $ ThreadId throwerTid
+      visitGCRef action ex
+{-
 instance VisitGCRef ThreadStatus where
   visitGCRef action = \case
     ThreadRunning   -> pure ()
@@ -76,7 +80,7 @@ instance VisitGCRef TLogEntry where
   visitGCRef action TLogEntry{..} = do
     action tleObservedGlobalValue
     action tleCurrentLocalValue
-
+-}
 instance VisitGCRef WeakPtrDescriptor where
   -- NOTE: the value is not tracked by the GC
   visitGCRef action WeakPtrDescriptor{..} = do
@@ -91,10 +95,14 @@ instance VisitGCRef WeakPtrDescriptor where
       visitGCRef action ma2
 
 instance VisitGCRef MVarDescriptor where
-  visitGCRef action MVarDescriptor{..} = visitGCRef action mvdValue
+  visitGCRef action MVarDescriptor{..} = do
+    visitGCRef action mvdValue
+    visitGCRef action $ map ThreadId mvdQueue
 
 instance VisitGCRef TVarDescriptor where
-  visitGCRef action TVarDescriptor{..} = visitGCRef action tvdValue
+  visitGCRef action TVarDescriptor{..} = do
+    visitGCRef action tvdValue
+    visitGCRef action $ map ThreadId $ IntSet.toList tvdQueue
 
 -- datalog ref value encoding:
 data RefNamespace
@@ -112,17 +120,26 @@ data RefNamespace
   | NS_StableName
   | NS_StablePointer
   | NS_WeakPointer
+  | NS_Thread
   deriving (Show, Read)
 
 encodeRef :: Int -> RefNamespace -> GCSymbol
-encodeRef i ns = GCSymbol $ show (ns, i)
+encodeRef i ns = GCSymbol $ BS8.pack $ show (ns, i)
 
 decodeRef :: GCSymbol -> (RefNamespace, Int)
-decodeRef = read . unGCSymbol
+decodeRef = read . BS8.unpack . unGCSymbol
 
 visitAtom :: Atom -> (GCSymbol -> SouffleM ()) -> SouffleM ()
 visitAtom atom action = case atom of
   HeapPtr i           -> action $ encodeRef i NS_HeapPtr
+  Literal{}           -> pure ()
+  Void                -> pure ()
+  PtrAtom (StablePtr i) _ -> action $ encodeRef i NS_StablePointer -- HINT: for debug purposes (track usage) keep this reference
+  PtrAtom{}           -> pure ()
+  IntAtom{}           -> pure ()
+  WordAtom{}          -> pure ()
+  FloatAtom{}         -> pure ()
+  DoubleAtom{}        -> pure ()
   MVar i              -> action $ encodeRef i NS_MVar
   MutVar i            -> action $ encodeRef i NS_MutVar
   TVar i              -> action $ encodeRef i NS_TVar
@@ -136,8 +153,11 @@ visitAtom atom action = case atom of
   MutableByteArray i  -> action $ encodeRef (baId i) NS_MutableByteArray
   WeakPointer i       -> action $ encodeRef i NS_WeakPointer
   StableName i        -> action $ encodeRef i NS_StableName
-  PtrAtom (StablePtr i) _ -> action $ encodeRef i NS_StablePointer -- HINT: for debug purposes (track usage) keep this reference
-  _                   -> pure ()
+  ThreadId i          -> action $ encodeRef i NS_Thread
+  LiftedUndefined{}   -> pure ()
+  Rubbish{}           -> pure ()
+  Unbinded{}          -> pure ()
+  _                   -> error $ "internal error - incomplete pattern: " ++ show atom
 
 arrIdxToRef :: ArrIdx -> GCSymbol
 arrIdxToRef = \case

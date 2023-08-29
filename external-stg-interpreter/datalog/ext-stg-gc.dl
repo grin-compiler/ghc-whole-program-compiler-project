@@ -3,25 +3,53 @@
 
 .decl Reference(from : symbol, to : symbol)
 .input Reference
-.output Reference
+//.output Reference
 
 .decl GCRoot(val : symbol)
 .input GCRoot
-.output GCRoot
+//.output GCRoot
 
 // output
 
 .decl Live(val : symbol)
 .output Live
 
+/*
+  liveness is detected in two steps to support thread deadlock detection:
+    step 0: reachability from gc roots, to detect deadlocked threads ; partial liveness result
+    step 1: mark deadlocked threads as live, because they will be waken up with an exception ; complete liveness result
+*/
+
 // traversal
+.decl LiveStep0(val : symbol)
 
-Live(ref) :- GCRoot(ref).
+LiveStep0(ref) :- GCRoot(ref).
 
+LiveStep0(to) :-
+  LiveStep0(from),
+  Reference(from, to).
+
+// support for deadlock detection: BlockedIndefinitelyOnMVar or BlockedIndefinitelyOnSTM
+
+.decl MaybeDeadlockingThread(threadId : symbol)
+.input MaybeDeadlockingThread
+//.output MaybeDeadlockingThread
+
+.decl DeadlockingThread(threadId : symbol)
+.output DeadlockingThread
+
+DeadlockingThread(tid) :-
+  MaybeDeadlockingThread(tid),
+  !LiveStep0(tid).
+
+Live(tid) :- DeadlockingThread(tid).
+Live(ref) :- LiveStep0(ref).
 Live(to) :-
   Live(from),
   Reference(from, to).
 
+
+/*
 .decl All(val : symbol)
 
 All(from),
@@ -38,6 +66,7 @@ Dead(val) :-
   All(val),
   !Live(val).
 
+
 // the inverse of the reference relation, but only for live values
 .decl LiveReferredBy(to : symbol, from : symbol)
 .output LiveReferredBy
@@ -46,3 +75,4 @@ LiveReferredBy(to, from) :-
   Reference(from, to),
   Live(from),
   Live(to).
+*/
