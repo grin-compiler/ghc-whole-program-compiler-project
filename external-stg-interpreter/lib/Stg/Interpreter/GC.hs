@@ -15,6 +15,7 @@ import Stg.Syntax
 import Stg.Interpreter.Debug (exportCallGraph)
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.LiveDataAnalysis
+import Stg.Interpreter.GC.DeadlockAnalysis
 import qualified Stg.Interpreter.PrimOp.WeakPointer as PrimWeakPointer
 
 import Stg.Interpreter.GC.RetainerAnalysis
@@ -32,7 +33,7 @@ checkGC localGCRoots = do
   t0 <- liftIO getCurrentTime
   requestMajorGC <- gets ssRequestMajorGC
   let
-   gcThreshold    = 85000000 -- wims tests pass
+   gcThreshold    = 30000000 -- wims tests pass
    -- gcThreshold = 3000000 -- wims tests fail? yes
    timeTrigger    = False -- t0 `diffUTCTime` lastGCTime > 20
   when (not gcIsRunning && (nextAddr - lastGCAddr > gcThreshold || requestMajorGC || timeTrigger)) $ do
@@ -78,7 +79,7 @@ postGCReport = do
 analysisLoop :: MVar ([Atom], StgState) -> MVar RefSet -> IO ()
 analysisLoop gcIn gcOut = do
   (localGCRoots, stgState) <- takeMVar gcIn
-  rsData <- runLiveDataAnalysis localGCRoots stgState
+  (rsData, _deadlockedThreads) <- runLiveDataAnalysis localGCRoots stgState
   unless (ssIsQuiet stgState) $ do
     reportRemovedData stgState rsData
     reportAddressCounters stgState
@@ -123,17 +124,19 @@ runGCSync :: [Atom] -> M ()
 runGCSync localGCRoots = do
   stgState <- get
   mylog $ "[GC] - start, cycle: " ++ show (ssGCCounter stgState)
-  rsData <- liftIO $ runLiveDataAnalysis localGCRoots stgState
-  put $ (pruneStgState stgState rsData) {ssGCIsRunning = False}
+  (liveSet, deadlockedThreads) <- liftIO $ runLiveDataAnalysis localGCRoots stgState
+  validateGCThreadResult liveSet deadlockedThreads
+  put $ (pruneStgState stgState liveSet) {ssGCIsRunning = False}
   mylog $ "[GC] - finished, cycle: " ++ show (ssGCCounter stgState)
   promptM_ $ liftIO $ reportAddressCounters stgState
   reportDeletedCode stgState
-  finalizeDeadWeakPointers (rsWeakPointers rsData)
+  handleDeadlockedThreads deadlockedThreads
+  finalizeDeadWeakPointers (rsWeakPointers liveSet)
   loadRetainerDb
   isQuiet <- gets ssIsQuiet
   unless isQuiet $ do
     liftIO $ do
-      reportRemovedData stgState rsData
+      reportRemovedData stgState liveSet
       reportAddressCounters stgState
     postGCReport
 

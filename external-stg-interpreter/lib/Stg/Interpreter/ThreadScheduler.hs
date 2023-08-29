@@ -15,7 +15,7 @@ import Stg.Interpreter.Base
 import Stg.Interpreter.IOManager
 import qualified Stg.Interpreter.Debugger as Debugger
 import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
-
+import qualified Stg.Interpreter.GC as GC
 runScheduler :: [Atom] -> ScheduleReason -> M [Atom]
 runScheduler result sr = do
   --debugAsyncExceptions
@@ -259,25 +259,34 @@ waitAndScheduleBlockedThreads = do
 
 stopIfThereIsNoRunnableThread :: M ()
 stopIfThereIsNoRunnableThread = do
-  -- check if there is anything to run
-  tsList <- gets $ IntMap.toList . ssThreads
-  let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
-      sleepingThreads = [tid | (tid, ts) <- tsList, canWakeUp $ tsStatus ts]
-      canWakeUp = \case
-        ThreadBlocked BlockedOnDelay{}  -> True
-        ThreadBlocked BlockedOnRead{}   -> True
-        ThreadBlocked BlockedOnWrite{}  -> True
-        _ -> False
-  when (null runnableThreads && null sleepingThreads) $ do
-    --reportThreads
-    liftIO $ do
-      putStrLn $ "[stopIfThereIsNoRunnableThread] No runnable threads, STOP!"
-      putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: "
-      forM_ tsList $ \(tid, ts) -> do
-        putStrLn $ show (tid, tsStatus ts, tsBlockExceptions ts, tsInterruptible ts, tsBlockedExceptions ts, tsLabel ts)
-    dumpStgState
-    modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
-    Debugger.checkBreakpoint $ BkpCustom "thread-scheduler"
+  let checkOutOfRunnables :: M Bool
+      checkOutOfRunnables = do
+        -- check if there is anything to run
+        tsList <- gets $ IntMap.toList . ssThreads
+        let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
+            sleepingThreads = [tid | (tid, ts) <- tsList, canWakeUp $ tsStatus ts]
+            canWakeUp = \case
+              ThreadBlocked BlockedOnDelay{}  -> True
+              ThreadBlocked BlockedOnRead{}   -> True
+              ThreadBlocked BlockedOnWrite{}  -> True
+              _ -> False
+        pure (null runnableThreads && null sleepingThreads)
+  noRunnable0 <- checkOutOfRunnables
+  when noRunnable0 $ do
+    GC.runGC [] -- will run deadlock detection
+    noRunnable1 <- checkOutOfRunnables
+    when noRunnable1 $ do
+      --reportThreads
+      tsList <- gets $ IntMap.toList . ssThreads
+      liftIO $ do
+        putStrLn $ "[stopIfThereIsNoRunnableThread] No runnable threads, STOP!"
+        putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: "
+        forM_ tsList $ \(tid, ts) -> do
+          putStrLn $ show (tid, tsStatus ts, tsBlockExceptions ts, tsInterruptible ts, tsBlockedExceptions ts, tsLabel ts)
+        putStrLn $ "[stopIfThereIsNoRunnableThread] - run GC to detect deadlocks"
+      dumpStgState
+      modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+      Debugger.checkBreakpoint $ BkpCustom "thread-scheduler"
 
 {-
   IDEA:
