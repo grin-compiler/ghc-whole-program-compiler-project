@@ -17,7 +17,7 @@
 /*
   liveness is detected in two steps to support thread deadlock detection:
     step 0: reachability from gc roots, to detect deadlocked threads ; partial liveness result
-    step 1: mark deadlocked threads as live, because they will be waken up with an exception ; complete liveness result
+    step 1: mark deadlocked threads as live, because they will be woken up with an exception ; complete liveness result
 */
 
 // traversal

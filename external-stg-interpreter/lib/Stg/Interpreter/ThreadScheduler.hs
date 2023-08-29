@@ -283,7 +283,6 @@ stopIfThereIsNoRunnableThread = do
         putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: "
         forM_ tsList $ \(tid, ts) -> do
           putStrLn $ show (tid, tsStatus ts, tsBlockExceptions ts, tsInterruptible ts, tsBlockedExceptions ts, tsLabel ts)
-        putStrLn $ "[stopIfThereIsNoRunnableThread] - run GC to detect deadlocks"
       dumpStgState
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
       Debugger.checkBreakpoint $ BkpCustom "thread-scheduler"
