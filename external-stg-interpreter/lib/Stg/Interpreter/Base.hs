@@ -335,6 +335,7 @@ data StgState
   = StgState
   { ssHeap                :: !Heap
   , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
+  , ssDynamicHeapStart    :: !Int
 
   -- GC
   , ssLastGCTime          :: !UTCTime
@@ -344,6 +345,7 @@ data StgState
   , ssGCIsRunning         :: Bool
   , ssGCCounter           :: Int
   , ssRequestMajorGC      :: Bool
+  , ssCAFSet              :: IntSet
 
   -- let-no-escape support
   , ssTotalLNECount       :: !Int
@@ -412,7 +414,6 @@ data StgState
   , ssExecutedPrimOps     :: !(Set Name)
   , ssExecutedFFI         :: !(Set ForeignCall)
   , ssExecutedPrimCalls   :: !(Set PrimCall)
-  , ssHeapStartAddress    :: !Int
   , ssClosureCallCounter  :: !Int
   , ssPrimOpTrace         :: !Bool
 
@@ -475,6 +476,7 @@ emptyStgState :: UTCTime
 emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSettings gcIn gcOut = StgState
   { ssHeap                = mempty
   , ssStaticGlobalEnv     = mempty
+  , ssDynamicHeapStart    = 0
 
   -- GC
   , ssLastGCTime          = now
@@ -484,6 +486,7 @@ emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSetti
   , ssGCIsRunning         = False
   , ssGCCounter           = 0
   , ssRequestMajorGC      = False
+  , ssCAFSet              = IntSet.empty
 
   -- let-no-escape support
   , ssTotalLNECount       = 0
@@ -547,7 +550,6 @@ emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSetti
   , ssExecutedPrimOps     = Set.empty
   , ssExecutedFFI         = Set.empty
   , ssExecutedPrimCalls   = Set.empty
-  , ssHeapStartAddress    = 0
   , ssClosureCallCounter  = 0
   , ssPrimOpTrace         = False
 
@@ -1420,7 +1422,7 @@ showProgramPoint = \case
 
 dumpStgState :: M ()
 dumpStgState = do
-  firstHeapAddress <- gets ssHeapStartAddress
+  firstHeapAddress <- gets ssDynamicHeapStart
   stgState0 <- get
   let stgState1 = stgState0
         { ssHeap            = IntMap.withoutKeys (ssHeap stgState0) (IntSet.fromList [0..firstHeapAddress-1])

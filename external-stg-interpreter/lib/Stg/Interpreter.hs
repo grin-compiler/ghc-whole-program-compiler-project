@@ -22,6 +22,7 @@ import qualified Data.Map.Strict as StrictMap
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.IntMap as IntMap
+import qualified Data.IntSet as IntSet
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Internal as BS
 import System.Posix.DynamicLinker
@@ -484,6 +485,9 @@ evalStackContinuation result = \case
     -> do
       o <- readHeap src
       store dstAddr o
+      dynamicHeapStartAddr <- gets ssDynamicHeapStart
+      when (dstAddr < dynamicHeapStartAddr) $ do
+        modify' $ \s@StgState{..} -> s {ssCAFSet = IntSet.insert dstAddr ssCAFSet}
       pure result
 
   -- HINT: STG IR uses 'case' expressions to chain instructions with strict evaluation
@@ -904,7 +908,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
               []        -> error "main_:Main.main not found"
               _         -> error "multiple main_:Main.main have found"
         limit <- gets ssNextHeapAddr
-        modify' $ \s@StgState{..} -> s {ssHeapStartAddress = limit}
+        modify' $ \s@StgState{..} -> s {ssDynamicHeapStart = limit}
         modify' $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
 
         -- TODO: check how it is done in the native RTS: call hs_main
@@ -961,7 +965,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
     freeResources
 
     unless isQuiet $ do
-      putStrLn $ "ssHeapStartAddress: " ++ show ssHeapStartAddress
+      putStrLn $ "ssDynamicHeapStart: " ++ show ssDynamicHeapStart
       putStrLn $ "ssTotalLNECount: " ++ show ssTotalLNECount
       putStrLn $ "ssClosureCallCounter: " ++ show ssClosureCallCounter
       putStrLn $ "executed closure id count: " ++ show (Set.size ssExecutedClosureIds)

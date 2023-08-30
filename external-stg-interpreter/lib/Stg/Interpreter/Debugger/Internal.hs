@@ -152,7 +152,7 @@ dbgCommands =
   , ( ["report"]
     , "report some internal data"
     , wrapWithDbgOut $ \_ -> do
-        heapStart <- gets ssHeapStartAddress
+        heapStart <- gets ssDynamicHeapStart
         liftIO $ do
           putStrLn $ "heap start address: " ++ show heapStart
     )

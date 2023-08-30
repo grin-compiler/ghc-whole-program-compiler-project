@@ -101,7 +101,7 @@ showMarked = do
 
 showDebug :: EvalOnNewThread -> M ()
 showDebug evalOnNewThread = do
-  limit <- gets ssHeapStartAddress
+  limit <- gets ssDynamicHeapStart
   liftIO $ putStrLn "\n-------------------------------------------\n"
   liftIO $ putStrLn "Used primops and foreign functions:"
   liftIO $ putStrLn "\n-------------------------------------------\n"

@@ -65,7 +65,7 @@ runGC = runGCSync
 postGCReport :: M ()
 postGCReport = do
   heap <- gets ssHeap
-  heapStart <- gets ssHeapStartAddress
+  heapStart <- gets ssDynamicHeapStart
   let (staticHeap, dynHeap) = IntMap.split (heapStart - 1) heap
       dynHeapSize = IntMap.size dynHeap
       staticHeapSize = IntMap.size staticHeap
@@ -143,7 +143,7 @@ runGCSync localGCRoots = do
 reportDeletedCode :: StgState -> M ()
 reportDeletedCode old = do
   new <- get
-  firstHeapAddress <- gets ssHeapStartAddress
+  firstHeapAddress <- gets ssDynamicHeapStart
   let f = IntSet.filter (< firstHeapAddress) . IntMap.keysSet . ssHeap
       newCodeKeys = f new
       oldCodeKeys = f old
@@ -192,7 +192,7 @@ pruneStgStateDead stgState@StgState{..} RefSet{..} = stgState
 
 pruneStgStateLive :: StgState -> RefSet -> StgState
 pruneStgStateLive stgState@StgState{..} RefSet{..} = stgState
-  { ssHeap                = IntMap.restrictKeys ssHeap                rsHeap
+  { ssHeap                = IntMap.filterWithKey (\k _ -> k < ssDynamicHeapStart || k `IntSet.member` rsHeap) ssHeap
   , ssOrigin              = IntMap.restrictKeys ssOrigin              rsHeap
 {-
   -- TODO: run weak pointer finalizers
@@ -268,7 +268,7 @@ reportRemovedData StgState{..} RefSet{..} = do
 lifetimeAnalysis :: M ()
 lifetimeAnalysis = do
   heap <- gets ssHeap
-  heapStart <- gets ssHeapStartAddress
+  heapStart <- gets ssDynamicHeapStart
   let age = 600000 -- heapStart - 1
   let (_, dynHeap) = IntMap.split age heap
       n = 100

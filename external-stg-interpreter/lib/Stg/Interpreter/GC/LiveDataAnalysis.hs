@@ -104,8 +104,8 @@ addGCRootFacts prog StgState{..} localGCRoots = do
   {-
     gc roots:
       - stable pointer indices
-      - stack indices
-      - static env
+      - threads state (result + stack)
+      - cafs
       - local
       - current closure ; Q: is it an extra? A: yes, it belongs to the local roots
   -}
@@ -116,8 +116,8 @@ addGCRootFacts prog StgState{..} localGCRoots = do
   -- stable pointer values
   visitGCRef addGCRoot [PtrAtom (StablePtr idx) (intPtrToPtr $ IntPtr idx) | idx <- IntMap.keys ssStablePointers]
 
-  -- static global env
-  visitGCRef addGCRoot ssStaticGlobalEnv
+  -- CAFs
+  visitGCRef addGCRoot $ map HeapPtr $ IntSet.toList ssCAFSet
 
   -- stack continuations of live threads
   forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of
@@ -146,7 +146,10 @@ addReferenceFacts prog StgState{..} = do
         forM_ l $ \(i, v) -> visitGCRef (addReference (encodeRef i ns)) v
 
   -- HINT: these types are tracked by GC
-  addRefs ssHeap                NS_HeapPtr
+  let dynamicHeap = IntMap.filterWithKey (\a _ -> a >= ssDynamicHeapStart) ssHeap
+      cafHeap     = IntMap.restrictKeys ssHeap ssCAFSet
+  addRefs dynamicHeap           NS_HeapPtr
+  addRefs cafHeap               NS_HeapPtr
   addRefs ssWeakPointers        NS_WeakPointer
   addRefs ssTVars               NS_TVar
   addRefs ssMVars               NS_MVar

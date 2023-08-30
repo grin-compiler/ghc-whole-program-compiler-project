@@ -246,8 +246,8 @@ exportStgStateM stgState@StgState{..} = do
       forM_ (zip (genAddressState s) (genAddressState e)) $ \((start_ns, start_value), (end_ns, end_value)) -> do
         addFact "Region" [N start_name, N end_name, I idx, S start_ns, I start_value, I end_value]
 
-  -- ssHeapStartAddress
-  addFact "HeapStartAddress" [I ssHeapStartAddress]
+  -- ssDynamicHeapStart
+  addFact "HeapStartAddress" [I ssDynamicHeapStart]
 
   -- current address state
   forM_ (genAddressState $ convertAddressState stgState) $ \(ns, value) -> do
