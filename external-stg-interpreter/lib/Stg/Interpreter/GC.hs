@@ -158,9 +158,12 @@ finalizeDeadWeakPointers :: IntSet -> M ()
 finalizeDeadWeakPointers rsWeaks = do
   let deadWeaks = IntSet.toList rsWeaks
   wdescs <- mapM lookupWeakPointerDescriptor deadWeaks
+  {-
   liftIO $ do
     putStrLn $ " * GC - run finalizers for dead weak pointers: " ++ show rsWeaks
     mapM_ print wdescs
+  -}
+  pure ()
   -- TODO: implement it right
   --forM_ deadWeaks PrimWeakPointer.finalizeWeak
 

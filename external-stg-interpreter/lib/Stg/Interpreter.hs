@@ -385,7 +385,7 @@ data ThreadStatus
 
 killAllThreads :: M ()
 killAllThreads = do
-  liftIO $ putStrLn "[estgi] - killAllThreads"
+  mylog "[estgi] - killAllThreads"
   -- TODO: check if there are running threads
   tsList <- gets $ IntMap.toList . ssThreads
   let runnableThreads = [tid | (tid, ts) <- tsList, tsStatus ts == ThreadRunning]
@@ -419,7 +419,7 @@ evalOnThread isMainThread setupAction = do
           True  -> loop resultOut -- HINT: the new scheduling is ready
           False -> do
             when isMainThread $ do
-              liftIO $ putStrLn "[estgi] - main hs thread finished"
+              mylog "[estgi] - main hs thread finished"
               killAllThreads
             pure tsCurrentResult
   loop result0

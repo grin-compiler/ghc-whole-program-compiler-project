@@ -1470,9 +1470,12 @@ traceLog msg = do
       liftIO $ hPutStrLn thWholeProgramPath $ maybe "" BS8.unpack (tsLabel ts) ++ "\t" ++  show tid ++ "\t" ++ msg
 
 mylog :: String -> M ()
+mylog _ = pure ()
+{-
 mylog msg = do
   ctid <- gets ssCurrentThreadId
   pp <- gets ssCurrentProgramPoint
   liftIO $ do
     BS8.putStrLn . BS8.pack $ msg ++ " " ++ show pp ++ " " ++ show ctid
     hFlush stdout
+-}
