@@ -30,7 +30,7 @@ validateGCThreadResult RefSet{..} deadlockedThreadIds = do
       BlockedOnMVar{}         -> assertLiveOrDeadlocked tid
       BlockedOnMVarRead{}     -> assertLiveOrDeadlocked tid
       BlockedOnBlackHole{}    -> error "not implemented yet"
-      BlockedOnThrowAsyncEx{} -> error "TODO: what is this case? figure it out"
+      BlockedOnThrowAsyncEx{} -> assertLiveOrDeadlocked tid
       BlockedOnSTM{}          -> assertLiveOrDeadlocked tid
       BlockedOnForeignCall{}  -> error "not implemented yet"
       BlockedOnRead{}         -> assertLiveThread tid
@@ -53,7 +53,7 @@ handleDeadlockedThreads deadlockedThreadIds = do
         BlockedOnMVar{}         -> raiseEx tid rtsBlockedIndefinitelyOnMVar
         BlockedOnMVarRead{}     -> raiseEx tid rtsBlockedIndefinitelyOnMVar
         BlockedOnBlackHole{}    -> error "not implemented yet"
-        BlockedOnThrowAsyncEx{} -> error "TODO: what is this case? figure it out"
+        BlockedOnThrowAsyncEx{} -> pure () -- HINT: it might be blocked on other deadlocked thread
         BlockedOnSTM{}          -> raiseEx tid rtsBlockedIndefinitelyOnSTM
         BlockedOnForeignCall{}  -> error "not implemented yet"
         s -> error $ "internal error - invalid thread state: " ++ show s

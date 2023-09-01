@@ -97,8 +97,8 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
 
 addGCRootFacts :: Souffle.Handle ExtStgGC -> StgState -> [Atom] -> SouffleM ()
 addGCRootFacts prog StgState{..} localGCRoots = do
-  let addGCRoot :: Atom -> SouffleM ()
-      addGCRoot a = visitAtom a $ \i -> Souffle.addFact prog $ GCRoot $ BS8.unpack $ unGCSymbol i
+  let addGCRoot :: GCSymbol -> SouffleM ()
+      addGCRoot s = Souffle.addFact prog $ GCRoot $ BS8.unpack $ unGCSymbol s
 
   -- HINT: the following can be GC roots
   {-
@@ -123,7 +123,7 @@ addGCRootFacts prog StgState{..} localGCRoots = do
   forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of
     ThreadFinished  -> pure ()
     ThreadDied      -> pure ()
-    ThreadRunning   -> visitGCRef addGCRoot $ ThreadId tid
+    ThreadRunning   -> addGCRoot $ encodeRef tid NS_Thread
     ThreadBlocked r -> case r of
       BlockedOnMVar{}         -> pure () -- will be referred by the mvar wait queue
       BlockedOnMVarRead{}     -> pure () -- will be referred by the mvar wait queue
@@ -131,14 +131,14 @@ addGCRootFacts prog StgState{..} localGCRoots = do
       BlockedOnThrowAsyncEx{} -> pure () -- will be referred by the target thread's blocked exceptions queue
       BlockedOnSTM{}          -> pure () -- will be referred by the tvar wait queue
       BlockedOnForeignCall{}  -> error "not implemented yet"
-      BlockedOnRead{}         -> visitGCRef addGCRoot $ ThreadId tid
-      BlockedOnWrite{}        -> visitGCRef addGCRoot $ ThreadId tid
-      BlockedOnDelay{}        -> visitGCRef addGCRoot $ ThreadId tid
+      BlockedOnRead{}         -> addGCRoot $ encodeRef tid NS_Thread
+      BlockedOnWrite{}        -> addGCRoot $ encodeRef tid NS_Thread
+      BlockedOnDelay{}        -> addGCRoot $ encodeRef tid NS_Thread
 
 addReferenceFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
 addReferenceFacts prog StgState{..} = do
-  let addReference :: GCSymbol -> Atom -> SouffleM ()
-      addReference from a = visitAtom a $ \i -> Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from) (BS8.unpack $ unGCSymbol i)
+  let addReference :: GCSymbol -> GCSymbol -> SouffleM ()
+      addReference from i = Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from) (BS8.unpack $ unGCSymbol i)
 
       addRefs :: VisitGCRef a => IntMap a -> RefNamespace -> SouffleM ()
       addRefs im ns = do
@@ -169,8 +169,8 @@ addReferenceFacts prog StgState{..} = do
 
 addMaybeDeadlockingThreadFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
 addMaybeDeadlockingThreadFacts prog StgState{..} = do
-  let addMaybeDeadlockingThread :: Atom -> SouffleM ()
-      addMaybeDeadlockingThread a = visitAtom a $ \i -> Souffle.addFact prog $ MaybeDeadlockingThread $ BS8.unpack $ unGCSymbol i
+  let addMaybeDeadlockingThread :: GCSymbol -> SouffleM ()
+      addMaybeDeadlockingThread i = Souffle.addFact prog $ MaybeDeadlockingThread $ BS8.unpack $ unGCSymbol i
 
   -- potentially deadlocking threads to check
   forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of
@@ -178,11 +178,11 @@ addMaybeDeadlockingThreadFacts prog StgState{..} = do
     ThreadDied      -> pure ()
     ThreadRunning   -> pure ()
     ThreadBlocked r -> case r of
-      BlockedOnMVar{}         -> addMaybeDeadlockingThread $ ThreadId tid
-      BlockedOnMVarRead{}     -> addMaybeDeadlockingThread $ ThreadId tid
+      BlockedOnMVar{}         -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
+      BlockedOnMVarRead{}     -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
       BlockedOnBlackHole{}    -> error "not implemented yet"
-      BlockedOnThrowAsyncEx{} -> error "TODO: what is this case? figure it out"
-      BlockedOnSTM{}          -> addMaybeDeadlockingThread $ ThreadId tid
+      BlockedOnThrowAsyncEx{} -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
+      BlockedOnSTM{}          -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
       BlockedOnForeignCall{}  -> error "not implemented yet"
       BlockedOnRead{}         -> pure ()
       BlockedOnWrite{}        -> pure ()

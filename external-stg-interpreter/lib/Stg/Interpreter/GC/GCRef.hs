@@ -14,10 +14,10 @@ import Stg.Interpreter.Base
 -- HINT: populate datalog database during a traversal
 
 class VisitGCRef a where
-  visitGCRef :: (Atom -> SouffleM ()) -> a -> SouffleM ()
+  visitGCRef :: (GCSymbol -> SouffleM ()) -> a -> SouffleM ()
 
 instance VisitGCRef Atom where
-  visitGCRef action a = action a
+  visitGCRef action a = visitAtom a action
 
 instance (Foldable t, VisitGCRef a) => VisitGCRef (t a) where
   visitGCRef action a = mapM_ (visitGCRef action) a
@@ -28,23 +28,23 @@ instance VisitGCRef HeapObject where
     Closure{..}       -> visitGCRef action hoCloArgs >> visitGCRef action hoEnv
     BlackHole _ o     -> pure ()
     ApStack{..}       -> visitGCRef action hoResult >> visitGCRef action hoStack
-    RaiseException ex -> action ex
+    RaiseException ex -> visitGCRef action ex
 
 instance VisitGCRef StackContinuation where
   visitGCRef action = \case
     CaseOf _ _ env _ _ _    -> visitGCRef action env
     Update addr             -> pure () -- action $ HeapPtr addr -- TODO/FIXME: this is not a GC root!
     Apply args              -> visitGCRef action args
-    Catch handler _ _       -> action handler
-    CatchRetry stm alt _ _  -> action stm >> action alt
-    CatchSTM stm handler    -> action stm >> action handler
+    Catch handler _ _       -> visitGCRef action handler
+    CatchRetry stm alt _ _  -> visitGCRef action stm >> visitGCRef action alt
+    CatchSTM stm handler    -> visitGCRef action stm >> visitGCRef action handler
     RestoreExMask{}         -> pure ()
     RunScheduler{}          -> pure ()
-    Atomically stmAction    -> action stmAction
-    AtomicallyOp stmAction  -> action stmAction
+    Atomically stmAction    -> visitGCRef action stmAction
+    AtomicallyOp stmAction  -> visitGCRef action stmAction
     DataToTagOp{}           -> pure ()
-    RaiseOp ex              -> action ex
-    KeepAlive value         -> action value
+    RaiseOp ex              -> visitGCRef action ex
+    KeepAlive value         -> visitGCRef action value
     DebugFrame{}            -> pure ()
 
 instance VisitGCRef ThreadState where
@@ -55,7 +55,7 @@ instance VisitGCRef ThreadState where
     --visitGCRef action tsTLogStack   -- not GC related
     --visitGCRef action tsStatus      -- not GC related
     forM_ tsBlockedExceptions $ \(throwerTid, ex) -> do
-      visitGCRef action $ ThreadId throwerTid
+      action $ encodeRef throwerTid NS_Thread
       visitGCRef action ex
 {-
 instance VisitGCRef ThreadStatus where
@@ -87,22 +87,22 @@ instance VisitGCRef WeakPtrDescriptor where
     ----------- temporarly track the value -- FIXME
     visitGCRef action wpdValue
     -----------
-    action wpdKey
+    visitGCRef action wpdKey
     visitGCRef action wpdFinalizer
     forM_ wpdCFinalizers $ \(a1, ma2, a3) -> do
-      action a1
-      action a3
+      visitGCRef action a1
+      visitGCRef action a3
       visitGCRef action ma2
 
 instance VisitGCRef MVarDescriptor where
   visitGCRef action MVarDescriptor{..} = do
     visitGCRef action mvdValue
-    visitGCRef action $ map ThreadId mvdQueue
+    forM_ mvdQueue $ \tid -> action $ encodeRef tid NS_Thread
 
 instance VisitGCRef TVarDescriptor where
   visitGCRef action TVarDescriptor{..} = do
     visitGCRef action tvdValue
-    visitGCRef action $ map ThreadId $ IntSet.toList tvdQueue
+    forM_ (IntSet.toList tvdQueue) $ \tid -> action $ encodeRef tid NS_Thread
 
 -- datalog ref value encoding:
 data RefNamespace
@@ -153,7 +153,7 @@ visitAtom atom action = case atom of
   MutableByteArray i  -> action $ encodeRef (baId i) NS_MutableByteArray
   WeakPointer i       -> action $ encodeRef i NS_WeakPointer
   StableName i        -> action $ encodeRef i NS_StableName
-  ThreadId i          -> action $ encodeRef i NS_Thread
+  ThreadId i          -> pure ()
   LiftedUndefined{}   -> pure ()
   Rubbish{}           -> pure ()
   Unbinded{}          -> pure ()
