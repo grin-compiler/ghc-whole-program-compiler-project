@@ -14,6 +14,7 @@ import Data.Maybe
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
 
 {-
   STM design notes
@@ -335,25 +336,31 @@ retrySTM = unwindStack where
           putStrLn $ "[STM] tid: " ++ show tid ++ " tlog: " ++ show tlog
           putStrLn $ "[STM] validateTLog: " ++ show isValid
 
-        if isValid
+        if (not isValid)
           then do
+            restartTransaction stmAction
+          else do
             promptM $ putStrLn $ "[STM] retry, block thread, tid: " ++ show tid
             tid <- gets ssCurrentThreadId
             ts <- getThreadState tid
             -- subscribe to wait queues
             let Just tlog = tsActiveTLog ts
-            when (IntMap.size tlog == 0) $ error "internal error: IntMap.sie tlog == 0 on BlockedOnSTM"
-            subscribeTVarWaitQueues tid tlog
-            -- suspend thread
-            updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnSTM tlog), tsActiveTLog = Just mempty})
-            -- Q: who will update the tsTLog after the wake up?
-            stackPush $ Atomically stmAction
-            stackPush $ Apply [Void]
-            stackPush $ RunScheduler SR_ThreadBlocked
-            pure [stmAction]
-
-          else do
-            restartTransaction stmAction
+            case IntMap.null tlog of
+              True -> do
+                -- HINT: the transaction log is empty, so there is no TVar to subscribe, therefore the transaction is blocked indefinitely
+                updateThreadState tid (ts {tsActiveTLog = Nothing})
+                Rts{..} <- gets ssRtsSupport
+                PrimConcurrency.raiseAsyncEx [] tid rtsBlockedIndefinitelyOnSTM
+                pure []
+              False -> do
+                subscribeTVarWaitQueues tid tlog
+                -- suspend thread
+                updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnSTM tlog), tsActiveTLog = Just mempty})
+                -- Q: who will update the tsTLog after the wake up?
+                stackPush $ Atomically stmAction
+                stackPush $ Apply [Void]
+                stackPush $ RunScheduler SR_ThreadBlocked
+                pure [stmAction]
 
       _ -> unwindStack -- HINT: discard stack frames
 
