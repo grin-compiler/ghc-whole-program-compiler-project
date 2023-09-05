@@ -7,7 +7,7 @@ index 81885ac6fb..17cd446607 100644
          self.rootdirs = []
  
 +        # Run only the runnable tests
-+        self.runnable_only = True
++        self.runnable_only = False
 +
          # Run these tests only (run all tests if empty)
          self.run_only_some_tests = False
@@ -40,10 +40,13 @@ index 8b58084921..188a31971b 100644
      stdout_arg = in_testdir(name, 'run.stdout')
      if opts.combined_output:
          stderr_arg = subprocess.STDOUT # type: Union[int, Path]
-@@ -1739,6 +1749,10 @@ def simple_run(name: TestName, way: WayName, prog: str, extra_run_opts: str) ->
+@@ -1739,6 +1749,13 @@ def simple_run(name: TestName, way: WayName, prog: str, extra_run_opts: str) ->
      # run the command
      exit_code = runCmd(cmd, stdin_arg, stdout_arg, stderr_arg, opts.run_timeout_multiplier)
  
++    # save test opts
++    in_testdir(name, 'run.opts').write_text(f'[("ignore_stdout",{opts.ignore_stdout}),("ignore_stderr",{opts.ignore_stderr})]')
++
 +    # save exit code
 +    in_testdir(name, 'run.exitcode').write_text(str(exit_code))
 +    in_testdir(name, 'expected.exitcode').write_text(str(opts.exit_code))

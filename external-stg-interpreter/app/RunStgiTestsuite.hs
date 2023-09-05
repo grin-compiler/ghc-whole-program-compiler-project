@@ -18,6 +18,7 @@ import System.Environment
 import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS8
 import Text.PrettyPrint.ANSI.Leijen hiding ((</>), (<$>))
@@ -110,11 +111,17 @@ runTestProcess path cmd args input = do
   errData <- BS8.readFile stderrPath
   pure (exitCode, outData, errData)
 
+readTestOpts :: FilePath -> IO (Bool, Bool)
+readTestOpts optsPath = do
+  opts <- Map.fromList . read <$> readFile optsPath
+  pure . fromJust $ (,) <$> Map.lookup "ignore_stdout" opts <*> Map.lookup "ignore_stderr" opts
+
 runTest :: Set FilePath -> FilePath -> IO TestResult
 runTest skipSet stderrPath = do
   let stdoutPath    = stderrPath -<.> ".stdout"
       stdinPath     = stderrPath -<.> ".stdin"
       argsPath      = stderrPath -<.> ".args"
+      optsPath      = stderrPath -<.> ".opts"
       exitcodePath  = stderrPath -<.> ".exitcode"
       testName      = takeFileName . dropExtension $ dropExtension stderrPath
       testDir       = takeDirectory stderrPath
@@ -145,6 +152,7 @@ runTest skipSet stderrPath = do
             False -> pure ""
             True  -> BS8.readFile stdinPath
 
+          (ignoreStdout, ignoreStderr) <- readTestOpts optsPath
           expectedStderr <- BS8.readFile stderrPath
           expectedStdout <- BS8.readFile stdoutPath
           expectedExitCode <- (read <$> readFile exitcodePath) >>= \case
@@ -161,7 +169,7 @@ runTest skipSet stderrPath = do
           case mResult of
             Nothing -> report $ Timeout ghcstgappPath
             Just (exitCode, out, err) -> do
-              if expectedExitCode == exitCode && expectedStdout == out && expectedStderr == err
+              if expectedExitCode == exitCode && (expectedStdout == out || ignoreStdout) && (expectedStderr == err || ignoreStderr)
                 then report $ OK ghcstgappPath
                 else report $ Fail ghcstgappPath (expectedExitCode, exitCode) (expectedStdout, out) (expectedStderr, err)
 
