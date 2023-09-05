@@ -3,11 +3,9 @@
 
 .decl Reference(from : symbol, to : symbol)
 .input Reference
-//.output Reference
 
 .decl GCRoot(val : symbol)
 .input GCRoot
-//.output GCRoot
 
 // output
 
@@ -33,7 +31,6 @@ LiveStep0(to) :-
 
 .decl MaybeDeadlockingThread(threadId : symbol)
 .input MaybeDeadlockingThread
-//.output MaybeDeadlockingThread
 
 .decl DeadlockingThread(threadId : symbol)
 .output DeadlockingThread
@@ -75,4 +72,11 @@ LiveReferredBy(to, from) :-
   Reference(from, to),
   Live(from),
   Live(to).
+*/
+
+/*
+// debug output
+.output Reference
+.output GCRoot
+.output MaybeDeadlockingThread
 */
