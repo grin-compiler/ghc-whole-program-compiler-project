@@ -152,6 +152,7 @@ wiredInClosures =
   , (":ext-stg",  ":ExtStg.RTS.Support",    "applyFun1Arg",                 \s cl -> s {rtsApplyFun1Arg               = cl})
   , (":ext-stg",  ":ExtStg.RTS.Support",    "tuple2Proj0",                  \s cl -> s {rtsTuple2Proj0                = cl})
   , ("base",      "Control.Exception.Base", "nestedAtomically",             \s cl -> s {rtsNestedAtomically           = cl})
+  , ("base",      "Control.Exception.Base", "nonTermination",               \s cl -> s {rtsNonTermination             = cl})
   , ("base",      "GHC.IO.Exception",       "blockedIndefinitelyOnMVar",    \s cl -> s {rtsBlockedIndefinitelyOnMVar  = cl})
   , ("base",      "GHC.IO.Exception",       "blockedIndefinitelyOnSTM",     \s cl -> s {rtsBlockedIndefinitelyOnSTM   = cl})
   ]
@@ -165,7 +166,6 @@ wiredInClosures =
   , ("base",      "GHC.IO.Exception",       "cannotCompactPinned",
   , ("base",      "GHC.IO.Exception",       "cannotCompactMutable",
   , ("base",      "Control.Exception.Base", "absentSumFieldError",
-  , ("base",      "Control.Exception.Base", "nonTermination",
   , ("base",      "GHC.Event.Thread",       "blockedOnBadFD",
   , ("base",      "GHC.Conc.Sync",          "runSparks",
   , ("base",      "GHC.Conc.IO",            "ensureIOManagerIsRunning",

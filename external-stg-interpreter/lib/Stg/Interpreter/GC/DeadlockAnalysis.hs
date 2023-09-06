@@ -29,7 +29,7 @@ validateGCThreadResult RefSet{..} deadlockedThreadIds = do
     ThreadBlocked r -> case r of
       BlockedOnMVar{}         -> assertLiveOrDeadlocked tid
       BlockedOnMVarRead{}     -> assertLiveOrDeadlocked tid
-      BlockedOnBlackHole{}    -> error "not implemented yet"
+      BlockedOnBlackHole{}    -> assertLiveOrDeadlocked tid
       BlockedOnThrowAsyncEx{} -> assertLiveOrDeadlocked tid
       BlockedOnSTM{}          -> assertLiveOrDeadlocked tid
       BlockedOnForeignCall{}  -> error "not implemented yet"
@@ -45,14 +45,21 @@ handleDeadlockedThreads deadlockedThreadIds = do
   Rts{..} <- gets ssRtsSupport
   let raiseEx targetTid exception = do
         PrimConcurrency.removeFromQueues targetTid
-        PrimConcurrency.raiseAsyncEx [] targetTid exception
-  forM_ (IntSet.toList deadlockedThreadIds) $ \tid -> do
+        targetTS <- getThreadState targetTid
+        PrimConcurrency.raiseAsyncEx (tsCurrentResult targetTS) targetTid exception
+  tsMap <- gets ssThreads
+  forM_ (reverse $ IntSet.toList deadlockedThreadIds) $ \tid -> do
     ts <- getThreadState tid
     case tsStatus ts of
+      ThreadRunning
+        -- HINT: during async excepion stack unwind, Update frames can wake up threads that were blocking on blackholes
+        | Just originalTS <- IntMap.lookup tid tsMap
+        , ThreadBlocked BlockedOnBlackHole{} <- tsStatus originalTS
+        -> pure ()
       ThreadBlocked r -> case r of
         BlockedOnMVar{}         -> raiseEx tid rtsBlockedIndefinitelyOnMVar
         BlockedOnMVarRead{}     -> raiseEx tid rtsBlockedIndefinitelyOnMVar
-        BlockedOnBlackHole{}    -> error "not implemented yet"
+        BlockedOnBlackHole{}    -> raiseEx tid rtsNonTermination
         BlockedOnThrowAsyncEx{} -> pure () -- HINT: it might be blocked on other deadlocked thread
         BlockedOnSTM{}          -> raiseEx tid rtsBlockedIndefinitelyOnSTM
         BlockedOnForeignCall{}  -> error "not implemented yet"
