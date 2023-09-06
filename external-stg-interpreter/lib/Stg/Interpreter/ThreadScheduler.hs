@@ -251,7 +251,7 @@ waitAndScheduleBlockedThreads = do
 
   if null blockedThreads
     then do
-      error "TODO: scheduler has n runnable thread to schedule" -- nothing to run, what to do??
+      error "TODO: scheduler has no runnable thread to schedule" -- nothing to run, what to do??
     else do
       handleBlockedDelayWait
       stopIfThereIsNoRunnableThread
