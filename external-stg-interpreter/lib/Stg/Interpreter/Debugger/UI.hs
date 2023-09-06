@@ -129,7 +129,7 @@ printHeapObject = \case
     printEnv hoEnv
     putStrLn $ "source location: " ++ (ppSrcSpan . binderDefLoc . unId $ hoName)
 
-  BlackHole _ ho -> do
+  BlackHole ho _ -> do
     putStrLn "BlackHole:"
     printHeapObject ho
     putStrLn ""

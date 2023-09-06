@@ -162,7 +162,8 @@ data HeapObject
     , hoCloArgs     :: [Atom]
     , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
     }
-  | BlackHole Int HeapObject
+  | BlackHole HeapObject [Int] -- original heap object, blocking queue of thread ids
+                               -- NOTE: each blackhole has exactly one corresponding thread and one update frame
   | ApStack                   -- HINT: needed for the async exceptions
     { hoResult      :: [Atom]
     , hoStack       :: [StackContinuation]
@@ -632,6 +633,7 @@ data Rts
   -- closures used by the GC deadlock detection
   , rtsBlockedIndefinitelyOnMVar  :: Atom -- (exception)
   , rtsBlockedIndefinitelyOnSTM   :: Atom -- (exception)
+  , rtsNonTermination             :: Atom -- (exception)
 
   -- rts helper custom closures
   , rtsApplyFun1Arg :: Atom
@@ -1156,7 +1158,7 @@ NOTE:
 data BlockReason
   = BlockedOnMVar         Int (Maybe Atom) -- mvar id, the value that need to put to mvar in case of blocking putMVar#, in case of takeMVar this is Nothing
   | BlockedOnMVarRead     Int       -- mvar id
-  | BlockedOnBlackHole
+  | BlockedOnBlackHole    Int       -- heap address
   | BlockedOnThrowAsyncEx Int       -- target thread id
   | BlockedOnSTM          TLog
   | BlockedOnForeignCall            -- RTS name: BlockedOnCCall
@@ -1445,7 +1447,7 @@ debugPrintHeapObject :: HeapObject -> String
 debugPrintHeapObject  = \case
   Con{..}           -> "Con: " ++ show (dcUniqueName $ unDC hoCon) ++ " " ++ show hoConArgs
   Closure{..}       -> "Clo: " ++ show hoName ++ " args: " ++ show hoCloArgs ++ " env: " ++ show (Map.size hoEnv) ++ " missing: " ++ show hoCloMissing
-  BlackHole t o     -> "BlackHole - tid: " ++ show t ++ " "  ++ debugPrintHeapObject o
+  BlackHole o _q    -> "BlackHole: " ++ debugPrintHeapObject o
   ApStack{}         -> "ApStack"
   RaiseException ex -> "RaiseException: " ++ show ex
 
@@ -1479,3 +1481,15 @@ mylog msg = do
     BS8.putStrLn . BS8.pack $ msg ++ " " ++ show pp ++ " " ++ show ctid
     hFlush stdout
 -}
+
+wakeupBlackHoleQueueThreads :: Int -> M ()
+wakeupBlackHoleQueueThreads addr = readHeap (HeapPtr addr) >>= \case
+  (BlackHole _ waitingThreads) -> do
+    -- wake up blocked threads
+    forM_ waitingThreads $ \waitingTid -> do
+      waitingTS <- getThreadState waitingTid
+      case tsStatus waitingTS of
+        ThreadBlocked (BlockedOnBlackHole dstAddr) -> do
+          updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
+        _ -> error $ "internal error - invalid thread status: " ++ show (tsStatus waitingTS)
+  x -> error $ "internal error - expected BlackHole, got: " ++ show x

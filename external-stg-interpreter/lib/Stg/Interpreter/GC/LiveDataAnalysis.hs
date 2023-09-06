@@ -127,7 +127,7 @@ addGCRootFacts prog StgState{..} localGCRoots = do
     ThreadBlocked r -> case r of
       BlockedOnMVar{}         -> pure () -- will be referred by the mvar wait queue
       BlockedOnMVarRead{}     -> pure () -- will be referred by the mvar wait queue
-      BlockedOnBlackHole{}    -> error "not implemented yet"
+      BlockedOnBlackHole{}    -> pure () -- will be referred by the BlockedOnBlackHole ADDR thread status
       BlockedOnThrowAsyncEx{} -> pure () -- will be referred by the target thread's blocked exceptions queue
       BlockedOnSTM{}          -> pure () -- will be referred by the tvar wait queue
       BlockedOnForeignCall{}  -> error "not implemented yet"
@@ -163,6 +163,17 @@ addReferenceFacts prog StgState{..} = do
   addRefs ssStablePointers      NS_StablePointer
   addRefs ssThreads             NS_Thread
 
+  -- references for backhole wait queues
+  let blackholes = [ (tid, addr)
+                   | (tid, ts) <- IntMap.toList ssThreads
+                   , Update addr <- tsStack ts
+                   ]
+  forM_ blackholes $ \(tid, addr) -> case IntMap.lookup addr ssHeap of
+    Just (BlackHole _ waitingThreads) -> do
+      forM_ waitingThreads $ \waitingTid -> do
+        addReference (encodeRef tid NS_Thread) (encodeRef waitingTid NS_Thread)
+    ho -> error $ "internal error - expected Blackhole, got: " ++ show ho
+
   -- stable name references
   let stableNames = Map.toList ssStableNameMap
   forM_ stableNames $ \(v, i) -> visitGCRef (addReference (encodeRef i NS_StableName)) v
@@ -180,7 +191,7 @@ addMaybeDeadlockingThreadFacts prog StgState{..} = do
     ThreadBlocked r -> case r of
       BlockedOnMVar{}         -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
       BlockedOnMVarRead{}     -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
-      BlockedOnBlackHole{}    -> error "not implemented yet"
+      BlockedOnBlackHole{}    -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
       BlockedOnThrowAsyncEx{} -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
       BlockedOnSTM{}          -> addMaybeDeadlockingThread $ encodeRef tid NS_Thread
       BlockedOnForeignCall{}  -> error "not implemented yet"

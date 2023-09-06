@@ -183,7 +183,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
           ThreadBlocked r -> case r of
             BlockedOnMVar{}         -> 1
             BlockedOnMVarRead{}     -> 14
-            BlockedOnBlackHole      -> 2
+            BlockedOnBlackHole{}    -> 2
             BlockedOnSTM{}          -> 6
             BlockedOnForeignCall    -> 10
             BlockedOnRead{}         -> 3
@@ -219,10 +219,12 @@ raiseAsyncEx lastResult targetTid exception = do
 
         -- replace Update with ApStack
         Update addr : stackTail -> do
+          when (result == []) $ error "internal error - result should be a [HeapPtr], but it's value is []"
           let apStack = ApStack
                 { hoResult  = result
                 , hoStack   = reverse stackPiece
                 }
+          wakeupBlackHoleQueueThreads addr
           store addr apStack
           let newResult = [HeapPtr addr]
           ctid <- gets ssCurrentThreadId
@@ -291,17 +293,24 @@ removeFromQueues tid = do
   ThreadState{..} <- getThreadState tid
   -- Q: what about the async exception queue?
   case tsStatus of
-    ThreadRunning                       -> pure ()
-    ThreadBlocked (BlockedOnMVar m _)   -> removeFromMVarQueue tid m
-    ThreadBlocked (BlockedOnMVarRead m) -> removeFromMVarQueue tid m
-    ThreadBlocked (BlockedOnSTM tlog)   -> do
-      unsubscribeTVarWaitQueues tid tlog
-    ThreadBlocked BlockedOnDelay{}      -> pure () -- HINT: no queue for delays
-    ThreadBlocked BlockedOnRead{}       -> pure () -- HINT: no queue for file read
-    ThreadBlocked BlockedOnWrite{}      -> pure () -- HINT: no queue for file write
+    ThreadRunning                           -> pure ()
+    ThreadBlocked (BlockedOnMVar m _)       -> removeFromMVarQueue tid m
+    ThreadBlocked (BlockedOnMVarRead m)     -> removeFromMVarQueue tid m
+    ThreadBlocked (BlockedOnSTM tlog)       -> unsubscribeTVarWaitQueues tid tlog
+    ThreadBlocked BlockedOnDelay{}          -> pure () -- HINT: no queue for delays
+    ThreadBlocked BlockedOnRead{}           -> pure () -- HINT: no queue for file read
+    ThreadBlocked BlockedOnWrite{}          -> pure () -- HINT: no queue for file write
+    ThreadBlocked BlockedOnThrowAsyncEx{}   -> pure () -- Q: what to do?
+    ThreadBlocked (BlockedOnBlackHole addr) -> removeFromBlackHoleQueue tid addr
     _ -> error $ "TODO: removeFromQueues " ++ show tsStatus
 
 removeFromMVarQueue :: Int -> Int -> M ()
 removeFromMVarQueue tid m = do
   let filterFun mvd@MVarDescriptor{..} = mvd {mvdQueue = filter (tid /=) mvdQueue}
   modify' $ \s@StgState{..} -> s {ssMVars = IntMap.adjust filterFun m ssMVars}
+
+removeFromBlackHoleQueue :: Int -> Int -> M ()
+removeFromBlackHoleQueue tid addr = do
+  readHeap (HeapPtr addr) >>= \case
+    (BlackHole o queue) -> modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert addr (BlackHole o $ filter (tid /=) queue) ssHeap }
+    x                   -> error $ "internal error - expected BlackHole, got: " ++ show x

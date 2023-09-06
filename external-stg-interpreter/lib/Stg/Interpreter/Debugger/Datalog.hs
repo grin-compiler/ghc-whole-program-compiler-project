@@ -203,7 +203,7 @@ exportStgStateM stgState@StgState{..} = do
       forM_ (zip [0..] (Map.toList hoEnv)) $ \(idx, (n, a)) -> do
         addFact "Heap_ClosureEnv" [I i, I idx, ID n, A $ snd a]
 
-    BlackHole _ o -> do
+    BlackHole o _ -> do
       addFact "Heap_BlackHole" [I i, S (debugPrintHeapObject o)]
 
     ApStack{..} -> do

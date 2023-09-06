@@ -184,26 +184,24 @@ builtinStgEval so a@HeapPtr{} = do
   Debugger.checkBreakpoint $ BkpCustom "eval"
   case o of
     ApStack{..} -> do
-      stackPush (Apply []) -- ensure WHNF
+      let HeapPtr l = a
+      store l (BlackHole o [])  -- HINT: prevent duplicate computation
+      stackPush (Update l)      -- HINT: ensure sharing, ApStack is always created from Update frame
       mapM_ stackPush (reverse hoStack)
       pure hoResult
-    RaiseException ex -> mylog (show o) >> PrimExceptions.raiseEx ex
+    RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}       -> pure [a]
-    
-    BlackHole _ t -> do
+
+    BlackHole ho waitingThreads -> do
+      let HeapPtr addr = a
+      tid <- gets ssCurrentThreadId
+      ts <- getThreadState tid
+      updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnBlackHole addr)})
+      store addr (BlackHole ho $ tid : waitingThreads)
       stackPush (Apply []) -- retry evaluation next time also
-      stackPush $ RunScheduler SR_ThreadYield
+      stackPush $ RunScheduler SR_ThreadBlocked
       pure [a]
-    
-    {-
-    -- TODO: check how the cmm stg machine handles this case
-    BlackHole t -> do
-                    Rts{..} <- gets ssRtsSupport
-                    liftIO $ do
-                      hPutStrLn stderr $ takeBaseName rtsProgName ++ ": <<loop>>"
-                      exitWith ExitSuccess
-                    stgErrorM $ "blackhole ; loop in evaluation of : " ++ show t
-    -}
+
     Closure{..}
       | hoCloMissing /= 0
       -> pure [a]
@@ -249,13 +247,12 @@ builtinStgEval so a@HeapPtr{} = do
             -- closure may be entered multiple times, but should not be updated or blackholed.
             evalExpr extendedEnv e
           Updatable -> do
-            tid <- gets ssCurrentThreadId
             -- closure should be updated after evaluation (and may be blackholed during evaluation).
             -- Q: what is eager and lazy blackholing?
             --  read: http://mainisusuallyafunction.blogspot.com/2011/10/thunks-and-lazy-blackholes-introduction.html
             --  read: https://www.microsoft.com/en-us/research/wp-content/uploads/2005/09/2005-haskell.pdf
             stackPush (Update l)
-            --store l (BlackHole tid o)
+            store l (BlackHole o [])
             evalExpr extendedEnv e
           SingleEntry -> do
             tid <- gets ssCurrentThreadId
@@ -263,7 +260,7 @@ builtinStgEval so a@HeapPtr{} = do
             -- no backholing, see: GHC Note [Black-holing non-updatable thunks]
             -- closure will only be entered once, and so need not be updated but may safely be blackholed.
             --stackPush (Update l) -- FIX??? Q: what will remove the backhole if there is no update? Q: is the value linear?
-            --store l (BlackHole tid o) -- Q: is this a bug?
+            --store l (BlackHole o) -- Q: is this a bug?
             evalExpr extendedEnv e
     _ -> stgErrorM $ "expected evaluable heap object, got: " ++ show a ++ " heap-object: " ++ show o ++ " static-origin: " ++ show so
 builtinStgEval so a = stgErrorM $ "expected a thunk, got: " ++ show a ++ ", static-origin: " ++ show so
@@ -276,18 +273,24 @@ builtinStgApply so a@HeapPtr{} args = do
   o <- readHeap a
   case o of
     ApStack{..} -> do
+      let HeapPtr l = a
+      store l (BlackHole o [])  -- HINT: prevent duplicate computation
       stackPush (Apply args)
+      stackPush (Update l)      -- HINT: ensure sharing, ApStack is always created from Update frame
       mapM_ stackPush (reverse hoStack)
       pure hoResult
-    RaiseException ex -> mylog (show o) >> PrimExceptions.raiseEx ex
+    RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}             -> stgErrorM $ "unexpected con at apply: " ++ show o ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
-    --BlackHole t       -> stgErrorM $ "blackhole ; loop in application of : " ++ show t
-    {-
-    BlackHole t -> do
-      stackPush (Apply args)
-      stackPush $ RunScheduler SR_ThreadYield
+
+    BlackHole ho waitingThreads -> do
+      tid <- gets ssCurrentThreadId
+      ts <- getThreadState tid
+      updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnBlackHole addr)})
+      store addr (BlackHole ho $ tid : waitingThreads)
+      stackPush (Apply args) -- retry evaluation next time also
+      stackPush $ RunScheduler SR_ThreadBlocked
       pure [a]
-    -}
+
     Closure{..}
       -- under saturation
       | hoCloMissing - argCount > 0
@@ -483,6 +486,7 @@ evalStackContinuation result = \case
   Update dstAddr
     | [src@HeapPtr{}] <- result
     -> do
+      wakeupBlackHoleQueueThreads dstAddr
       o <- readHeap src
       store dstAddr o
       dynamicHeapStartAddr <- gets ssDynamicHeapStart
@@ -557,7 +561,7 @@ evalStackContinuation result = \case
           -- raise exception
           ts <- getCurrentThreadState
           updateThreadState tid ts {tsBlockedExceptions = waitingTids}
-          PrimConcurrency.raiseAsyncEx (tsCurrentResult ts) tid exception
+          PrimConcurrency.raiseAsyncEx result tid exception
       _ -> pure ()
     pure result
 
