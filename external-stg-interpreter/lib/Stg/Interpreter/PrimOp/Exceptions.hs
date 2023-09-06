@@ -68,10 +68,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ts@ThreadState{..} <- getCurrentThreadState
     tid <- gets ssCurrentThreadId
 
-    when (tsBlockedExceptions /= []) $ do
-      reportThreads
-      error $ "TODO: maskAsyncExceptions# - raise async exceptions getting from threads: " ++ show tsBlockedExceptions
-
     ------------------------ debug
     promptM_ $ do
       liftIO $ print (tid, op, args)
@@ -130,7 +126,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
           -- raise exception
           ts <- getCurrentThreadState
           updateThreadState tid ts {tsBlockedExceptions = waitingTids}
-          PrimConcurrency.raiseAsyncEx (tsCurrentResult ts) tid exception
+          -- run action
+          stackPush $ Apply [w] -- HINT: the stack may be captured by ApStack if there is an Update frame,
+                                --        so we have to setup the continuation properly
+          PrimConcurrency.raiseAsyncEx [f] tid exception
           pure []
       [] -> do
           -- set new masking state
@@ -289,10 +288,13 @@ raiseEx0 ex = unwindStack where
         unwindStack
 
       Just (Update addr) -> do
-        -- update the (balckholed/running) thunk with the exception value
+        -- update the (blackholed/running) thunk with the exception value
+        wakeupBlackHoleQueueThreads addr
         store addr $ RaiseException ex
-        ctid <- gets ssCurrentThreadId
-        --mylog $ "raiseEx - Update " ++ show addr ++ " current-tid: " ++ show ctid
+        --ctid <- gets ssCurrentThreadId
+        --exObj <- readHeap ex
+        --mylog $ "raiseEx - Update " ++ show addr ++ " = " ++ show (RaiseException ex) ++ " current-tid: " ++ show ctid ++ " ex: " ++ show exObj
+        --reportThread ctid
         unwindStack
 
       Just (Atomically stmAction) -> do
