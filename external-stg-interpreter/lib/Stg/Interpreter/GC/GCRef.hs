@@ -26,14 +26,15 @@ instance VisitGCRef HeapObject where
   visitGCRef action = \case
     Con{..}           -> visitGCRef action hoConArgs
     Closure{..}       -> visitGCRef action hoCloArgs >> visitGCRef action hoEnv
-    BlackHole _ o     -> pure ()
+    BlackHole _o _q   -> pure () -- HINT: the blackhole wait queue is handled separately
     ApStack{..}       -> visitGCRef action hoResult >> visitGCRef action hoStack
     RaiseException ex -> visitGCRef action ex
 
 instance VisitGCRef StackContinuation where
   visitGCRef action = \case
     CaseOf _ _ env _ _ _    -> visitGCRef action env
-    Update addr             -> pure () -- action $ HeapPtr addr -- TODO/FIXME: this is not a GC root!
+    Update{}                -> pure () -- HINT: the thunk is under evaluation, its closure is referred from the thread stack
+                                       --       the blackhole wait queue is handled separately
     Apply args              -> visitGCRef action args
     Catch handler _ _       -> visitGCRef action handler
     CatchRetry stm alt _ _  -> visitGCRef action stm >> visitGCRef action alt
@@ -153,7 +154,7 @@ visitAtom atom action = case atom of
   MutableByteArray i  -> action $ encodeRef (baId i) NS_MutableByteArray
   WeakPointer i       -> action $ encodeRef i NS_WeakPointer
   StableName i        -> action $ encodeRef i NS_StableName
-  ThreadId i          -> pure ()
+  ThreadId i          -> action $ encodeRef i NS_Thread -- NOTE: in GHC the ThreadId# prim type is a strong pointer to TSO (thread state oject)
   LiftedUndefined{}   -> pure ()
   Rubbish{}           -> pure ()
   Unbinded{}          -> pure ()
