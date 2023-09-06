@@ -345,22 +345,14 @@ retrySTM = unwindStack where
             ts <- getThreadState tid
             -- subscribe to wait queues
             let Just tlog = tsActiveTLog ts
-            case IntMap.null tlog of
-              True -> do
-                -- HINT: the transaction log is empty, so there is no TVar to subscribe, therefore the transaction is blocked indefinitely
-                updateThreadState tid (ts {tsActiveTLog = Nothing})
-                Rts{..} <- gets ssRtsSupport
-                PrimConcurrency.raiseAsyncEx [] tid rtsBlockedIndefinitelyOnSTM
-                pure []
-              False -> do
-                subscribeTVarWaitQueues tid tlog
-                -- suspend thread
-                updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnSTM tlog), tsActiveTLog = Just mempty})
-                -- Q: who will update the tsTLog after the wake up?
-                stackPush $ Atomically stmAction
-                stackPush $ Apply [Void]
-                stackPush $ RunScheduler SR_ThreadBlocked
-                pure [stmAction]
+            subscribeTVarWaitQueues tid tlog -- HINT: GC deadlock detection will cover empty tlog and dead TVar caused deadlocks
+            -- suspend thread
+            updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnSTM tlog), tsActiveTLog = Just mempty})
+            -- Q: who will update the tsTLog after the wake up?
+            stackPush $ Atomically stmAction
+            stackPush $ Apply [Void]
+            stackPush $ RunScheduler SR_ThreadBlocked
+            pure [stmAction]
 
       _ -> unwindStack -- HINT: discard stack frames
 
