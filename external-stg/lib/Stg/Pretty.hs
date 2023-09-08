@@ -23,14 +23,12 @@ import Control.Monad.Reader
 import Control.Monad.Writer hiding (Alt)
 import Control.Monad.State
 import Control.Monad.RWS hiding (Alt)
+import Data.Maybe
 import Data.Foldable
 import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
-
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 import Stg.Syntax
 import Stg.IRLocation
@@ -104,7 +102,7 @@ code
 -}
 
 getStgPoint :: DocM StgPoint
-getStgPoint = askEnv >>= \case
+getStgPoint = (speStgPoint <$> askEnv) >>= \case
   Nothing -> error "missing stg point"
   Just sp -> pure sp
 ---------------------------------------------------------
@@ -125,21 +123,25 @@ state0 = PState
   { curLine = []
   }
 
-{-
+data Config
+  = Config
+  { cfgPrintTickish :: Bool
+  }
+
 data SPEnv
   = SPEnv
-  { speParent         :: Maybe StgPoint
-  , speBinderName     :: Maybe Name
-  , speScrutineeName  :: Maybe Name
-  } Maybe StgPoint
--}
-type SPEnv = Maybe StgPoint
+  { speStgPoint :: Maybe StgPoint
+  , speConfig   :: Config
+  }
 
 withStgPoint :: StgPoint -> Doc -> Doc
-withStgPoint sp = localEnv (const $ Just sp)
+withStgPoint sp = localEnv (\env -> env {speStgPoint = Just sp})
 
-spEnv0 :: SPEnv
-spEnv0 = Nothing
+spEnv0 :: Config -> SPEnv
+spEnv0 cfg = SPEnv
+  { speStgPoint = Nothing
+  , speConfig   = cfg
+  }
 
 
 -- For plain text pretty printing
@@ -161,9 +163,9 @@ instance IsString (DocM ()) where
 runDocM :: PEnv Int StgPoint () -> SPEnv -> PState Int () -> DocM a -> Maybe (PState Int (), POut Int StgPoint, a)
 runDocM e spe s d = (\(a,s',o) -> (s',o,a)) <$> runRWST (runEnvT spe $ unDocM d) e s
 
-execDoc :: Doc -> POut Int StgPoint
-execDoc d =
-  let rM = runDocM env0 spEnv0 state0 d
+execDoc :: Config -> Doc -> POut Int StgPoint
+execDoc cfg d =
+  let rM = runDocM env0 (spEnv0 cfg) state0 d
   in case rM of
     Nothing -> PAtom $ AChunk $ CText "<internal pretty printing error>"
     Just (_, o, ()) -> o
@@ -319,10 +321,6 @@ instance Pretty AltType where
       PrimAlt r     -> text "PrimAlt" <+> ppPrimRep r
       AlgAlt tc     -> text "AlgAlt" <+> ppTyConName tc
 
-instance Pretty Binder where
-    pretty = pprBinder
-
-
 pprAlt :: Id -> Int -> Alt -> Doc
 pprAlt scrutId idx (Alt con bndrs rhs) =
   (hsep (pretty con : map (pprBinder) bndrs) <+> text "-> do") <$$>
@@ -388,6 +386,23 @@ putDefaultLast :: [Alt] -> [Doc] -> [Doc]
 putDefaultLast (Alt AltDefault _ _ : _) (first : rest) = rest ++ [first]
 putDefaultLast _ l = l
 
+pprRealSrcSpan :: RealSrcSpan -> Doc
+pprRealSrcSpan RealSrcSpan'{..} = pretty srcSpanFile <+> pprPos srcSpanSLine srcSpanSCol <> text "-" <> pprPos srcSpanELine srcSpanECol
+  where pprPos line col = parens $ pretty line <> text ":" <> pretty col
+
+instance Pretty RealSrcSpan where
+  pretty = pprRealSrcSpan
+
+pprTickish :: Tickish -> Doc
+pprTickish = \case
+  ProfNote        -> text "-- ProfNote"
+  HpcTick         -> text "-- HpcTick"
+  Breakpoint      -> text "-- Breakpoint"
+  SourceNote{..}  -> text "-- SourceNote for" <+> pretty sourceName <+> pretty sourceSpan
+
+instance Pretty Tickish where
+  pretty = pprTickish
+
 pprExpr :: Expr -> Doc
 pprExpr exp = do
   stgPoint <- getStgPoint
@@ -419,7 +434,11 @@ pprExpr exp = do
       [ text "-- stack allocating let"
       , text "let" <+> (align $ pprBinding b) <$$> align (withStgPoint (SP_LetNoEscapeExpr stgPoint) $ pprExpr e)
       ]
-    StgTick tickish e     -> pprExpr e
+    StgTick tickish e -> do
+      Config{..} <- speConfig <$> askEnv
+      if cfgPrintTickish
+        then vsep [pretty tickish, pprExpr e]
+        else pprExpr e
 
 instance Pretty Expr where
   pretty = pprExpr
@@ -428,10 +447,17 @@ addUnboxedCommentIfNecessary :: DataCon -> Doc -> Doc
 addUnboxedCommentIfNecessary DataCon{..} doc = case dcRep of
   UnboxedTupleCon{} -> doc -- vsep [text "-- stack allocated unboxed tuple", doc]
   _ -> doc
-
+{-
+pprSrcSpan :: SrcSpan -> Doc
+pprSrcSpan = \case
+  UnhelpfulSpan UnhelpfulNoLocationInfo -> mempty
+  UnhelpfulSpan (UnhelpfulOther s)      -> text "-- src-loc:" <+> pretty s
+  UnhelpfulSpan sr                      -> text "-- src-loc:" <+> text (T.pack $ show sr)
+  RealSrcSpan sp _                      -> text "-- src-loc:" <+> pretty sp
+-}
 pprRhs :: Id -> Rhs -> Doc
 pprRhs rhsId@(Id rhsBinder) = \case
-  StgRhsClosure _ u bs e -> pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do" <+> (newline <> (indent 2 $ withStgPoint (SP_RhsClosureExpr rhsId) $ pprExpr e))
+  StgRhsClosure _ u bs e -> pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do" <> (newline <> (indent 2 $ withStgPoint (SP_RhsClosureExpr rhsId) $ pprExpr e))
   StgRhsCon dc vs -> annotate (SP_RhsCon rhsId) $ do
     pprBinder rhsBinder <+> text "=" <+> addUnboxedCommentIfNecessary dc (pprDataConName dc <+> (hsep $ map (pprArg) vs))
 
@@ -481,6 +507,7 @@ instance Pretty DataCon where
 pprModule :: Module -> Doc
 pprModule Module{..} = vsep
   [ text "-- package:" <+> pretty moduleUnitId
+  , text "-- source-file-path:" <+> pretty (fromMaybe "<empty>" moduleSourceFilePath)
   , text "module" <+> pretty moduleName
   , indent 2 $ pprExportList moduleTopBindings
   , "  ) where"
@@ -573,9 +600,12 @@ getPos :: M SrcPos
 getPos = (,) <$> gets spsRow <*> gets spsCol
 
 pShow :: Doc -> (Text, [(StgPoint, SrcRange)])
-pShow doc = (T.concat . reverse $ spsOutput result, spsStgPoints result)
+pShow = pShowWithConfig Config {cfgPrintTickish = False}
+
+pShowWithConfig :: Config -> Doc -> (Text, [(StgPoint, SrcRange)])
+pShowWithConfig cfg doc = (T.concat . reverse $ spsOutput result, spsStgPoints result)
   where
-    result = execState (renderPOut $ execDoc doc) emptyStgPointState
+    result = execState (renderPOut $ execDoc cfg doc) emptyStgPointState
 
     renderChunk :: Chunk Int -> M ()
     renderChunk = \case

@@ -3,6 +3,7 @@ import Data.List
 
 import Options.Applicative
 import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Text.IO as T
 
 import Stg.Pretty
 import Stg.IO
@@ -20,14 +21,17 @@ modes = subparser
 
     showMode :: Parser (IO ())
     showMode =
-        run <$> modpakFile
+        run <$> modpakFile <*> switch (long "hide-tickish" <> help "do not print STG IR Tickish annotation")
       where
-        run fname = do
+        run fname hideTickish = do
             dump <- case () of
               _ | isSuffixOf "modpak" fname -> Stg.IO.readModpakL fname modpakStgbinPath decodeStgbin
               _ | isSuffixOf "stgbin" fname -> decodeStgbin <$> BSL.readFile fname
               _ -> fail "unknown file format"
-            putStrLn . fst . pShowS $ pprModule dump
+            let cfg = Config
+                  { cfgPrintTickish = not hideTickish
+                  }
+            T.putStrLn . fst . pShowWithConfig cfg $ pprModule dump
 
 main :: IO ()
 main = join $ execParser $ info (helper <*> modes) mempty
