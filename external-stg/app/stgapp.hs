@@ -44,6 +44,7 @@ modes = subparser
     <> mode "undef" undefMode  (progDesc "print list of undefined foreign symbols")
     <> mode "link" linkMode  (progDesc "link cbits.so for the applications with used foreign functions")
     <> mode "hi-list"  hiListMode  (progDesc "whole program interface file list")
+    <> mode "srcpaths"  srcpathMode  (progDesc "print module source filepaths")
     )
   where
     mode :: String -> Parser a -> InfoMod a -> Mod CommandFields a
@@ -208,6 +209,33 @@ modes = subparser
             case ok of
               True  -> printf "OK: %s\n" modModuleName
               False -> printf "MISSING: %s\n" hiName
+
+    srcpathMode :: Parser (IO ())
+    srcpathMode =
+        run <$> fullpakFile
+      where
+        run fname = do
+          moduleList <- loadModules fname
+          -- print source filepaths
+          forM_ moduleList $ \m -> case moduleSourceFilePath m of
+            Nothing       -> pure ()
+            Just srcPath  -> printf "source filepath: %s %s %s\n"
+                              (BS8.unpack $ getUnitId $ moduleUnitId m)
+                              (BS8.unpack $ getModuleName $ moduleName m)
+                              (BS8.unpack srcPath)
+
+          -- report empty moduleSourceFilePath
+          forM_ [m | m <- moduleList, isNothing $ moduleSourceFilePath m] $ \m -> do
+            printf "missing source filepath for: %s %s\n" (BS8.unpack $ getUnitId $ moduleUnitId m) (BS8.unpack $ getModuleName $ moduleName m)
+
+          -- report ambiguous moduleSourceFilePath
+          let moduleMaps  = [Map.singleton srcPath (1, [m]) | m <- moduleList, srcPath <- maybeToList $ moduleSourceFilePath m]
+              duplicates  = Map.filter (\(n, _) -> n > 1) $ Map.unionsWith (\(n1, l1) (n2, l2) -> (n1 + n2, l1 ++ l2)) moduleMaps
+          forM_ (Map.toList duplicates) $ \(srcPath, (_, mods)) -> forM_ mods $ \m -> do
+            printf "duplicate source filepath: %s %s %s\n"
+              (BS8.unpack $ getUnitId $ moduleUnitId m)
+              (BS8.unpack $ getModuleName $ moduleName m)
+              (BS8.unpack srcPath)
 
 main :: IO ()
 main = join $ execParser $ info (helper <*> modes) mempty

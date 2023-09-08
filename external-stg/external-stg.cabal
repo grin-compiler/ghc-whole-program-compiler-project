@@ -16,6 +16,7 @@ library
   exposed-modules:
     Stg.Pretty
     Stg.IRLocation
+    Stg.Tickish
     Stg.Reconstruct
     Stg.Deconstruct
     Stg.Fullpak
