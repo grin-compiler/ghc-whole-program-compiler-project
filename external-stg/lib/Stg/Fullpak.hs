@@ -66,6 +66,7 @@ mkFullpak ghcstgappPath stgbinsOnly includeAll fullpakName = do
           { aiLiveCode =
               [ CodeInfo
                 { ciPackageName = modPackageName
+                , ciUnitId      = modUnitId
                 , ciModuleName  = modModuleName
                 }
               | StgModuleInfo{..} <- fullpakModules
@@ -111,6 +112,6 @@ mkFullpak ghcstgappPath stgbinsOnly includeAll fullpakName = do
             ]
       existingFiles <- withArchive modModpakPath $ mapM mkEntrySelector files >>= filterM doesEntryExist
       forM_ existingFiles $ \src -> do
-        dst <- mkEntrySelector ("haskell" </> modPackageName </> modModuleName </> unEntrySelector src)
+        dst <- mkEntrySelector ("haskell" </> modUnitId </> modModuleName </> unEntrySelector src)
         copyEntry modModpakPath src dst
         setExternalFileAttrs (fromFileMode 0o0644) dst

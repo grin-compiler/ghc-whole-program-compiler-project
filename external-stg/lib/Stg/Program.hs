@@ -222,7 +222,7 @@ getFullpakModules fullpakPath = do
     appinfoSelector <- liftIO $ mkEntrySelector fullpakAppInfoPath
     AppInfo{..} <- getEntry appinfoSelector >>= Y.decodeThrow
     forM aiLiveCode $ \CodeInfo{..} -> do
-      s <- liftIO $ mkEntrySelector $ "haskell" </> ciPackageName </> ciModuleName </> modpakStgbinPath
+      s <- liftIO $ mkEntrySelector $ "haskell" </> ciUnitId </> ciModuleName </> modpakStgbinPath
       decodeStgbin . BSL.fromStrict <$> getEntry s
 
 -- .ghc_stgapp
@@ -522,6 +522,7 @@ downloadFoundationPakIfMissing ghcVersionString foundationPakPath = do
 data CodeInfo
   = CodeInfo
   { ciPackageName :: String
+  , ciUnitId      :: String
   , ciModuleName  :: String
   }
   deriving (Eq, Ord, Show)
@@ -530,6 +531,7 @@ instance FromJSON CodeInfo where
   parseJSON (Y.Object v) =
     CodeInfo
       <$> v .: "package-name"
+      <*> v .: "unit-id"
       <*> v .: "module-name"
   parseJSON _ = fail "Expected Object for CodeInfo value"
 
@@ -537,6 +539,7 @@ instance ToJSON CodeInfo where
   toJSON CodeInfo{..} =
     object
       [ "package-name"  .= ciPackageName
+      , "unit-id"       .= ciUnitId
       , "module-name"   .= ciModuleName
       ]
 
