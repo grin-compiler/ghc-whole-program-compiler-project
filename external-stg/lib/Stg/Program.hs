@@ -222,7 +222,7 @@ getFullpakModules fullpakPath = do
     appinfoSelector <- liftIO $ mkEntrySelector fullpakAppInfoPath
     AppInfo{..} <- getEntry appinfoSelector >>= Y.decodeThrow
     forM aiLiveCode $ \CodeInfo{..} -> do
-      s <- liftIO $ mkEntrySelector $ "haskell" </> ciUnitId </> ciModuleName </> modpakStgbinPath
+      s <- liftIO $ mkEntrySelector $ "haskell" </> ciPackageName </> ciModuleName </> modpakStgbinPath
       decodeStgbin . BSL.fromStrict <$> getEntry s
 
 -- .ghc_stgapp
