@@ -26,7 +26,7 @@ instance VisitGCRef HeapObject where
   visitGCRef action = \case
     Con{..}           -> visitGCRef action hoConArgs
     Closure{..}       -> visitGCRef action hoCloArgs >> visitGCRef action hoEnv
-    BlackHole _o _q   -> pure () -- HINT: the blackhole wait queue is handled separately
+    BlackHole _ _ _   -> pure () -- HINT: the blackhole wait queue is handled separately
     ApStack{..}       -> visitGCRef action hoResult >> visitGCRef action hoStack
     RaiseException ex -> visitGCRef action ex
 

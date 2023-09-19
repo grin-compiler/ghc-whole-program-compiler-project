@@ -184,20 +184,25 @@ builtinStgEval so a@HeapPtr{} = do
   Debugger.checkBreakpoint $ BkpCustom "eval"
   case o of
     ApStack{..} -> do
+      tid <- gets ssCurrentThreadId
       let HeapPtr l = a
-      store l (BlackHole o [])  -- HINT: prevent duplicate computation
+      -- HINT: prevent duplicate computation
+      store l BlackHole
+        { hoBHOwnerThreadId = tid
+        , hoBHOriginalThunk = o
+        , hoBHWaitQueue     = []
+        }
       stackPush (Update l)      -- HINT: ensure sharing, ApStack is always created from Update frame
       mapM_ stackPush (reverse hoStack)
       pure hoResult
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}       -> pure [a]
-
-    BlackHole ho waitingThreads -> do
+    BlackHole{..} -> do
       let HeapPtr addr = a
       tid <- gets ssCurrentThreadId
       ts <- getThreadState tid
       updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnBlackHole addr)})
-      store addr (BlackHole ho $ tid : waitingThreads)
+      store addr o {hoBHWaitQueue = tid : hoBHWaitQueue}
       stackPush (Apply []) -- retry evaluation next time also
       stackPush $ RunScheduler SR_ThreadBlocked
       pure [a]
@@ -252,7 +257,12 @@ builtinStgEval so a@HeapPtr{} = do
             --  read: http://mainisusuallyafunction.blogspot.com/2011/10/thunks-and-lazy-blackholes-introduction.html
             --  read: https://www.microsoft.com/en-us/research/wp-content/uploads/2005/09/2005-haskell.pdf
             stackPush (Update l)
-            store l (BlackHole o [])
+            tid <- gets ssCurrentThreadId
+            store l BlackHole
+              { hoBHOwnerThreadId = tid
+              , hoBHOriginalThunk = o
+              , hoBHWaitQueue     = []
+              }
             evalExpr extendedEnv e
           SingleEntry -> do
             tid <- gets ssCurrentThreadId
@@ -274,19 +284,24 @@ builtinStgApply so a@HeapPtr{} args = do
   case o of
     ApStack{..} -> do
       let HeapPtr l = a
-      store l (BlackHole o [])  -- HINT: prevent duplicate computation
+      tid <- gets ssCurrentThreadId
+      -- HINT: prevent duplicate computation
+      store l BlackHole
+        { hoBHOwnerThreadId = tid
+        , hoBHOriginalThunk = o
+        , hoBHWaitQueue     = []
+        }
       stackPush (Apply args)
       stackPush (Update l)      -- HINT: ensure sharing, ApStack is always created from Update frame
       mapM_ stackPush (reverse hoStack)
       pure hoResult
     RaiseException ex -> PrimExceptions.raiseEx ex
     Con{}             -> stgErrorM $ "unexpected con at apply: " ++ show o ++ ", args: " ++ show args ++ ", static-origin: " ++ show so
-
-    BlackHole ho waitingThreads -> do
+    BlackHole{..} -> do
       tid <- gets ssCurrentThreadId
       ts <- getThreadState tid
       updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnBlackHole addr)})
-      store addr (BlackHole ho $ tid : waitingThreads)
+      store addr o {hoBHWaitQueue = tid : hoBHWaitQueue}
       stackPush (Apply args) -- retry evaluation next time also
       stackPush $ RunScheduler SR_ThreadBlocked
       pure [a]

@@ -312,5 +312,5 @@ removeFromMVarQueue tid m = do
 removeFromBlackHoleQueue :: Int -> Int -> M ()
 removeFromBlackHoleQueue tid addr = do
   readHeap (HeapPtr addr) >>= \case
-    (BlackHole o queue) -> modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert addr (BlackHole o $ filter (tid /=) queue) ssHeap }
-    x                   -> error $ "internal error - expected BlackHole, got: " ++ show x
+    bh@BlackHole{..}  -> modify' $ \s@StgState{..} -> s { ssHeap = IntMap.insert addr (bh {hoBHWaitQueue = filter (tid /=) hoBHWaitQueue}) ssHeap }
+    x                 -> error $ "internal error - expected BlackHole, got: " ++ show x

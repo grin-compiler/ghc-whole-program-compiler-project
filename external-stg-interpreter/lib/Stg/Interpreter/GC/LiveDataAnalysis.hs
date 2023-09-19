@@ -169,7 +169,7 @@ addReferenceFacts prog StgState{..} = do
                    , Update addr <- tsStack ts
                    ]
   forM_ blackholes $ \(tid, addr) -> case IntMap.lookup addr ssHeap of
-    Just (BlackHole _ waitingThreads) -> do
+    Just (BlackHole _ _ waitingThreads) -> do
       forM_ waitingThreads $ \waitingTid -> do
         addReference (encodeRef tid NS_Thread) (encodeRef waitingTid NS_Thread)
     ho -> error $ "internal error - expected Blackhole, got: " ++ show ho

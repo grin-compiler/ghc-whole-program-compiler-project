@@ -162,8 +162,11 @@ data HeapObject
     , hoCloArgs     :: [Atom]
     , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
     }
-  | BlackHole HeapObject [Int] -- original heap object, blocking queue of thread ids
-                               -- NOTE: each blackhole has exactly one corresponding thread and one update frame
+  | BlackHole -- NOTE: each blackhole has exactly one corresponding thread and one update frame
+    { hoBHOwnerThreadId :: Int        -- owner thread id
+    , hoBHOriginalThunk :: HeapObject -- original heap object
+    , hoBHWaitQueue     :: [Int]      -- blocking queue of thread ids
+    }
   | ApStack                   -- HINT: needed for the async exceptions
     { hoResult      :: [Atom]
     , hoStack       :: [StackContinuation]
@@ -1447,7 +1450,7 @@ debugPrintHeapObject :: HeapObject -> String
 debugPrintHeapObject  = \case
   Con{..}           -> "Con: " ++ show (dcUniqueName $ unDC hoCon) ++ " " ++ show hoConArgs
   Closure{..}       -> "Clo: " ++ show hoName ++ " args: " ++ show hoCloArgs ++ " env: " ++ show (Map.size hoEnv) ++ " missing: " ++ show hoCloMissing
-  BlackHole o _q    -> "BlackHole: " ++ debugPrintHeapObject o
+  BlackHole{..}     -> "BlackHole: " ++ debugPrintHeapObject hoBHOriginalThunk
   ApStack{}         -> "ApStack"
   RaiseException ex -> "RaiseException: " ++ show ex
 
@@ -1484,9 +1487,9 @@ mylog msg = do
 
 wakeupBlackHoleQueueThreads :: Int -> M ()
 wakeupBlackHoleQueueThreads addr = readHeap (HeapPtr addr) >>= \case
-  (BlackHole _ waitingThreads) -> do
+  BlackHole{..} -> do
     -- wake up blocked threads
-    forM_ waitingThreads $ \waitingTid -> do
+    forM_ hoBHWaitQueue $ \waitingTid -> do
       waitingTS <- getThreadState waitingTid
       case tsStatus waitingTS of
         ThreadBlocked (BlockedOnBlackHole dstAddr) -> do
