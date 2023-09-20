@@ -410,19 +410,19 @@ pprExpr exp = do
     StgLit l            -> pretty l
     StgCase x b at [Alt AltDefault [] rhs] -> sep
                             [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
-                                pprBinder b <+> text "<-" <+> pprExpr x
+                                pprBinder b <+> text "<-" <+> nest 2 (pprExpr x)
                             , withStgPoint (SP_AltExpr (Id b) 0) $
                                 pprExpr rhs
                             ]
     StgCase x b at [Alt con bndrs rhs] -> sep
                             [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
-                                pprBinder b <+> text "@" <+> parens (hsep $ pretty con : map (pprBinder) bndrs) <+> text "<-" <+> pprExpr x
+                                pprBinder b <+> text "@" <+> parens (hsep $ pretty con : map (pprBinder) bndrs) <+> text "<-" <+> nest 2 (pprExpr x)
                             , withStgPoint (SP_AltExpr (Id b) 0) $
                                 pprExpr rhs
                             ]
     StgCase x b at alts -> sep
                             [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
-                                pprBinder b <+> text "<-" <+> pprExpr x
+                                pprBinder b <+> text "<-" <+> nest 2 (pprExpr x)
                             , text "case" <+> pprVar b <+> text "of"
                             , indent 2 $ vcat $ putDefaultLast alts [pprAlt (Id b) idx a | (idx, a) <- zip [0..] alts]
                             ]
