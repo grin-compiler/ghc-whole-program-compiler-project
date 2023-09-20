@@ -81,6 +81,8 @@ getFFISymbol name
   = case name of
       "enabled_capabilities" -> do
         gets $ castPtrToFunPtr . rtsDataSymbol_enabled_capabilities . ssRtsSupport
+      "RtsFlags" -> do
+        pure $ error "TODO: deferred error for RtsFlags foreign symbol"
       _ -> do
         stgErrorM $ "native RTS symbol dereference is not implemented yet: " ++ BS8.unpack name
 getFFISymbol name = do
