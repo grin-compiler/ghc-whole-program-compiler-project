@@ -2,19 +2,17 @@
 module Stg.Interpreter.GC.GCRef where
 
 import Data.Maybe
-import Control.Monad.State
+import Control.Monad
 import Foreign.Ptr
 import qualified Data.IntSet as IntSet
 import qualified Data.ByteString.Char8 as BS8
-
-import Language.Souffle.Compiled (SouffleM)
 
 import Stg.Interpreter.Base
 
 -- HINT: populate datalog database during a traversal
 
 class VisitGCRef a where
-  visitGCRef :: (GCSymbol -> SouffleM ()) -> a -> SouffleM ()
+  visitGCRef :: Monad m => (GCSymbol -> m ()) -> a -> m ()
 
 instance VisitGCRef Atom where
   visitGCRef action a = visitAtom a action
@@ -122,7 +120,7 @@ data RefNamespace
   | NS_StablePointer
   | NS_WeakPointer
   | NS_Thread
-  deriving (Show, Read)
+  deriving (Eq, Ord, Show, Read)
 
 encodeRef :: Int -> RefNamespace -> GCSymbol
 encodeRef i ns = GCSymbol $ BS8.pack $ show (ns, i)
@@ -130,7 +128,7 @@ encodeRef i ns = GCSymbol $ BS8.pack $ show (ns, i)
 decodeRef :: GCSymbol -> (RefNamespace, Int)
 decodeRef = read . BS8.unpack . unGCSymbol
 
-visitAtom :: Atom -> (GCSymbol -> SouffleM ()) -> SouffleM ()
+visitAtom :: Monad m => Atom -> (GCSymbol -> m ()) -> m ()
 visitAtom atom action = case atom of
   HeapPtr i           -> action $ encodeRef i NS_HeapPtr
   Literal{}           -> pure ()
