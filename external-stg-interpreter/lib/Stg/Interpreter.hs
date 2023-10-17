@@ -161,14 +161,14 @@ stackPushRestoreProgramPoint argCount = do
 buildCallGraph :: StaticOrigin -> Id -> M ()
 buildCallGraph so hoName = do
   progPoint <- gets ssCurrentProgramPoint
-  addInterClosureCallGraphEdge so progPoint $ PP_Closure hoName
-  setProgramPoint $ PP_Closure hoName
+  addInterClosureCallGraphEdge so progPoint . PP_StgPoint . SP_RhsClosureExpr . binderToStgId $ unId hoName
+  setProgramPoint $ PP_StgPoint . SP_RhsClosureExpr . binderToStgId $ unId hoName
   -- connect call sites to parent closure
   currentClosure <- gets ssCurrentClosure
   case progPoint of
     PP_Global -> pure ()
     _ -> case currentClosure of
-      Just cloId  -> addIntraClosureCallGraphEdge (PP_Closure cloId) so progPoint
+      Just cloId  -> addIntraClosureCallGraphEdge (PP_StgPoint . SP_RhsClosureExpr . binderToStgId $ unId cloId) so progPoint
       _           -> pure ()
   -- write whole program path entry
   fuel <- gets ssDebugFuel
@@ -242,7 +242,7 @@ builtinStgEval so a@HeapPtr{} = do
         -- check breakpoints and region entering
         let closureName = binderUniqueName $ unId hoName
         markClosure closureName -- HINT: this list can be deleted by a debugger command, so this is not the same as `markExecutedId`
-        Debugger.checkBreakpoint . BkpStgPoint $ SP_RhsClosureExpr hoName
+        Debugger.checkBreakpoint . BkpStgPoint . SP_RhsClosureExpr . binderToStgId . unId $ hoName
         Debugger.checkRegion closureName
         GC.checkGC [a] -- HINT: add local env as GC root
 
@@ -521,18 +521,14 @@ evalStackContinuation result = \case
               _   -> error $ "expected a single value: " ++ show result
             extendedEnv = addBinderToEnv SO_Scrut resultBinder v localEnv
         con <- readHeapCon v
-        case getCutShowItem alts of
-          d@(Alt AltDefault _ _) : al -> matchFirstCon resultId extendedEnv con $ al ++ [d]
-          _ -> matchFirstCon resultId extendedEnv con $ getCutShowItem alts
+        matchFirstCon resultId extendedEnv con $ getCutShowItem alts
 
       PrimAlt _r -> do
         let lit = case result of
               [l] -> l
               _   -> error $ "expected a single value: " ++ show result
             extendedEnv = addBinderToEnv SO_Scrut resultBinder lit localEnv
-        case getCutShowItem alts of
-          d@(Alt AltDefault _ _) : al -> matchFirstLit resultId extendedEnv lit $ al ++ [d]
-          _ -> matchFirstLit resultId extendedEnv lit $ getCutShowItem alts
+        matchFirstLit resultId extendedEnv lit $ getCutShowItem alts
 
       MultiValAlt n -> do -- unboxed tuple
         -- NOTE: result binder is not assigned
@@ -545,7 +541,7 @@ evalStackContinuation result = \case
         --unless (length altBinders == length result) $ do
         --  stgErrorM $ "evalStackContinuation - MultiValAlt - length mismatch: " ++ show (n, altBinders, result)
 
-        setProgramPoint $ PP_Alt resultId altCon
+        setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId resultBinder) 0
         evalExpr extendedEnv altRHS
 
       PolyAlt -> do
@@ -558,7 +554,7 @@ evalStackContinuation result = \case
         unless (length altBinders == length result) $ do
           stgErrorM $ "evalStackContinuation - PolyAlt - length mismatch: " ++ show (altBinders, result)
         -}
-        setProgramPoint $ PP_Alt resultId altCon
+        setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId resultBinder) 0
         evalExpr extendedEnv altRHS
 
   s@(RestoreExMask oldMask blockAsyncEx isInterruptible) -> do
@@ -709,7 +705,7 @@ evalExpr localEnv = \case
     Just curClosure <- gets ssCurrentClosure
     curClosureAddr <- gets ssCurrentClosureAddr
     stackPush (CaseOf curClosureAddr curClosure localEnv (Id scrutineeResult) (CutShow altType) $ CutShow alts)
-    setProgramPoint . PP_Scrutinee $ Id scrutineeResult
+    setProgramPoint . PP_StgPoint . SP_CaseScrutineeExpr $ binderToStgId scrutineeResult
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
@@ -770,11 +766,16 @@ evalExpr localEnv = \case
 
 matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [Atom]
 matchFirstLit resultId localEnv a [Alt AltDefault _ rhs] = do
-  setProgramPoint $ PP_Alt resultId AltDefault
+  setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) 0
   evalExpr localEnv rhs
-matchFirstLit resultId localEnv atom alts = case head $ [a | a@Alt{..} <- alts, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, map altCon alts)) of
-  Alt{..} -> do
-    setProgramPoint $ PP_Alt resultId altCon
+matchFirstLit resultId localEnv atom alts
+  | indexedAlts <- zip [0..] alts
+  , indexedAltsWithDefault <- case indexedAlts of
+      d@(_, Alt AltDefault _ _) : xs -> xs ++ [d]
+      xs -> xs
+  = case head $ [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, map altCon alts)) of
+  (idx, Alt{..}) -> do
+    setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) idx
     evalExpr localEnv altRHS
 
 matchLit :: HasCallStack => Atom -> AltCon -> Bool
@@ -804,15 +805,20 @@ convertAltLit lit = case lit of
   l -> error $ "unsupported: " ++ show l
 
 matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
-matchFirstCon resultId localEnv (Con _ (DC dc) args) alts = case [a | a@Alt{..} <- alts, matchCon dc altCon] of
+matchFirstCon resultId localEnv (Con _ (DC dc) args) alts
+  | indexedAlts <- zip [0..] alts
+  , indexedAltsWithDefault <- case indexedAlts of
+      d@(_, Alt AltDefault _ _) : xs -> xs ++ [d]
+      xs -> xs
+  = case [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchCon dc altCon] of
   []  -> stgErrorM $ "no matching alts for: " ++ show resultId
-  Alt{..} : _ -> do
+  (idx, Alt{..}) : _ -> do
     let extendedEnv = case altCon of
                         AltDataCon{}  -> addManyBindersToEnv SO_AltArg altBinders args localEnv
                         _             -> localEnv
     --unless (length altBinders == length args) $ do
     --  stgErrorM $ "matchFirstCon length mismatch: " ++ show (DC dc, altBinders, args, resultId)
-    setProgramPoint $ PP_Alt resultId altCon
+    setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) idx
     evalExpr extendedEnv altRHS
 
 matchCon :: HasCallStack => DataCon -> AltCon -> Bool
