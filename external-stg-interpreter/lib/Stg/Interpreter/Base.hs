@@ -1407,23 +1407,9 @@ markLNE lneAddrs = do
 
 data ProgramPoint
   = PP_Global
-  | PP_Closure    Id          -- closure name
-  | PP_Scrutinee  Id          -- qualified scrutinee result name
-  | PP_Alt        Id AltCon   -- qualified scrutinee result name, alternative pattern
   | PP_Apply      Int ProgramPoint
-  deriving (Eq, Ord)
-
-instance Show ProgramPoint where show = showProgramPoint
-
-showProgramPoint :: ProgramPoint -> String
-showProgramPoint = \case
-  PP_Global       -> "<global>"
-  PP_Closure n    -> show n
-  PP_Scrutinee v  -> "scrut: " ++ show v
-  PP_Alt v pat    -> "alt: " ++ show v ++ " " ++ case pat of
-    AltDataCon dc -> "AltDataCon " ++ show (DC dc)
-    _             -> show pat
-  PP_Apply i p    -> "apply " ++ show i ++ ": " ++ show p
+  | PP_StgPoint   StgPoint
+  deriving (Eq, Ord, Read, Show)
 
 dumpStgState :: M ()
 dumpStgState = do
