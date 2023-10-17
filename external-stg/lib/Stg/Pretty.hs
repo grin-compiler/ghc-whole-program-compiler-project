@@ -322,9 +322,9 @@ instance Pretty AltType where
       AlgAlt tc     -> text "AlgAlt" <+> ppTyConName tc
 
 pprAlt :: Id -> Int -> Alt -> Doc
-pprAlt scrutId idx (Alt con bndrs rhs) =
+pprAlt (Id scrutBinder) idx (Alt con bndrs rhs) =
   (hsep (pretty con : map (pprBinder) bndrs) <+> text "-> do") <$$>
-  indent 2 (withStgPoint (SP_AltExpr scrutId idx) $ pprExpr rhs)
+  indent 2 (withStgPoint (SP_AltExpr (binderToStgId scrutBinder) idx) $ pprExpr rhs)
 
 pprArg :: Arg -> Doc
 pprArg = \case
@@ -409,19 +409,19 @@ pprExpr exp = do
   annotate stgPoint $ case exp of
     StgLit l            -> pretty l
     StgCase x b at [Alt AltDefault [] rhs] -> sep
-                            [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
+                            [ withStgPoint (SP_CaseScrutineeExpr $ binderToStgId b) $
                                 pprBinder b <+> text "<-" <+> nest 2 (pprExpr x)
-                            , withStgPoint (SP_AltExpr (Id b) 0) $
+                            , withStgPoint (SP_AltExpr (binderToStgId b) 0) $
                                 pprExpr rhs
                             ]
     StgCase x b at [Alt con bndrs rhs] -> sep
-                            [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
+                            [ withStgPoint (SP_CaseScrutineeExpr $ binderToStgId b) $
                                 pprBinder b <+> text "@" <+> parens (hsep $ pretty con : map (pprBinder) bndrs) <+> text "<-" <+> nest 2 (pprExpr x)
-                            , withStgPoint (SP_AltExpr (Id b) 0) $
+                            , withStgPoint (SP_AltExpr (binderToStgId b) 0) $
                                 pprExpr rhs
                             ]
     StgCase x b at alts -> sep
-                            [ withStgPoint (SP_CaseScrutineeExpr $ Id b) $
+                            [ withStgPoint (SP_CaseScrutineeExpr $ binderToStgId b) $
                                 pprBinder b <+> text "<-" <+> nest 2 (pprExpr x)
                             , text "case" <+> pprVar b <+> text "of"
                             , indent 2 $ vcat $ putDefaultLast alts [pprAlt (Id b) idx a | (idx, a) <- zip [0..] alts]
@@ -437,7 +437,7 @@ pprExpr exp = do
     StgTick tickish e -> do
       Config{..} <- speConfig <$> askEnv
       if cfgPrintTickish
-        then vsep [pretty tickish, pprExpr e]
+        then vsep [annotate (SP_Tickish stgPoint) $ pretty tickish, pprExpr e]
         else pprExpr e
 
 instance Pretty Expr where
@@ -456,9 +456,10 @@ pprSrcSpan = \case
   RealSrcSpan sp _                      -> text "-- src-loc:" <+> pretty sp
 -}
 pprRhs :: Id -> Rhs -> Doc
-pprRhs rhsId@(Id rhsBinder) = \case
-  StgRhsClosure _ u bs e -> pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do" <> (newline <> (indent 2 $ withStgPoint (SP_RhsClosureExpr rhsId) $ pprExpr e))
-  StgRhsCon dc vs -> annotate (SP_RhsCon rhsId) $ do
+pprRhs (Id rhsBinder) = \case
+  StgRhsClosure _ u bs e -> annotate (SP_Binding $ binderToStgId rhsBinder) $ do
+    pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do" <> (newline <> (indent 2 $ withStgPoint (SP_RhsClosureExpr $ binderToStgId rhsBinder) $ pprExpr e))
+  StgRhsCon dc vs -> annotate (SP_RhsCon $ binderToStgId rhsBinder) $ do
     pprBinder rhsBinder <+> text "=" <+> addUnboxedCommentIfNecessary dc (pprDataConName dc <+> (hsep $ map (pprArg) vs))
 
 pprBinding :: Binding -> Doc

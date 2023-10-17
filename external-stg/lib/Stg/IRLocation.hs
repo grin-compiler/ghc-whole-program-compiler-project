@@ -1,16 +1,39 @@
+{-# LANGUAGE RecordWildCards #-}
 module Stg.IRLocation where
 
 import Stg.Syntax
 
+data StgId
+  = StgId
+  { siUnitId      :: Name
+  , siModuleName  :: Name
+  , siName        :: Name
+  , siUnique      :: Maybe Unique
+  }
+  deriving (Eq, Ord, Show, Read)
+
+binderToStgId :: Binder -> StgId
+binderToStgId Binder{..} = StgId
+  { siUnitId      = getUnitId binderUnitId
+  , siModuleName  = getModuleName binderModule
+  , siName        = binderName
+  , siUnique      = case binderScope of
+                      ModulePublic -> Nothing
+                      _ | BinderId u <- binderId
+                        -> Just u
+  }
+
 data StgPoint
   -- expression locations
-  = SP_CaseScrutineeExpr  { spScrutineeResultName :: Id }
+  = SP_CaseScrutineeExpr  { spScrutineeResultName :: StgId }
   | SP_LetExpr            { spParent :: StgPoint }
   | SP_LetNoEscapeExpr    { spParent :: StgPoint }
-  | SP_RhsClosureExpr     { spRhsBinderName :: Id }
-  | SP_AltExpr            { spScrutineeResultName :: Id, spAltIndex :: Int }
-  | SP_RhsCon             { spRhsBinderName :: Id }
-  deriving (Eq, Ord, Show)
+  | SP_RhsClosureExpr     { spRhsBinderName :: StgId }
+  | SP_AltExpr            { spScrutineeResultName :: StgId, spAltIndex :: Int }
+  | SP_RhsCon             { spRhsBinderName :: StgId }
+  | SP_Binding            { spBinderName :: StgId }
+  | SP_Tickish            { spParent :: StgPoint }
+  deriving (Eq, Ord, Show, Read)
 
 {-
   breakpoint types:
@@ -59,7 +82,7 @@ data StgPoint
 data FieldSelector
   -- generic
   = FS_UniqueName                 Name  -- selects uniquely named IR element
-  | FS_Binder                     Id    -- selects uniquely named IR element
+  | FS_Binder                     StgId -- selects uniquely named IR element
 
   -- Module
   | FS_Module_moduleTopBindings   Int   -- selects: Module     -> TopBinding

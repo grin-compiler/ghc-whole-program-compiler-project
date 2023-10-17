@@ -28,7 +28,7 @@ visitBinding = \case
 
 visitRhs :: Binder -> Rhs -> M ()
 visitRhs rhsBinder = \case
-  StgRhsClosure _ _ _ e -> withStgPoint (SP_RhsClosureExpr $ Id rhsBinder) $ visitExpr e
+  StgRhsClosure _ _ _ e -> withStgPoint (SP_RhsClosureExpr $ binderToStgId rhsBinder) $ visitExpr e
   StgRhsCon{}           -> pure ()
 
 visitExpr :: Expr -> M ()
@@ -40,7 +40,7 @@ visitExpr expr = do
     StgOpApp{}          -> pure ()
     StgConApp{}         -> pure ()
     StgCase x b _ alts  -> do
-                            withStgPoint (SP_CaseScrutineeExpr $ Id b) $ visitExpr x
+                            withStgPoint (SP_CaseScrutineeExpr $ binderToStgId b) $ visitExpr x
                             sequence_ [visitAlt (Id b) idx a | (idx, a) <- zip [0..] alts]
     StgLet b e          -> do
                             visitBinding b
@@ -53,8 +53,8 @@ visitExpr expr = do
                             visitExpr e
 
 visitAlt :: Id -> Int -> Alt -> M ()
-visitAlt scrutId idx (Alt _con _bndrs rhs) = do
-  withStgPoint (SP_AltExpr scrutId idx) $ visitExpr rhs
+visitAlt (Id scrutBinder) idx (Alt _con _bndrs rhs) = do
+  withStgPoint (SP_AltExpr (binderToStgId scrutBinder) idx) $ visitExpr rhs
 
 collectTickish :: Module -> [(StgPoint, Tickish)]
 collectTickish m = snd $ evalRWS (mapM_ visitTopBinding $ moduleTopBindings m) Nothing ()
