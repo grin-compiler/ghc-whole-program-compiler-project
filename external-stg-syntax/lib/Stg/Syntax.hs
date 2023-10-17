@@ -11,6 +11,7 @@ import GHC.Generics
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import Data.Binary
+import Data.List
 
 -- utility
 
@@ -68,11 +69,26 @@ data Unique
   = Unique !Char !Int
   deriving (Eq, Ord, Generic)
 
-instance Show Unique where
- show (Unique c n) = c : iToBase62 n
+instance Read Unique where
+  readsPrec _d r =
+    [ (Unique c (base62ToInt numStr), s)
+    | (c : numStr, s) <- lex r
+    ]
 
-iToBase62 :: Int -> String
-iToBase62 n_ = go n_ "" where
+instance Show Unique where
+ show (Unique c n) = c : intToBase62 n
+
+base62ToInt :: String -> Int
+base62ToInt numStr = sum
+  [ 62^e * i
+  | (e, n) <- zip ([0..] :: [Int]) $ reverse numStr
+  , Just i <- [elemIndex n chars62]
+  ]
+ where
+  chars62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+intToBase62 :: Int -> String
+intToBase62 n_ = go n_ "" where
   go n cs | n < 62
           = let c = chooseChar62 n in c : cs
           | otherwise
