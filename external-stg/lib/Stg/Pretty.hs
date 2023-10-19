@@ -604,7 +604,7 @@ pShow :: Doc -> (Text, [(StgPoint, SrcRange)])
 pShow = pShowWithConfig Config {cfgPrintTickish = False}
 
 pShowWithConfig :: Config -> Doc -> (Text, [(StgPoint, SrcRange)])
-pShowWithConfig cfg doc = (T.concat . reverse $ spsOutput result, spsStgPoints result)
+pShowWithConfig cfg doc = (T.concat . reverse $ spsOutput result, reverse $ spsStgPoints result)
   where
     result = execState (renderPOut $ execDoc cfg doc) emptyStgPointState
 
