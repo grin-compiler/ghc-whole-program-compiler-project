@@ -96,9 +96,15 @@ runLiveDataAnalysis extraGCRoots stgState = Souffle.runSouffle ExtStgGC $ \maybe
 ---------------------------
 
 addGCRootFacts :: Souffle.Handle ExtStgGC -> StgState -> [Atom] -> SouffleM ()
-addGCRootFacts prog StgState{..} localGCRoots = do
-  let addGCRoot :: GCSymbol -> SouffleM ()
-      addGCRoot s = Souffle.addFact prog $ GCRoot $ BS8.unpack $ unGCSymbol s
+addGCRootFacts prog stgState localGCRoots = withGCRootFacts stgState localGCRoots $ \_msg s -> do
+  Souffle.addFact prog $ GCRoot $ BS8.unpack $ unGCSymbol s
+
+addReferenceFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
+addReferenceFacts prog stgState = withReferenceFacts stgState $ \from to -> do
+  Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from) (BS8.unpack $ unGCSymbol to)
+
+withGCRootFacts :: Monad m => StgState -> [Atom] -> (String -> GCSymbol -> m ()) -> m ()
+withGCRootFacts StgState{..} localGCRoots addGCRoot = do
 
   -- HINT: the following can be GC roots
   {-
@@ -111,19 +117,19 @@ addGCRootFacts prog StgState{..} localGCRoots = do
   -}
 
   -- local
-  visitGCRef addGCRoot localGCRoots
+  visitGCRef (addGCRoot "local") localGCRoots
 
   -- stable pointer values
-  visitGCRef addGCRoot [PtrAtom (StablePtr idx) (intPtrToPtr $ IntPtr idx) | idx <- IntMap.keys ssStablePointers]
+  visitGCRef (addGCRoot "stable pointer") [PtrAtom (StablePtr idx) (intPtrToPtr $ IntPtr idx) | idx <- IntMap.keys ssStablePointers]
 
   -- CAFs
-  visitGCRef addGCRoot $ map HeapPtr $ IntSet.toList ssCAFSet
+  visitGCRef (addGCRoot "CAF") $ map HeapPtr $ IntSet.toList ssCAFSet
 
   -- stack continuations of live threads
   forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of
     ThreadFinished  -> pure ()
     ThreadDied      -> pure ()
-    ThreadRunning   -> addGCRoot $ encodeRef tid NS_Thread
+    ThreadRunning   -> addGCRoot "thread" $ encodeRef tid NS_Thread
     ThreadBlocked r -> case r of
       BlockedOnMVar{}         -> pure () -- will be referred by the mvar wait queue
       BlockedOnMVarRead{}     -> pure () -- will be referred by the mvar wait queue
@@ -131,16 +137,13 @@ addGCRootFacts prog StgState{..} localGCRoots = do
       BlockedOnThrowAsyncEx{} -> pure () -- will be referred by the target thread's blocked exceptions queue
       BlockedOnSTM{}          -> pure () -- will be referred by the tvar wait queue
       BlockedOnForeignCall{}  -> error "not implemented yet"
-      BlockedOnRead{}         -> addGCRoot $ encodeRef tid NS_Thread
-      BlockedOnWrite{}        -> addGCRoot $ encodeRef tid NS_Thread
-      BlockedOnDelay{}        -> addGCRoot $ encodeRef tid NS_Thread
+      BlockedOnRead{}         -> addGCRoot "thread" $ encodeRef tid NS_Thread
+      BlockedOnWrite{}        -> addGCRoot "thread" $ encodeRef tid NS_Thread
+      BlockedOnDelay{}        -> addGCRoot "thread" $ encodeRef tid NS_Thread
 
-addReferenceFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
-addReferenceFacts prog StgState{..} = do
-  let addReference :: GCSymbol -> GCSymbol -> SouffleM ()
-      addReference from i = Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from) (BS8.unpack $ unGCSymbol i)
-
-      addRefs :: VisitGCRef a => IntMap a -> RefNamespace -> SouffleM ()
+withReferenceFacts :: forall m . Monad m => StgState -> (GCSymbol -> GCSymbol -> m ()) -> m ()
+withReferenceFacts StgState{..} addReference = do
+  let addRefs :: (VisitGCRef a, Monad m) => IntMap a -> RefNamespace -> m ()
       addRefs im ns = do
         let l = IntMap.toList im
         forM_ l $ \(i, v) -> visitGCRef (addReference (encodeRef i ns)) v
