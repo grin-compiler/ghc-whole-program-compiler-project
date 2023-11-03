@@ -31,6 +31,7 @@ library
     Stg.Interpreter.Debugger.Region
     Stg.Interpreter.Debugger.UI
     Stg.Interpreter.Debugger.TraverseState
+    Stg.Interpreter.Debugger.Retainer
     Stg.Interpreter.GC
     Stg.Interpreter.GC.GCRef
     Stg.Interpreter.GC.LiveDataAnalysis
@@ -93,6 +94,8 @@ library
                        unagi-chan,
                        pretty-terminal,
                        pretty-simple,
+                       dom-lt,
+                       bimap,
                        souffle-haskell,
                        external-stg-syntax,
                        external-stg
