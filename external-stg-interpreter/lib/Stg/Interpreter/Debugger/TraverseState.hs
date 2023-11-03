@@ -1,6 +1,9 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.Debugger.TraverseState
  ( exportReachableGraph
+ , exportHeapGraph
+ , getHeapObjectSummary
+ , getHeapObjectCategory
  ) where
 
 import Control.Monad.State
@@ -121,3 +124,51 @@ getHeapObjectCategory = \case
   BlackHole{}       -> "BlackHole"
   ApStack{}         -> "ApStack"
   RaiseException{}  -> "Exception"
+
+exportHeapGraph :: FilePath -> FilePath -> Heap -> IO ()
+exportHeapGraph nodesFname edgesFname heap = do
+  withFile edgesFname WriteMode $ \hEdge -> do
+    withFile nodesFname WriteMode $ \hNode -> do
+      BS8.hPutStrLn hNode $ BS8.intercalate "\t"
+        [ "Id"
+        , "Label"
+        , "partition2"
+        ]
+      BS8.hPutStrLn hEdge $ BS8.intercalate "\t"
+        [ "Source"
+        , "Target"
+        , "partition2"
+        ]
+      flip evalStateT Set.empty $ do
+        forM_ (IntMap.toList heap) $ \(addr, obj) -> do
+          let source = encodeRef addr NS_HeapPtr
+
+              genNode node = do
+                firstTimeVisit <- mark node
+                when firstTimeVisit $ do
+                  let (ns, idx) = decodeRef node
+                      (nodeLabel, nodeCategory) = case ns of
+                        NS_HeapPtr
+                          | Just ho <- IntMap.lookup idx heap
+                          -> (getHeapObjectSummary ho, getHeapObjectCategory ho)
+                        _ -> (drop 3 $ show ns, drop 3 $ show ns)
+                  -- HINT: write line to node .tsv
+                  liftIO $ do
+                    BS8.hPut hNode $ unGCSymbol node
+                    BS8.hPut hNode "\t"
+                    hPutStr hNode nodeLabel
+                    BS8.hPut hNode "\t"
+                    hPutStr hNode nodeCategory
+                    BS8.hPut hNode "\n"
+
+          genNode source
+          flip visitGCRef obj $ \target -> do
+            genNode target
+            -- HINT: write line to edge .tsv
+            liftIO $ do
+              BS8.hPut hEdge $ unGCSymbol source
+              BS8.hPut hEdge "\t"
+              BS8.hPut hEdge $ unGCSymbol target
+              BS8.hPut hEdge "\t"
+              BS8.hPut hEdge "green"
+              BS8.hPut hEdge "\n"
