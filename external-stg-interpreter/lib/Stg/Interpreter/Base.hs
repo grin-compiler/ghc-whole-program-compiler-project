@@ -310,6 +310,9 @@ type Heap   = IntMap HeapObject
 type Env    = Map Id (StaticOrigin, Atom)   -- NOTE: must contain only the defined local variables
 type Stack  = [StackContinuation]
 
+envToAtoms :: Env -> [Atom]
+envToAtoms = map snd . Map.elems
+
 data StaticOrigin
   = SO_CloArg
   | SO_Let
@@ -410,6 +413,7 @@ data StgState
 
   -- debug
   , ssIsQuiet             :: Bool
+  , ssLocalEnv            :: [Atom]
   , ssCurrentClosureEnv   :: Env
   , ssCurrentClosure      :: Maybe Id
   , ssCurrentClosureAddr  :: Int
@@ -437,7 +441,9 @@ data StgState
 
   -- region tracker
   , ssMarkers             :: !(Map Name (Set Region))
-  , ssRegions             :: !(Map Region (Maybe AddressState, CallGraph, [(AddressState, AddressState)]) )
+  , ssRegionStack         :: !(Map (Int, Region) [(Int, AddressState, CallGraph)]) -- HINT: key = threadId + region ; value = index + start + call-graph
+  , ssRegionInstances     :: !(Map Region (IntMap (AddressState, AddressState))) -- region => instance-index => start end
+  , ssRegionCounter       :: !(Map Region Int)
 
   -- retainer db
   , ssReferenceMap        :: !(Map GCSymbol (Set GCSymbol))
@@ -455,7 +461,7 @@ data StgState
 
   -- tracing primops
   , ssTraceEvents         :: ![(String, AddressState)]
-  , ssTraceMarkers        :: ![(String, AddressState)]
+  , ssTraceMarkers        :: ![(String, Int, AddressState)]
 
   -- internal dev mode debug settings
   , ssDebugSettings       :: DebugSettings
@@ -546,6 +552,7 @@ emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSetti
 
   -- debug
   , ssIsQuiet             = isQuiet
+  , ssLocalEnv            = mempty
   , ssCurrentClosureEnv   = mempty
   , ssCurrentClosure      = Nothing
   , ssCurrentClosureAddr  = -1
@@ -573,7 +580,9 @@ emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSetti
 
   -- region tracker
   , ssMarkers             = mempty
-  , ssRegions             = mempty
+  , ssRegionStack         = mempty
+  , ssRegionInstances     = mempty
+  , ssRegionCounter       = mempty
 
   -- retainer db
   , ssReferenceMap        = mempty
@@ -935,22 +944,24 @@ addInterClosureCallGraphEdge :: StaticOrigin -> ProgramPoint -> ProgramPoint -> 
 addInterClosureCallGraphEdge so from to = do
   let addEdge g@CallGraph{..} = g {cgInterClosureCallGraph = StrictMap.insertWith (+) (so, from, to) 1 cgInterClosureCallGraph}
       updateRegion = \case
-        (a@Just{}, regionCallGraph, l) -> (a, addEdge regionCallGraph, l)
+        -- HINT: collect edges for regions on stack top only, the call graph will be merged for nested regions at close
+        (i, a, regionCallGraph) : l -> (i, a, addEdge regionCallGraph) : l
         r -> r
   modify' $ \s@StgState{..} -> s
-    { ssCallGraph = addEdge ssCallGraph
-    , ssRegions   = fmap updateRegion ssRegions
+    { ssCallGraph   = addEdge ssCallGraph
+    , ssRegionStack = fmap updateRegion ssRegionStack
     }
 
 addIntraClosureCallGraphEdge :: ProgramPoint -> StaticOrigin -> ProgramPoint -> M ()
 addIntraClosureCallGraphEdge from so to = do
   let addEdge g@CallGraph{..} = g {cgIntraClosureCallGraph = StrictMap.insertWith (+) (from, so, to) 1 cgIntraClosureCallGraph}
       updateRegion = \case
-        (a@Just{}, regionCallGraph, l) -> (a, addEdge regionCallGraph, l)
+        -- HINT: collect edges for regions on stack top only, the call graph will be merged for nested regions at close
+        (i, a, regionCallGraph) : l -> (i, a, addEdge regionCallGraph) : l
         r -> r
   modify' $ \s@StgState{..} -> s
-    { ssCallGraph = addEdge ssCallGraph
-    , ssRegions   = fmap updateRegion ssRegions
+    { ssCallGraph   = addEdge ssCallGraph
+    , ssRegionStack = fmap updateRegion ssRegionStack
     }
 
 setProgramPoint :: ProgramPoint -> M ()
@@ -1391,9 +1402,12 @@ convertAddressState StgState{..} = AddressState
   }
 
 data Region
-  = Region
+  = IRRegion
   { regionStart :: Name
   , regionEnd   :: Name
+  }
+  | EventRegion
+  { regionName  :: Name
   }
   deriving (Eq, Ord, Show)
 

@@ -3,6 +3,7 @@ module Stg.Interpreter.Debugger.Region where
 
 import Text.Printf
 import Control.Monad.State
+import Data.Maybe
 import qualified Data.List as List
 import qualified Data.Set as Set
 import qualified Data.Map as Map
@@ -17,6 +18,14 @@ import Stg.Syntax
 
 import qualified Stg.Interpreter.GC as GC
 import qualified Stg.Interpreter.GC.GCRef as GC
+
+evalRegionCommand :: String -> M ()
+evalRegionCommand cmd = do
+  tid <- gets ssCurrentThreadId
+  case words cmd of
+    ["estgi.debug.region.start", name] -> startRegion tid . EventRegion $ BS8.pack name
+    ["estgi.debug.region.end",   name] -> endRegion tid . EventRegion $ BS8.pack name
+    _ -> pure ()
 
 dumpHeapObject :: Int -> HeapObject -> String
 dumpHeapObject i o = printf "%-8d %3s  %s" i (GC.ppLNE o) (debugPrintHeapObject o)
@@ -49,15 +58,15 @@ getRegionHeap start end = do
 
 showRegion :: Bool -> String -> String -> M ()
 showRegion doHeapDump start end = do
-  regions <- gets ssRegions
-  let r = Region (BS8.pack start) (BS8.pack end)
+  instances <- gets ssRegionInstances
+  let r = IRRegion (BS8.pack start) (BS8.pack end)
       printDelimiter = when doHeapDump $ liftIO $ putStrLn "\n==============================================================================\n"
-  case Map.lookup r regions of
+  case Map.lookup r instances of
     Nothing       -> pure ()
-    Just (cur, _curCallGraph, l) -> do
-      liftIO $ putStrLn $ "region data count: " ++ show (length l)
+    Just l -> do
+      liftIO $ putStrLn $ "region data count: " ++ show (IntMap.size l)
       liftIO $ putStrLn $ "order:  OLD -> NEW"
-      forM_ (reverse l) $ \(s, e) -> do
+      forM_ (IntMap.elems l) $ \(s, e) -> do
         printDelimiter
         let sAddr = asNextHeapAddr s
             eAddr = asNextHeapAddr e
@@ -71,23 +80,21 @@ showRegion doHeapDump start end = do
 
 addRegion :: String -> String -> M ()
 addRegion start end = do
-  regions <- gets ssRegions
+  regions <- gets ssRegionCounter
   let s = BS8.pack start
       e = BS8.pack end
-      r = Region s e
+      r = IRRegion s e
   unless (Map.member r regions) $ do
-    modify $ \s@StgState{..} -> s {ssRegions = Map.insert r (Nothing, emptyCallGraph, []) ssRegions}
     addMarker s r
     addMarker e r
 
 delRegion :: String -> String -> M ()
 delRegion start end = do
-  regions <- gets ssRegions
+  regions <- gets ssRegionCounter
   let s = BS8.pack start
       e = BS8.pack end
-      r = Region s e
+      r = IRRegion s e
   when (Map.member r regions) $ do
-    modify $ \s@StgState{..} -> s {ssRegions = Map.delete r ssRegions}
     delMarker s r
     delMarker e r
 
@@ -102,34 +109,41 @@ delMarker m r = do
 
 checkRegion :: Name -> M ()
 checkRegion markerName = do
+  tid <- gets ssCurrentThreadId
   markers <- gets ssMarkers
   case Map.lookup markerName markers of
     Nothing -> pure ()
     Just rl -> do
-      forM_ rl $ \r@(Region s e) -> case r of
-        _ | markerName == s && markerName == e -> startEndRegion r
-        _ | markerName == s -> startRegion r
-        _ | markerName == e -> endRegion r
+      forM_ rl $ \r@(IRRegion s e) -> case r of
+        _ | markerName == s && markerName == e -> endRegion tid r >> startRegion tid r
+        _ | markerName == s -> startRegion tid r
+        _ | markerName == e -> endRegion tid r
 
-startRegion :: Region -> M ()
-startRegion r = do
-  a <- getAddressState
-  let start (Nothing, _, l) = (Just a, emptyCallGraph, l)
-      start x = x -- HINT: multiple start is allowed to support more flexible debugging
-  modify $ \s@StgState{..} -> s {ssRegions = Map.adjust start r ssRegions}
+nextRegionIndex :: Region -> M Int
+nextRegionIndex r = do
+  idx <- fromMaybe 0 <$> gets (Map.lookup r . ssRegionCounter)
+  modify' $ \s@StgState{..} -> s {ssRegionCounter = Map.insert r (succ idx) ssRegionCounter}
+  pure idx
 
-endRegion :: Region -> M ()
-endRegion r = do
-  exportRegionCallGraph r
-  a <- getAddressState
-  let end (Just s, _, l) = (Nothing, emptyCallGraph, (s, a) : l)
-      end x = x -- HINT: if the region was not started then there is nothing to do
-  modify $ \s@StgState{..} -> s {ssRegions = Map.adjust end r ssRegions}
+startRegion :: Int -> Region -> M ()
+startRegion threadId r = do
+  idx <- nextRegionIndex r
+  startAddr <- getAddressState
+  modify $ \s@StgState{..} -> s {ssRegionStack = Map.insertWith (++) (threadId, r) [(idx, startAddr, emptyCallGraph)] ssRegionStack}
 
-startEndRegion :: Region -> M ()
-startEndRegion r = do
-  exportRegionCallGraph r
-  a <- getAddressState
-  let fun (Nothing, _, l) = (Just a, emptyCallGraph, l)
-      fun (Just s, _, l)  = (Just a, emptyCallGraph, (s, a) : l)
-  modify $ \s@StgState{..} -> s {ssRegions = Map.adjust fun r ssRegions}
+endRegion :: Int -> Region -> M ()
+endRegion threadId r = do
+  -- pop region
+  gets (Map.lookup (threadId, r) . ssRegionStack) >>= \case
+    Just ((idx, startAddr, callGraph) : stackTail) -> do
+      exportRegionCallGraph idx r callGraph
+      endAddr <- getAddressState
+      modify $ \s@StgState{..} -> s { ssRegionInstances = Map.insertWith IntMap.union r (IntMap.singleton idx (startAddr, endAddr)) ssRegionInstances }
+      case stackTail of
+        [] -> do
+          -- HINT: keep ssRegionStack small, to make call graph update fast
+          modify $ \s@StgState{..} -> s { ssRegionStack = Map.delete (threadId, r) ssRegionStack }
+        (o, a, cg) : l  -> do
+          let mergedStackTail = (o, a, joinCallGraph cg callGraph) : l -- HINT: merge callgraphs for nested regions
+          modify $ \s@StgState{..} -> s { ssRegionStack = Map.insert (threadId, r) mergedStackTail ssRegionStack}
+    _ -> pure ()

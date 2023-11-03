@@ -135,23 +135,19 @@ exportCallGraph = do
     writeCallGraph (rtsProgName ++ "-call-graph.tsv") globalCallGraph
     writeCallGraphSummary (rtsProgName ++ "-call-graph-summary") globalCallGraph
 
-exportRegionCallGraph :: Region -> M ()
-exportRegionCallGraph r@Region{..} = do
-  regions <- gets ssRegions
-  case Map.lookup r regions of
-    Just (Just{}, callGraph, l) -> do
-      Rts{..} <- gets ssRtsSupport
-      let regionName  = BS8.unpack regionStart ++ "-" ++ BS8.unpack regionEnd
-          dirName     = "." ++ rtsProgName ++ "-call-graph" </> regionName
-          idx         = length l
-      liftIO $ do
-        regionPath <- makeAbsolute dirName
-        createDirectoryIfMissing True regionPath
-        putStrLn $ "save call graphs to: " ++ regionPath
-        writeCallGraph (regionPath </> printf "%04d" idx ++ ".tsv") callGraph
-        writeCallGraphSummary (regionPath </> printf "%04d" idx ++ "-summary") callGraph
-
-    _ -> pure () -- HINT: ignore missing regions or non-open regions
+exportRegionCallGraph :: Int -> Region -> CallGraph -> M ()
+exportRegionCallGraph idx r callGraph = do
+  Rts{..} <- gets ssRtsSupport
+  let name  = case r of
+        IRRegion{..}    -> BS8.unpack regionStart ++ "-" ++ BS8.unpack regionEnd
+        EventRegion{..} -> BS8.unpack regionName
+      dirName     = "." ++ rtsProgName ++ "-call-graph" </> name
+  liftIO $ do
+    regionPath <- makeAbsolute dirName
+    createDirectoryIfMissing True regionPath
+    putStrLn $ "save call graphs to: " ++ regionPath
+    writeCallGraph (regionPath </> printf "%04d" idx ++ ".tsv") callGraph
+    writeCallGraphSummary (regionPath </> printf "%04d" idx ++ "-summary") callGraph
 
 writeCallGraph :: FilePath -> CallGraph -> IO ()
 writeCallGraph fname CallGraph{..} = do

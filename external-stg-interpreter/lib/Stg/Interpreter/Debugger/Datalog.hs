@@ -236,13 +236,16 @@ exportStgStateM stgState@StgState{..} = do
     forM_ (genAddressState a) $ \(ns, value) -> do
       addFact "TraceEvent" [S n, I i, S ns, I value]
 
-  forM_ (zip [0..] $ reverse ssTraceMarkers) $ \(i, (n, a)) -> do
+  forM_ (zip [0..] $ reverse ssTraceMarkers) $ \(i, (n, _tid, a)) -> do
     forM_ (genAddressState a) $ \(ns, value) -> do
       addFact "TraceMarker" [S n, I i, S ns, I value]
 
   -- regions
-  forM_ (Map.toList ssRegions) $ \(Region start_name end_name, (_, _curCallGraph, l)) -> do
-    forM_ (zip [0..] (reverse l)) $ \(idx, (s, e)) -> do
+  forM_ (Map.toList ssRegionInstances) $ \(r, l) -> do
+    let (start_name, end_name) = case r of
+          IRRegion{..}    -> (regionStart, regionEnd)
+          EventRegion{..} -> (regionName, regionName)
+    forM_ (IntMap.toList l) $ \(idx, (s, e)) -> do
       forM_ (zip (genAddressState s) (genAddressState e)) $ \((start_ns, start_value), (end_ns, end_value)) -> do
         addFact "Region" [N start_name, N end_name, I idx, S start_ns, I start_value, I end_value]
 

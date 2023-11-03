@@ -7,6 +7,7 @@ import Foreign.Ptr
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+import Stg.Interpreter.Debugger.Region (evalRegionCommand)
 
 pattern Int64V i = IntAtom i
 
@@ -28,6 +29,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- traceEvent# :: Addr# -> State# s -> State# s
   ( "traceEvent#", [PtrAtom _ p, _s]) -> do
     msg <- liftIO $ peekCString $ castPtr p
+    evalRegionCommand msg
     addrState <- getAddressState
     modify' $ \s@StgState{..} -> s {ssTraceEvents = (msg, addrState) : ssTraceEvents}
     pure []
@@ -37,8 +39,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- traceMarker# :: Addr# -> State# s -> State# s
   ( "traceMarker#", [PtrAtom _ p, _s]) -> do
     msg <- liftIO $ peekCString $ castPtr p
+    evalRegionCommand msg
+    tid <- gets ssCurrentThreadId
+    liftIO $ print (tid, msg)
     addrState <- getAddressState
-    modify' $ \s@StgState{..} -> s {ssTraceMarkers = (msg, addrState) : ssTraceMarkers}
+    modify' $ \s@StgState{..} -> s {ssTraceMarkers = (msg, tid, addrState) : ssTraceMarkers}
     pure []
 
   -- setThreadAllocationCounter# :: Int64# -> State# RealWorld -> State# RealWorld
