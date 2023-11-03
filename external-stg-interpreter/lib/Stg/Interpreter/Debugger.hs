@@ -109,8 +109,9 @@ hasFuel = do
   modify' $ \s@StgState{..} -> s {ssDebugFuel = fmap pred ssDebugFuel, ssStepCounter = succ ssStepCounter}
   pure $ maybe True (> 0) fuel
 
-checkBreakpoint :: Breakpoint -> M ()
-checkBreakpoint breakpoint = do
+checkBreakpoint :: [Atom] -> Breakpoint -> M ()
+checkBreakpoint localEnv breakpoint = do
+  modify' $ \s@StgState{..} -> s {ssLocalEnv = localEnv}
   dbgState <- gets ssDebugState
   exit <- processCommandsNonBlocking
   shouldStep <- hasFuel

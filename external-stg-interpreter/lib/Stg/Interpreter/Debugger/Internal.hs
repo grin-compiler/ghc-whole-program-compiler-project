@@ -131,8 +131,8 @@ dbgCommands =
   [ ( ["gc"]
     , "run sync. garbage collector"
     , wrapWithDbgOut $ \_ -> do
-        curClosureAddr <- gets ssCurrentClosureAddr
-        GC.runGCSync [HeapPtr curClosureAddr]
+        localEnv <- gets ssLocalEnv
+        GC.runGCSync localEnv
     )
   , ( ["cleardb"]
     , "clear retainer db"
@@ -177,7 +177,7 @@ dbgCommands =
     , "[START] [END] list a given region or all regions if the arguments are omitted"
     , wrapWithDbgOut $ \case
       [] -> do
-        regions <- Map.keys <$> gets ssRegions
+        regions <- Map.keys <$> gets ssRegionStack
         liftIO $ putStrLn $ unlines $ map show regions
       [start]       -> showRegion False start start
       [start, end]  -> showRegion False start end
@@ -286,14 +286,14 @@ dbgCommands =
     , "list all trace markers and heap address state"
     , wrapWithDbgOut $ \_-> do
         markers <- gets ssTraceMarkers
-        forM_ (reverse markers) $ \(msg, AddressState{..}) -> liftIO $ printf "%-10d  %s\n" asNextHeapAddr (show msg)
+        forM_ (reverse markers) $ \(msg, _tid, AddressState{..}) -> liftIO $ printf "%-10d  %s\n" asNextHeapAddr (show msg)
     )
 
   , ( ["?m-dump"]
     , "list all trace markers and the whole address state"
     , wrapWithDbgOut $ \_-> do
         markers <- gets ssTraceMarkers
-        forM_ (reverse markers) $ \(msg, a) -> liftIO $ do
+        forM_ (reverse markers) $ \(msg, _tid, a) -> liftIO $ do
           print msg
           print a
     )

@@ -285,7 +285,7 @@ stopIfThereIsNoRunnableThread = do
           putStrLn $ show (tid, tsStatus ts, tsBlockExceptions ts, tsInterruptible ts, tsBlockedExceptions ts, tsLabel ts)
       dumpStgState
       modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
-      Debugger.checkBreakpoint $ BkpCustom "thread-scheduler"
+      Debugger.checkBreakpoint [] $ BkpCustom "thread-scheduler"
 
 {-
   IDEA:

@@ -181,7 +181,7 @@ buildCallGraph so hoName = do
 builtinStgEval :: HasCallStack => StaticOrigin -> Atom -> M [Atom]
 builtinStgEval so a@HeapPtr{} = do
   o <- readHeap a
-  Debugger.checkBreakpoint $ BkpCustom "eval"
+  Debugger.checkBreakpoint [a] $ BkpCustom "eval"
   case o of
     ApStack{..} -> do
       tid <- gets ssCurrentThreadId
@@ -242,7 +242,7 @@ builtinStgEval so a@HeapPtr{} = do
         -- check breakpoints and region entering
         let closureName = binderUniqueName $ unId hoName
         markClosure closureName -- HINT: this list can be deleted by a debugger command, so this is not the same as `markExecutedId`
-        Debugger.checkBreakpoint . BkpStgPoint . SP_RhsClosureExpr . binderToStgId . unId $ hoName
+        Debugger.checkBreakpoint [a] . BkpStgPoint . SP_RhsClosureExpr . binderToStgId . unId $ hoName
         Debugger.checkRegion closureName
         GC.checkGC [a] -- HINT: add local env as GC root
 
@@ -467,7 +467,7 @@ evalStackMachine result = do
         resultStr <- mapM debugPrintAtom result
         traceLog $ showStackCont stackCont ++ " current-result: " ++ show resultStr
 
-      Debugger.checkBreakpoint $ BkpCustom "stack"
+      Debugger.checkBreakpoint result $ BkpCustom "stack"
       nextResult <- evalStackContinuation result stackCont
       case stackCont of
         RunScheduler{} -> pure ()
@@ -709,7 +709,7 @@ evalExpr localEnv = \case
     evalExpr localEnv e
 
   StgOpApp (StgPrimOp op) l t tc -> do
-    Debugger.checkBreakpoint $ BkpPrimOp op
+    Debugger.checkBreakpoint (envToAtoms localEnv) $ BkpPrimOp op
     Debugger.checkRegion op
     markPrimOp op
     args <- mapM (evalArg localEnv) l
@@ -723,7 +723,7 @@ evalExpr localEnv = \case
     -- check foreign target region and breakpoint
     case foreignCTarget foreignCall of
       StaticTarget _ targetName _ _ -> do
-        Debugger.checkBreakpoint $ BkpFFISymbol targetName
+        Debugger.checkBreakpoint (envToAtoms localEnv) $ BkpFFISymbol targetName
         Debugger.checkRegion targetName
       _ -> pure ()
 
@@ -955,7 +955,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
 
         exportCallGraph
 
-        Debugger.checkBreakpoint $ BkpCustom "program finished"
+        Debugger.checkBreakpoint [] $ BkpCustom "program finished"
         -- HINT: start debugger REPL in debug mode
         when (dbgState == DbgStepByStep) $ do
           Debugger.processCommandsUntilExit
