@@ -54,14 +54,14 @@ coreToDosFun :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
 coreToDosFun cmdOpts todo0 = do
   let captureCore :: ModGuts -> CoreM ModGuts
       captureCore mg = do
-        putMsgS $ "wpc-plugin captureCore pass"
+        --putMsgS $ "wpc-plugin captureCore pass"
         liftIO $ modifyIORef globalEnvIORef $ \d -> d {geModGuts = Just mg}
         pure mg
 
       todo = todo0 ++ [CoreDoPluginPass "capture IR" captureCore]
 
-  putMsgS $ "wpc-plugin coreToDosFun cmdOpts: " ++ show cmdOpts
-  putMsg $ text "wpc-plugin coreToDosFun todo: " <+> vcat (map ppr todo)
+  --putMsgS $ "wpc-plugin coreToDosFun cmdOpts: " ++ show cmdOpts
+  --putMsg $ text "wpc-plugin coreToDosFun todo: " <+> vcat (map ppr todo)
   return todo
 
 driverFun :: [CommandLineOption] -> HscEnv -> IO HscEnv
@@ -246,7 +246,7 @@ linkFun ghcLink dflags isBatchMode hpt = do
   GlobalEnv{..} <- readIORef globalEnvIORef
   let Just HscEnv{..} = geHscEnv
       hooks = hsc_hooks {linkHook = Nothing}
-  result <- Pipeline.link ghcLink hsc_logger hsc_tmpfs hooks dflags hsc_unit_env isBatchMode Nothing hpt
+  result <- Pipeline.link ghcLink hsc_logger hsc_tmpfs hsc_FC hooks dflags hsc_unit_env isBatchMode Nothing hpt
   {-
     IDEA: generate ghcstgapp file along with modpak file for the main module
             do not use the link hook

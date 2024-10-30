@@ -118,10 +118,10 @@ bs8SDoc :: (?ienv :: ImplicitEnv) => GHC.SDoc -> BS8.ByteString
 bs8SDoc = BS8.pack . GHC.showSDoc (ieDflags ?ienv)
 
 uniqueKey :: GHC.Uniquable a => a -> Int
-uniqueKey = GHC.getKey . GHC.getUnique
+uniqueKey = fromIntegral . GHC.getKey . GHC.getUnique
 
 cvtUnique :: GHC.Unique -> Unique
-cvtUnique u = Unique a b
+cvtUnique u = Unique a (fromIntegral b)
   where (a,b) = GHC.unpkUnique u
 
 -- name conversion
@@ -172,13 +172,15 @@ cvtUnhelpfulSpanReason = \case
   GHC.UnhelpfulOther s        -> UnhelpfulOther $ GHC.bytesFS s
 
 -- tickish conversion
+cvtLexicalFastString :: GHC.LexicalFastString -> BS8.ByteString
+cvtLexicalFastString (GHC.LexicalFastString fs) = GHC.bytesFS fs
 
 cvtTickish :: GHC.StgTickish -> Tickish
 cvtTickish = \case
   GHC.ProfNote{}      -> ProfNote
   GHC.HpcTick{}       -> HpcTick
   GHC.Breakpoint{}    -> Breakpoint
-  GHC.SourceNote{..}  -> SourceNote (cvtRealSrcSpan sourceSpan) (BS8.pack sourceName)
+  GHC.SourceNote{..}  -> SourceNote (cvtRealSrcSpan sourceSpan) (cvtLexicalFastString sourceName)
 
 -- data con conversion
 
@@ -303,17 +305,22 @@ cvtTypeNormal t
   | GHC.isUnboxedSumType t || GHC.isUnboxedTupleType t
   = UnboxedTuple (map cvtPrimRep $ GHC.typePrimRep t)
 
-  | [rep] <- GHC.typePrimRepArgs t
+  | [rep] <- GHC.typePrimRep t
   = SingleValue (cvtPrimRep rep)
 
   | otherwise
   = error $ "could not convert type: " ++ ppr t
 
+cvtPrimRepOrVoidRep :: GHC.PrimOrVoidRep -> PrimRep
+cvtPrimRepOrVoidRep = \case
+    GHC.VoidRep -> VoidRep
+    GHC.NVRep r -> cvtPrimRep r
+
 cvtPrimRep :: GHC.PrimRep -> PrimRep
 cvtPrimRep = \case
-  GHC.VoidRep     -> VoidRep
-  GHC.LiftedRep   -> LiftedRep
-  GHC.UnliftedRep -> UnliftedRep
+  GHC.BoxedRep levity -> case levity of
+                            Just GHC.Unlifted -> UnliftedRep
+                            _                 -> LiftedRep
   GHC.Int8Rep     -> Int8Rep
   GHC.Int16Rep    -> Int16Rep
   GHC.Int32Rep    -> Int32Rep
@@ -401,6 +408,7 @@ cvtIdDetails i = case GHC.idDetails i of
   GHC.DataConWorkId d -> DataConWorkId <$> cvtDataCon d
   GHC.DataConWrapId d -> DataConWrapId <$> cvtDataCon d
   GHC.ClassOpId{}     -> pure ClassOpId
+  GHC.RepPolyId{}     -> pure RepPolyId
   GHC.PrimOpId{}      -> pure PrimOpId
   GHC.FCallId{}       -> pure FCallId
   GHC.TickBoxOpId{}   -> pure TickBoxOpId
@@ -419,7 +427,7 @@ cvtBinderIdClosureParam details msg v
   | GHC.isId v = SBinder
       { sbinderName     = cvtOccName $ GHC.getOccName v
       , sbinderId       = BinderId . cvtUnique . GHC.idUnique $ v
-      , sbinderType     = SingleValue . cvtPrimRep . {-trpp (unwords [msg, "cvtBinderIdClosureParam", ppr v])-} GHC.typePrimRep1 $ GHC.idType v
+      , sbinderType     = SingleValue . cvtPrimRepOrVoidRep . {-trpp (unwords [msg, "cvtBinderIdClosureParam", ppr v])-} GHC.typePrimRep1 $ GHC.idType v
       , sbinderTypeSig  = BS8.pack . ppr $ GHC.idType v
       , sbinderScope    = cvtScope v
       , sbinderDetails  = details
@@ -460,7 +468,7 @@ cvtBinderIdM msg i = do
 
 cvtSourceText :: GHC.SourceText -> SourceText
 cvtSourceText = \case
-  GHC.SourceText s  -> SourceText (BS8.pack s)
+  GHC.SourceText s  -> SourceText (GHC.bytesFS s)
   GHC.NoSourceText  -> NoSourceText
 
 cvtCCallTarget :: GHC.CCallTarget -> CCallTarget
@@ -529,11 +537,18 @@ cvtConAppTypeArgs tys = pure . unsafePerformIO $ catch (evaluate $ map (cvtType 
     -> pure []
   e -> throw e
 
+cvtConAppTypeArgs2 :: (?ienv :: ImplicitEnv) => [[GHC.PrimRep]] -> M [Type]
+cvtConAppTypeArgs2 tys = pure . unsafePerformIO $ catch (evaluate [UnboxedTuple $ map cvtPrimRep l | l <- tys]) $ \case
+  GHC.Panic msg
+    | "mkSeqs shouldn't use the type arg" `isInfixOf` msg
+    -> pure []
+  e -> throw e
+
 cvtExpr :: (?ienv :: ImplicitEnv) => GHC.CgStgExpr -> M SExpr
 cvtExpr = \case
   GHC.StgApp f ps           -> StgApp <$> cvtOccId f <*> mapM cvtArg ps
   GHC.StgLit l              -> pure $ StgLit (cvtLit l)
-  GHC.StgConApp dc _ ps ts  -> StgConApp <$> cvtDataCon dc <*> mapM cvtArg ps <*> cvtConAppTypeArgs ts
+  GHC.StgConApp dc _ ps ts  -> StgConApp <$> cvtDataCon dc <*> mapM cvtArg ps <*> cvtConAppTypeArgs2 ts
   GHC.StgOpApp o ps t       -> StgOpApp (cvtOp o) <$> mapM cvtArg ps <*> pure (cvtType "StgOpApp" t) <*> cvtDataTyConIdFromType t
   GHC.StgCase e b at al     -> StgCase <$> cvtExpr e <*> cvtBinderIdM "StgCase" b <*> cvtAltType at <*> mapM cvtAlt al
   GHC.StgLet _ b e          -> StgLet <$> cvtBind b <*> cvtExpr e
@@ -551,8 +566,8 @@ cvtUpdateFlag = \case
 
 cvtRhs :: (?ienv :: ImplicitEnv) => GHC.CgStgRhs -> M SRhs
 cvtRhs = \case
-  GHC.StgRhsClosure _ _ u bs e  -> StgRhsClosure [] (cvtUpdateFlag u) <$> mapM (cvtBinderIdClosureParamM "StgRhsClosure") bs <*> cvtExpr e
-  GHC.StgRhsCon _ dc _ _ args   -> StgRhsCon <$> cvtDataCon dc <*> mapM cvtArg args
+  GHC.StgRhsClosure _ _ u bs e _ -> StgRhsClosure [] (cvtUpdateFlag u) <$> mapM (cvtBinderIdClosureParamM "StgRhsClosure") bs <*> cvtExpr e
+  GHC.StgRhsCon _ dc _ _ args _  -> StgRhsCon <$> cvtDataCon dc <*> mapM cvtArg args
 
 -- bind and top-bind conversion
 
@@ -713,7 +728,7 @@ mkSDataCon dc = SDataCon
       --dcpp msg f a = trace ("mkSDataCon " ++ msg ++ " : " ++ ppr a) $ f a
       n = GHC.getName dc
       getConArgRep = \case
-        GHC.VoidRep -> [] -- HINT: drop VoidRep arguments, the STG constructor builder code also ignores them
+        --GHC.VoidRep -> [] -- HINT: drop VoidRep arguments, the STG constructor builder code also ignores them
         r           -> [cvtPrimRep r]
 
 topBindIds :: GHC.CgStgTopBinding -> [GHC.Id]

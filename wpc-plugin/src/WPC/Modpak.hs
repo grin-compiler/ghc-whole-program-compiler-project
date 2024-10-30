@@ -64,6 +64,10 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
       modpak_output   = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "modpaks" </> makeRelative odir modpak_output0
   createDirectoryIfMissing True (takeDirectory modpak_output)
 
+  let moddir_output0  = replaceExtension (ml_hi_file location) (objectSuf dflags)
+  let moddir_output   = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "hs-modules" </> makeRelative odir moddir_output0
+  createDirectoryIfMissing True moddir_output
+
   -- stgbin
   stgbinFile <- newTempName logger tmpfs (tmpDir dflags) TFL_CurrentModule (objectSuf dflags ++ "_stgbin")
   BSL.writeFile stgbinFile stgBin
@@ -114,6 +118,7 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
         , FileOption "--entryPath=" dst
         , FileOption "--sourcePath=" src
         ]
+
   runSomething logger "finish .modpak" "zip-cmd" $
     [ Option "CreateArchive", FileOption "--zipPath=" modpak_output] ++
     addToZip "module.stgbin" stgbinFile ++
@@ -135,6 +140,36 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
       Nothing   -> []
       Just fn -> addToZip "module_stub.c" fn
     )
+
+  -- mod dir output
+  let moveToDir dst src = renameFile src (moddir_output </> dst)
+      copyToDir dst src = copyFile src (moddir_output </> dst)
+  moveToDir "module.stgbin" stgbinFile
+  moveToDir "module.fullcore-hi" fullcoreHiFile
+  moveToDir "module.ghcstg" ghcstgFile
+  moveToDir "module.ghccore" ghccoreFile
+  moveToDir "module.cmm" cmm_filename
+  copyToDir "module.s" output_filename
+  moveToDir "module.info" infoFile
+  case mSrcPath of
+    Nothing -> pure ()
+    Just fn -> copyToDir "module.hs" fn
+  if has_stub_h
+    then copyToDir "module_stub.h" (mkStubPaths (initFinderOpts dflags) modName location)
+    else pure ()
+  case m_stub_c of
+    Nothing   -> pure ()
+    Just fn -> copyToDir "module_stub.c" fn
+  {-
+  -- compress
+  runSomething logger "compress module IRs" "zstd" $
+    [ Option "-q"
+    , Option "-T0"
+    , Option "--rm"
+    , Option "-r"
+    , FileOption "" moddir_output
+    ]
+  -}
 
 writeFullCoreInterface :: HscEnv -> ModGuts -> ModSummary -> FilePath -> IO ()
 writeFullCoreInterface hscEnv0 mod_guts mod_summary output_name = do
