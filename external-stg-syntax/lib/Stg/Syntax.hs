@@ -284,6 +284,7 @@ data IdDetails
   | CoVarId
   | JoinId        Int (Maybe [CbvMark])
   | WorkerLikeId  [CbvMark]
+  | RepPolyId
   deriving (Eq, Ord, Generic, Show)
 
 -- stg expr related
