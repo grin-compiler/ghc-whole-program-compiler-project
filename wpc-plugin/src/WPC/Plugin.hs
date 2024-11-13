@@ -134,8 +134,11 @@ runPhaseFun phase = do
         T_Cmm{}           -> "T_Cmm"
         T_Cc{}            -> "T_Cc"
         T_As{}            -> "T_As"
+        T_Js{}            -> "T_Js"
+        T_ForeignJs{}     -> "T_ForeignJs"
         T_LlvmOpt{}       -> "T_LlvmOpt"
         T_LlvmLlc{}       -> "T_LlvmLlc"
+        T_LlvmAs{}        -> "T_LlvmAs"
         T_LlvmMangle{}    -> "T_LlvmMangle"
         T_MergeForeign{}  -> "T_MergeForeign"
 
