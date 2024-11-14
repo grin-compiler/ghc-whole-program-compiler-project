@@ -73,4 +73,4 @@ linkForeignCbitsSharedLib ghcstgappFname = do
 
   let scriptFname = workDir </> "cbits.so.sh"
   writeFile scriptFname linkScript
-  callCommand $ printf "(cd %s; bash cbits.so.sh)" workDir
+  callCommand $ printf "(cd %s; bash cbits.so.sh)" (show workDir)
