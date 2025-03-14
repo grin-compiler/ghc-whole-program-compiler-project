@@ -6,12 +6,12 @@
 
 module Stg.Syntax where
 
-import GHC.Generics
+import GHC.Generics ( Generic )
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
-import Data.Binary
-import Data.List
+import Data.Binary ( Binary )
+import Data.List ( elemIndex )
 
 -- utility
 

@@ -18,12 +18,12 @@ import qualified Data.IntSet as IntSet
 import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Map as Map
 import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Graph.Dom as Graph
 import System.IO
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.GCRef
 import Stg.Interpreter.GC.LiveDataAnalysis
 import Stg.Interpreter.Debugger.TraverseState
+import Control.Monad
 
 
 data RetainerState
@@ -61,25 +61,24 @@ exportRetainerGraph nodesFname edgesFname stgState root = do
   let gcRootSet :: Map GCSymbol String
       gcRootSet = execWriter $ withGCRootFacts stgState (ssLocalEnv stgState) $ \msg s -> tell $ Map.singleton s msg
 
-  withFile edgesFname WriteMode $ \hEdge -> do
-    withFile nodesFname WriteMode $ \hNode -> do
-      BS8.hPutStrLn hNode $ BS8.intercalate "\t"
-        [ "Id"
-        , "Label"
-        , "partition2"
-        ]
-      BS8.hPutStrLn hEdge $ BS8.intercalate "\t"
-        [ "Source"
-        , "Target"
-        , "partition2"
-        ]
-      flip evalStateT Set.empty . addEdgesFrom hNode hEdge stgState gcRootSet root True $ \case
-        source
-          | Just i <- Bimap.lookup source rsNodeMap
-          , Just edges <- IntMap.lookup i rsGraph
-          -> catMaybes $ map (flip Bimap.lookupR rsNodeMap) $ IntSet.toList edges
-          | otherwise
-          -> []
+  withFile edgesFname WriteMode $ \hEdge -> withFile nodesFname WriteMode $ \hNode -> do
+    BS8.hPutStrLn hNode $ BS8.intercalate "\t"
+      [ "Id"
+      , "Label"
+      , "partition2"
+      ]
+    BS8.hPutStrLn hEdge $ BS8.intercalate "\t"
+      [ "Source"
+      , "Target"
+      , "partition2"
+      ]
+    flip evalStateT Set.empty . addEdgesFrom hNode hEdge stgState gcRootSet root True $ \case
+      source
+        | Just i <- Bimap.lookup source rsNodeMap
+        , Just edges <- IntMap.lookup i rsGraph
+        -> (mapMaybe (`Bimap.lookupR` rsNodeMap) (IntSet.toList edges))
+        | otherwise
+        -> []
 
   pure ()
 
@@ -109,8 +108,7 @@ addEdgesFrom hNode hEdge stgState@StgState{..} gcRootSet source isRoot getEdges 
       BS8.hPut hNode "\t"
       hPutStr hNode $
         (if isRoot then ("Root " ++) else id) $
-        (maybe id (\msg str -> "GCRoot " ++ msg ++ " " ++ str) $ Map.lookup source gcRootSet) $
-        nodeLabel
+        maybe id (\msg str -> "GCRoot " ++ msg ++ " " ++ str) (Map.lookup source gcRootSet) nodeLabel
       BS8.hPut hNode "\t"
       hPutStr hNode nodeCategory
       BS8.hPut hNode "\n"

@@ -1,16 +1,14 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant <$>" #-}
 module Stg.Interpreter.FFI where
 
 ----- FFI experimental
-import qualified GHC.Exts as Exts
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Internal as BS
 import Control.Concurrent
 
 import Foreign.Storable
 import Foreign.Ptr
 import Foreign.C.Types
-import Foreign.C.String
 import System.Posix.DynamicLinker
 import Data.Word
 import Data.Int
@@ -19,51 +17,54 @@ import qualified Foreign.LibFFI as FFI
 import qualified Foreign.LibFFI.Internal as FFI
 import qualified Foreign.LibFFI.FFITypes as FFI
 import qualified Foreign.LibFFI.Closure as FFI
-import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
 import qualified Data.Primitive.ByteArray as BA
 import qualified Data.ByteString.Char8 as BS8
 -----
-import System.Exit
-import System.IO
-import System.FilePath
-import Text.Printf
 
-import Data.Time.Clock
 
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
 
 import GHC.Stack
 import Control.Monad.State.Strict
-import Control.Concurrent.MVar
 
 import Stg.Syntax
 import Stg.GHC.Symbols
 import Stg.Interpreter.Base
-import Stg.Interpreter.Debug
 import Stg.Interpreter.Rts (globalStoreSymbols)
 import qualified Stg.Interpreter.RtsFFI as RtsFFI
 import qualified Stg.Interpreter.EmulatedLibFFI as EmulatedLibFFI
+import Control.Monad
+import Data.List.NonEmpty (NonEmpty(..))
 
+pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V :: Int -> Atom
 pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V :: Int -> Atom
 pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int32V :: Int -> Atom
 pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V :: Int -> Atom
 pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V :: Word -> Atom
 pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word16V :: Word -> Atom
 pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V :: Word -> Atom
 pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern FloatV :: Float -> Atom
 pattern FloatV f  = FloatAtom f
+pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 
 emulatedLibrarySymbolSet :: Set Name
@@ -73,7 +74,7 @@ emulatedLibrarySymbolSet = Set.fromList
   ]
 
 rtsSymbolSet :: Set Name
-rtsSymbolSet = Set.fromList $ map (BS8.pack . getSymbolName) rtsSymbols
+rtsSymbolSet = Set.fromList $ fmap (BS8.pack . getSymbolName) rtsSymbols
 
 getFFISymbol :: Name -> M (FunPtr a)
 getFFISymbol name
@@ -226,9 +227,9 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t tc = do
         -> do
             --promptM $ putStrLn $ "[global store FFI] " ++ show foreignSymbol
             -- HINT: set once with the first value, then return it always, only for the globalStoreSymbols
-            store <- gets $ rtsGlobalStore . ssRtsSupport
-            case Map.lookup foreignSymbol store of
-              Nothing -> state $ \s@StgState{..} -> ([value], s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol value store}})
+            store' <- gets $ rtsGlobalStore . ssRtsSupport
+            case Map.lookup foreignSymbol store' of
+              Nothing -> state $ \s@StgState{..} -> ([value], s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol value store'}})
               Just v  -> pure [v]
 
       -- calls to GHC RTS
@@ -250,9 +251,7 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t tc = do
       --------------
       StaticTarget _ foreignSymbol _ _
         -> do
-          let blacklist =
-                [ "__gmpn"
-                ]
+          -- let blacklist = [ "__gmpn" ]
           {-
           unless (any (`BS8.isPrefixOf` foreignSymbol) blacklist) $ do
             liftIO $ do
@@ -282,13 +281,13 @@ createAdjustor :: HasCallStack => EvalOnNewThread -> Atom -> (Bool, Name, [Name]
 createAdjustor evalOnNewThread fun cwrapperDesc@(_, retTy, argTys) = do
   --liftIO $ putStrLn $ "created adjustor: " ++ show fun ++ " " ++ show cwrapperDesc
 
-  let (retCType : argsCType) = map (ffiRepToCType . ffiTypeToFFIRep) $ retTy : argTys
+  let (retCType :| argsCType) = fmap (ffiRepToCType . ffiTypeToFFIRep) $ retTy :| argTys
   stateStore <- gets $ unPrintableMVar . ssStateStore
   liftIO $ FFI.wrapper retCType argsCType (ffiCallbackBridge evalOnNewThread stateStore fun cwrapperDesc)
 
 {-# NOINLINE ffiCallbackBridge #-}
 ffiCallbackBridge :: HasCallStack => EvalOnNewThread -> MVar StgState -> Atom -> CWrapperDesc -> Ptr FFI.CIF -> Ptr FFI.CValue -> Ptr (Ptr FFI.CValue) -> Ptr Word8 -> IO ()
-ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argTypeNames) _cif retStorage argsStoragePtr _userData = do
+ffiCallbackBridge evalOnNewThread stateStore fun (isIOCall, retTypeName, argTypeNames) _cif retStorage argsStoragePtr _userData = do
   -- read args from ffi
   argsStorage <- peekArray (length argTypeNames) argsStoragePtr
   argAtoms <- zipWithM (ffiRepToGetter . ffiTypeToFFIRep) argTypeNames argsStorage
@@ -303,7 +302,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
   -}
   before <- takeMVar stateStore
   (unboxedResult, after) <- flip runStateT before $ do
-    funStr <- debugPrintHeapObject <$> readHeap fun
+    _funStr <- debugPrintHeapObject <$> readHeap fun
     --liftIO $ putStrLn $ "  ** fun str ** = " ++ funStr
 
     {-
@@ -314,7 +313,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
     scheduleToTheEnd tidFFI
     switchToThread tidFFI
     -}
-    fuel <- gets ssDebugFuel
+    _fuel <- gets ssDebugFuel
     --liftIO $ putStrLn $ "[step 1] fuel = " ++ show fuel
     boxedResult <- evalOnNewThread $ do
       -- TODO: box FFI arg atoms
@@ -329,7 +328,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
       stackPush $ RunScheduler SR_ThreadFinishedFFICallback -- return from callback
       stackPush $ Apply [] -- force result to WHNF ; is this needed?
       --liftIO $ putStrLn $ "[step 4]"
-      stackPush $ Apply $ boxedArgs ++ if isIOCall then [Void] else []
+      stackPush $ Apply $ boxedArgs ++ [Void | isIOCall]
       --liftIO $ putStrLn $ "[step 5]"
       --modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
       pure [fun]
@@ -359,6 +358,7 @@ ffiCallbackBridge evalOnNewThread stateStore fun wd@(isIOCall, retTypeName, argT
       -- write result to ffi
       -- NOTE: only single result is supported
       ffiRepToSetter (ffiTypeToFFIRep retTypeName) retStorage retAtom retTypeName
+    (_:_)     -> error "only single result is supported"
 
 -- NOTE: LiftedRep and UnliftedRep is not used in FFIRep only AddrRep
 newtype FFIRep = FFIRep {unFFIRep :: PrimRep}
@@ -518,10 +518,10 @@ buildCWrapperHsTypeMap :: [Module] -> M ()
 buildCWrapperHsTypeMap mods = do
   let m = Map.fromListWithKey (\k a b -> error $ "CWrapper name duplication: " ++ show k ++ " with hsTypes: " ++ show (a, b))
           [ (name, (isIOCall, retType, argTypes))
-          | ForeignStubs{..} <- map moduleForeignStubs mods
+          | ForeignStubs{..} <- fmap moduleForeignStubs mods
           , StubDeclImport _ (Just (StubImplImportCWrapper name _ isIOCall retType argTypes)) <- fsDecls
           ]
-  modify' $ \s@StgState{..} -> s {ssCWrapperHsTypeMap = m}
+  modify' $ \s -> s {ssCWrapperHsTypeMap = m}
   {-
   liftIO $ do
     putStrLn $ "CWrappers:"

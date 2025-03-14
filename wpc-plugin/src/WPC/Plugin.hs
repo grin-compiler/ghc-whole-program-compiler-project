@@ -238,7 +238,7 @@ cmmToRawCmmFun cmmHandle hscEnv dflags mMod cmms = do
       dumpStyle = mkDumpStyle print_unqual
 
   let dump a = do
-        let cmmDoc = vcat $ map (\i -> pdoc platform i $$ blankLine) a
+        let cmmDoc = vcat $ fmap (\i -> pdoc platform i $$ blankLine) a
         hPutStr cmmHandle . showSDoc dflags $ withPprStyle dumpStyle cmmDoc
         pure a
   pure $ Stream.mapM dump rawcmms0

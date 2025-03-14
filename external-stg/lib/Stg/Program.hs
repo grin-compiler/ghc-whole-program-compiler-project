@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, LambdaCase, RecordWildCards, OverloadedStrings #-}
+{-# LANGUAGE LambdaCase, RecordWildCards, OverloadedStrings #-}
 module Stg.Program where
 
 import Control.Monad.IO.Class
@@ -6,7 +6,7 @@ import Control.Monad
 import Text.Printf
 
 import Data.Maybe
-import Data.List (isPrefixOf, groupBy, sortBy, foldl')
+import Data.List (isPrefixOf, foldl')
 import Data.Containers.ListUtils (nubOrd)
 
 import qualified Data.Map as Map
@@ -29,18 +29,19 @@ import Stg.IO
 import Stg.JSON ()
 import Stg.Reconstruct (reconModule)
 import qualified Stg.GHC.Symbols as GHCSymbols
+import Prelude hiding (mod)
 
 moduleToModpak :: String -> String -> FilePath
 moduleToModpak modpakExt moduleName = replaceEq '.' '/' moduleName ++ modpakExt
   where
     replaceEq :: Eq a => a -> a -> [a] -> [a]
-    replaceEq from to = map (\cur -> if cur == from then to else cur)
+    replaceEq from to = fmap (\cur -> if cur == from then to else cur)
 
 parseSection :: [String] -> String -> [String]
-parseSection content n = map (read . tail) . takeWhile (isPrefixOf "-") . tail . dropWhile (not . isPrefixOf n) $ content
+parseSection content n = fmap (read . tail) . takeWhile (isPrefixOf "-") . tail . dropWhile (not . isPrefixOf n) $ content
 
 printSection :: Show a => [a] -> String
-printSection l = unlines ["- " ++ x | x <- nubOrd $ map show l]
+printSection l = unlines ["- " ++ x | x <- nubOrd $ fmap show l]
 
 data StgModuleInfo
   = StgModuleInfo
@@ -132,20 +133,19 @@ wpcModpaksPath, wpcCbitsPath, wpcCapiStubsPath, wpcCbitsSourcePath :: String
 wpcModpaksPath    = "extra-compilation-artifacts" </> "wpc-plugin" </> "modpaks"
 wpcCbitsPath      = "extra-compilation-artifacts" </> "wpc-plugin" </> "cbits"
 wpcCapiStubsPath  = "extra-compilation-artifacts" </> "wpc-plugin" </> "capi-stubs"
-wpcWrapperStubsPath = "extra-compilation-artifacts" </> "wpc-plugin" </> "wrapper-stubs"
+-- wpcWrapperStubsPath = "extra-compilation-artifacts" </> "wpc-plugin" </> "wrapper-stubs"
 wpcCbitsSourcePath  = "extra-compilation-artifacts" </> "wpc-plugin" </> "cbits-source"
 
 getAppModuleMapping :: FilePath -> IO [StgModuleInfo]
 getAppModuleMapping ghcStgAppFname = do
   let showLog = False -- TODO: use RIO ???
-  let packageName = "exe:" ++ takeBaseName ghcStgAppFname -- TODO: save package to .ghc_stgapp
+  -- let packageName = "exe:" ++ takeBaseName ghcStgAppFname -- TODO: save package to .ghc_stgapp
   GhcStgApp{..} <- readGhcStgApp ghcStgAppFname
   let modpakExt = "." ++ appObjSuffix ++ "_modpak"
       check f = do
         --putStrLn $ "check: " ++ f
         exist <- doesFileExist f
-        unless exist $ when showLog $ do
-          putStrLn $ "modpak does not exist: " ++ f
+        unless exist $ when showLog $ putStrLn $ "modpak does not exist: " ++ f
         pure exist
 
   libModules <- filterM (check . modModpakPath) $
@@ -183,7 +183,7 @@ getAppModuleMapping ghcStgAppFname = do
   pure $ appMods ++ libModules
 
 getAppModpaks :: FilePath -> IO [FilePath]
-getAppModpaks ghcStgAppFname = map modModpakPath <$> getAppModuleMapping ghcStgAppFname
+getAppModpaks ghcStgAppFname = fmap modModpakPath <$> getAppModuleMapping ghcStgAppFname
 
 collectProgramModules' :: Bool -> [FilePath] -> String -> String -> [(String, String, String)] -> IO [FilePath]
 collectProgramModules' showLog modpakFileNames unitId mod liveSymbols = do
@@ -207,9 +207,8 @@ collectProgramModules' showLog modpakFileNames unitId mod liveSymbols = do
   when showLog $ do
     putStrLn $ "all modules: " ++ show (length modpakFileNames)
     putStrLn $ "app modules: " ++ show (length prunedDeps)
-    putStrLn $ "app dependencies:\n"
-    forM_ [mnameMap Map.! fname | fname <- prunedDeps] $ \(UnitId uid, ModuleName mod) -> do
-      printf "%-60s %s\n" (BS8.unpack uid) (BS8.unpack mod)
+    putStrLn "app dependencies:\n"
+    forM_ [mnameMap Map.! fname | fname <- prunedDeps] $ \(UnitId uid, ModuleName mod') -> printf "%-60s %s\n" (BS8.unpack uid) (BS8.unpack mod')
   pure prunedDeps
 
 collectProgramModules :: [FilePath] -> String -> String -> [(String, String, String)] -> IO [FilePath]
@@ -217,26 +216,24 @@ collectProgramModules = collectProgramModules' True
 
 -- .fullpak
 getFullpakModules :: FilePath -> IO [Module]
-getFullpakModules fullpakPath = do
-  withArchive fullpakPath $ do
-    appinfoSelector <- liftIO $ mkEntrySelector fullpakAppInfoPath
-    AppInfo{..} <- getEntry appinfoSelector >>= Y.decodeThrow
-    forM aiLiveCode $ \CodeInfo{..} -> do
-      s <- liftIO $ mkEntrySelector $ "haskell" </> ciPackageName </> ciModuleName </> modpakStgbinPath
-      decodeStgbin . BSL.fromStrict <$> getEntry s
+getFullpakModules fullpakPath = withArchive fullpakPath $ do
+  appinfoSelector <- liftIO $ mkEntrySelector fullpakAppInfoPath
+  AppInfo{..} <- getEntry appinfoSelector >>= Y.decodeThrow
+  forM aiLiveCode $ \CodeInfo{..} -> do
+    s <- liftIO $ mkEntrySelector $ "haskell" </> ciPackageName </> ciModuleName </> modpakStgbinPath
+    decodeStgbin . BSL.fromStrict <$> getEntry s
 
 -- .ghc_stgapp
 getGhcStgAppModules :: FilePath -> IO [Module]
 getGhcStgAppModules ghcstgappPath = do
   modinfoList <- getAppModuleMapping ghcstgappPath
   appModpaks <- collectProgramModules' False (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
-  forM appModpaks $ \modpakName -> do
-    readModpakL modpakName modpakStgbinPath decodeStgbin
+  forM appModpaks $ \modpakName -> readModpakL modpakName modpakStgbinPath decodeStgbin
 
 -- .json
 getJSONModules :: FilePath -> IO [Module]
-getJSONModules filePath = do
-  res <- Aeson.eitherDecodeFileStrict' filePath
+getJSONModules path = do
+  res <- Aeson.eitherDecodeFileStrict' path
   case res of
     Left  err     -> error err
     Right smodule -> pure [reconModule smodule]
@@ -288,7 +285,7 @@ getAppLinkerInfo ghcStgAppFname = do
         }
 
   -- lib info
-  let forceDynamic = True
+  -- let forceDynamic = True
       {-
       arExt n = if forceDynamic
         then "-" ++ appGhcName ++ appGhcVersion ++ ".dyn_o" ++ n ++ ".a"
@@ -296,11 +293,9 @@ getAppLinkerInfo ghcStgAppFname = do
       -}
   libInfoList <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
 
-    cbitsPathList <- forM (maybeToList unitArtifactsDir) $ \path -> do
-      findIfExists always (extension ==? ".dyn_o") $ path </> wpcCbitsPath
+    cbitsPathList <- forM (maybeToList unitArtifactsDir) $ \path -> findIfExists always (extension ==? ".dyn_o") $ path </> wpcCbitsPath
 
-    capiStubsPathList <- forM (maybeToList unitArtifactsDir) $ \path -> do
-      findIfExists always (extension ==? ".dyn_o") $ path </> wpcCapiStubsPath
+    capiStubsPathList <- forM (maybeToList unitArtifactsDir) $ \path -> findIfExists always (extension ==? ".dyn_o") $ path </> wpcCapiStubsPath
 
     pure $ StgLibLinkerInfo
       { stglibName            = unitName
@@ -312,7 +307,7 @@ getAppLinkerInfo ghcStgAppFname = do
       }
   pure (appInfo, libInfoList)
 
-data StgAppLicenseInfo
+newtype StgAppLicenseInfo
   = StgAppLicenseInfo
   { stgappUnitConfs :: [FilePath]
   }
@@ -327,10 +322,9 @@ getAppLicenseInfo ghcStgAppFname = do
           | confName <- unitId : [libName | 'H':'S':libName <- unitLibraries]
           , confPath <- appUnitDbPaths
           ]
-    unitConfs <- forM possibleUnitConfs $ \p -> do
-      doesFileExist p >>= \case
-        True  -> pure $ Just p
-        False -> pure Nothing
+    unitConfs <- forM possibleUnitConfs $ \p -> doesFileExist p >>= \case
+      True  -> pure $ Just p
+      False -> pure Nothing
     -- NOTE: report errors, but never fail.
     case catMaybes unitConfs of
       c : _ -> pure $ Just c -- HINT: pick the first match
@@ -354,8 +348,7 @@ data StgAppInfo
   deriving (Eq, Ord, Show)
 
 getAppInfo :: FilePath -> IO StgAppInfo
-getAppInfo ghcStgAppFname = do
-  pure undefined
+getAppInfo _ghcStgAppFname = pure undefined
 
 -- observation of foreign cbits source files
 
@@ -380,20 +373,19 @@ getAppForeignFiles ghcStgAppFname = do
           }
         | p <- appCbitsSources
         ]
-  libsCbitsInfos <- forM appLibDeps $ \UnitLinkerInfo{..} -> do
-    forM (maybeToList unitArtifactsDir) $ \path -> do
-      let libSrcDir = path </> wpcCbitsSourcePath
-      libCbitsSources <- findIfExists always (fileType ==? RegularFile) libSrcDir
-      pure
-        [ StgAppForeignSourceInfo
-          { stgForeignSourceAbsPath = p
-          , stgForeignSourceRelPath = makeRelative libSrcDir p
-          , stgForeignUnitId        = unitId
-          }
-        | p <- libCbitsSources
-        ]
+  libsCbitsInfos <- forM appLibDeps $ \UnitLinkerInfo{..} -> forM (maybeToList unitArtifactsDir) $ \path -> do
+    let libSrcDir = path </> wpcCbitsSourcePath
+    libCbitsSources <- findIfExists always (fileType ==? RegularFile) libSrcDir
+    pure
+      [ StgAppForeignSourceInfo
+        { stgForeignSourceAbsPath = p
+        , stgForeignSourceRelPath = makeRelative libSrcDir p
+        , stgForeignUnitId        = unitId
+        }
+      | p <- libCbitsSources
+      ]
 
-  pure $ appCbitsInfos ++ (concat $ concat libsCbitsInfos)
+  pure $ appCbitsInfos ++ concat (concat libsCbitsInfos)
 
 readGhcStgApp :: FilePath -> IO GhcStgApp
 readGhcStgApp fname = do
@@ -507,7 +499,7 @@ foundationPakURL = "https://github.com/grin-compiler/foundation-pak/releases/dow
 downloadFoundationPakIfMissing :: String -> FilePath -> IO ()
 downloadFoundationPakIfMissing ghcVersionString foundationPakPath = do
   exists <- doesDirectoryExist foundationPakPath
-  when (not exists) $ do
+  unless exists $ do
     let (pakDir, pakName) = splitFileName foundationPakPath
         pakFileName       = pakName <.> ".pak.tar.xz"
         pakURL            = foundationPakURL </> ghcVersionString </> pakFileName

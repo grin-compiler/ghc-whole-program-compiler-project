@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.Prefetch where
 
 import Stg.Syntax

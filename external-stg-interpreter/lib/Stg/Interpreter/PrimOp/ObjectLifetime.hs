@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.ObjectLifetime where
 
 import Stg.Syntax

@@ -3,17 +3,15 @@
 module Stg.Interpreter.IOManager where
 
 import Control.Monad.State
-import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Time.Clock
 
-import Data.Monoid ((<>))
 import Foreign.C.Types
 import qualified Language.C.Inline as C
 import qualified Data.Vector.Storable as V
-import qualified Data.Vector.Storable.Mutable as VM
 
 import Stg.Interpreter.Base
+import Control.Monad
 
 -------- I/O manager
 C.context (C.baseCtx <> C.vecCtx)
@@ -147,16 +145,16 @@ fdPollWriteState fd = do
 handleBlockedDelayWait :: M ()
 handleBlockedDelayWait = do
   tsList <- gets $ IntMap.toList . fmap tsStatus . ssThreads
-  now <- liftIO getCurrentTime
-  let maxSeconds  = 31 * 24 * 60 * 60 -- some OS have this constraint
-      maxDelay    = secondsToNominalDiffTime maxSeconds
-      delaysT     = [(tid, t `diffUTCTime` now) | (tid, ThreadBlocked (BlockedOnDelay t)) <- tsList]
-      minDelay    = max 0 $ minimum $ maxDelay : delays
+  _now <- liftIO getCurrentTime
+  let -- maxSeconds  = 31 * 24 * 60 * 60 -- some OS have this constraint
+      -- maxDelay    = secondsToNominalDiffTime maxSeconds
+      -- delaysT     = [(tid, t `diffUTCTime` now) | (tid, ThreadBlocked (BlockedOnDelay t)) <- tsList]
+      -- minDelay    = max 0 $ minimum $ maxDelay : delays
       readFDsT    = [(tid, fromIntegral fd :: CInt) | (tid, ThreadBlocked (BlockedOnRead fd)) <- tsList]
       writeFDsT   = [(tid, fromIntegral fd :: CInt) | (tid, ThreadBlocked (BlockedOnWrite fd)) <- tsList]
-      delays      = map snd delaysT
-      readFDs     = map snd readFDsT
-      writeFDs    = map snd writeFDsT
+      -- delays      = fmap snd delaysT
+      readFDs     = fmap snd readFDsT
+      writeFDs    = fmap snd writeFDsT
       fdList      = readFDs ++ writeFDs
       maxFD       = maximum fdList
   -- TODO: detect deadlocks

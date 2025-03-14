@@ -1,9 +1,9 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, FlexibleInstances #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 module Stg.Interpreter.GC.GCRef where
 
-import Data.Maybe
 import Control.Monad
-import Foreign.Ptr
 import qualified Data.IntSet as IntSet
 import qualified Data.ByteString.Char8 as BS8
 
@@ -18,13 +18,13 @@ instance VisitGCRef Atom where
   visitGCRef action a = visitAtom a action
 
 instance (Foldable t, VisitGCRef a) => VisitGCRef (t a) where
-  visitGCRef action a = mapM_ (visitGCRef action) a
+  visitGCRef action = mapM_ (visitGCRef action)
 
 instance VisitGCRef HeapObject where
   visitGCRef action = \case
     Con{..}           -> visitGCRef action hoConArgs
     Closure{..}       -> visitGCRef action hoCloArgs >> visitGCRef action hoEnv
-    BlackHole _ _ _   -> pure () -- HINT: the blackhole wait queue is handled separately
+    BlackHole {}      -> pure () -- HINT: the blackhole wait queue is handled separately
     ApStack{..}       -> visitGCRef action hoResult >> visitGCRef action hoStack
     RaiseException ex -> visitGCRef action ex
 
@@ -156,7 +156,7 @@ visitAtom atom action = case atom of
   LiftedUndefined{}   -> pure ()
   Rubbish{}           -> pure ()
   Unbinded{}          -> pure ()
-  _                   -> error $ "internal error - incomplete pattern: " ++ show atom
+  -- _                   -> error $ "internal error - incomplete pattern: " ++ show atom
 
 arrIdxToRef :: ArrIdx -> GCSymbol
 arrIdxToRef = \case

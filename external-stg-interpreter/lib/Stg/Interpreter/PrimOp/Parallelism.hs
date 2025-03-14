@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Parallelism where
 
 import Stg.Syntax
@@ -11,6 +11,7 @@ import Stg.Interpreter.Base
     - the ext-stg interpreter is a single core evaluator
 -}
 
+pattern IntV :: Int -> Atom
 pattern IntV i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]

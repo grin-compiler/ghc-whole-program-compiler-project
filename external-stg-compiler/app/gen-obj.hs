@@ -42,7 +42,7 @@ main = runGhc (Just libdir) $ do
     let StgModule{..} = toStg strippedExtModule
         oName         = modpakName ++ ".o"
     --liftIO $ putStrLn $ "compiling " ++ oName
-    --putStrLn $ unlines $ map show stgIdUniqueMap
+    --putStrLn $ unlines $ fmap show stgIdUniqueMap
 
     -- HINT: the stubs are compiled at link time
     compileToObjectM cg stgUnitId stgModuleName GHC.NoStubs stgModuleTyCons stgTopBindings oName

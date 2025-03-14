@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, TypeApplications, Strict #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms, TypeApplications, Strict #-}
 {-# LANGUAGE ScopedTypeVariables, MagicHash #-}
 module Stg.Interpreter.PrimOp.Word where
 
@@ -12,8 +12,11 @@ import Stg.Interpreter.Base
 
 type PrimWord = Word64
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V :: Word -> Atom
 pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]

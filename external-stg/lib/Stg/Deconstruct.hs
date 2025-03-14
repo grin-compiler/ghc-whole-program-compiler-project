@@ -13,9 +13,9 @@ deconModule Module{..} = smod where
     , moduleForeignStubs        = deconForeignStubs moduleForeignStubs
     , moduleHasForeignExported  = moduleHasForeignExported
     , moduleDependency          = moduleDependency
-    , moduleExternalTopIds      = [(uid, [(m, map deconIdBnd ids) | (m, ids) <- mods]) | (uid, mods) <- moduleExternalTopIds]
-    , moduleTyCons              = [(uid, [(m, map deconTcBnd tcs) | (m, tcs) <- mods]) | (uid, mods) <- moduleTyCons]
-    , moduleTopBindings         = map deconTopBinding moduleTopBindings
+    , moduleExternalTopIds      = [(uid, [(m, fmap deconIdBnd ids) | (m, ids) <- mods]) | (uid, mods) <- moduleExternalTopIds]
+    , moduleTyCons              = [(uid, [(m, fmap deconTcBnd tcs) | (m, tcs) <- mods]) | (uid, mods) <- moduleTyCons]
+    , moduleTopBindings         = fmap deconTopBinding moduleTopBindings
     }
 
 deconIdBnd :: Binder -> SBinder
@@ -36,7 +36,7 @@ deconTcBnd TyCon{..} =
   STyCon
     { stcName     = tcName
     , stcId       = tcId
-    , stcDataCons = map deconDcBnd tcDataCons
+    , stcDataCons = fmap deconDcBnd tcDataCons
     , stcDefLoc   = tcDefLoc
     }
 
@@ -109,7 +109,7 @@ deconAltCon = \case
 deconForeignStubs :: ForeignStubs -> SForeignStubs
 deconForeignStubs = \case
   NoStubs                 -> NoStubs
-  ForeignStubs h c i f l  -> ForeignStubs h c i f $ map deconStubDecl l
+  ForeignStubs h c i f l  -> ForeignStubs h c i f $ fmap deconStubDecl l
 
 deconStubDecl :: StubDecl -> SStubDecl
 deconStubDecl = \case

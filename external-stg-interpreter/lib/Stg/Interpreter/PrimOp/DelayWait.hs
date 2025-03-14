@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.DelayWait where
 
 import Control.Monad.State
@@ -7,7 +7,9 @@ import Data.Fixed
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+import Control.Monad
 
+pattern IntV :: Int -> Atom
 pattern IntV i = IntAtom i
 
 {-

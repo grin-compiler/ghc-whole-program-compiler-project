@@ -8,6 +8,7 @@ import qualified Data.Vector as V
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
 lookupArrIdx :: ArrIdx -> M (V.Vector Atom)

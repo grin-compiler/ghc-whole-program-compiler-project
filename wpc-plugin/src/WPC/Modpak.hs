@@ -97,7 +97,7 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
   writeFullCoreInterface hsc_env mod_guts mod_summary fullcoreHiFile
 
   -- module compilation info
-  let ppYamlList key l = unlines $ key : ["- " ++ x | x <- nubOrd $ map show l]
+  let ppYamlList key l = unlines $ key : ["- " ++ x | x <- nubOrd $ fmap show l]
       ppYamlSingle key v = unwords [key, show v]
   infoFile <- newTempName logger tmpfs (tmpDir dflags) TFL_CurrentModule (objectSuf dflags ++ "_info")
   writeFile infoFile $ unlines

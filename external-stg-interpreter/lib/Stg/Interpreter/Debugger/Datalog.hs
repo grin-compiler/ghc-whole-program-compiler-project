@@ -1,10 +1,9 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+
 module Stg.Interpreter.Debugger.Datalog (exportStgState) where
 
 import Control.Monad
 import Control.Monad.State
-import Control.Monad.Reader
-import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
@@ -22,7 +21,6 @@ import System.Directory
 import System.FilePath
 import System.IO
 
-import qualified Stg.Interpreter.GC as GC
 
 import Stg.Interpreter.Base
 import Stg.Syntax
@@ -35,7 +33,7 @@ data Param
   | A   Atom
   | ID  Id
 
-data DLExport
+newtype DLExport
   = DLExport
   { dleHandleMap  :: Map Name Handle
   }
@@ -246,7 +244,7 @@ exportStgStateM stgState@StgState{..} = do
           IRRegion{..}    -> (regionStart, regionEnd)
           EventRegion{..} -> (regionName, regionName)
     forM_ (IntMap.toList l) $ \(idx, (s, e)) -> do
-      forM_ (zip (genAddressState s) (genAddressState e)) $ \((start_ns, start_value), (end_ns, end_value)) -> do
+      forM_ (zip (genAddressState s) (genAddressState e)) $ \((start_ns, start_value), (_end_ns, end_value)) -> do
         addFact "Region" [N start_name, N end_name, I idx, S start_ns, I start_value, I end_value]
 
   -- ssDynamicHeapStart
@@ -376,7 +374,7 @@ exportStgState dbFolder s = do
   putStrLn $ "save StgState datalog facts to: " ++ dir
   createDirectoryIfMissing True dir
   hMap <- mkHandles dir allFactNames
-  DLExport{..} <- execStateT (exportStgStateM s) $ DLExport
+  void $ execStateT (exportStgStateM s) $ DLExport
     { dleHandleMap  = hMap
     }
   mapM_ hClose $ Map.elems hMap

@@ -163,7 +163,7 @@ type G = State Env
 attr :: [Option] -> (Option -> Maybe a) -> G a
 attr opts f = do
   defaults <- gets envDefaults
-  pure $ head $ catMaybes $ map f (opts ++ defaults)
+  pure $ head $ catMaybes $ fmap f (opts ++ defaults)
 
 attrBool :: String -> [Option] -> G Bool
 attrBool name opts = attr opts $ \case
@@ -248,7 +248,7 @@ genGHCPrimOps = do
       primPrelude =
         [ "primPrelude :: Program"
         , "primPrelude = [progConst|"
-        ] ++ map tab (concat [comment title ++ (lines $ showWidth 800 $ plain $ L.prettyExternals exts) ++ [""] | (title, exts, _) <- envSections]) ++
+        ] ++ fmap tab (concat [comment title ++ (lines $ showWidth 800 $ plain $ L.prettyExternals exts) ++ [""] | (title, exts, _) <- envSections]) ++
         ["  |]\n"]
 
       unsupported =
@@ -279,7 +279,7 @@ genGHCPrimOps = do
     no - transform primop names to   GHC:op_name
     no - transform primtype names to GHC:type_name
     done - filter out void representations from the result ; State#
-    done - map unboxed tuples properly
+    done - fmap unboxed tuples properly
 -}
 {-
   STG state convention:

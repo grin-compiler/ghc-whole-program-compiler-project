@@ -26,7 +26,7 @@ ssaExternal ext@External{..} = do
       substFun t = ana (project . mapNameTy (subst $ Map.fromList env)) t
   pure ext
     { eRetType  = substFun eRetType
-    , eArgsType = map substFun eArgsType
+    , eArgsType = fmap substFun eArgsType
     }
 
 singleStaticAssignment :: Exp -> Exp
@@ -54,7 +54,7 @@ singleStaticAssignment e = evalState (anaM build (mempty, e)) (mkNameEnv e) wher
         , pPublicNamesF           = pPublicNames
         , pForeignExportedNamesF  = pForeignExportedNames
         , pStaticDataF            = pStaticData
-        , pDefinitionsF           = map (env,) pDefinitions
+        , pDefinitionsF           = fmap (env,) pDefinitions
         }
 
     -- name shadowing in the bind sequence
@@ -68,7 +68,7 @@ singleStaticAssignment e = evalState (anaM build (mempty, e)) (mkNameEnv e) wher
       pure $ LetSF bs' (newEnv, e)
 
     LetRec bs e -> do
-      let ns = map fst3 bs
+      let ns = fmap fst3 bs
       newNs <- mapM deriveNewName ns
       let newEnv = addMany env $ zip ns newNs
       pure $ LetRecF [(n, t, (newEnv, b)) | (n, (_, t, b)) <- zip newNs bs] (newEnv, e)

@@ -1,0 +1,22 @@
+cradle:
+  cabal:
+    - path: "lib"
+      component: "lib:external-stg-compiler"
+
+    - path: "app/gen-exe.hs"
+      component: "external-stg-compiler:exe:gen-exe"
+
+    - path: "app/gen-obj.hs"
+      component: "external-stg-compiler:exe:gen-obj"
+
+    - path: "app/gen-exe2.hs"
+      component: "external-stg-compiler:exe:gen-exe2"
+
+    - path: "app/gen-obj2.hs"
+      component: "external-stg-compiler:exe:gen-obj2"
+
+    - path: "app/show-ghc-stg.hs"
+      component: "external-stg-compiler:exe:show-ghc-stg"
+
+    - path: "app/dce-fullpak.hs"
+      component: "external-stg-compiler:exe:dce-fullpak"

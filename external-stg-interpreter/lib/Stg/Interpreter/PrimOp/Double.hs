@@ -8,10 +8,15 @@ import GHC.Exts
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V :: Int -> Atom
 pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern FloatV :: Float -> Atom
 pattern FloatV f  = FloatAtom f
+pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
@@ -115,14 +120,15 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- decodeDouble_2Int# :: Double# -> (# Int#, Word#, Word#, Int# #)
   ( "decodeDouble_2Int#", [DoubleV (D# x)]) -> do
-    -- NOTE: map back to GHC primop
+    -- NOTE: fmap back to GHC primop
     let !(# a, b, c, d #) = decodeDouble_2Int# x
     pure [IntV (I# a), WordV (W# b), WordV (W# c), IntV (I# d)]
 
   -- decodeDouble_Int64# :: Double# -> (# Int64#, Int# #)
   ( "decodeDouble_Int64#", [DoubleV (D# x)]) -> do
-    -- NOTE: map back to GHC primop
+    -- NOTE: fmap back to GHC primop
     let !(# a, b #) = decodeDouble_Int64# x
-    pure [Int64V (I# a), IntV (I# b)]
+    let a' = int64ToInt# a
+    pure [Int64V (I# a'), IntV (I# b)]
 
   _ -> fallback op args t tc

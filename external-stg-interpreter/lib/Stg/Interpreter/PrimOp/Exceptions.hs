@@ -6,7 +6,9 @@ import Control.Monad.State
 import Stg.Syntax
 import Stg.Interpreter.Base
 import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
+import Control.Monad
 
+pattern IntV :: Int -> Atom
 pattern IntV i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
@@ -53,7 +55,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     raiseEx rtsOverflowException
 
   -- raiseIO# :: a -> State# RealWorld -> (# State# RealWorld, b #)
-  ( "raiseIO#", [ex, s]) -> do
+  ( "raiseIO#", [ex, _s]) -> do
     tid <- gets ssCurrentThreadId
     mylog $ show (tid, op, args)
     -- for debug only
@@ -76,7 +78,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ------------------------ debug
 
     -- set new masking state
-    unless (tsBlockExceptions == True && tsInterruptible == True) $ do
+    unless (tsBlockExceptions && tsInterruptible) $ do
       updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = True}
       --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " maskAsyncExceptions# b:True i:True"
       stackPush $ RestoreExMask (True, True) tsBlockExceptions tsInterruptible
@@ -100,7 +102,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ------------------------ debug
 
     -- set new masking state
-    unless (tsBlockExceptions == True && tsInterruptible == False) $ do
+    unless (tsBlockExceptions && not tsInterruptible) $ do
       updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = False}
       --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " maskUninterruptible# b:True i:False"
       stackPush $ RestoreExMask (True, False) tsBlockExceptions tsInterruptible
@@ -124,8 +126,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
           when (tsStatus throwingTS == ThreadBlocked (BlockedOnThrowAsyncEx tid)) $ do
             updateThreadState thowingTid throwingTS {tsStatus = ThreadRunning}
           -- raise exception
-          ts <- getCurrentThreadState
-          updateThreadState tid ts {tsBlockedExceptions = waitingTids}
+          ts' <- getCurrentThreadState
+          updateThreadState tid ts' {tsBlockedExceptions = waitingTids}
           -- run action
           stackPush $ Apply [w] -- HINT: the stack may be captured by ApStack if there is an Update frame,
                                 --        so we have to setup the continuation properly
@@ -133,11 +135,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
           pure []
       [] -> do
           -- set new masking state
-          unless (tsBlockExceptions ts == False && tsInterruptible ts == False) $ do
+          unless (not (tsBlockExceptions ts) && not (tsInterruptible ts)) $ do
             updateThreadState tid $ ts {tsBlockExceptions = False, tsInterruptible = False}
             --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " unmaskAsyncExceptions# b:False i:False"
             stackPush $ RestoreExMask (False, False) (tsBlockExceptions ts) (tsInterruptible ts)
-          pure ()
           -- run action
           stackPush $ Apply [w]
           pure [f]
@@ -235,13 +236,12 @@ int maybePerformBlockedException (Capability *cap, StgTSO *tso) -- Returns: non-
 
 raiseEx :: Atom -> M [Atom]
 raiseEx a = do
-  tid <- gets ssCurrentThreadId
+  _tid <- gets ssCurrentThreadId
   --mylog $ "pre - raiseEx, current-result: " ++ show a
   --reportThread tid
-  result <- raiseEx0 a
+  raiseEx0 a
   --mylog $ "post - raiseEx, next-result: " ++ show result
   --reportThread tid
-  pure result
 
 raiseEx0 :: Atom -> M [Atom]
 raiseEx0 ex = unwindStack where
@@ -304,14 +304,13 @@ raiseEx0 ex = unwindStack where
         when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
         let Just tlog = tsActiveTLog ts
         isValid <- validateTLog tlog
-        case isValid of
-          True -> do
+        if isValid then do
             -- abandon transaction
             --mylog $ show tid ++ " ** Atomically - valid"
             updateThreadState tid $ ts {tsActiveTLog = Nothing}
             --unsubscribeTVarWaitQueues tid tlog
             unwindStack
-          False -> do
+        else do
             --mylog $ show tid ++ " ** Atomically - invalid"
             -- restart transaction due to invalid STM state
             -- Q: what about async exceptions?

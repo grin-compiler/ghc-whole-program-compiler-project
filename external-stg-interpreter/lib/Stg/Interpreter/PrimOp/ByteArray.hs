@@ -14,17 +14,29 @@ import qualified Data.Primitive.ByteArray as BA
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+import Control.Monad
 
+pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V :: Int -> Atom
 pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V :: Int -> Atom
 pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int32V :: Int -> Atom
 pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V :: Int -> Atom
 pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V :: Word -> Atom
 pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word16V :: Word -> Atom
 pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V :: Word -> Atom
 pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 lookupByteArray :: Int -> M BA.ByteArray
@@ -40,7 +52,7 @@ getByteArrayContentPtr baId = do
   pure $ BA.mutableByteArrayContents baaMutableByteArray
 
 newByteArray :: Int -> Int -> Bool -> M ByteArrayIdx
-newByteArray size alignment pinned = do
+newByteArray size alignment' pinned = do
   -- HINT: the implementation always uses pinned byte array because the primop implementation is not atomic
   --        GC may occur and the content data pointer must stay in place
   --        but this is only an interpreter implementation constraint
@@ -55,7 +67,7 @@ newByteArray size alignment pinned = do
         { baaMutableByteArray = ba
         , baaByteArray        = Nothing
         , baaPinned           = pinned
-        , baaAlignment        = alignment
+        , baaAlignment        = alignment'
         }
 
   modify' $ \s -> s {ssMutableByteArrays = IntMap.insert next desc byteArrays, ssNextMutableByteArray = succ next}
@@ -63,7 +75,7 @@ newByteArray size alignment pinned = do
   pure $ ByteArrayIdx
     { baId        = next
     , baPinned    = pinned
-    , baAlignment = alignment
+    , baAlignment = alignment'
     }
 
 {-
@@ -93,8 +105,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
 
   -- newAlignedPinnedByteArray# :: Int# -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
-  ( "newAlignedPinnedByteArray#", [IntV size, IntV alignment, _s]) -> do
-    baIdx <- newByteArray size alignment True
+  ( "newAlignedPinnedByteArray#", [IntV size, IntV alignment', _s]) -> do
+    baIdx <- newByteArray size alignment' True
     pure [MutableByteArray baIdx]
 
   ---------------------------------------------
@@ -136,7 +148,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- resizeMutableByteArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s,MutableByteArray# s #)
   ( "resizeMutableByteArray#", [MutableByteArray baIdx@ByteArrayIdx{..}, IntV newSizeInBytes, _s]) -> do
-    desc@ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
+    ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
     -- sanity check
     when baaPinned $ do
       stgErrorM $ "(undefined behaviour) resizeMutableByteArray# on pinned MutableByteArray, primop args: " ++ show args
@@ -751,12 +763,12 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "compareByteArrays#",
       [ ByteArray ByteArrayIdx{baId = baIdA}, IntV offsetA
       , ByteArray ByteArrayIdx{baId = baIdB}, IntV offsetB
-      , IntV length
+      , IntV length'
       ]
    ) -> do
     baA <- lookupByteArray baIdA
     baB <- lookupByteArray baIdB
-    case BA.compareByteArrays baA offsetA baB offsetB length of
+    case BA.compareByteArrays baA offsetA baB offsetB length' of
       LT  -> pure [IntV (-1)]
       EQ  -> pure [IntV 0]
       GT  -> pure [IntV 1]
@@ -769,48 +781,48 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "copyByteArray#",
       [ ByteArray ByteArrayIdx{baId = baIdSrc},        IntV offsetSrc
       , MutableByteArray ByteArrayIdx{baId = baIdDst}, IntV offsetDst
-      , IntV length, _s
+      , IntV length', _s
       ]
    ) -> do
     src <- getByteArrayContentPtr baIdSrc
     dst <- getByteArrayContentPtr baIdDst
-    liftIO $ copyBytes (plusPtr dst offsetDst) (plusPtr src offsetSrc) length
+    liftIO $ copyBytes (plusPtr dst offsetDst) (plusPtr src offsetSrc) length'
     pure []
 
   -- copyMutableByteArray# :: MutableByteArray# s -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
   ( "copyMutableByteArray#",
       [ MutableByteArray ByteArrayIdx{baId = baIdSrc}, IntV offsetSrc
       , MutableByteArray ByteArrayIdx{baId = baIdDst}, IntV offsetDst
-      , IntV length, _s
+      , IntV length', _s
       ]
    ) -> do
     src <- getByteArrayContentPtr baIdSrc
     dst <- getByteArrayContentPtr baIdDst
-    liftIO $ copyBytes (plusPtr dst offsetDst) (plusPtr src offsetSrc) length
+    liftIO $ copyBytes (plusPtr dst offsetDst) (plusPtr src offsetSrc) length'
     pure []
 
   -- copyByteArrayToAddr# :: ByteArray# -> Int# -> Addr# -> Int# -> State# s -> State# s
-  ( "copyByteArrayToAddr#", [ByteArray ByteArrayIdx{..}, IntV offset, PtrAtom _ dst, IntV length, _s]) -> do
+  ( "copyByteArrayToAddr#", [ByteArray ByteArrayIdx{..}, IntV offset, PtrAtom _ dst, IntV length', _s]) -> do
     p <- getByteArrayContentPtr baId
-    liftIO $ copyBytes dst (plusPtr p offset) length
+    liftIO $ copyBytes dst (plusPtr p offset) length'
     pure []
 
   -- copyMutableByteArrayToAddr# :: MutableByteArray# s -> Int# -> Addr# -> Int# -> State# s -> State# s
-  ( "copyMutableByteArrayToAddr#", [MutableByteArray ByteArrayIdx{..}, IntV offset, PtrAtom _ dst, IntV length, _s]) -> do
+  ( "copyMutableByteArrayToAddr#", [MutableByteArray ByteArrayIdx{..}, IntV offset, PtrAtom _ dst, IntV length', _s]) -> do
     p <- getByteArrayContentPtr baId
-    liftIO $ copyBytes dst (plusPtr p offset) length
+    liftIO $ copyBytes dst (plusPtr p offset) length'
     pure []
 
   -- copyAddrToByteArray# :: Addr# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
-  ( "copyAddrToByteArray#", [PtrAtom _ src, MutableByteArray ByteArrayIdx{..}, IntV offset, IntV length, _s]) -> do
+  ( "copyAddrToByteArray#", [PtrAtom _ src, MutableByteArray ByteArrayIdx{..}, IntV offset, IntV length', _s]) -> do
     p <- getByteArrayContentPtr baId
-    liftIO $ copyBytes (plusPtr p offset) src length
+    liftIO $ copyBytes (plusPtr p offset) src length'
     pure []
 
   -- setByteArray# :: MutableByteArray# s -> Int# -> Int# -> Int# -> State# s -> State# s
-  ( "setByteArray#", [MutableByteArray ByteArrayIdx{..}, IntV offset, IntV length, IntV value, _s]) -> do
+  ( "setByteArray#", [MutableByteArray ByteArrayIdx{..}, IntV offset, IntV length', IntV value, _s]) -> do
     p <- getByteArrayContentPtr baId
-    liftIO $ fillBytes (plusPtr p offset) (fromIntegral value :: Word8) length
+    liftIO $ fillBytes (plusPtr p offset) (fromIntegral value :: Word8) length'
     pure []
 
   ---------------------------------------------
@@ -832,48 +844,48 @@ evalPrimOp fallback op args t tc = case (op, args) of
     pure []
 
   -- casIntArray# :: MutableByteArray# s -> Int# -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-  ( "casIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV old, IntV new, _s]) -> do
+  ( "casIntArray#", [MutableByteArray ByteArrayIdx{..}, IntV index, IntV old, IntV new', _s]) -> do
     p <- getByteArrayContentPtr baId
     -- NOTE: CPU atomic
     current <- liftIO (peekElemOff (castPtr p) index :: IO Int)
     when (current == old) $ do
-      liftIO $ pokeElemOff (castPtr p) index new
+      liftIO $ pokeElemOff (castPtr p) index new'
     pure [IntV current]
 
   -- casInt8Array# :: MutableByteArray# t0 -> Int# -> Int8# -> Int8# -> State# t0 -> (# State# t0, Int8# #)
-  ( "casInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int8V old, Int8V new, _s]) -> do
+  ( "casInt8Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int8V old, Int8V new', _s]) -> do
     p <- getByteArrayContentPtr baId
     -- NOTE: CPU atomic
     current <- fromIntegral <$> liftIO (peekElemOff (castPtr p) index :: IO Int8)
     when (current == old) $ do
-      liftIO $ pokeElemOff (castPtr p) index new
+      liftIO $ pokeElemOff (castPtr p) index new'
     pure [Int8V current]
 
   -- casInt16Array# :: MutableByteArray# t0 -> Int# -> Int16# -> Int16# -> State# t0 -> (# State# t0, Int16# #)
-  ( "casInt16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int16V old, Int16V new, _s]) -> do
+  ( "casInt16Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int16V old, Int16V new', _s]) -> do
     p <- getByteArrayContentPtr baId
     -- NOTE: CPU atomic
     current <- fromIntegral <$> liftIO (peekElemOff (castPtr p) index :: IO Int16)
     when (current == old) $ do
-      liftIO $ pokeElemOff (castPtr p) index new
+      liftIO $ pokeElemOff (castPtr p) index new'
     pure [Int16V current]
 
   -- casInt32Array# :: MutableByteArray# t0 -> Int# -> Int32# -> Int32# -> State# t0 -> (# State# t0, Int32# #)
-  ( "casInt32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int32V old, Int32V new, _s]) -> do
+  ( "casInt32Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int32V old, Int32V new', _s]) -> do
     p <- getByteArrayContentPtr baId
     -- NOTE: CPU atomic
     current <- fromIntegral <$> liftIO (peekElemOff (castPtr p) index :: IO Int32)
     when (current == old) $ do
-      liftIO $ pokeElemOff (castPtr p) index new
+      liftIO $ pokeElemOff (castPtr p) index new'
     pure [Int32V current]
 
   -- casInt64Array# :: MutableByteArray# t0 -> Int# -> Int64# -> Int64# -> State# t0 -> (# State# t0, Int64# #)
-  ( "casInt64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int64V old, Int64V new, _s]) -> do
+  ( "casInt64Array#", [MutableByteArray ByteArrayIdx{..}, IntV index, Int64V old, Int64V new', _s]) -> do
     p <- getByteArrayContentPtr baId
     -- NOTE: CPU atomic
     current <- fromIntegral <$> liftIO (peekElemOff (castPtr p) index :: IO Int64)
     when (current == old) $ do
-      liftIO $ pokeElemOff (castPtr p) index new
+      liftIO $ pokeElemOff (castPtr p) index new'
     pure [Int64V current]
 
   -- fetchAddIntArray# :: MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #)

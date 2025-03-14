@@ -179,7 +179,7 @@ type CollectedCCs
       { hscTarget     = target
       , ghcLink       = LinkBinary
       , libraryPaths  = libraryPaths dflags ++ libPaths
-      , ldInputs      = ldInputs dflags ++ map Option ldOpts
+      , ldInputs      = ldInputs dflags ++ fmap Option ldOpts
       , includePaths  = addQuoteInclude (includePaths dflags) incPathsFixed
       }
     `gopt_set`  Opt_KeepSFiles
@@ -198,7 +198,7 @@ type CollectedCCs
 
   let libSet = Set.fromList ["rts"] -- "rts", "ghc-prim-cbits", "base-cbits", "integer-gmp-cbits"]
   dflags <- getSessionDynFlags
-  let ignored_pkgs  = [IgnorePackage p |  p <- map (unpackFS . unitIdFS) pkgs, Set.notMember p libSet]
+  let ignored_pkgs  = [IgnorePackage p |  p <- fmap (unpackFS . unitIdFS) pkgs, Set.notMember p libSet]
       my_pkgs       = [ExposePackage p (PackageArg p)  (ModRenaming True []) | p <- Set.toList libSet]
   setSessionDynFlags $ dflags { ignorePackageFlags = ignored_pkgs, packageFlags = my_pkgs }
   dflags <- getSessionDynFlags

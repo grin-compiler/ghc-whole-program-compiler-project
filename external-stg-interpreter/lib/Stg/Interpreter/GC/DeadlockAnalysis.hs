@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 module Stg.Interpreter.GC.DeadlockAnalysis where
 
 import Control.Monad
@@ -36,7 +36,6 @@ validateGCThreadResult RefSet{..} deadlockedThreadIds = do
       BlockedOnRead{}         -> assertLiveThread tid
       BlockedOnWrite{}        -> assertLiveThread tid
       BlockedOnDelay{}        -> assertLiveThread tid
-  pure ()
 
 -- the analysis is done in datalog, this code just uses the analysis result
 

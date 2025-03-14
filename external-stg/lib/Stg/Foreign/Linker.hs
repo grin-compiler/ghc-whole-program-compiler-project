@@ -8,7 +8,6 @@ import System.Process
 import Text.Printf
 
 import Stg.Program
-import Stg.Syntax
 import Stg.Foreign.Stubs
 
 getExtStgWorkDirectory :: FilePath -> IO FilePath

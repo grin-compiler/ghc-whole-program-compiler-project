@@ -1,11 +1,11 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+
 module Stg.Interpreter.PrimOp.Compact where
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp fallback = fallback
 
   -- compactNew# :: Word# -> State# RealWorld -> (# State# RealWorld, Compact# #)
   -- compactResize# :: Compact# -> Word# -> State# RealWorld -> State# RealWorld
@@ -19,7 +19,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- compactAddWithSharing# :: Compact# -> a -> State# RealWorld -> (# State# RealWorld, a #)
   -- compactSize# :: Compact# -> State# RealWorld -> (# State# RealWorld, Word# #)
 
-  _ -> fallback op args t tc
+  -- _ -> fallback op args t tc
 
 {-
 ------------------------------------------------------------------------

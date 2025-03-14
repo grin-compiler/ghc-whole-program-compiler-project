@@ -176,4 +176,5 @@ spec = do
     it "decodeDouble_Int64#" $
       property $ \(a :: Double) -> do
         let !(# x, y #) = decodeDouble_Int64# (unboxDouble a)
-        evalOp "decodeDouble_Int64#" [DoubleV a] `shouldReturn` [IntV (I# x), IntV (I# y)]
+        let x' = int64ToInt# x
+        evalOp "decodeDouble_Int64#" [DoubleV a] `shouldReturn` [IntV (I# x'), IntV (I# y)]

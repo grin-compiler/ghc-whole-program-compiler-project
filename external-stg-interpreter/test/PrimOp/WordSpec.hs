@@ -171,7 +171,7 @@ spec = do
 
     it "popCnt64#" $
       property $ \(a :: Word) -> do
-        evalOp "popCnt64#" [WordV a] `shouldReturn` [WordV (W# (popCnt64# (unboxWord a)))]
+        evalOp "popCnt64#" [WordV a] `shouldReturn` [WordV (W# (popCnt64# (wordToWord64# (unboxWord a))))]
 
     it "popCnt#" $
       property $ \(a :: Word) -> do
@@ -191,7 +191,9 @@ spec = do
 
     it "pdep64#" $
       property $ \(a :: Word, b :: Word) -> do
-        evalOp "pdep64#" [WordV a, WordV b] `shouldReturn` [WordV (W# (pdep64# (unboxWord a) (unboxWord b)))]
+        let a' = wordToWord64#(unboxWord a)
+        let b' = wordToWord64# (unboxWord b)
+        evalOp "pdep64#" [WordV a, WordV b] `shouldReturn` [WordV (W# (word64ToWord# (pdep64# a' b')))]
 
     it "pdep#" $
       property $ \(a :: Word, b :: Word) -> do
@@ -211,7 +213,9 @@ spec = do
 
     it "pext64#" $
       property $ \(a :: Word, b :: Word) -> do
-        evalOp "pext64#" [WordV a, WordV b] `shouldReturn` [WordV (W# (pext64# (unboxWord a) (unboxWord b)))]
+        let a' = wordToWord64#(unboxWord a)
+        let b' = wordToWord64# (unboxWord b)
+        evalOp "pext64#" [WordV a, WordV b] `shouldReturn` [WordV (W# (word64ToWord# (pext64# a' b')))]
 
     it "pext#" $
       property $ \(a :: Word, b :: Word) -> do
@@ -231,7 +235,8 @@ spec = do
 
     it "clz64#" $
       property $ \(a :: Word) -> do
-        evalOp "clz64#" [WordV a] `shouldReturn` [WordV (W# (clz64# (unboxWord a)))]
+        let a' = wordToWord64#(unboxWord a)
+        evalOp "clz64#" [WordV a] `shouldReturn` [WordV (W# (clz64# a'))]
 
     it "clz#" $
       property $ \(a :: Word) -> do
@@ -251,7 +256,8 @@ spec = do
 
     it "ctz64#" $
       property $ \(a :: Word) -> do
-        evalOp "ctz64#" [WordV a] `shouldReturn` [WordV (W# (ctz64# (unboxWord a)))]
+        let a' = wordToWord64#(unboxWord a)
+        evalOp "ctz64#" [WordV a] `shouldReturn` [WordV (W# (ctz64# a'))]
 
     it "ctz#" $
       property $ \(a :: Word) -> do
@@ -267,7 +273,8 @@ spec = do
 
     it "byteSwap64#" $
       property $ \(a :: Word) -> do
-        evalOp "byteSwap64#" [WordV a] `shouldReturn` [WordV (W# (byteSwap64# (unboxWord a)))]
+        let a' = wordToWord64#(unboxWord a)
+        evalOp "byteSwap64#" [WordV a] `shouldReturn` [WordV (W# (word64ToWord# (byteSwap64# a')))]
 
     it "byteSwap#" $
       property $ \(a :: Word) -> do
@@ -288,7 +295,8 @@ spec = do
 
     it "bitReverse64#" $
       property $ \(a :: Word) -> do
-        evalOp "bitReverse64#" [WordV a] `shouldReturn` [WordV (W# (bitReverse64# (unboxWord a)))]
+        let a' = wordToWord64#(unboxWord a)
+        evalOp "bitReverse64#" [WordV a] `shouldReturn` [WordV (W# (word64ToWord# (bitReverse64# a')))]
 
     it "bitReverse#" $
       property $ \(a :: Word) -> do

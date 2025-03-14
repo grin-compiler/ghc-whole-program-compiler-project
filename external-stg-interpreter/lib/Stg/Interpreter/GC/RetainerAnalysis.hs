@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Stg.Interpreter.GC.RetainerAnalysis where
 
 import Control.Monad.State
@@ -13,12 +13,13 @@ import Text.Printf
 import qualified Data.ByteString.Char8 as BS8
 
 import Stg.Interpreter.Base
+import Control.Monad
 
 loadMap :: String -> IO (Map GCSymbol (Set GCSymbol))
 loadMap factPath = do
   absFactPath <- makeAbsolute factPath
   putStrLn $ "loading: " ++ show absFactPath
-  refs <- map BS8.words . BS8.lines <$> BS8.readFile absFactPath
+  refs <- fmap BS8.words . BS8.lines <$> BS8.readFile absFactPath
   pure $ Map.fromListWith Set.union [(GCSymbol to, Set.singleton $ GCSymbol from) | [to, from] <- refs]
 
 
@@ -27,7 +28,7 @@ loadStringSet isQuiet factPath = do
   absFactPath <- makeAbsolute factPath
   unless isQuiet $ do
     putStrLn $ "loading: " ++ show absFactPath
-  Set.fromList . map GCSymbol . BS8.lines <$> BS8.readFile absFactPath
+  Set.fromList . fmap GCSymbol . BS8.lines <$> BS8.readFile absFactPath
 
 loadRetainerDb :: M ()
 loadRetainerDb = pure ()

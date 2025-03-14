@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.StablePointer where
 
 import Foreign.Ptr
@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]

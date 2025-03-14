@@ -87,7 +87,7 @@ mkStubImpl bindings decl = case decl of
     Coercion{}    -> []
 
 getCWrapperDescriptor :: Coercion -> (Bool, String, [String]) -- is IO, result type, arg types
-getCWrapperDescriptor ffiCo = (is_IO_res_ty, showFFIType res_ty, map showFFIType fe_arg_tys)
+getCWrapperDescriptor ffiCo = (is_IO_res_ty, showFFIType res_ty, fmap showFFIType fe_arg_tys)
   where
     -- example for ffiTy: (Int -> IO Int) -> IO (FunPtr (Int -> IO Int))
     ffiTy                   = coercionLKind ffiCo

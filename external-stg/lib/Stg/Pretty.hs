@@ -1,44 +1,35 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards, LambdaCase #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Stg.Pretty where
-
-import Control.Monad
-import Control.Applicative
-import Control.Monad.Identity
-import Control.Monad.Reader
-import Control.Monad.Writer hiding (Alt)
-import Control.Monad.State
-import Control.Monad.RWS hiding (Alt)
-import Data.Maybe
-import Data.Foldable
+import Control.Applicative ( Alternative(..) )
+import Control.Monad.Identity ( Identity(..) )
+import Control.Monad.Reader ( ReaderT(ReaderT), MonadReader )
+import Control.Monad.Writer ( MonadWriter )
+import Control.Monad.State ( gets, modify', execState, MonadState, State )
+import Control.Monad.RWS ( RWST(..) )
+import Data.Maybe ( fromMaybe )
 import Data.String (IsString(..))
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 
 import Stg.Syntax
-import Stg.IRLocation
+import Stg.IRLocation ( StgPoint(..), binderToStgId )
 
-import Data.Ratio
-import Data.ByteString (ByteString)
+import Data.Ratio ( denominator, numerator )
 import qualified Data.ByteString.Char8 as BS
 import Text.PrettyPrint.Final
-import Text.PrettyPrint.Final.Words
+import Text.PrettyPrint.Final.Words ( braces, comma, parens )
 import Text.PrettyPrint.Final.Extensions.Environment
+import Prelude hiding (exp, mod)
 
 ---------------------------------------------------------
 type SrcPos = (Int, Int)
@@ -102,9 +93,9 @@ code
 -}
 
 getStgPoint :: DocM StgPoint
-getStgPoint = (speStgPoint <$> askEnv) >>= \case
+getStgPoint = askEnv >>= (\case
   Nothing -> error "missing stg point"
-  Just sp -> pure sp
+  Just sp -> pure sp) . speStgPoint
 ---------------------------------------------------------
 
 env0 :: Monoid fmt => PEnv Int a fmt
@@ -123,7 +114,7 @@ state0 = PState
   { curLine = []
   }
 
-data Config
+newtype Config
   = Config
   { cfgPrintTickish :: Bool
   }
@@ -216,20 +207,26 @@ angles x = char '<' >> x >> char '>'
 (<+>) :: MonadPretty w ann fmt m => m a -> m b -> m b
 a <+> b = a >> char ' ' >> b
 
+(<$$>) :: (MonadPretty w ann fmt m, Semigroup (m ())) => m () -> m () -> m ()
 x <$$> y = x <> newline <> y
 
+hang :: MonadPretty w ann fmt m => w -> m a -> m a
 hang i d = align (nest i d)
+
+indent :: Int -> DocM () -> DocM ()
 indent i d = hang i (textS (spaces i) <> d)
 
 vcat :: [Doc] -> Doc
 vcat = vsep
 
+sep :: [DocM ()] -> DocM ()
 sep = grouped . vsep
 
 spaces :: Int -> String
 spaces n        | n <= 0    = ""
                 | otherwise = replicate n ' '
 
+textS :: String -> DocM ()
 textS = text . T.pack
 
 --------------------------------------------------------
@@ -255,7 +252,7 @@ pprBinderTypeSig :: Binder -> Doc
 pprBinderTypeSig b = pprVar b <+> text "::" <+> ppType (binderType b)
 
 pprBinder :: Binder -> Doc
-pprBinder b = pprVar b
+pprBinder = pprVar
 
 {-
   name handling design:
@@ -303,10 +300,10 @@ instance Pretty Lit where
     pretty (LitChar x) = text (T.pack $ show x)
     pretty (LitString x) = text (T.pack $ show x)
     pretty LitNullAddr = "nullAddr#"
-    pretty (LitFloat x) = (pprRational x)
-    pretty (LitDouble x) = (pprRational x)
+    pretty (LitFloat x) = pprRational x
+    pretty (LitDouble x) = pprRational x
     pretty (LitLabel x s) = text "LABEL" <+> parens (pretty x) <+> textS (show s)
-    pretty (LitNumber t i) = pretty i
+    pretty (LitNumber _t i) = pretty i
     pretty (LitRubbish t) = text "#Rubbish" <+> pretty t
 
 instance Pretty AltCon where
@@ -323,7 +320,7 @@ instance Pretty AltType where
 
 pprAlt :: Id -> Int -> Alt -> Doc
 pprAlt (Id scrutBinder) idx (Alt con bndrs rhs) =
-  (hsep (pretty con : map (pprBinder) bndrs) <+> text "-> do") <$$>
+  (hsep (pretty con : fmap pprBinder bndrs) <+> text "-> do") <$$>
   indent 2 (withStgPoint (SP_AltExpr (binderToStgId scrutBinder) idx) $ pprExpr rhs)
 
 pprArg :: Arg -> Doc
@@ -349,7 +346,7 @@ instance Pretty PrimCall where
 pprOp :: StgOp -> Doc
 pprOp = \case
   StgPrimOp op -> text "primop" <+> pretty (show op)
-  StgPrimCallOp (PrimCall sym uid) -> text "cmmcall" <+> pretty (show sym)-- <+> text "-- from package:" <+> pretty uid
+  StgPrimCallOp (PrimCall sym _uid) -> text "cmmcall" <+> pretty (show sym)-- <+> text "-- from package:" <+> pretty uid
   StgFCallOp ForeignCall{..} -> case foreignCTarget of
     StaticTarget _ sym _ _ -> text "foreigncall" <+> pretty (show sym)
     DynamicTarget -> text "foreigncall dynamic_call_target"
@@ -408,31 +405,31 @@ pprExpr exp = do
   stgPoint <- getStgPoint
   annotate stgPoint $ case exp of
     StgLit l            -> pretty l
-    StgCase x b at [Alt AltDefault [] rhs] -> sep
+    StgCase x b _at [Alt AltDefault [] rhs] -> sep
                             [ withStgPoint (SP_CaseScrutineeExpr $ binderToStgId b) $
                                 pprBinder b <+> text "<-" <+> nest 2 (pprExpr x)
                             , withStgPoint (SP_AltExpr (binderToStgId b) 0) $
                                 pprExpr rhs
                             ]
-    StgCase x b at [Alt con bndrs rhs] -> sep
+    StgCase x b _at [Alt con bndrs rhs] -> sep
                             [ withStgPoint (SP_CaseScrutineeExpr $ binderToStgId b) $
-                                pprBinder b <+> text "@" <+> parens (hsep $ pretty con : map (pprBinder) bndrs) <+> text "<-" <+> nest 2 (pprExpr x)
+                                pprBinder b <+> text "@" <+> parens (hsep $ pretty con : fmap pprBinder bndrs) <+> text "<-" <+> nest 2 (pprExpr x)
                             , withStgPoint (SP_AltExpr (binderToStgId b) 0) $
                                 pprExpr rhs
                             ]
-    StgCase x b at alts -> sep
+    StgCase x b _at alts -> sep
                             [ withStgPoint (SP_CaseScrutineeExpr $ binderToStgId b) $
                                 pprBinder b <+> text "<-" <+> nest 2 (pprExpr x)
                             , text "case" <+> pprVar b <+> text "of"
                             , indent 2 $ vcat $ putDefaultLast alts [pprAlt (Id b) idx a | (idx, a) <- zip [0..] alts]
                             ]
-    StgApp f args         -> (pprVar f) <+> (hsep $ map (pprArg) args)
-    StgOpApp op args ty n -> (pprOp op) <+> (hsep $ map (pprArg) args){- <+> text "::" <+> (pretty ty) <+> maybe mempty (parens . ppTyConName) n -}
-    StgConApp dc args _t  -> addUnboxedCommentIfNecessary dc $ (pprDataConName dc) <+> (hsep $ map (pprArg) args)
-    StgLet b e            -> text "let" <+> (align $ pprBinding b) <$$> align (withStgPoint (SP_LetExpr stgPoint) $ pprExpr e)
+    StgApp f args         -> pprVar f <+> hsep (map pprArg args)
+    StgOpApp op args _ty _n -> pprOp op <+> hsep (map pprArg args){- <+> text "::" <+> (pretty ty) <+> maybe mempty (parens . ppTyConName) n -}
+    StgConApp dc args _t  -> addUnboxedCommentIfNecessary dc $ pprDataConName dc <+> hsep (map pprArg args)
+    StgLet b e            -> text "let" <+> align (pprBinding b) <$$> align (withStgPoint (SP_LetExpr stgPoint) $ pprExpr e)
     StgLetNoEscape b e    -> vsep
       [ text "-- stack allocating let"
-      , text "let" <+> (align $ pprBinding b) <$$> align (withStgPoint (SP_LetNoEscapeExpr stgPoint) $ pprExpr e)
+      , text "let" <+> align (pprBinding b) <$$> align (withStgPoint (SP_LetNoEscapeExpr stgPoint) $ pprExpr e)
       ]
     StgTick tickish e -> do
       Config{..} <- speConfig <$> askEnv
@@ -457,10 +454,16 @@ pprSrcSpan = \case
 -}
 pprRhs :: Id -> Rhs -> Doc
 pprRhs (Id rhsBinder) = \case
-  StgRhsClosure _ u bs e -> annotate (SP_Binding $ binderToStgId rhsBinder) $ do
-    pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do" <> (newline <> (indent 2 $ withStgPoint (SP_RhsClosureExpr $ binderToStgId rhsBinder) $ pprExpr e))
-  StgRhsCon dc vs -> annotate (SP_RhsCon $ binderToStgId rhsBinder) $ do
-    pprBinder rhsBinder <+> text "=" <+> addUnboxedCommentIfNecessary dc (pprDataConName dc <+> (hsep $ map (pprArg) vs))
+  StgRhsClosure _ _ bs e ->
+    annotate (SP_Binding $ binderToStgId rhsBinder) $
+      pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do" 
+        <> newline
+        <> indent 2 (withStgPoint (SP_RhsClosureExpr $ binderToStgId rhsBinder) $ pprExpr e)
+  StgRhsCon dc vs ->
+    annotate (SP_RhsCon $ binderToStgId rhsBinder) $
+      pprBinder rhsBinder
+        <+> text "="
+        <+> addUnboxedCommentIfNecessary dc (pprDataConName dc <+> hsep (map pprArg vs))
 
 pprBinding :: Binding -> Doc
 pprBinding = \case
@@ -468,13 +471,13 @@ pprBinding = \case
   StgRec bs      -> vsep (map pprBind bs)
   where
     pprBind (b,rhs) =
-      (pprRhs (Id b) rhs)
+      pprRhs (Id b) rhs
 
 pprTopBinding :: TopBinding -> Doc
 pprTopBinding = \case
   StgTopLifted (StgNonRec b r)  -> pprTopBind (b,r)
   StgTopLifted (StgRec bs)      -> vsep (map pprTopBind bs)
-  StgTopStringLit b s           -> pprTopBind' (\(Id b) str -> pprBinder b <+> text "=" <+> (textS . show $ str)) (b,s)
+  StgTopStringLit b s           -> pprTopBind' (\(Id b') str -> pprBinder b' <+> text "=" <+> (textS . show $ str)) (b,s)
   where
     pprTopBind = pprTopBind' pprRhs
     pprTopBind' f (b, rhs) = sep
@@ -482,7 +485,6 @@ pprTopBinding = \case
       , f (Id b) rhs
       , mempty
       ]
-
 instance Pretty TopBinding where
   pretty = pprTopBinding
 
@@ -491,7 +493,7 @@ ppTyConName TyCon{..} = {-pretty tcUnitId <> text "_" <> pretty tcModule <> text
 
 pprTyCon :: TyCon -> Doc
 pprTyCon TyCon{..} = {-pretty tcUnitId <> text "_" <> pretty tcModule <> text "." <> -}
-  text "data" <+> pretty tcName <$$> (indent 2 $ vsep ([text c <+> pprDataConDef dc | (dc, c) <- zip tcDataCons ("=" : repeat "|")]))
+  text "data" <+> pretty tcName <$$> indent 2 (vsep ([text c <+> pprDataConDef dc | (dc, c) <- zip tcDataCons ("=" : repeat "|")]))
 
 pprDataConDef :: DataCon -> Doc
 pprDataConDef DataCon{..} = case dcRep of
@@ -523,11 +525,11 @@ pprModule Module{..} = vsep
     , modName == moduleName
     , tc <- tl
     ]
-  , vsep (map (pprTopBinding) moduleTopBindings)
+  , vsep (map pprTopBinding moduleTopBindings)
   ]
 
 pprImportList :: UnitId -> ModuleName -> [Binder] -> Doc
-pprImportList u mod bl = text "import" <+> text "\"" <> pretty u <> text "\"" <+> pretty mod <+> align (collection "(" ")" "," $ map pprVar bl)
+pprImportList u mod bl = text "import" <+> text "\"" <> pretty u <> text "\"" <+> pretty mod <+> align (collection "(" ")" "," $ fmap pprVar bl)
 
 pprExportList :: [TopBinding] -> Doc
 pprExportList l = vsep
@@ -538,12 +540,12 @@ pprExportList l = vsep
     exportedBinders = filter ((ModulePublic ==) . binderScope) $ getTopBinders l
 
 getTopBinders :: [TopBinding] -> [Binder]
-getTopBinders topBindings = concatMap go topBindings
+getTopBinders = concatMap go
   where
     go = \case
       StgTopStringLit b _ -> [b]
       StgTopLifted (StgNonRec b _) -> [b]
-      StgTopLifted (StgRec l) -> map fst l
+      StgTopLifted (StgRec l) -> fmap fst l
 
 instance Pretty Module where
   pretty = pprModule
@@ -554,7 +556,7 @@ pprForeignStubs = \case
   ForeignStubs{..}  -> vsep
                         [ text "foreign stub C header {" <$$> green (pretty fsCHeader) <$$> text "}"
                         , text "foreign stub C source {" <$$> green (pretty fsCSource) <$$> text "}"
-                        , text "foreign decls {" <$$> (indent 2 $ vsep $ map (textS . show) fsDecls) <$$> text "}"
+                        , text "foreign decls {" <$$> indent 2 (vsep $ fmap (textS . show) fsDecls) <$$> text "}"
                         ]
 
 comment :: Doc -> Doc
@@ -598,7 +600,7 @@ addStgPoint :: StgPoint -> SrcRange -> M ()
 addStgPoint p r = modify' $ \s@StgPointState{..} -> s { spsStgPoints = (p, r) : spsStgPoints }
 
 getPos :: M SrcPos
-getPos = (,) <$> gets spsRow <*> gets spsCol
+getPos = gets ((,) . spsRow) <*> gets spsCol
 
 pShow :: Doc -> (Text, [(StgPoint, SrcRange)])
 pShow = pShowWithConfig Config {cfgPrintTickish = False}

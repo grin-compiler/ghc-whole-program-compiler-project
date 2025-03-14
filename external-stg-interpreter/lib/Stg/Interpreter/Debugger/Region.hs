@@ -1,14 +1,13 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, MultiWayIf #-}
+
 module Stg.Interpreter.Debugger.Region where
 
 import Text.Printf
 import Control.Monad.State
 import Data.Maybe
-import qualified Data.List as List
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
-import qualified Data.IntSet as IntSet
 import qualified Data.ByteString.Char8 as BS8
 import System.Console.Pretty
 
@@ -18,6 +17,7 @@ import Stg.Syntax
 
 import qualified Stg.Interpreter.GC as GC
 import qualified Stg.Interpreter.GC.GCRef as GC
+import Control.Monad
 
 evalRegionCommand :: String -> M ()
 evalRegionCommand cmd = do
@@ -35,7 +35,7 @@ dumpOriginM i = do
   origin <- gets ssOrigin
   case IntMap.lookup i origin of
     Nothing -> pure ""
-    Just (oId,oAddr,_) -> pure $ (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
+    Just (oId,oAddr,_) -> pure $ color White (style Bold "  ORIGIN: ") ++ color Green (show oId) ++ " " ++ show oAddr
 
 dumpHeapM :: Heap -> M ()
 dumpHeapM h = do
@@ -114,14 +114,16 @@ checkRegion markerName = do
   case Map.lookup markerName markers of
     Nothing -> pure ()
     Just rl -> do
-      forM_ rl $ \r@(IRRegion s e) -> case r of
-        _ | markerName == s && markerName == e -> endRegion tid r >> startRegion tid r
-        _ | markerName == s -> startRegion tid r
-        _ | markerName == e -> endRegion tid r
+      forM_ rl $ \r -> case r of
+        (IRRegion s e) -> if | markerName == s && markerName == e -> endRegion tid r >> startRegion tid r
+                             | markerName == s -> startRegion tid r
+                             | markerName == e -> endRegion tid r
+                             | otherwise -> error ""
+        EventRegion _ -> error ""
 
 nextRegionIndex :: Region -> M Int
 nextRegionIndex r = do
-  idx <- fromMaybe 0 <$> gets (Map.lookup r . ssRegionCounter)
+  idx <- gets (fromMaybe 0 . Map.lookup r . ssRegionCounter)
   modify' $ \s@StgState{..} -> s {ssRegionCounter = Map.insert r (succ idx) ssRegionCounter}
   pure idx
 

@@ -1,30 +1,20 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
-{-# LANGUAGE ForeignFunctionInterface #-}
 
 module Stg.Interpreter where
 
 import GHC.Stack
-import qualified GHC.Exts as Exts
 import Foreign.Ptr
 
 import Control.Concurrent
-import Control.Concurrent.MVar
-import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 import Control.Monad.State.Strict
 import Control.Exception
-import qualified Data.Primitive.ByteArray as BA
 
-import Data.Maybe
 import Data.List (partition, isSuffixOf)
-import Data.Set (Set)
-import Data.Map (Map)
 import qualified Data.Map.Strict as StrictMap
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteString.Internal as BS
 import System.Posix.DynamicLinker
 import Codec.Archive.Zip
 import qualified Data.Yaml as Y
@@ -34,13 +24,11 @@ import Data.Time.Clock
 import System.FilePath
 import System.IO
 import System.Directory
-import System.Exit
 
 import Stg.IRLocation
 import Stg.Syntax
 import Stg.IO
 import Stg.Program
-import Stg.JSON
 import Stg.Analysis.LiveVariable
 import Stg.Foreign.Linker
 
@@ -52,7 +40,6 @@ import Stg.Interpreter.Debug
 import qualified Stg.Interpreter.ThreadScheduler as Scheduler
 import qualified Stg.Interpreter.Debugger        as Debugger
 import qualified Stg.Interpreter.Debugger.Region as Debugger
-import qualified Stg.Interpreter.Debugger.Internal as Debugger
 import qualified Stg.Interpreter.GC as GC
 
 import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
@@ -89,6 +76,7 @@ import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
 import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
 import qualified Stg.Interpreter.PrimOp.ObjectLifetime  as PrimObjectLifetime
 import qualified Stg.Interpreter.PrimOp.InfoTableOrigin as PrimInfoTableOrigin
+import Control.Monad
 
 {-
   Q: what is the operational semantic of StgApp
@@ -137,7 +125,7 @@ evalLiteral = \case
   LitNumber LitNumWord64 n  -> pure . WordAtom $ fromIntegral n
   c@LitChar{}               -> pure $ Literal c
   LitRubbish{} -> pure Rubbish
-  l -> error $ "unsupported: " ++ show l
+  -- l -> error $ "unsupported: " ++ show l
 
 evalArg :: HasCallStack => Env -> Arg -> M Atom
 evalArg localEnv = \case
@@ -225,8 +213,10 @@ builtinStgEval so a@HeapPtr{} = do
             BS8.putStrLn . BS8.pack $ unlines argStrs
             hFlush stdout
         -}
-        let StgRhsClosure _ uf params e = getCutShowItem $ hoCloBody
-            HeapPtr l = a
+        let (uf, params, e) = case getCutShowItem hoCloBody of
+                  StgRhsClosure _ uf' params' e' -> (uf', params', e')
+                  StgRhsCon _ _ -> error "missed StgRhsClosure"
+        let HeapPtr l = a
             extendedEnv = addManyBindersToEnv SO_CloArg params hoCloArgs hoEnv
         unless (length params == length hoCloArgs) $ do
           stgErrorM $ "builtinStgEval - Closure - length mismatch: " ++ show (params, hoCloArgs)
@@ -265,14 +255,14 @@ builtinStgEval so a@HeapPtr{} = do
               }
             evalExpr extendedEnv e
           SingleEntry -> do
-            tid <- gets ssCurrentThreadId
+            _tid <- gets ssCurrentThreadId
             -- TODO: investigate how does single-entry blackholing cause problem (estgi does not have racy memops as it is mentioned in GHC Note below)
             -- no backholing, see: GHC Note [Black-holing non-updatable thunks]
             -- closure will only be entered once, and so need not be updated but may safely be blackholed.
             --stackPush (Update l) -- FIX??? Q: what will remove the backhole if there is no update? Q: is the value linear?
             --store l (BlackHole o) -- Q: is this a bug?
             evalExpr extendedEnv e
-    _ -> stgErrorM $ "expected evaluable heap object, got: " ++ show a ++ " heap-object: " ++ show o ++ " static-origin: " ++ show so
+    -- _ -> stgErrorM $ "expected evaluable heap object, got: " ++ show a ++ " heap-object: " ++ show o ++ " static-origin: " ++ show so
 builtinStgEval so a = stgErrorM $ "expected a thunk, got: " ++ show a ++ ", static-origin: " ++ show so
 
 builtinStgApply :: HasCallStack => StaticOrigin -> Atom -> [Atom] -> M [Atom]
@@ -355,7 +345,7 @@ assertWHNF :: HasCallStack => [Atom] -> AltType -> Binder -> M ()
 assertWHNF [hp@HeapPtr{}] aty res = do
   o <- readHeap hp
   case o of
-    Con _ dc args -> pure ()
+    Con _ _dc _args -> pure ()
     Closure{..}
       | hoCloMissing == 0
       , aty /= MultiValAlt 1
@@ -410,8 +400,7 @@ killAllThreads = do
   isQuiet <- gets ssIsQuiet
   unless isQuiet $ when (runnableThreads /= []) $ do
     reportThreads
-    error "killing all running threads"
-  pure () -- TODO
+    error "killing all running threads" -- TODO
 
 evalOnMainThread :: M [Atom] -> M [Atom]
 evalOnMainThread = evalOnThread True
@@ -433,9 +422,9 @@ evalOnThread isMainThread setupAction = do
   let loop resultIn = do
         resultOut <- evalStackMachine resultIn
         ThreadState{..} <- getThreadState tid
-        case isThreadLive tsStatus of
-          True  -> loop resultOut -- HINT: the new scheduling is ready
-          False -> do
+        if isThreadLive tsStatus then
+          loop resultOut -- HINT: the new scheduling is ready
+        else do
             when isMainThread $ do
               mylog "[estgi] - main hs thread finished"
               killAllThreads
@@ -462,7 +451,7 @@ evalStackMachine result = do
         putStrLn $ "  input result = " ++ show result
         putStrLn $ "  stack-cont   = " ++ showStackCont stackCont
 
-      doTrace <- gets ssPrimOpTrace
+      _doTrace <- gets ssPrimOpTrace
       do -- when doTrace $ do
         resultStr <- mapM debugPrintAtom result
         traceLog $ showStackCont stackCont ++ " current-result: " ++ show resultStr
@@ -479,6 +468,7 @@ peekAtom a = case a of
   HeapPtr{} -> debugPrintHeapObject <$> readHeap a
   _ -> pure $ show a
 
+peekAtoms :: [Atom] -> StateT StgState IO [String]
 peekAtoms = mapM peekAtom
 
 evalStackContinuation :: HasCallStack => [Atom] -> StackContinuation -> M [Atom]
@@ -486,13 +476,13 @@ evalStackContinuation result = \case
   Apply args
     | [fun@HeapPtr{}] <- result
     -> do
-      argsS <- peekAtoms args
-      resultS <- peekAtoms result
+      _argsS <- peekAtoms args
+      _resultS <- peekAtoms result
       --liftIO $ putStrLn $ "evalStackContinuation Apply args: " ++ show args ++ " to " ++ show result
       --liftIO $ putStrLn $ "evalStackContinuation Apply args: " ++ show argsS ++ " to " ++ show resultS
-      
+
       out <- builtinStgApply SO_ClosureResult fun args
-      outS <- peekAtoms out
+      _outS <- peekAtoms out
 
       --liftIO $ putStrLn $ "evalStackContinuation Apply args: " ++ show args ++ " to " ++ show result ++ " output-result: " ++ show out
       --liftIO $ putStrLn $ "evalStackContinuation Apply args: " ++ show argsS ++ " to " ++ show resultS ++ " output-result: " ++ show outS
@@ -515,7 +505,7 @@ evalStackContinuation result = \case
     assertWHNF result altType resultBinder
     let resultId = (Id resultBinder)
     case altType of
-      AlgAlt tc -> do
+      AlgAlt _tc -> do
         let v = case result of
               [l] -> l
               _   -> error $ "expected a single value: " ++ show result
@@ -535,7 +525,7 @@ evalStackContinuation result = \case
         let [Alt{..}] = getCutShowItem alts
         when (n /= length altBinders) $ do
           stgErrorM $ "evalStackContinuation - MultiValAlt n broken assumption 2: " ++ show (n, altBinders, result)
-        let extendedEnv = if n == 1 && altBinders == []
+        let extendedEnv = if n == 1 && null altBinders
                             then addManyBindersToEnv SO_Scrut [resultBinder] result localEnv
                             else addManyBindersToEnv SO_Scrut altBinders result localEnv
         --unless (length altBinders == length result) $ do
@@ -557,29 +547,29 @@ evalStackContinuation result = \case
         setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId resultBinder) 0
         evalExpr extendedEnv altRHS
 
-  s@(RestoreExMask oldMask blockAsyncEx isInterruptible) -> do
+  (RestoreExMask _oldMask blockAsyncEx isInterruptible) -> do
     tid <- gets ssCurrentThreadId
     ts <- getCurrentThreadState
     updateThreadState tid $ ts {tsBlockExceptions = blockAsyncEx, tsInterruptible = isInterruptible}
     case tsBlockedExceptions ts of
       (thowingTid, exception) : waitingTids
-        | blockAsyncEx == False
+        | not blockAsyncEx
         -> do
           -- try wake up thread
           throwingTS <- getThreadState thowingTid
           when (tsStatus throwingTS == ThreadBlocked (BlockedOnThrowAsyncEx tid)) $ do
             updateThreadState thowingTid throwingTS {tsStatus = ThreadRunning}
           -- raise exception
-          ts <- getCurrentThreadState
-          updateThreadState tid ts {tsBlockedExceptions = waitingTids}
+          ts' <- getCurrentThreadState
+          updateThreadState tid ts' {tsBlockedExceptions = waitingTids}
           PrimConcurrency.raiseAsyncEx result tid exception
       _ -> pure ()
     pure result
 
-  Catch h b i -> do
+  Catch _h b i -> do
     -- TODO: is anything to do??
     -- assert if current mask is the same as the one in stack frame
-    ts@ThreadState{..} <- getCurrentThreadState
+    ThreadState{..} <- getCurrentThreadState
     when (tsBlockExceptions /= b || tsInterruptible /= i) $ do
       error $ "Catch frame assertion failure - ex mask mismatch, expected: " ++ show (b, i) ++ " got: " ++ show (tsBlockExceptions, tsInterruptible)
     pure result
@@ -624,7 +614,7 @@ evalDebugFrame result = \case
     traceLog "full-trace-off"
     pure result
 
-  x -> error $ "unsupported debug-frame: " ++ show x ++ ", result: " ++ show result
+  -- x -> error $ "unsupported debug-frame: " ++ show x ++ ", result: " ++ show result
 
 evalExpr :: HasCallStack => Env -> Expr -> M [Atom]
 evalExpr localEnv = \case
@@ -713,7 +703,7 @@ evalExpr localEnv = \case
     Debugger.checkRegion op
     markPrimOp op
     args <- mapM (evalArg localEnv) l
-    tid <- gets ssCurrentThreadId
+    _tid <- gets ssCurrentThreadId
     result <- evalPrimOp op args t tc
     doTrace <- gets ssPrimOpTrace
     when doTrace $ traceLog $ show (op, args)
@@ -750,18 +740,16 @@ evalExpr localEnv = \case
             stgErrorM $ "illegal createAdjustor call"
       _ -> mapM (evalArg localEnv) l
     --mylog $ show ("executing", foreignCall, args)
-    result <- evalFCallOp evalOnNewThread foreignCall args t tc
+    evalFCallOp evalOnNewThread foreignCall args t tc
     --mylog $ show (foreignCall, args, result)
-    pure result
 
   StgOpApp (StgPrimCallOp primCall) l t tc -> do
     markPrimCall primCall
     args <- mapM (evalArg localEnv) l
-    result <- evalPrimCallOp primCall args t tc
+    evalPrimCallOp primCall args t tc
     --liftIO $ print (primCall, args, result)
-    pure result
 
-  StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
+  -- StgOpApp op _args t _tc -> stgErrorM $ "unsupported StgOp: " ++ show op ++ " :: " ++ show t
 
 
 matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [Atom]
@@ -773,7 +761,7 @@ matchFirstLit resultId localEnv atom alts
   , indexedAltsWithDefault <- case indexedAlts of
       d@(_, Alt AltDefault _ _) : xs -> xs ++ [d]
       xs -> xs
-  = case head $ [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, map altCon alts)) of
+  = case head $ [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, fmap altCon alts)) of
   (idx, Alt{..}) -> do
     setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) idx
     evalExpr localEnv altRHS
@@ -805,21 +793,27 @@ convertAltLit lit = case lit of
   l -> error $ "unsupported: " ++ show l
 
 matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
-matchFirstCon resultId localEnv (Con _ (DC dc) args) alts
+matchFirstCon resultId localEnv heap alts
   | indexedAlts <- zip [0..] alts
   , indexedAltsWithDefault <- case indexedAlts of
       d@(_, Alt AltDefault _ _) : xs -> xs ++ [d]
       xs -> xs
-  = case [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchCon dc altCon] of
-  []  -> stgErrorM $ "no matching alts for: " ++ show resultId
-  (idx, Alt{..}) : _ -> do
-    let extendedEnv = case altCon of
-                        AltDataCon{}  -> addManyBindersToEnv SO_AltArg altBinders args localEnv
-                        _             -> localEnv
-    --unless (length altBinders == length args) $ do
-    --  stgErrorM $ "matchFirstCon length mismatch: " ++ show (DC dc, altBinders, args, resultId)
-    setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) idx
-    evalExpr extendedEnv altRHS
+  = case heap of
+      (Con _ (DC dc) args) -> do
+        case [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchCon dc altCon] of
+          []  -> stgErrorM $ "no matching alts for: " ++ show resultId
+          (idx, Alt{..}) : _ -> do
+            let extendedEnv = case altCon of
+                                AltDataCon{}  -> addManyBindersToEnv SO_AltArg altBinders args localEnv
+                                _             -> localEnv
+            --unless (length altBinders == length args) $ do
+            --  stgErrorM $ "matchFirstCon length mismatch: " ++ show (DC dc, altBinders, args, resultId)
+            setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) idx
+            evalExpr extendedEnv altRHS
+      Closure {}       -> error "unsupported"
+      BlackHole {}     -> error "unsupported"
+      ApStack _ _      -> error "unsupported"
+      RaiseException _ -> error "unsupported"
 
 matchCon :: HasCallStack => DataCon -> AltCon -> Bool
 matchCon a = \case
@@ -854,7 +848,7 @@ storeRhs isLetNoEscape localEnv i addr = \case
     store addr (Con isLetNoEscape (DC dc) args)
 
   cl@(StgRhsClosure freeVars _ paramNames _) -> do
-    let liveSet   = Set.fromList $ map Id freeVars
+    let liveSet   = Set.fromList $ fmap Id freeVars
         prunedEnv = Map.restrictKeys localEnv liveSet -- HINT: do pruning to keep only the live/later referred variables
     store addr (Closure isLetNoEscape (Id i) (CutShow cl) prunedEnv [] (length paramNames))
 
@@ -862,7 +856,7 @@ storeRhs isLetNoEscape localEnv i addr = \case
 
 declareTopBindings :: HasCallStack => [Module] -> M ()
 declareTopBindings mods = do
-  let (strings, closures) = partition isStringLit $ (concatMap moduleTopBindings) mods
+  let (strings, closures) = partition isStringLit $ concatMap moduleTopBindings mods
       isStringLit = \case
         StgTopStringLit{} -> True
         _                 -> False
@@ -876,13 +870,14 @@ declareTopBindings mods = do
       getBindings = \case
         StgTopLifted (StgNonRec i rhs) -> [(i, rhs)]
         StgTopLifted (StgRec l) -> l
+        StgTopStringLit _ _ -> error "unsupported"
 
   (closureEnv, rhsList) <- fmap unzip . forM bindings $ \(b, rhs) -> do
     addr <- freshHeapAddress
     pure ((Id b, (SO_TopLevel, HeapPtr addr)), (b, addr, rhs))
 
   -- set the top level binder env
-  modify' $ \s@StgState{..} -> s {ssStaticGlobalEnv = Map.fromList $ stringEnv ++ closureEnv}
+  modify' $ \s -> s {ssStaticGlobalEnv = Map.fromList $ stringEnv ++ closureEnv}
 
   -- HINT: top level closures does not capture local variables
   forM_ rhsList $ \(b, addr, rhs) -> storeRhs False mempty b addr rhs
@@ -895,7 +890,7 @@ usesMultiThreadedRts fullpak_name = do
                                             GhcStgApp{..} <- Y.decodeThrow bs
                                             pure $ "WayThreaded" `elem` appWays
     ".json"                             -> error "TODO: read rts concurrency mode from json"
-    ext | isSuffixOf "_ghc_stgapp" ext  -> do
+    ext | "_ghc_stgapp" `isSuffixOf` ext  -> do
                                             GhcStgApp{..} <- readGhcStgApp fullpak_name
                                             pure $ "WayThreaded" `elem` appWays
     _                                   -> error "unknown input file format"
@@ -906,13 +901,13 @@ loadAndRunProgram isQuiet switchCWD fullpak_name progArgs dbgChan dbgState traci
   mods0 <- case takeExtension fullpak_name of
     ".fullpak"                          -> getFullpakModules fullpak_name
     ".json"                             -> getJSONModules fullpak_name
-    ext | isSuffixOf "_ghc_stgapp" ext  -> getGhcStgAppModules fullpak_name
+    ext | "_ghc_stgapp" `isSuffixOf` ext  -> getGhcStgAppModules fullpak_name
     _                                   -> error "unknown input file format"
   runProgram isQuiet switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing debugSettings
 
 runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> DebugSettings -> IO ()
 runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing debugSettings = do
-  let mods      = map annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
+  let mods      = fmap annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName  = dropExtension progFilePath
 
   usesMultiThreadedRts progFilePath >>= \case
@@ -933,13 +928,13 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
               []        -> error "main_:Main.main not found"
               _         -> error "multiple main_:Main.main have found"
         limit <- gets ssNextHeapAddr
-        modify' $ \s@StgState{..} -> s {ssDynamicHeapStart = limit}
-        modify' $ \s@StgState{..} -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
+        modify' $ \s -> s {ssDynamicHeapStart = limit}
+        modify' $ \s -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
 
         -- TODO: check how it is done in the native RTS: call hs_main
         mainAtom <- lookupEnv mempty rootMain
 
-        evalOnMainThread $ do
+        _ <- evalOnMainThread $ do
           stackPush $ Apply [Void]
           pure [mainAtom]
 
@@ -960,9 +955,10 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
         when (dbgState == DbgStepByStep) $ do
           Debugger.processCommandsUntilExit
 
-  tracingState <- case tracing of
-    False -> pure NoTracing
-    True  -> do
+  tracingState <-
+    if tracing then
+      pure NoTracing
+    else do
       let tracePath = ".extstg-trace" </> takeFileName progName
       createDirectoryIfMissing True tracePath
       fd <- openFile (progName ++ ".whole-program-path.tsv") WriteMode
@@ -983,9 +979,9 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
             hClose wpp
             hClose h
           _ -> pure ()
-  flip catch (\e -> do {freeResources; throw (e :: SomeException)}) $ do
+  handle (\e -> do {freeResources; throw (e :: SomeException)}) $ do
     now <- getCurrentTime
-    s@StgState{..} <- execStateT run (emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSettings gcIn gcOut)
+    StgState{..} <- execStateT run (emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSettings gcIn gcOut)
     when switchCWD $ setCurrentDirectory currentDir
     freeResources
 
@@ -1027,7 +1023,7 @@ loadCbitsSO isQuiet progFilePath = do
 flushStdHandles :: M ()
 flushStdHandles = do
   Rts{..} <- gets ssRtsSupport
-  evalOnMainThread $ do
+  void $ evalOnMainThread $ do
     stackPush $ Apply [] -- HINT: force IO monad result to WHNF
     stackPush $ Apply [Void]
     pure [rtsTopHandlerFlushStdHandles]
@@ -1044,7 +1040,6 @@ flushStdHandles = do
     []            -> pure resultLazy
     [valueThunk]  -> builtinStgEval valueThunk -- pure resultLazy -- builtinStackMachineApply valueThunk []
 -}
-  pure ()
 
 
 

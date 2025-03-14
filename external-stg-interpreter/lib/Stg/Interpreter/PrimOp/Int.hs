@@ -1,5 +1,5 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
-{-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE MagicHash, UnboxedTuples #-}
 module Stg.Interpreter.PrimOp.Int where
 
 import GHC.Exts
@@ -7,17 +7,21 @@ import Foreign.Storable (sizeOf)
 import Data.Int
 import Data.Word
 import Data.Bits
-import Data.Char
 
 import Stg.Syntax
 import Stg.Interpreter.Base
 
 type PrimInt  = Int64
 
+pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern FloatV :: Float -> Atom
 pattern FloatV f  = FloatAtom f
+pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
@@ -48,7 +52,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
           -- Return either 00..00 or FF..FF depending on the carry
           carryFill :: Int -> Int
-          carryFill x = x `shiftR` (wordSizeInBits - 1)
+          carryFill x' = x' `shiftR` (wordSizeInBits - 1)
 
     wordSizeInBits :: Int
     wordSizeInBits = 8 * sizeOf (0 :: Word)

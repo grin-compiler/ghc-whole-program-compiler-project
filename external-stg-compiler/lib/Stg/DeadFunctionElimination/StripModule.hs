@@ -38,7 +38,7 @@ stripDeadParts stgappName mod = do
           | otherwise -> Nothing
 
   -- TODO: strip stgModuleTyCons
-  pure mod {moduleTopBindings = catMaybes $ map dropDeadBinding $ moduleTopBindings mod}
+  pure mod {moduleTopBindings = catMaybes $ fmap dropDeadBinding $ moduleTopBindings mod}
 
 tryStripDeadParts :: FilePath -> Module -> IO Module
 tryStripDeadParts stgappName mod = do

@@ -42,7 +42,7 @@ prettyBinderArg = parens . prettyBinder
 instance Pretty Exp where
   pretty prg = cata folder prg where
     extNames      = case prg of
-                      Program{..} -> Set.fromList $ map eName pExternals
+                      Program{..} -> Set.fromList $ fmap eName pExternals
                       _           -> Set.empty
     isPrimName n  = Set.member n extNames
 
@@ -52,23 +52,23 @@ instance Pretty Exp where
                            : prettyPublicNames pPublicNamesF
                            : prettyForeignExportedNames pForeignExportedNamesF
                            : prettyStaticData pStaticDataF
-                           : map pretty pDefinitionsF
+                           : fmap pretty pDefinitionsF
                            )
-      DefF name args exp  -> nest 2 (hsep (pretty name : map prettyBinderArg args) <+> text "=" <$$> pretty exp) <> line
+      DefF name args exp  -> nest 2 (hsep (pretty name : fmap prettyBinderArg args) <+> text "=" <$$> pretty exp) <> line
       -- Exp
-      AppF name args      -> hsep (((if isPrimName name then dullyellow else cyan) $ pretty name) : text "$" : map pretty args)
+      AppF name args      -> hsep (((if isPrimName name then dullyellow else cyan) $ pretty name) : text "$" : fmap pretty args)
       CaseF atom alts     -> nest 2 (keyword "case" <+> pretty atom <+> keyword "of" <$$> vsep (map pretty alts))
       LetF binds exp      -> nest 2 (keyword "let"    <$$> vsep (map prettyBind binds)) <$$> pretty exp
       LetRecF binds exp   -> nest 2 (keyword "letrec" <$$> vsep (map prettyBind binds)) <$$> pretty exp
       LetSF binds exp     -> nest 2 (keyword "letS"   <$$> vsep (map prettyBind binds)) <$$> pretty exp
-      ConF tag args       -> brackets $ hsep (pretty tag : map pretty args)
+      ConF tag args       -> brackets $ hsep (pretty tag : fmap pretty args)
       -- Atom
       VarF name           -> pretty name
       LitF lit            -> pretty lit
       -- Alt
       AltF name cpat exp  -> nest 2 (pretty cpat <+> text "@" <+> pretty name <+> text "->" <$$> pretty exp)
       -- Extra
-      ClosureF vars args exp -> nest 2 (keyword "\\closure" <+> hsep (brackets (hsep (map pretty vars)) : map prettyBinderArg args ++ [text "->"]) Leijen.<$> pretty exp)
+      ClosureF vars args exp -> nest 2 (keyword "\\closure" <+> hsep (brackets (hsep (map pretty vars)) : fmap prettyBinderArg args ++ [text "->"]) Leijen.<$> pretty exp)
 
 instance Pretty Lit where
   pretty = \case
@@ -87,7 +87,7 @@ instance Pretty Lit where
 
 instance Pretty Pat where
   pretty = \case
-    NodePat tag vars  -> parens $ hsep (pretty tag : map pretty vars)
+    NodePat tag vars  -> parens $ hsep (pretty tag : fmap pretty vars)
     LitPat  lit       -> pretty lit
     DefaultPat        -> keyword "_"
 
@@ -104,7 +104,7 @@ prettyConGroups [] = mempty
 prettyConGroups cons = keyword "constructors" <$$> line <> vsep (map prettyConGroup cons) <> line
 
 prettyConGroup :: ConGroup -> Doc
-prettyConGroup (ConGroup name cons) = indent 2 (keyword "data" <+> pretty name <$$> indent 2 (vsep $ map (prettyConSpec width) cons)) <> line where
+prettyConGroup (ConGroup name cons) = indent 2 (keyword "data" <+> pretty name <$$> indent 2 (vsep $ fmap (prettyConSpec width) cons)) <> line where
   maxWidth  = 80
   maxLen    = maximum [length . show . pretty $ csName s | s <- cons]
   width     = min maxLen maxWidth
@@ -115,7 +115,7 @@ prettyConSpec width (ConSpec name argsRep) = fill width (pretty name) <+> hsep (
 
 prettyStaticData :: [StaticData] -> Doc
 prettyStaticData [] = mempty
-prettyStaticData sdata = keyword "static" <+> keyword "data" <$$> indent 2 (vsep $ map (prettyStaticDataItem width) sdata) <> line where
+prettyStaticData sdata = keyword "static" <+> keyword "data" <$$> indent 2 (vsep $ fmap (prettyStaticDataItem width) sdata) <> line where
   maxWidth  = 80
   maxLen    = maximum [length . show . pretty $ sName s | s <- sdata]
   width     = min maxLen maxWidth
@@ -147,7 +147,7 @@ prettyFunction width name ret args = fill width (pretty name) <> align (myEnclos
 
 instance Pretty Ty where
   pretty = \case
-    TyCon varName name tys       -> braces (hsep ((green $ pretty name) : map pretty tys)) <+> text "@" <+> pretty varName
+    TyCon varName name tys       -> braces (hsep ((green $ pretty name) : fmap pretty tys)) <+> text "@" <+> pretty varName
     TyVar name                   -> text "%" <> cyan (pretty name)
     TySimple varName simpleType  -> parens (pretty simpleType) <+> text "@" <+> pretty varName
     TyFun name retTy argsTy      -> parens (pretty name <> (myEncloseSep (text " : ") empty (text " -> ") (map pretty $ argsTy ++ [retTy])))
@@ -163,7 +163,7 @@ instance Pretty PrimRep where
 instance Pretty RepType where
   pretty = \case
     SingleValue t   -> pretty t
-    UnboxedTuple l  -> braces (hsep $ map pretty l)
+    UnboxedTuple l  -> braces (hsep $ fmap pretty l)
     PolymorphicRep  -> red $ text "PolymorphicRep"
     Auto            -> red $ text "Auto"
 

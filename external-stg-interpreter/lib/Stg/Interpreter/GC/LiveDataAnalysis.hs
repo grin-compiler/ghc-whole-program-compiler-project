@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies, DeriveGeneric #-}
 module Stg.Interpreter.GC.LiveDataAnalysis where
 
@@ -15,7 +15,6 @@ import System.FilePath
 import System.Directory
 import Foreign.Ptr
 import Text.Printf
-import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS8
 
 import Language.Souffle.Compiled (SouffleM)
@@ -23,18 +22,19 @@ import qualified Language.Souffle.Compiled as Souffle
 
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.GCRef
+import Control.Monad
 
 -------- souffle program
 
 data ExtStgGC = ExtStgGC
 
-data GCRoot = GCRoot String
+newtype GCRoot = GCRoot String
   deriving (Eq, Show, Generic)
 
 data Reference = Reference String String
   deriving (Eq, Show, Generic)
 
-data MaybeDeadlockingThread = MaybeDeadlockingThread String
+newtype MaybeDeadlockingThread = MaybeDeadlockingThread String
   deriving (Eq, Show, Generic)
 
 instance Souffle.Program ExtStgGC where
@@ -100,8 +100,8 @@ addGCRootFacts prog stgState localGCRoots = withGCRootFacts stgState localGCRoot
   Souffle.addFact prog $ GCRoot $ BS8.unpack $ unGCSymbol s
 
 addReferenceFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
-addReferenceFacts prog stgState = withReferenceFacts stgState $ \from to -> do
-  Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from) (BS8.unpack $ unGCSymbol to)
+addReferenceFacts prog stgState = withReferenceFacts stgState $ \from' to' -> do
+  Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from') (BS8.unpack $ unGCSymbol to')
 
 withGCRootFacts :: Monad m => StgState -> [Atom] -> (String -> GCSymbol -> m ()) -> m ()
 withGCRootFacts StgState{..} localGCRoots addGCRoot = do
@@ -123,7 +123,7 @@ withGCRootFacts StgState{..} localGCRoots addGCRoot = do
   visitGCRef (addGCRoot "stable pointer") [PtrAtom (StablePtr idx) (intPtrToPtr $ IntPtr idx) | idx <- IntMap.keys ssStablePointers]
 
   -- CAFs
-  visitGCRef (addGCRoot "CAF") $ map HeapPtr $ IntSet.toList ssCAFSet
+  visitGCRef (addGCRoot "CAF") $ fmap HeapPtr $ IntSet.toList ssCAFSet
 
   -- stack continuations of live threads
   forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of
@@ -232,21 +232,21 @@ collectGCSymbol dd@RefSet{..} sym = do
     NS_WeakPointer        -> dd {rsWeakPointers       = IntSet.insert idx rsWeakPointers}
     NS_StablePointer      -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
     NS_Thread             -> dd {rsThreads            = IntSet.insert idx rsThreads}
-    _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
+    -- _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
 
 readbackLiveData :: FilePath -> Bool -> SouffleM RefSet
 readbackLiveData factDir isQuiet = do
   liveSet <- liftIO $ loadStringSet isQuiet (factDir </> "Live.csv")
-  foldM (\dd sym -> collectGCSymbol dd sym) emptyRefSet $ Set.toList liveSet
+  foldM collectGCSymbol emptyRefSet $ Set.toList liveSet
 
 readbackDeadlockingThreadData :: FilePath -> Bool -> SouffleM IntSet
 readbackDeadlockingThreadData factDir isQuiet = do
   deadlockingSet <- liftIO $ loadStringSet isQuiet (factDir </> "DeadlockingThread.csv")
-  rsThreads <$> foldM (\dd sym -> collectGCSymbol dd sym) emptyRefSet (Set.toList deadlockingSet)
+  rsThreads <$> foldM collectGCSymbol emptyRefSet (Set.toList deadlockingSet)
 
 loadStringSet :: Bool -> String -> IO (Set GCSymbol)
 loadStringSet isQuiet factPath = do
   absFactPath <- makeAbsolute factPath
   unless isQuiet $ do
     putStrLn $ "loading: " ++ show absFactPath
-  Set.fromList . map GCSymbol . BS8.lines <$> BS8.readFile absFactPath
+  Set.fromList . fmap GCSymbol . BS8.lines <$> BS8.readFile absFactPath

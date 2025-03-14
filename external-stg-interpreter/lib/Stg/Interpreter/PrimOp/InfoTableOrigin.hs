@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.InfoTableOrigin where
 
 import Foreign.Ptr

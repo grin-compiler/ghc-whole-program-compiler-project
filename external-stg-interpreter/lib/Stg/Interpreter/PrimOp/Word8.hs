@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
 module Stg.Interpreter.PrimOp.Word8 where
 
 import Stg.Syntax
@@ -7,9 +7,13 @@ import Stg.Interpreter.Base
 import Data.Word
 import Data.Bits
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V :: Int -> Atom
 pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V :: Word -> Atom
 pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]

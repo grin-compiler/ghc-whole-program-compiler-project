@@ -107,7 +107,7 @@ modes = subparser
                 symbols = Set.fromList $
                   [n | LitLabel n _ <- Map.keys fiLitLabels] ++
                   [n | PrimCall n _ <- Map.keys fiPrimCalls] ++
-                  [n | StaticTarget _ n _ _ <- map foreignCTarget $ Map.keys fiForeignCalls]
+                  [n | StaticTarget _ n _ _ <- fmap foreignCTarget $ Map.keys fiForeignCalls]
 
             printf "foreign symbols: %d\n" (Set.size symbols)
             mapM_ BS8.putStrLn $ Set.toList symbols
@@ -153,15 +153,15 @@ modes = subparser
             moduleList <- loadModules fname
             let ignoredSymbols = Set.fromList $
                   [ n
-                  | ForeignStubs _ _ _ _ l <- map moduleForeignStubs moduleList
+                  | ForeignStubs _ _ _ _ l <- fmap moduleForeignStubs moduleList
                   , StubDeclImport _ (Just (StubImplImportCWrapper n _ _ _ _)) <- l
                   -- HINT: these symbols are used only by "createAdjustor" that does not dereference the symbol
-                  ] ++ map BS8.pack handledRTSSymbols
+                  ] ++ fmap BS8.pack handledRTSSymbols
             let ForeignInfo{..} = getForeignInfos moduleList
                 symbols = Set.fromList $
                   [n | LitLabel n _ <- Map.keys fiLitLabels] ++
                   [n | PrimCall n _ <- Map.keys fiPrimCalls] ++
-                  [n | StaticTarget _ n _ _ <- map foreignCTarget $ Map.keys fiForeignCalls]
+                  [n | StaticTarget _ n _ _ <- fmap foreignCTarget $ Map.keys fiForeignCalls]
 
             -- get known symbols from .cbits.so
             soName <- makeAbsolute (fname -<.> ".cbits.so")

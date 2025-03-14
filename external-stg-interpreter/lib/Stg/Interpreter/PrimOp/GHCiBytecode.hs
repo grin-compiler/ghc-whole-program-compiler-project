@@ -5,9 +5,9 @@ import Stg.Syntax
 import Stg.Interpreter.Base
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimOp fallback op args t tc = case (op, args) of
+evalPrimOp fallback  = fallback
 
-  _ -> fallback op args t tc
+  -- _ -> fallback op args t tc
 
 {-
 ------------------------------------------------------------------------

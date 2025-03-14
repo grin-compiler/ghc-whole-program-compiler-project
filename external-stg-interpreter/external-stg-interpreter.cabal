@@ -87,6 +87,7 @@ library
                        text,
                        bytestring,
                        containers,
+                       transformers,
                        primitive,
                        vector,
                        mtl,

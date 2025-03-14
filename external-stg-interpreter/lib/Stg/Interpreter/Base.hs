@@ -1,4 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant <$>" #-}
+{-# HLINT ignore "Use camelCase" #-}
 module Stg.Interpreter.Base where
 
 import Data.Word
@@ -18,7 +21,6 @@ import qualified Data.IntMap as IntMap
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Internal as BS
-import qualified Data.ByteString.Lazy as BL
 import Data.Vector (Vector)
 import qualified Data.Primitive.ByteArray as BA
 import Control.Monad.Primitive
@@ -28,14 +30,13 @@ import Control.Concurrent.Chan.Unagi.Bounded
 import Foreign.ForeignPtr.Unsafe
 import Data.Time.Clock
 import System.IO
-import Text.Pretty.Simple (pShowNoColor, pShow)
+import Text.Pretty.Simple (pShowNoColor)
 import qualified Data.Text.Lazy.IO as Text
 
 import GHC.Stack
-import Text.Printf
-import Debug.Trace
 import Stg.Syntax
 import Stg.IRLocation
+import Control.Monad
 
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
 
@@ -311,7 +312,7 @@ type Env    = Map Id (StaticOrigin, Atom)   -- NOTE: must contain only the defin
 type Stack  = [StackContinuation]
 
 envToAtoms :: Env -> [Atom]
-envToAtoms = map snd . Map.elems
+envToAtoms = fmap snd . Map.elems
 
 data StaticOrigin
   = SO_CloArg
@@ -688,7 +689,7 @@ stackPush sc = do
 stackPop :: M (Maybe StackContinuation)
 stackPop = do
   let tailFun ts@ThreadState{..} = ts {tsStack = drop 1 tsStack}
-  Just ts@ThreadState{..} <- state $ \s@StgState{..} ->
+  Just ThreadState{..} <- state $ \s@StgState{..} ->
     ( IntMap.lookup ssCurrentThreadId ssThreads
     , s {ssThreads = IntMap.adjust tailFun ssCurrentThreadId ssThreads}
     )
@@ -700,7 +701,7 @@ stackPop = do
 
 freshHeapAddress :: HasCallStack => M Addr
 freshHeapAddress = do
-  limit <- gets ssNextHeapAddr
+  _limit <- gets ssNextHeapAddr
   state $ \s@StgState{..} -> (ssNextHeapAddr, s {ssNextHeapAddr = succ ssNextHeapAddr})
 
 allocAndStore :: HasCallStack => HeapObject -> M Addr
@@ -751,8 +752,7 @@ stgErrorM msg = do
     putStrLn $ "current closure: " ++ show curClosure
     putStrLn $ " * native estgi call stack:"
     putStrLn $ prettyCallStack callStack
-  action <- unPrintable <$> gets ssStgErrorAction
-  action
+  void $ unPrintable <$> gets ssStgErrorAction
   error "stgErrorM"
 
 addBinderToEnv :: StaticOrigin -> Binder -> Atom -> Env -> Env
@@ -762,7 +762,7 @@ addZippedBindersToEnv :: StaticOrigin -> [(Binder, Atom)] -> Env -> Env
 addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so, v) e) env bvList
 
 addManyBindersToEnv :: StaticOrigin -> [Binder] -> [Atom] -> Env -> Env
-addManyBindersToEnv so [] [] env = env
+addManyBindersToEnv _  [] [] env = env
 addManyBindersToEnv so (b : binders) (v : values) env = addManyBindersToEnv so binders values $ Map.insert (Id b) (so, v) env
 addManyBindersToEnv so (b : binders) values env = addManyBindersToEnv so binders values $ Map.insert (Id b) (so, Unbinded (Id b)) env
 addManyBindersToEnv so binders values _env = error $ "addManyBindersToEnv - length mismatch: " ++ show (so, [(Id b, binderType b, binderTypeSig b) | b <- binders], values)
@@ -923,7 +923,7 @@ markClosure :: Name -> M ()
 markClosure n = modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = setInsert n ssEvaluatedClosures}
 
 markExecuted :: Int -> M ()
-markExecuted i = pure () -- modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
+markExecuted _ = pure () -- modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
 
 markExecutedId :: Id -> M ()
 markExecutedId i = modify' $ \s@StgState{..} -> s {ssExecutedClosureIds = setInsert i ssExecutedClosureIds}
@@ -965,7 +965,7 @@ addIntraClosureCallGraphEdge from so to = do
     }
 
 setProgramPoint :: ProgramPoint -> M ()
-setProgramPoint pp = modify' $ \s@StgState{..} -> s {ssCurrentProgramPoint = pp}
+setProgramPoint pp = modify' $ \s -> s {ssCurrentProgramPoint = pp}
 
 -- string constants
 -- NOTE: the string gets extended with a null terminator
@@ -989,12 +989,12 @@ promptM ioAction = do
   isQuiet <- gets ssIsQuiet
   tid <- gets ssCurrentThreadId
   pp <- gets ssCurrentProgramPoint
-  cc <- gets ssCurrentClosure
+  _cc <- gets ssCurrentClosure
   tsList <- gets $ IntMap.toList . ssThreads
   liftIO . unless isQuiet $ do
     now <- getCurrentTime
     putStrLn $ "  now           = " ++ show now
-    putStrLn $ "  tid           = " ++ show tid ++ "    thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
+    putStrLn $ "  tid           = " ++ show tid ++ "    thread status list: " ++ show [(tid', tsStatus ts) | (tid', ts) <- tsList]
     putStrLn $ "  program point = " ++ show pp
     ioAction
     --putStrLn "[press enter]"
@@ -1288,7 +1288,7 @@ reportThread tid = do
 reportThreadIO :: Int -> ThreadState -> IO ()
 reportThreadIO tid endTS = do
     putStrLn ""
-    putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
+    print ("tid" :: String, tid, "tsStatus" :: String, tsStatus endTS)
     Text.putStrLn $ pShowNoColor endTS
     putStrLn ""
 
@@ -1492,7 +1492,7 @@ wakeupBlackHoleQueueThreads addr = readHeap (HeapPtr addr) >>= \case
     forM_ hoBHWaitQueue $ \waitingTid -> do
       waitingTS <- getThreadState waitingTid
       case tsStatus waitingTS of
-        ThreadBlocked (BlockedOnBlackHole dstAddr) -> do
+        ThreadBlocked (BlockedOnBlackHole _dstAddr) -> do
           updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
         _ -> error $ "internal error - invalid thread status: " ++ show (tsStatus waitingTS)
   x -> error $ "internal error - expected BlackHole, got: " ++ show x

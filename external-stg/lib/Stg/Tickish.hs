@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Stg.Tickish where
 
-import Control.Monad.RWS hiding (Alt)
+import Control.Monad.RWS
 
 import Stg.Syntax
 import Stg.IRLocation

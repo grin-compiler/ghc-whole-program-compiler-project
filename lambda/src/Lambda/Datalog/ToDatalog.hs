@@ -67,7 +67,7 @@ programToFactsM log outDir prg = do
     hClose h
 
 toDatalog :: [Fact] -> String
-toDatalog = unlines . map prettyFact where
+toDatalog = unlines . fmap prettyFact where
   prettyFact :: Fact -> String
   prettyFact (n, args) = n ++ "(" ++ intercalate ", " (map showParam args) ++ ")."
 
@@ -78,7 +78,7 @@ toDatalog = unlines . map prettyFact where
     N n -> show $ unpackName n
 
 toFacts :: [Fact] -> [(String, String)]
-toFacts = map prettyFacts . Map.toList . Map.unionsWith (++) . map (\(f,a) -> Map.singleton f [a]) where
+toFacts = fmap prettyFacts . Map.toList . Map.unionsWith (++) . fmap (\(f,a) -> Map.singleton f [a]) where
   factEq a b = fst a == fst b
 
   prettyFacts :: (String, [[Param]]) -> (String, String)

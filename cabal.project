@@ -1,0 +1,16 @@
+
+packages:
+  external-stg-syntax
+  external-stg
+  external-stg-interpreter
+
+source-repository-package
+  type: git
+  location: https://github.com/david-christiansen/final-pretty-printer.git
+  tag: 048e8fa2d8b2b7a6f9e4e209db4f67361321eec8
+
+source-repository-package
+  type: git
+  location: https://github.com/zlonast/souffle-haskell.git
+  tag: b3420f24c0955e16c2bf1bdf6233f0ec9a93fea9
+

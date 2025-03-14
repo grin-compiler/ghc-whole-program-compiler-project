@@ -21,7 +21,6 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS8
-import Text.PrettyPrint.ANSI.Leijen hiding ((</>), (<$>))
 
 
 {- testsuite compilation / preparation

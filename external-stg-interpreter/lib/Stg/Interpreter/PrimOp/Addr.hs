@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
 module Stg.Interpreter.PrimOp.Addr where
 
 import Control.Monad.State
@@ -6,25 +6,34 @@ import Data.Char
 import Data.Word
 import Data.Int
 import Data.Bits
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Internal as BS
 import Foreign.Ptr
 import Foreign.Storable
 
 import Stg.Syntax
 import Stg.Interpreter.Base
+import Control.Monad
 
-pattern CharV c = Literal (LitChar c)
+pattern CharV :: Char -> Atom
+pattern CharV c   = Literal (LitChar c)
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V :: Int -> Atom
 pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V :: Int -> Atom
 pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int32V :: Int -> Atom
 pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V :: Int -> Atom
 pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V :: Word -> Atom
 pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word16V :: Word -> Atom
 pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V :: Word -> Atom
 pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]

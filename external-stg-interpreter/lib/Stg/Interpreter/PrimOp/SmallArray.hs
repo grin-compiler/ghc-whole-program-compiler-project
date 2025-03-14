@@ -8,8 +8,11 @@ import qualified Data.Vector as V
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 lookupSmallArrIdx :: SmallArrIdx -> M (V.Vector Atom)
@@ -28,7 +31,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- newSmallArray# :: Int# -> a -> State# s -> (# State# s, SmallMutableArray# s a #)
   ( "newSmallArray#", [IntV i, a, _s]) -> do
-    smallMutableArrays <- gets ssSmallMutableArrays
+    _smallMutableArrays <- gets ssSmallMutableArrays
     next <- gets ssNextSmallMutableArray
     let v = V.replicate (fromIntegral i) a
     modify' $ \s@StgState{..} -> s {ssSmallMutableArrays = IntMap.insert next v ssSmallMutableArrays, ssNextSmallMutableArray = succ next}
@@ -43,7 +46,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- readSmallArray# :: SmallMutableArray# s a -> Int# -> State# s -> (# State# s, a #)
   ( "readSmallArray#", [SmallMutableArray a, IntV i, _s]) -> do
     v <- lookupSmallArrIdx a
-    pure [v V.! (fromIntegral i)]
+    pure [v V.! fromIntegral i]
 
   -- writeSmallArray#" :: SmallMutableArray# s a -> Int# -> a -> State# s -> State# s
   ( "writeSmallArray#", [SmallMutableArray m, IntV i, a, _s]) -> do
@@ -70,7 +73,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- indexSmallArray# :: SmallArray# a -> Int# -> (# a #)
   ( "indexSmallArray#", [SmallArray a, IntV i]) -> do
     v <- lookupSmallArrIdx a
-    pure [v V.! (fromIntegral i)]
+    pure [v V.! fromIntegral i]
 
   -- unsafeFreezeSmallArray# :: SmallMutableArray# s a -> State# s -> (# State# s, SmallArray# a #)
   ( "unsafeFreezeSmallArray#", [SmallMutableArray v, _s]) -> do
@@ -88,7 +91,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
                           | i <- [ 0 .. n-1 ]
                           , let si = os + i
                           , let di = od + i
-                          , let v = vsrc V.! (fromIntegral si)
+                          , let v = vsrc V.! fromIntegral si
                           ]
     updateSmallArrIdx dst vdst'
     pure []
@@ -101,7 +104,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
                           | i <- [ 0 .. n-1 ]
                           , let si = os + i
                           , let di = od + i
-                          , let v = vsrc V.! (fromIntegral si)
+                          , let v = vsrc V.! fromIntegral si
                           ]
     updateSmallArrIdx dst vdst'
     pure []
@@ -142,7 +145,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- NOTE: CPU atomic
   ( "casSmallArray#", [SmallMutableArray src, IntV o, old, new, _s]) -> do
     vsrc <- lookupSmallArrIdx src
-    let current = vsrc V.! (fromIntegral o)
+    let current = vsrc V.! fromIntegral o
     if current == old
       then do
         updateSmallArrIdx src (vsrc V.// [(fromIntegral o, new)])

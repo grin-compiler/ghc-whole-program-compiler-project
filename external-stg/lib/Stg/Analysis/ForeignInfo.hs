@@ -7,11 +7,8 @@ module Stg.Analysis.ForeignInfo
   , emptyForeignInfo
   ) where
 
-import Control.Monad
 import Control.Monad.State
 
-import Data.Set (Set)
-import qualified Data.Set as Set
 
 import Data.Map (Map)
 import qualified Data.Map as Map

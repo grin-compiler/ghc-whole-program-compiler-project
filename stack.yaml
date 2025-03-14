@@ -8,10 +8,8 @@ packages:
 #  - 'external-stg-compiler'
 
 extra-deps:
-  - dom-lt-0.2.3
-  - souffle-haskell-3.5.1
-  - type-errors-pretty-0.0.1.2@sha256:9042b64d1ac2f69aa55690576504a2397ebea8a6a55332242c88f54027c7eb57,2781
-  - github: csabahruska/final-pretty-printer
-    commit: 5444974a2e0ee76abb790c85738a38f96696c908
+  - github: david-christiansen/final-pretty-printer
+    commit: 048e8fa2d8b2b7a6f9e4e209db4f67361321eec8
 
-allow-newer: true
+  - github: zlonast/souffle-haskell
+    commit: b3420f24c0955e16c2bf1bdf6233f0ec9a93fea9

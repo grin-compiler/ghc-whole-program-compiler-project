@@ -1,12 +1,15 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.TagToEnum where
 
 import Data.List (findIndex)
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 dataToTagOp :: [Atom] -> M [Atom]

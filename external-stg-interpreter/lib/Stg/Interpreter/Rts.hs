@@ -1,25 +1,20 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+
 module Stg.Interpreter.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
 
-import GHC.Stack
 import Control.Monad.State
-import Control.Concurrent.MVar
 
 import Foreign.Marshal.Utils
 
-import Data.List (foldl')
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
 import Stg.Syntax
 import Stg.Reconstruct
 import Stg.Interpreter.Base
+import Control.Monad
 
-pattern CharV c = Literal (LitChar c)
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-
+emptyRts :: String -> [String] -> Rts
 emptyRts progName progArgs = Rts
   { rtsGlobalStore  = Map.empty
   , rtsProgName     = progName
@@ -39,7 +34,7 @@ initRtsSupport :: String -> [String] -> [Module] -> M ()
 initRtsSupport progName progArgs mods = do
 
   -- create empty Rts data con, it is filled gradually
-  modify' $ \s@StgState{..} -> s {ssRtsSupport = emptyRts progName progArgs}
+  modify' $ \s -> s {ssRtsSupport = emptyRts progName progArgs}
   initRtsCDataSymbols
 
   -- collect rts related modules
@@ -51,7 +46,7 @@ initRtsSupport progName progArgs mods = do
   -- lookup wired-in constructors
   let dcMap = Map.fromList
                 [ ((moduleUnitId, moduleName, tcName, dcName), dc)
-                | m@Module{..} <- rtsMods
+                | Module{..} <- rtsMods
                 , (tcU, tcMs) <- moduleTyCons
                 , tcU == moduleUnitId
                 , (tcM, tcs) <- tcMs
@@ -68,11 +63,11 @@ initRtsSupport progName progArgs mods = do
   -- lookup wired-in closures
   let getBindings = \case
         StgTopLifted (StgNonRec i _) -> [i]
-        StgTopLifted (StgRec l) -> map fst l
+        StgTopLifted (StgRec l) -> fmap fst l
         _ -> []
       closureMap = Map.fromList
                 [ ((uId, mName, bName), topBinding)
-                | m@Module{..} <- rtsMods
+                | Module{..} <- rtsMods
                 , topBinding@Binder{..} <- concatMap getBindings moduleTopBindings
                 , (uId, mName, bName, _) <- wiredInClosures
                 , UnitId uId == moduleUnitId
@@ -81,7 +76,7 @@ initRtsSupport progName progArgs mods = do
                 ]
 
   promptM_ $ do
-    forM_ mods $ \m@Module{..} -> do
+    forM_ mods $ \Module{..} -> do
       liftIO $ print (moduleUnitId, moduleName)
 
   forM_ wiredInClosures $ \(u, m, n, setter) -> do

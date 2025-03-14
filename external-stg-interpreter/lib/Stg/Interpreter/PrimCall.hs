@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
+
 module Stg.Interpreter.PrimCall where
 
 import Control.Monad.State.Strict
@@ -8,8 +9,11 @@ import Stg.Syntax
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimOp.Exceptions
 
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i
+pattern FloatV :: Float -> Atom
 pattern FloatV f  = FloatAtom f
+pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 
 -- HINT: prim call emulation of .cmm code, because the interpreter FFI does not support Cmm
@@ -19,7 +23,7 @@ pattern DoubleV d = DoubleAtom d
 -- NOTE: the WordV should contain a 64 bit wide value
 
 evalPrimCallOp :: PrimCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
+evalPrimCallOp pCall@(PrimCall primCallTarget _primCallUnitId) args t _tc = do
   case primCallTarget of
   -- stg_raiseDivZZerozh :: State# RealWorld -> (# State# RealWorld, Void# #)
     "stg_raiseDivZZerozh"

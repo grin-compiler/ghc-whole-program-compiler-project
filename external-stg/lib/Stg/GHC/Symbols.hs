@@ -1,6 +1,5 @@
 module Stg.GHC.Symbols where
 
-import Stg.Syntax
 
 liveSymbols :: [(String, String, String)]
 liveSymbols =

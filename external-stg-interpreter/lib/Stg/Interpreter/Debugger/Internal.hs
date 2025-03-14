@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections #-}
+
 module Stg.Interpreter.Debugger.Internal where
 
 import Text.Printf
@@ -9,11 +10,9 @@ import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
-import qualified Data.ByteString.Char8 as BS8
 import Data.Tree
 import System.Console.Pretty
 
-import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
 import Control.Concurrent (myThreadId)
 import Control.Concurrent.MVar
 
@@ -25,6 +24,7 @@ import qualified Stg.Interpreter.GC.GCRef as GC
 import Stg.Interpreter.Debugger.Region
 import Stg.Interpreter.GC.RetainerAnalysis
 import Stg.Interpreter.Debugger.Datalog
+import Control.Monad
 
 showOriginTrace :: Int -> M ()
 showOriginTrace i = do
@@ -96,7 +96,7 @@ decodeAndShow dlRef = do
   rootSet <- gets ssGCRootSet
   let showOrigin = \case
         Nothing -> ""
-        Just (oId,oAddr,_) -> (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
+        Just (oId,oAddr,_) -> color White (style Bold "  ORIGIN: ") ++ color Green (show oId) ++ " " ++ show oAddr
       showHeapObj = \case
         Nothing -> ""
         Just ho -> " " ++ debugPrintHeapObject ho
@@ -130,28 +130,28 @@ dbgCommands :: [([String], String, [String] -> M ())]
 dbgCommands =
   [ ( ["gc"]
     , "run sync. garbage collector"
-    , wrapWithDbgOut $ \_ -> do
+    , wrapWithDbgOut $ const $ do
         localEnv <- gets ssLocalEnv
         GC.runGCSync localEnv
     )
   , ( ["cleardb"]
     , "clear retainer db"
-    , wrapWithDbgOut $ \_ -> clearRetanerDb
+    , wrapWithDbgOut $ const clearRetanerDb
     )
 
   , ( ["loaddb"]
     , "load retainer db"
-    , wrapWithDbgOut $ \_ -> loadRetainerDb2
+    , wrapWithDbgOut $ const loadRetainerDb2
     )
 
   , ( ["?"]
     , "show debuggers' all internal commands"
-    , wrapWithDbgOut $ \_ -> printHelp
+    , wrapWithDbgOut $ const printHelp
     )
 
   , ( ["report"]
     , "report some internal data"
-    , wrapWithDbgOut $ \_ -> do
+    , wrapWithDbgOut $ const $ do
         heapStart <- gets ssDynamicHeapStart
         liftIO $ do
           putStrLn $ "heap start address: " ++ show heapStart
@@ -161,7 +161,7 @@ dbgCommands =
     , "queries a given list of NAME_PATTERNs in static global env as substring"
     , wrapWithDbgOut $ \patterns -> do
         env <- gets ssStaticGlobalEnv
-        let filterPattern pat resultList = [n | n <- resultList, List.isInfixOf pat n]
+        let filterPattern pat resultList = [n | n <- resultList, pat `List.isInfixOf` n]
             matches = foldr filterPattern (map show $ Map.keys env) patterns
         liftIO $ putStrLn $ unlines matches
     )
@@ -169,7 +169,7 @@ dbgCommands =
   , ( ["?b"]
     , "list breakpoints"
     , wrapWithDbgOut $ \_ -> do
-        bks <- Map.toList <$> gets ssBreakpoints
+        bks <- gets (Map.toList . ssBreakpoints)
         liftIO $ putStrLn $ unlines [printf "%-40s  %d [fuel]" (show name) fuel | (name, fuel) <- bks]
     )
 
@@ -177,8 +177,8 @@ dbgCommands =
     , "[START] [END] list a given region or all regions if the arguments are omitted"
     , wrapWithDbgOut $ \case
       [] -> do
-        regions <- Map.keys <$> gets ssRegionStack
-        liftIO $ putStrLn $ unlines $ map show regions
+        regions <- gets (Map.keys . ssRegionStack)
+        liftIO $ putStrLn $ unlines $ fmap show regions
       [start]       -> showRegion False start start
       [start, end]  -> showRegion False start end
       _ -> pure ()
@@ -313,10 +313,10 @@ dbgCommands =
     , "STEP-COUNT - make multiple steps ; 'fuel -' - turn off step count check"
     , wrapWithDbgOut $ \case
       ["-"]
-        -> modify' $ \s@StgState{..} -> s {ssDebugFuel = Nothing}
+        -> modify' $ \s -> s {ssDebugFuel = Nothing}
       [countS]
         | Just stepCount <- Text.readMaybe countS
-        -> modify' $ \s@StgState{..} -> s {ssDebugFuel = Just stepCount}
+        -> modify' $ \s -> s {ssDebugFuel = Just stepCount}
       _ -> pure ()
     )
 
@@ -331,12 +331,12 @@ dbgCommands =
 
   , ( ["get-current-thread-state"]
     , "reports the currently running thread state"
-    , \_ -> reportStateSync
+    , const reportStateSync
     )
 
   , ( ["get-stg-state"]
     , "reports the stg state"
-    , \_ -> reportStgStateSync
+    , const reportStgStateSync
     )
 
   ]
@@ -349,7 +349,7 @@ flatCommands = [(cmd, desc, action) | (tokens, desc, action) <- dbgCommands, cmd
 
 printHelp :: M ()
 printHelp = do
-  let maxLen = maximum $ map length [c | (c, _, _) <- flatCommands]
+  let maxLen = maximum $ fmap length [c | (c, _, _) <- flatCommands]
   liftIO $ putStrLn "internal debugger commands:"
   forM_ flatCommands $ \(cmd, desc, _) -> do
     liftIO $ printf ("  %-" ++ show maxLen ++ "s - %s\n") cmd desc

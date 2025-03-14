@@ -8,8 +8,11 @@ import qualified Data.Vector as V
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 lookupArrayArrIdx :: ArrayArrIdx -> M (V.Vector Atom)
@@ -57,37 +60,37 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- indexByteArrayArray# :: ArrayArray# -> Int# -> ByteArray#
   ( "indexByteArrayArray#", [ArrayArray a, IntV i]) -> do
     v <- lookupArrayArrIdx a
-    let x@ByteArray{} = v V.! (fromIntegral i)
+    let x@ByteArray{} = v V.! fromIntegral i
     pure [x]
 
   -- indexArrayArrayArray# :: ArrayArray# -> Int# -> ArrayArray#
   ( "indexArrayArrayArray#", [ArrayArray a, IntV i]) -> do
     v <- lookupArrayArrIdx a
-    let x@ArrayArray{} = v V.! (fromIntegral i)
+    let x@ArrayArray{} = v V.! fromIntegral i
     pure [x]
 
   -- readByteArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, ByteArray# #)
   ( "readByteArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
     v <- lookupArrayArrIdx a
-    let x@ByteArray{} = v V.! (fromIntegral i)
+    let x@ByteArray{} = v V.! fromIntegral i
     pure [x]
 
   -- readMutableByteArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
   ( "readMutableByteArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
     v <- lookupArrayArrIdx a
-    let x@MutableByteArray{} = v V.! (fromIntegral i)
+    let x@MutableByteArray{} = v V.! fromIntegral i
     pure [x]
 
   -- readArrayArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, ArrayArray# #)
   ( "readArrayArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
     v <- lookupArrayArrIdx a
-    let x@ArrayArray{} = v V.! (fromIntegral i)
+    let x@ArrayArray{} = v V.! fromIntegral i
     pure [x]
 
   -- readMutableArrayArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableArrayArray# s #)
   ( "readMutableArrayArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
     v <- lookupArrayArrIdx a
-    let x@MutableArrayArray{} = v V.! (fromIntegral i)
+    let x@MutableArrayArray{} = v V.! fromIntegral i
     pure [x]
 
   -- writeByteArrayArray# :: MutableArrayArray# s -> Int# -> ByteArray# -> State# s -> State# s
@@ -122,7 +125,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
                           | i <- [ 0 .. n-1 ]
                           , let si = os + i
                           , let di = od + i
-                          , let v = vsrc V.! (fromIntegral si)
+                          , let v = vsrc V.! fromIntegral si
                           ]
     updateArrayArrIdx dst vdst'
     pure []
@@ -135,7 +138,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
                           | i <- [ 0 .. n-1 ]
                           , let si = os + i
                           , let di = od + i
-                          , let v = vsrc V.! (fromIntegral si)
+                          , let v = vsrc V.! fromIntegral si
                           ]
     updateArrayArrIdx dst vdst'
     pure []

@@ -238,7 +238,7 @@ static inline std::string substr_wrapper(const std::string& str, std::size_t idx
 }
 public:
 // -- initialize symbol table --
-SymbolTableImpl symTable;// -- initialize record table --
+SymbolTable symTable;// -- initialize record table --
 SpecializedRecordTable<0> recordTable{};
 // -- Table: GCRoot
 Own<t_btree_i__0__1> rel_1_GCRoot = mk<t_btree_i__0__1>();

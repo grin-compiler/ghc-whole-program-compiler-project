@@ -1,9 +1,9 @@
 {-# LANGUAGE RecordWildCards, LambdaCase #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Stg.Reconstruct (reconModule, topBindings) where
 
 import Data.Foldable
-import Data.Bifunctor
-import Prelude hiding (readFile)
+import Prelude hiding (mod, readFile)
 
 import Data.Hashable
 import qualified Data.HashMap.Lazy as HM
@@ -41,12 +41,14 @@ getBinder BinderMap{..} bid = case HM.lookup bid bmIdMap of
   Nothing -> error $ "unknown binder "++ show bid ++ ":\nin scope:\n" ++
               unlines (map (\(bid',b) -> show bid' ++ "\t" ++ show b) (HM.toList bmIdMap))
 
+{-
 -- DataCon handling
 insertDataCon :: DataCon -> BinderMap -> BinderMap
 insertDataCon dc bm@BinderMap{..} = bm {bmDataConMap = HM.insert (dcId dc) dc bmDataConMap}
 
 insertDataCons :: [DataCon] -> BinderMap -> BinderMap
 insertDataCons dcs bm = foldl' (flip insertDataCon) bm dcs
+-}
 
 getDataCon :: BinderMap -> DataConId -> DataCon
 getDataCon BinderMap{..} bid = case HM.lookup bid bmDataConMap of
@@ -104,7 +106,7 @@ reconTyCon u m stc@STyCon{..} = tc where
     , tcId          = stcId
     , tcUnitId      = u
     , tcModule      = m
-    , tcDataCons    = map (reconDataCon u m tc) stcDataCons
+    , tcDataCons    = fmap (reconDataCon u m tc) stcDataCons
     , tcDefLoc      = stcDefLoc
     , tcUniqueName  = uName
     , tcUNameHash   = hash uName
@@ -158,13 +160,13 @@ reconModule Module{..} = mod where
   cons = concatMap tcDataCons tyCons
 
   tyConList :: [(UnitId, [(ModuleName, [TyCon])])]
-  tyConList = [(u, [(m, map (reconTyCon u m) l) | (m, l) <- ml]) | (u, ml) <- moduleTyCons]
+  tyConList = [(u, [(m, fmap (reconTyCon u m) l) | (m, l) <- ml]) | (u, ml) <- moduleTyCons]
 
   stubs :: ForeignStubs
   stubs = reconForeignStubs bm moduleForeignStubs
 
   binds :: [TopBinding]
-  binds = map reconTopBinding moduleTopBindings
+  binds = fmap reconTopBinding moduleTopBindings
 
   tops :: [Binder]
   tops  = [ mkTopBinder moduleUnitId moduleName sbinderScope b
@@ -172,7 +174,7 @@ reconModule Module{..} = mod where
           ]
 
   exts :: [(UnitId, [(ModuleName, [Binder])])]
-  exts = [(u, [(m, map (mkTopBinder u m ModulePublic) l) | (m, l) <- ml]) | (u, ml) <- moduleExternalTopIds]
+  exts = [(u, [(m, fmap (mkTopBinder u m ModulePublic) l) | (m, l) <- ml]) | (u, ml) <- moduleExternalTopIds]
 
   reconTopBinder :: SBinder -> Binder
   reconTopBinder b = getBinder bm $ sbinderId b
@@ -186,7 +188,7 @@ reconModule Module{..} = mod where
 reconForeignStubs :: BinderMap -> SForeignStubs -> ForeignStubs
 reconForeignStubs bm = \case
   NoStubs                 -> NoStubs
-  ForeignStubs h c i f l  -> ForeignStubs h c i f $ map (reconStubDecl bm) l
+  ForeignStubs h c i f l  -> ForeignStubs h c i f $ fmap (reconStubDecl bm) l
 
 reconStubDecl :: BinderMap -> SStubDecl -> StubDecl
 reconStubDecl bm = \case
@@ -196,7 +198,7 @@ reconStubDecl bm = \case
 topBindings :: TopBinding' idBnd idOcc dcOcc tcOcc -> [idBnd]
 topBindings = \case
   StgTopLifted (StgNonRec b _)  -> [b]
-  StgTopLifted (StgRec bs)      -> map fst bs
+  StgTopLifted (StgRec bs)      -> fmap fst bs
   StgTopStringLit b _           -> [b]
 
 reconExpr :: BinderMap -> SExpr -> Expr
@@ -219,15 +221,15 @@ reconBinding bm = \case
   StgNonRec b r -> let b'   = reconLocalBinder bm b
                        bm'  = insertBinder b' bm
                    in (bm', StgNonRec b' (reconRhs bm' r))
-  StgRec bs     -> let bs'  = map (reconLocalBinder bm . fst) bs
+  StgRec bs     -> let bs'  = fmap (reconLocalBinder bm . fst) bs
                        bm'  = insertBinders bs' bm
                    in (bm', StgRec [(b, reconRhs bm' r) | ((_,r), b) <- zip bs bs'])
 
 reconRhs :: BinderMap -> SRhs -> Rhs
 reconRhs bm = \case
-  StgRhsCon dc vs         -> StgRhsCon (getDataCon bm dc) $ map (reconArg bm) vs
-  StgRhsClosure fs u bs e -> let  fs' = map (getBinder bm) fs
-                                  bs' = map (reconLocalBinder bm) bs
+  StgRhsCon dc vs         -> StgRhsCon (getDataCon bm dc) $ fmap (reconArg bm) vs
+  StgRhsClosure fs u bs e -> let  fs' = fmap (getBinder bm) fs
+                                  bs' = fmap (reconLocalBinder bm) bs
                                   bm' = insertBinders bs' bm
                               in StgRhsClosure fs' u bs' (reconExpr bm' e)
 
@@ -238,7 +240,7 @@ reconArg bm = \case
 
 reconAlt :: BinderMap -> SAlt -> Alt
 reconAlt bm (Alt con bs rhs) =
-    let bs' = map (reconLocalBinder bm) bs
+    let bs' = fmap (reconLocalBinder bm) bs
         bm' = insertBinders bs' bm
     in Alt (reconAltCon bm con) bs' (reconExpr bm' rhs)
 

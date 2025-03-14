@@ -1,19 +1,15 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.RtsFFI where
 
 ----- FFI experimental
 import qualified GHC.Exts as Exts
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Internal as BS
 
 import Foreign.Storable
 import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.C.String
 import Data.Word
-import Data.Int
-import Data.Maybe
-import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
 import qualified Data.Primitive.ByteArray as BA
 -----
@@ -27,39 +23,46 @@ import Data.Time.Clock
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
 
-import GHC.Stack
 import Control.Monad.State.Strict
-import Control.Concurrent.MVar
 
 import Stg.Syntax
-import Stg.GHC.Symbols
 import Stg.Interpreter.Base
 import Stg.Interpreter.Debug
 import Stg.Interpreter.Rts (globalStoreSymbols)
 
+pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V :: Int -> Atom
 pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V :: Int -> Atom
 pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int32V :: Int -> Atom
 pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V :: Int -> Atom
 pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V :: Word -> Atom
 pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word16V :: Word -> Atom
 pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V :: Word -> Atom
 pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern FloatV :: Float -> Atom
 pattern FloatV f  = FloatAtom f
+pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 
 {-# NOINLINE evalFCallOp #-}
 evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
+evalFCallOp _evalOnNewThread fCall@ForeignCall{..} args t _tc = do
     --liftIO $ putStrLn $ "[evalFCallOp]  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
 
@@ -108,11 +111,11 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
 
       StaticTarget _ "freeHaskellFunctionPtr" _ _ -> pure [] -- TODO
       StaticTarget _ "performMajorGC" _ _ -> do
-        modify' $ \s@StgState{..} -> s {ssRequestMajorGC = True}
+        modify' $ \s -> s {ssRequestMajorGC = True}
         pure []
 
       StaticTarget _ "setNumCapabilities" _ _
-        | [WordV num_caps, Void] <- args
+        | [WordV _num_caps, Void] <- args
         -> do
           pure [] -- TODO
 
@@ -132,7 +135,7 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
       StaticTarget _ "rts_setMainThread" _ _
         | [WeakPointer weakId, Void] <- args
         -> do
-          wd <- lookupWeakPointerDescriptor weakId
+          _wd <- lookupWeakPointerDescriptor weakId
           --error $ show wd
           pure [] -- TODO
 
@@ -158,17 +161,17 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
       StaticTarget _ "stg_sig_install" _ _ -> pure [IntV (-1)]                          -- TODO: for testsuite
 
       StaticTarget _ "lockFile" _ _
-        | [Word64V id, Word64V dev, Word64V ino, Int32V for_writing, Void] <- args
+        | [Word64V id', Word64V dev, Word64V ino, Int32V for_writing, Void] <- args
         , UnboxedTuple [Int32Rep] <- t
         -> do
-          result <- liftIO $ lockFile (fromIntegral id) (fromIntegral dev) (fromIntegral ino) (fromIntegral for_writing)
+          result <- liftIO $ lockFile (fromIntegral id') (fromIntegral dev) (fromIntegral ino) (fromIntegral for_writing)
           pure [Int32V $ fromIntegral result]
 
       StaticTarget _ "unlockFile" _ _
-        | [Word64V id, Void] <- args
+        | [Word64V id', Void] <- args
         , UnboxedTuple [Int32Rep] <- t
         -> do
-          result <- liftIO $ unlockFile (fromIntegral id)
+          result <- liftIO $ unlockFile (fromIntegral id')
           pure [Int32V $ fromIntegral result]
 
       StaticTarget _ "rtsSupportsBoundThreads" _ _ -> pure [IntV 0]
@@ -190,7 +193,7 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
           pure []
 
       StaticTarget _ "getProgArgv" _ _
-        | [PtrAtom (ByteArrayPtr ba1) ptrArgc, PtrAtom (ByteArrayPtr ba2) ptrArgv, Void] <- args
+        | [PtrAtom (ByteArrayPtr _ba1) ptrArgc, PtrAtom (ByteArrayPtr _ba2) ptrArgv, Void] <- args
         -> do
           Rts{..} <- gets ssRtsSupport
           liftIO $ do
@@ -199,14 +202,14 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
 
             -- FIXME: this has a race condition with the GC!!!! because it is pure
             arr1 <- newCString rtsProgName :: IO CString
-            args <- mapM newCString rtsProgArgs :: IO [CString]
-            arr2 <- newArray (arr1 : args ++ [nullPtr]) :: IO (Ptr CString)
+            args' <- mapM newCString rtsProgArgs :: IO [CString]
+            arr2 <- newArray (arr1 : args' ++ [nullPtr]) :: IO (Ptr CString)
 
             poke (castPtr ptrArgv :: Ptr (Ptr CString)) arr2--(castPtr arr2 :: Ptr CString )
           pure []
 
       StaticTarget _ "shutdownHaskellAndExit" _ _
-        | [IntV retCode, IntV fastExit, Void] <- args
+        | [IntV retCode, IntV _sfastExit, Void] <- args
         , UnboxedTuple [] <- t
         -> do
           --showDebug evalOnNewThread
@@ -257,9 +260,9 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
         , [value, Void] <- args
         -> do
             -- HINT: set once with the first value, then return it always, only for the globalStoreSymbols
-            store <- gets $ rtsGlobalStore . ssRtsSupport
-            case Map.lookup foreignSymbol store of
-              Nothing -> state $ \s@StgState{..} -> ([value], s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol value store}})
+            store' <- gets $ rtsGlobalStore . ssRtsSupport
+            case Map.lookup foreignSymbol store' of
+              Nothing -> state $ \s@StgState{..} -> ([value], s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol value store'}})
               Just v  -> pure [v]
 
       _ -> stgErrorM $ "unsupported RTS StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args

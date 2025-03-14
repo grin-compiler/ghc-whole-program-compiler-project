@@ -413,7 +413,7 @@ cvtIdDetails i = case GHC.idDetails i of
   GHC.DFunId{}        -> pure DFunId
   GHC.CoVarId{}       -> pure CoVarId
   GHC.JoinId ar m     -> pure $ JoinId ar (fmap (map cvtCbvMark) m)
-  GHC.WorkerLikeId l  -> pure $ WorkerLikeId $ map cvtCbvMark l
+  GHC.WorkerLikeId l  -> pure $ WorkerLikeId $ fmap cvtCbvMark l
 
 cvtScope :: GHC.Id -> Scope
 cvtScope i
@@ -576,7 +576,7 @@ cvtTopBindsAndStubs binds stubs decls = do
   s <- cvtForeignStubs stubs decls
 
   let stgTopIds = concatMap topBindIds binds
-      topKeys   = IntSet.fromList $ map uniqueKey stgTopIds
+      topKeys   = IntSet.fromList $ fmap uniqueKey stgTopIds
   Env{..} <- get
   extItems <- sequence [mkExternalName e | (k,e) <- IntMap.toList envExternalIds, IntSet.notMember k topKeys]
   pure (b, s, groupByUnitIdAndModule extItems)
@@ -673,11 +673,11 @@ cvtModule' phase unit' modName' mSrcPath binds foreignStubs foreignDecls foreign
       stgTopIds           = concatMap topBindIds binds
       modName             = cvtModuleName modName'
       unitId              = cvtUnitId unit'
-      tyCons              = groupByUnitIdAndModule . map mkTyCon $ IntMap.elems envTyCons
+      tyCons              = groupByUnitIdAndModule . fmap mkTyCon $ IntMap.elems envTyCons
 
       -- calculate dependencies
-      externalTyCons      = [(cvtUnitIdAndModuleName m, ()) | m <- catMaybes $ map (GHC.nameModule_maybe . GHC.getName) $ IntMap.elems envTyCons]
-      dependencies        = map (fmap (map fst)) $ groupByUnitIdAndModule $ [((u, m), ()) | (u, ml) <- externalIds, (m, _) <- ml] ++ externalTyCons
+      externalTyCons      = [(cvtUnitIdAndModuleName m, ()) | m <- catMaybes $ fmap (GHC.nameModule_maybe . GHC.getName) $ IntMap.elems envTyCons]
+      dependencies        = fmap (fmap (map fst)) $ groupByUnitIdAndModule $ [((u, m), ()) | (u, ml) <- externalIds, (m, _) <- ml] ++ externalTyCons
 
 -- utils
 
@@ -696,7 +696,7 @@ mkTyCon tc = (cvtUnitIdAndModuleName $ GHC.nameModule n, b) where
   b = STyCon
       { stcName     = cvtOccName $ GHC.getOccName n
       , stcId       = TyConId . cvtUnique . GHC.getUnique $ n
-      , stcDataCons = map mkSDataCon . sortDataCons $ GHC.tyConDataCons tc
+      , stcDataCons = fmap mkSDataCon . sortDataCons $ GHC.tyConDataCons tc
       , stcDefLoc   = cvtSrcSpan $ GHC.nameSrcSpan n
       }
   sortDataCons l = IntMap.elems $ IntMap.fromList [(GHC.dataConTag dc, dc) | dc <- l]
@@ -732,5 +732,5 @@ mkSDataCon dc = SDataCon
 topBindIds :: GHC.CgStgTopBinding -> [GHC.Id]
 topBindIds = \case
   GHC.StgTopLifted (GHC.StgNonRec b _)  -> [b]
-  GHC.StgTopLifted (GHC.StgRec bs)      ->  map fst bs
+  GHC.StgTopLifted (GHC.StgRec bs)      ->  fmap fst bs
   GHC.StgTopStringLit b _               -> [b]

@@ -4,7 +4,6 @@ module Stg.Fullpak
   ) where
 
 import Control.Monad
-import qualified Data.ByteString.Char8 as BS8
 import System.FilePath
 import System.Directory
 import Codec.Archive.Zip

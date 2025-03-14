@@ -17,14 +17,10 @@ module Stg.IO
 
 import Prelude hiding (readFile)
 
-import Control.Monad.IO.Class
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString.Lazy as BSL
 import Data.Binary
-import Data.Binary.Get
 import Codec.Archive.Zip
-import System.FilePath
 
 import Stg.Syntax
 import Stg.Reconstruct

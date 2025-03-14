@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Stg.JSON where
 
 import Data.Aeson

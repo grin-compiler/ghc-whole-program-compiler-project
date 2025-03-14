@@ -14,6 +14,7 @@ import qualified Data.ByteString.Char8 as BS8
 import System.IO
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.GCRef
+import Control.Monad
 
 {-
   export GCSymbol's reachability graph as gephi compatible .tsv file

@@ -4,23 +4,21 @@ module Stg.Interpreter.GC where
 import Text.Printf
 import Control.Monad.State
 import qualified Data.Map as Map
-import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 
 import Control.Concurrent
 
-import Stg.Syntax
 import Stg.Interpreter.Debug (exportCallGraph)
 import Stg.Interpreter.Base
 import Stg.Interpreter.GC.LiveDataAnalysis
 import Stg.Interpreter.GC.DeadlockAnalysis
-import qualified Stg.Interpreter.PrimOp.WeakPointer as PrimWeakPointer
 
 import Stg.Interpreter.GC.RetainerAnalysis
 
 import Data.Time.Clock
+import Control.Monad
 
 checkGC :: [Atom] -> M ()
 checkGC localGCRoots = do
@@ -29,7 +27,7 @@ checkGC localGCRoots = do
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
 
-  lastGCTime <- gets ssLastGCTime
+  _lastGCTime <- gets ssLastGCTime
   t0 <- liftIO getCurrentTime
   requestMajorGC <- gets ssRequestMajorGC
   let
@@ -48,8 +46,8 @@ checkGC localGCRoots = do
       , ssRequestMajorGC  = False
       }
     runGC localGCRoots
-    t0 <- liftIO getCurrentTime
-    modify' $ \s@StgState{..} -> s {ssLastGCTime = t0}
+    _t0 <- liftIO getCurrentTime
+    modify' $ \s -> s {ssLastGCTime = t0}
     {-
       TODO:
         done - send the current state for live data analysis (async channel) if the GC condition triggers
@@ -157,7 +155,7 @@ reportDeletedCode old = do
 finalizeDeadWeakPointers :: IntSet -> M ()
 finalizeDeadWeakPointers rsWeaks = do
   let deadWeaks = IntSet.toList rsWeaks
-  wdescs <- mapM lookupWeakPointerDescriptor deadWeaks
+  _wdescs <- mapM lookupWeakPointerDescriptor deadWeaks
   {-
   liftIO $ do
     putStrLn $ " * GC - run finalizers for dead weak pointers: " ++ show rsWeaks

@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
 {-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns #-}
 module Stg.Interpreter.PrimOp.Float where
 
@@ -7,10 +7,15 @@ import GHC.Float
 import Stg.Syntax
 import Stg.Interpreter.Base
 
+pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern FloatV :: Float -> Atom
 pattern FloatV f  = FloatAtom f
+pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
@@ -114,7 +119,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- decodeFloat_Int# :: Float# -> (# Int#, Int# #)
   ( "decodeFloat_Int#", [FloatV (F# a)]) -> do
-    let !(# mantissa, exponent #) = decodeFloat_Int# a
-    pure [IntV (I# mantissa), IntV (I# exponent)]
+    let !(# mantissa, exponent' #) = decodeFloat_Int# a
+    pure [IntV (I# mantissa), IntV (I# exponent')]
 
   _ -> fallback op args t tc
