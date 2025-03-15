@@ -1,17 +1,29 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE Strict #-}
 module Stg.Interpreter.PrimOp.Addr where
 
-import Control.Monad.State
-import Data.Char
-import Data.Word
-import Data.Int
-import Data.Bits
-import Foreign.Ptr
-import Foreign.Storable
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad        (when)
+import           Control.Monad.State  (MonadIO (..))
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import Control.Monad
+import           Data.Bits            (Bits (..))
+import           Data.Char            (Char, chr, ord)
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($), (.))
+import           Data.Int             (Int, Int16, Int32, Int64, Int8)
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+import           Data.Word            (Word, Word16, Word32, Word64, Word8)
+
+import           Foreign.Ptr          (IntPtr (..), Ptr, castPtr, intPtrToPtr, minusPtr, plusPtr, ptrToIntPtr,
+                                       ptrToWordPtr)
+import           Foreign.Storable     (Storable (..))
+
+import           GHC.Float            (Double, Float)
+import           GHC.Num              (Num (..))
+import           GHC.Real             (Integral (..), fromIntegral)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval, PtrOrigin (..))
+import           Stg.Syntax           (Lit (..), Name, TyCon, Type)
 
 pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)
@@ -382,7 +394,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "atomicExchangeWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
     liftIO $ do
       oldValue <- peek (castPtr p :: Ptr Word)
-      poke (castPtr p :: Ptr Word) (fromIntegral value)
+      poke (castPtr p :: Ptr Word) value
       pure [WordV oldValue]
 
   -- atomicCasAddrAddr# :: Addr# -> Addr# -> Addr# -> State# s -> (# State# s, Addr# #)
@@ -398,7 +410,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     liftIO $ do
       oldValue <- peek (castPtr p :: Ptr Word)
       when (oldValue == expected) $ do
-        poke (castPtr p :: Ptr Word) (fromIntegral value)
+        poke (castPtr p :: Ptr Word) value
       pure [WordV oldValue]
 
   -- atomicCasWord8Addr# :: Addr# -> Word8# -> Word8# -> State# t0 -> (# State# t0, Word8# #)

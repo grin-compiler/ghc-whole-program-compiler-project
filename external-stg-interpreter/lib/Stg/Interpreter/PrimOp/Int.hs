@@ -1,15 +1,28 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
-{-# LANGUAGE MagicHash, UnboxedTuples #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE Strict        #-}
+{-# LANGUAGE UnboxedTuples #-}
 module Stg.Interpreter.PrimOp.Int where
 
-import GHC.Exts
-import Foreign.Storable (sizeOf)
-import Data.Int
-import Data.Word
-import Data.Bits
+import           Control.Applicative  (Applicative (..))
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Bits            (Bits (..))
+import           Data.Bool            ((||))
+import           Data.Enum            (Bounded (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($), (.))
+import           Data.Int             (Int64)
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+import           Data.Word            (Word64)
+
+import           Foreign.Storable     (sizeOf)
+
+import           GHC.Exts
+import           GHC.Num              (Integer, Num (..))
+import           GHC.Real             (Integral (..), fromIntegral)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Syntax           (Lit (..), Name, TyCon, Type)
 
 type PrimInt  = Int64
 

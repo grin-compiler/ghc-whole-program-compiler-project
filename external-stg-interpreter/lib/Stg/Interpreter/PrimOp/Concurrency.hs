@@ -1,14 +1,33 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Concurrency where
 
-import Control.Monad.State
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.IntMap as IntMap
-import Foreign.Ptr
+import           Control.Applicative   (Applicative (..), (<$>))
+import           Control.Monad         (Monad (..), when)
+import           Control.Monad.State   (MonadIO (..), gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import Control.Monad
+import           Data.Bool             (Bool (..), not, otherwise, (||))
+import qualified Data.ByteString.Char8 as BS8
+import           Data.Eq               (Eq (..))
+import           Data.Function         (($), (.))
+import           Data.Int              (Int)
+import qualified Data.IntMap           as IntMap
+import           Data.List             (drop, filter, null, reverse, (++))
+import           Data.Maybe            (Maybe (..), fromJust)
+
+import           Foreign.Ptr           (castPtr)
+
+import           GHC.Err               (error, undefined)
+
+import           Stg.Interpreter.Base  (Atom (..), BlockReason (..), HeapObject (..), M, MVarDescriptor (..),
+                                        PrimOpEval, ScheduleReason (..), StackContinuation (..), StgState (..),
+                                        ThreadState (..), ThreadStatus (..), createThread, getCurrentThreadState,
+                                        getThreadState, mylog, promptM, readHeap, reportThread, requestContextSwitch,
+                                        scheduleToTheEnd, stackPush, store, unsubscribeTVarWaitQueues,
+                                        updateThreadState, wakeupBlackHoleQueueThreads)
+import           Stg.Syntax            (Name, TyCon, Type)
+
+import           System.IO             (print, putStrLn)
+
+import           Text.Show             (Show (..))
 
 pattern IntV :: Int -> Atom
 pattern IntV i = IntAtom i
@@ -241,7 +260,7 @@ raiseAsyncEx lastResult targetTid exception = do
               reportThread targetTid
               error "internal error"
             _ -> pure ()
-          let Just _tlog = tsActiveTLog ts
+          let _tlog = fromJust $ tsActiveTLog ts
           -- HINT: abort transaction, do not need to unsubscribe, because it was already done in killThread# before it called raiseAsyncEx
           updateThreadState targetTid $ ts {tsActiveTLog = Nothing}
           unwindStack result (AtomicallyOp stmAction : stackPiece) stackTail
@@ -256,8 +275,11 @@ raiseAsyncEx lastResult targetTid exception = do
               reportThread targetTid
               error "internal error"
             _ -> pure ()
-          let Just _tlog = tsActiveTLog ts
-              tlogStackTop : tlogStackTail = tsTLogStack ts
+          let _tlog = fromJust $ tsActiveTLog ts
+              (tlogStackTop, tlogStackTail) =
+                case tsTLogStack ts of
+                  []      -> undefined
+                  (a : b) -> (a, b)
           -- HINT: abort transaction, do not need to unsubscribe, because it was already done in killThread# before it called raiseAsyncEx
           mylog $ show targetTid ++ " ** raiseAsyncEx - CatchSTM"
           updateThreadState targetTid $ ts
@@ -277,8 +299,8 @@ raiseAsyncEx lastResult targetTid exception = do
               reportThread targetTid
               error "internal error"
             _ -> pure ()
-          let Just _tlog = tsActiveTLog ts
-          updateThreadState targetTid $ ts { tsTLogStack = tail $ tsTLogStack ts }
+          let _tlog = fromJust $ tsActiveTLog ts
+          updateThreadState targetTid $ ts { tsTLogStack = drop 1 $ tsTLogStack ts }
           unwindStack result (stackHead : stackPiece) stackTail
 
         -- collect stack frames for ApStack
@@ -302,7 +324,7 @@ removeFromQueues tid = do
     ThreadBlocked BlockedOnWrite{}          -> pure () -- HINT: no queue for file write
     ThreadBlocked BlockedOnThrowAsyncEx{}   -> pure () -- Q: what to do?
     ThreadBlocked (BlockedOnBlackHole addr) -> removeFromBlackHoleQueue tid addr
-    _ -> error $ "TODO: removeFromQueues " ++ show tsStatus
+    _                                       -> error $ "TODO: removeFromQueues " ++ show tsStatus
 
 removeFromMVarQueue :: Int -> Int -> M ()
 removeFromMVarQueue tid m = do

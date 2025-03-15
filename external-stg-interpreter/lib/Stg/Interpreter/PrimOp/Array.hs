@@ -1,12 +1,21 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Array where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import qualified Data.Vector as V
+import           Control.Applicative  (Applicative (..))
+import           Control.Monad.State  (MonadState (..), gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Enum            (Enum (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import           Data.Maybe           (Maybe)
+import qualified Data.Vector          as V
+
+import           GHC.Num              (Num (..))
+
+import           Stg.Interpreter.Base (ArrIdx (..), Atom (..), M, PrimOpEval, StgState (..), lookupArray,
+                                       lookupMutableArray)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)

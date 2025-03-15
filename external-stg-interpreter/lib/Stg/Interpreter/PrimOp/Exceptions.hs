@@ -1,12 +1,31 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Exceptions where
 
-import Control.Monad.State
+import           Control.Applicative                (Applicative (..))
+import           Control.Monad                      (Monad (..), unless, when)
+import           Control.Monad.State                (MonadIO (..), gets)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Bool                          (Bool (..), not, (&&))
+import           Data.Eq                            (Eq (..))
+import           Data.Function                      (($))
+import           Data.Int                           (Int)
+import           Data.List                          (drop, null)
+import           Data.Maybe                         (Maybe (..), fromJust)
+import           Data.Monoid                        (Monoid (..))
+
+import           GHC.Err                            (error, undefined)
+
+import           Stg.Interpreter.Base               (Atom (..), BlockReason (..), HeapObject (..), M, PrimOpEval,
+                                                     Rts (..), ScheduleReason (..), StackContinuation (..),
+                                                     StgState (..), ThreadState (..), ThreadStatus (..),
+                                                     getCurrentThreadState, getThreadState, mylog, promptM_,
+                                                     reportThreads, stackPop, stackPush, store, updateThreadState,
+                                                     validateTLog, wakeupBlackHoleQueueThreads)
 import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
-import Control.Monad
+import           Stg.Syntax                         (Name, TyCon, Type)
+
+import           System.IO                          (print)
+
+import           Text.Show                          (Show (..))
 
 pattern IntV :: Int -> Atom
 pattern IntV i = IntAtom i
@@ -193,10 +212,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
                 2 == masked, interruptible
     -}
     let status = case (tsBlockExceptions, tsInterruptible) of
-          (False, False)  -> 0
-          (True,  False)  -> 1
-          (True,  True)   -> 2
-          (False, True)   -> error "impossible exception mask, tsBlockExceptions: False, tsInterruptible: True"
+          (False, False) -> 0
+          (True,  False) -> 1
+          (True,  True)  -> 2
+          (False, True)  -> error "impossible exception mask, tsBlockExceptions: False, tsInterruptible: True"
     pure [IntV status]
 
   _ -> fallback op args t tc
@@ -270,7 +289,10 @@ raiseEx0 ex = unwindStack where
       Just (CatchSTM _stmAction exHandler) -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        let tlogStackTop : tlogStackTail = tsTLogStack ts
+        let (tlogStackTop, tlogStackTail) =
+              case tsTLogStack ts of
+                []      -> undefined
+                (a : b) -> (a, b)
         -- HINT: abort current nested transaction, and reload the parent tlog then run the exception handler in it
         --mylog $ show tid ++ " ** CatchSTM"
         updateThreadState tid $ ts
@@ -284,7 +306,7 @@ raiseEx0 ex = unwindStack where
       Just CatchRetry{} -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid $ ts { tsTLogStack = tail $ tsTLogStack ts}
+        updateThreadState tid $ ts { tsTLogStack = drop 1 $ tsTLogStack ts}
         unwindStack
 
       Just (Update addr) -> do
@@ -302,7 +324,7 @@ raiseEx0 ex = unwindStack where
         tid <- gets ssCurrentThreadId
         -- extra validation (optional)
         when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
-        let Just tlog = tsActiveTLog ts
+        let tlog = fromJust $ tsActiveTLog ts
         isValid <- validateTLog tlog
         if isValid then do
             -- abandon transaction

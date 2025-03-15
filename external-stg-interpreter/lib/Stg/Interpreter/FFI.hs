@@ -1,44 +1,61 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant <$>" #-}
 module Stg.Interpreter.FFI where
 
 ----- FFI experimental
-import Control.Concurrent
+import           Control.Applicative            (Applicative (..), (<$>))
+import           Control.Concurrent             (MVar, putMVar, takeMVar)
+import           Control.Monad                  (Functor (..), Monad (..), mapM, unless, zipWithM)
+import           Control.Monad.State.Strict     (MonadIO (..), MonadState (..), StateT (..), gets, modify')
 
-import Foreign.Storable
-import Foreign.Ptr
-import Foreign.C.Types
-import System.Posix.DynamicLinker
-import Data.Word
-import Data.Int
-import Data.Maybe
-import qualified Foreign.LibFFI as FFI
-import qualified Foreign.LibFFI.Internal as FFI
-import qualified Foreign.LibFFI.FFITypes as FFI
-import qualified Foreign.LibFFI.Closure as FFI
-import Foreign.Marshal.Array
-import qualified Data.Primitive.ByteArray as BA
-import qualified Data.ByteString.Char8 as BS8
------
+import           Data.Bool                      (Bool (..))
+import qualified Data.ByteString.Char8          as BS8
+import           Data.Char                      (Char)
+import           Data.Eq                        (Eq (..))
+import           Data.Function                  (flip, ($), (.))
+import           Data.Int                       (Int, Int16, Int32, Int64, Int8)
+import           Data.List                      (length, (++))
+import           Data.List.NonEmpty             (NonEmpty (..))
+import qualified Data.Map                       as Map
+import           Data.Maybe                     (Maybe (..), catMaybes)
+import qualified Data.Primitive.ByteArray       as BA
+import           Data.Set                       (Set)
+import qualified Data.Set                       as Set
+import           Data.Word                      (Word, Word16, Word32, Word64, Word8)
 
+import           Foreign.C.Types                (CDouble (..), CFloat (..))
+import qualified Foreign.LibFFI                 as FFI
+import qualified Foreign.LibFFI.Closure         as FFI
+import qualified Foreign.LibFFI.FFITypes        as FFI
+import qualified Foreign.LibFFI.Internal        as FFI
+import           Foreign.Marshal.Array          (peekArray)
+import           Foreign.Ptr                    (FunPtr, Ptr, castFunPtrToPtr, castPtr, castPtrToFunPtr, nullFunPtr,
+                                                 nullPtr)
+import           Foreign.Storable               (Storable (..))
 
+import           GHC.Err                        (error)
+import           GHC.Float                      (Double, Float)
+import           GHC.Real                       (fromIntegral)
+import           GHC.Stack                      (HasCallStack)
 
-import Data.Set (Set)
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-
-import GHC.Stack
-import Control.Monad.State.Strict
-
-import Stg.Syntax
-import Stg.GHC.Symbols
-import Stg.Interpreter.Base
-import Stg.Interpreter.Rts (globalStoreSymbols)
-import qualified Stg.Interpreter.RtsFFI as RtsFFI
+import           Stg.GHC.Symbols                (Symbol (..), rtsSymbols)
+import           Stg.Interpreter.Base           (Atom (..), ByteArrayDescriptor (..), EvalOnNewThread, HeapObject (..),
+                                                 M, PrintableMVar (..), PtrOrigin (..), Rts (..), ScheduleReason (..),
+                                                 StackContinuation (..), StgState (..), ThreadState (..), allocAndStore,
+                                                 debugPrintHeapObject, getCurrentThreadState, liftIOAndBorrowStgState,
+                                                 lookupByteArrayDescriptorI, lookupStablePointerPtr, readHeap,
+                                                 stackPush, stgErrorM, traceLog)
 import qualified Stg.Interpreter.EmulatedLibFFI as EmulatedLibFFI
-import Control.Monad
-import Data.List.NonEmpty (NonEmpty(..))
+import           Stg.Interpreter.Rts            (globalStoreSymbols)
+import qualified Stg.Interpreter.RtsFFI         as RtsFFI
+import           Stg.Syntax                     (CCallTarget (..), DC (..), DataCon, ForeignCall (..),
+                                                 ForeignStubs' (..), LabelSpec, Lit (..), Module, Module' (..), Name,
+                                                 PrimRep (..), StubDecl' (..), StubImpl (..), TyCon, Type (..))
+
+import           System.IO                      (IO)
+import           System.Posix.DynamicLinker     (c_dlsym, packDL)
+
+import           Text.Show                      (Show (..))
 
 pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)
@@ -422,48 +439,48 @@ ffiRepToCType (FFIRep r) = case r of
 
 ffiRepToGetter :: FFIRep -> Ptr FFI.CValue -> IO Atom
 ffiRepToGetter (FFIRep r) p = case r of
-  VoidRep     -> pure Void
-  Int64Rep    -> Int64V  . fromIntegral <$> peek (castPtr p :: Ptr Int64)
-  Int32Rep    -> Int32V  . fromIntegral <$> peek (castPtr p :: Ptr Int32)
-  Int16Rep    -> Int16V  . fromIntegral <$> peek (castPtr p :: Ptr Int16)
-  Int8Rep     -> Int8V   . fromIntegral <$> peek (castPtr p :: Ptr Int8)
-  IntRep      -> IntV    . fromIntegral <$> peek (castPtr p :: Ptr Int)
-  Word64Rep   -> Word64V . fromIntegral <$> peek (castPtr p :: Ptr Word64)
-  Word32Rep   -> Word32V . fromIntegral <$> peek (castPtr p :: Ptr Word32)
-  Word16Rep   -> Word16V . fromIntegral <$> peek (castPtr p :: Ptr Word16)
-  Word8Rep    -> Word8V  . fromIntegral <$> peek (castPtr p :: Ptr Word8)
-  WordRep     -> WordV   . fromIntegral <$> peek (castPtr p :: Ptr Word)
-  AddrRep     -> PtrAtom RawPtr <$> peek (castPtr p)
-  FloatRep    -> FloatAtom <$> peek (castPtr p)
-  DoubleRep   -> DoubleAtom <$> peek (castPtr p)
-  rep         -> error $ "ffiRepToGetter - unsupported: " ++ show rep
+  VoidRep   -> pure Void
+  Int64Rep  -> Int64V  . fromIntegral <$> peek (castPtr p :: Ptr Int64)
+  Int32Rep  -> Int32V  . fromIntegral <$> peek (castPtr p :: Ptr Int32)
+  Int16Rep  -> Int16V  . fromIntegral <$> peek (castPtr p :: Ptr Int16)
+  Int8Rep   -> Int8V   . fromIntegral <$> peek (castPtr p :: Ptr Int8)
+  IntRep    -> IntV <$> peek (castPtr p :: Ptr Int)
+  Word64Rep -> Word64V . fromIntegral <$> peek (castPtr p :: Ptr Word64)
+  Word32Rep -> Word32V . fromIntegral <$> peek (castPtr p :: Ptr Word32)
+  Word16Rep -> Word16V . fromIntegral <$> peek (castPtr p :: Ptr Word16)
+  Word8Rep  -> Word8V  . fromIntegral <$> peek (castPtr p :: Ptr Word8)
+  WordRep   -> WordV  <$> peek (castPtr p :: Ptr Word)
+  AddrRep   -> PtrAtom RawPtr <$> peek (castPtr p)
+  FloatRep  -> FloatAtom <$> peek (castPtr p)
+  DoubleRep -> DoubleAtom <$> peek (castPtr p)
+  rep       -> error $ "ffiRepToGetter - unsupported: " ++ show rep
 
 ffiRepToSetter :: FFIRep -> Ptr FFI.CValue -> Atom -> Name -> IO ()
 ffiRepToSetter (FFIRep r) p a retTypeName = case (r, a) of
-  (VoidRep,   Void)         -> pure ()
-  (FloatRep,  FloatAtom v)  -> poke (castPtr p) v
-  (DoubleRep, DoubleAtom v) -> poke (castPtr p) v
-  (Int64Rep,  Int64V v)     -> poke (castPtr p :: Ptr Int64)  $ fromIntegral v
-  (Int32Rep,  Int32V v)     -> poke (castPtr p :: Ptr Int32)  $ fromIntegral v
-  (Int16Rep,  Int16V v)     -> poke (castPtr p :: Ptr Int16)  $ fromIntegral v
-  (Int8Rep,   Int8V  v)     -> poke (castPtr p :: Ptr Int8)   $ fromIntegral v
-  (IntRep,    IntV   v)     -> poke (castPtr p :: Ptr Int)    $ fromIntegral v
-  (Word64Rep, Word64V v)    -> poke (castPtr p :: Ptr Word64) $ fromIntegral v
-  (Word32Rep, Word32V v)    -> poke (castPtr p :: Ptr Word32) $ fromIntegral v
-  (Word16Rep, Word16V v)    -> poke (castPtr p :: Ptr Word16) $ fromIntegral v
-  (Word8Rep,  Word8V v)     -> poke (castPtr p :: Ptr Word8)  $ fromIntegral v
-  (WordRep,   WordV v)      -> poke (castPtr p :: Ptr Word)   $ fromIntegral v
-  (AddrRep,   PtrAtom RawPtr v)  -> poke (castPtr p) v
-  x -> error $ "ffiRepToSetter - unsupported: " ++ show (x, retTypeName)
+  (VoidRep,   Void)             -> pure ()
+  (FloatRep,  FloatAtom v)      -> poke (castPtr p) v
+  (DoubleRep, DoubleAtom v)     -> poke (castPtr p) v
+  (Int64Rep,  Int64V v)         -> poke (castPtr p :: Ptr Int64)  $ fromIntegral v
+  (Int32Rep,  Int32V v)         -> poke (castPtr p :: Ptr Int32)  $ fromIntegral v
+  (Int16Rep,  Int16V v)         -> poke (castPtr p :: Ptr Int16)  $ fromIntegral v
+  (Int8Rep,   Int8V  v)         -> poke (castPtr p :: Ptr Int8)   $ fromIntegral v
+  (IntRep,    IntV   v)         -> poke (castPtr p :: Ptr Int)    $ v
+  (Word64Rep, Word64V v)        -> poke (castPtr p :: Ptr Word64) $ fromIntegral v
+  (Word32Rep, Word32V v)        -> poke (castPtr p :: Ptr Word32) $ fromIntegral v
+  (Word16Rep, Word16V v)        -> poke (castPtr p :: Ptr Word16) $ fromIntegral v
+  (Word8Rep,  Word8V v)         -> poke (castPtr p :: Ptr Word8)  $ fromIntegral v
+  (WordRep,   WordV v)          -> poke (castPtr p :: Ptr Word)   $ v
+  (AddrRep,   PtrAtom RawPtr v) -> poke (castPtr p) v
+  x                             -> error $ "ffiRepToSetter - unsupported: " ++ show (x, retTypeName)
 
 unboxFFIAtom :: HasCallStack => Name -> Atom -> M Atom
 unboxFFIAtom hsFFIType a = case (hsFFIType, a) of
-  ("()",      HeapPtr{})  -> pure Void
-  ("Int",     HeapPtr{})  -> con1Unbox
-  ("Int32",   HeapPtr{})  -> con1Unbox
-  ("Double",  HeapPtr{})  -> con1Unbox
+  ("()",      HeapPtr{}) -> pure Void
+  ("Int",     HeapPtr{}) -> con1Unbox
+  ("Int32",   HeapPtr{}) -> con1Unbox
+  ("Double",  HeapPtr{}) -> con1Unbox
   -- TODO: make this complete
-  x -> error $ "unboxFFIAtom - unknown pattern: " ++ show x
+  x                      -> error $ "unboxFFIAtom - unknown pattern: " ++ show x
  where
   con1Unbox = do
     readHeap a >>= \case
@@ -473,21 +490,21 @@ unboxFFIAtom hsFFIType a = case (hsFFIType, a) of
 boxFFIAtom :: Name -> Atom -> M Atom
 boxFFIAtom hsFFIType a = case (hsFFIType, a) of
   -- boxed Char
-  ("Char", WordV _)     -> mkWiredInCon rtsCharCon    [a]
+  ("Char", WordV _)               -> mkWiredInCon rtsCharCon    [a]
 
   -- boxed Ints
-  ("Int", IntV _)       -> mkWiredInCon rtsIntCon     [a]
-  ("Int8", Int8V _)     -> mkWiredInCon rtsInt8Con    [a]
-  ("Int16", Int16V _)   -> mkWiredInCon rtsInt16Con   [a]
-  ("Int32", Int32V _)   -> mkWiredInCon rtsInt32Con   [a]
-  ("Int64", Int64V _)   -> mkWiredInCon rtsInt64Con   [a]
+  ("Int", IntV _)                 -> mkWiredInCon rtsIntCon     [a]
+  ("Int8", Int8V _)               -> mkWiredInCon rtsInt8Con    [a]
+  ("Int16", Int16V _)             -> mkWiredInCon rtsInt16Con   [a]
+  ("Int32", Int32V _)             -> mkWiredInCon rtsInt32Con   [a]
+  ("Int64", Int64V _)             -> mkWiredInCon rtsInt64Con   [a]
 
   -- boxed Words
-  ("Word", WordV _)     -> mkWiredInCon rtsWordCon    [a]
-  ("Word8", Word8V _)   -> mkWiredInCon rtsWord8Con   [a]
-  ("Word16", Word16V _) -> mkWiredInCon rtsWord16Con  [a]
-  ("Word32", Word32V _) -> mkWiredInCon rtsWord32Con  [a]
-  ("Word64", Word64V _) -> mkWiredInCon rtsWord64Con  [a]
+  ("Word", WordV _)               -> mkWiredInCon rtsWordCon    [a]
+  ("Word8", Word8V _)             -> mkWiredInCon rtsWord8Con   [a]
+  ("Word16", Word16V _)           -> mkWiredInCon rtsWord16Con  [a]
+  ("Word32", Word32V _)           -> mkWiredInCon rtsWord32Con  [a]
+  ("Word64", Word64V _)           -> mkWiredInCon rtsWord64Con  [a]
 
   ("Ptr", PtrAtom RawPtr _)       -> mkWiredInCon rtsPtrCon     [a]
   ("FunPtr", PtrAtom RawPtr _)    -> mkWiredInCon rtsFunPtrCon  [a]
@@ -499,7 +516,7 @@ boxFFIAtom hsFFIType a = case (hsFFIType, a) of
   ("Bool", IntV i)                -> mkWiredInCon (if i == 0 then rtsFalseCon else rtsTrueCon) []
   ("String", PtrAtom RawPtr _)    -> error "TODO: support C string FFI arg boxing"
 
-  x -> error $ "boxFFIAtom - unknown pattern: " ++ show x
+  x                               -> error $ "boxFFIAtom - unknown pattern: " ++ show x
 
 mkWiredInCon :: (Rts -> DataCon) -> [Atom] -> M Atom
 mkWiredInCon conFun args = do

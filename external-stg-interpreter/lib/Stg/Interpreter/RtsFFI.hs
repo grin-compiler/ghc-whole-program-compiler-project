@@ -1,37 +1,53 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
+
 module Stg.Interpreter.RtsFFI where
 
 ----- FFI experimental
-import qualified GHC.Exts as Exts
-import qualified Data.ByteString as BS
+import           Control.Applicative        (Applicative (..), (<$>))
+import           Control.Monad              (Monad (..), mapM)
+import           Control.Monad.State.Strict (MonadIO (..), MonadState (..), gets, modify')
 
-import Foreign.Storable
-import Foreign.Ptr
-import Foreign.C.Types
-import Foreign.C.String
-import Data.Word
-import Foreign.Marshal.Array
-import qualified Data.Primitive.ByteArray as BA
------
-import System.Exit
-import System.IO
-import System.FilePath
-import Text.Printf
+import           Data.Bool                  (Bool (..))
+import qualified Data.ByteString            as BS
+import           Data.Char                  (Char)
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($), (.))
+import           Data.Int                   (Int)
+import           Data.List                  (filter, length, (++))
+import qualified Data.Map                   as Map
+import           Data.Maybe                 (Maybe (..))
+import           Data.Ord                   (Ord (..))
+import qualified Data.Primitive.ByteArray   as BA
+import qualified Data.Set                   as Set
+import qualified Data.Text                  as Text
+import qualified Data.Text.Encoding         as Text
+import           Data.Time.Clock            (UTCTime (..), diffTimeToPicoseconds, getCurrentTime)
+import           Data.Word                  (Word, Word64)
 
-import Data.Time.Clock
+import           Foreign.C.String           (CString, newCString, peekCString)
+import           Foreign.C.Types            (CInt (..))
+import           Foreign.Marshal.Array      (newArray, peekArray)
+import           Foreign.Ptr                (Ptr, castPtr, nullPtr)
+import           Foreign.Storable           (Storable (..))
 
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
+import qualified GHC.Exts                   as Exts
+import           GHC.Float                  (Double, Float)
+import           GHC.Num                    (Num (..))
+import           GHC.Real                   (Integral (..), fromIntegral)
 
-import qualified Data.Set as Set
-import qualified Data.Map as Map
+import           Stg.Interpreter.Base       (Atom (..), ByteArrayDescriptor (..), EvalOnNewThread, M, PtrOrigin (..),
+                                             Rts (..), StgState (..), lookupByteArrayDescriptorI,
+                                             lookupWeakPointerDescriptor, stgErrorM)
+import           Stg.Interpreter.Debug      (exportCallGraph)
+import           Stg.Interpreter.Rts        (globalStoreSymbols)
+import           Stg.Syntax                 (CCallTarget (..), ForeignCall (..), Lit (..), PrimRep (..), TyCon,
+                                             Type (..))
 
-import Control.Monad.State.Strict
+import           System.Exit                (ExitCode (..), exitWith)
+import           System.FilePath            (takeBaseName)
+import           System.IO                  (IO, hFlush, hPutStr, hPutStrLn, print, putStrLn, stderr)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import Stg.Interpreter.Debug
-import Stg.Interpreter.Rts (globalStoreSymbols)
+import           Text.Printf                (printf)
+import           Text.Show                  (Show (..))
 
 pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)
@@ -186,7 +202,7 @@ evalFCallOp _evalOnNewThread fCall@ForeignCall{..} args t _tc = do
         | [IntAtom argc, PtrAtom _ argvPtr, Void] <- args
         -> do
           liftIO $ do
-            -- peekCString :: CString -> IO String 
+            -- peekCString :: CString -> IO String
             argv <- peekArray argc (castPtr argvPtr) >>= mapM peekCString
             print (argc, argv)
           -- TODO: save to the env!!

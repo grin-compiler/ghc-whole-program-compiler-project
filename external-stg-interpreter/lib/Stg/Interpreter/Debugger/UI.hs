@@ -1,19 +1,35 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 module Stg.Interpreter.Debugger.UI where
 
-import System.Exit
-import System.Posix.Process
-import Control.Concurrent
-import Control.Monad
-import qualified Data.ByteString.Char8 as BS8
+import           Control.Applicative                   (Applicative (..), (<$>))
+import           Control.Concurrent                    (forkIO, putMVar, takeMVar)
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
-import qualified Data.List as List
-import qualified Data.Map as Map
-import Text.Printf
+import           Control.Monad                         (Functor (..), Monad (..), forM_, mapM_, void)
 
-import Stg.Interpreter.Base
-import Stg.Interpreter
-import Stg.Syntax
+import           Data.Bool                             (Bool (..), otherwise)
+import qualified Data.ByteString.Char8                 as BS8
+import           Data.Char                             (Char)
+import           Data.Eq                               (Eq (..))
+import           Data.Function                         (($), (.))
+import           Data.List                             (length, maximum, sum, (++))
+import qualified Data.List                             as List
+import qualified Data.Map                              as Map
+import           Data.Maybe                            (Maybe (..))
+import           Data.String                           (String, lines, unlines, words)
+
+import           Stg.Interpreter                       (loadAndRunProgram)
+import           Stg.Interpreter.Base                  (DebugCommand (..), DebugEvent (..), DebugOutput (..),
+                                                        DebugSettings, DebugState (..), DebuggerChan (..), Env,
+                                                        HeapObject (..), reportThreadIO)
+import           Stg.Syntax                            (Binder (..), BinderId (..), DC (..), DataCon (..), Id (..),
+                                                        RealSrcSpan (..), SrcSpan (..), getModuleName)
+
+import           System.Exit                           (ExitCode (..))
+import           System.IO                             (IO, getLine, print, putStrLn, readFile)
+import           System.Posix.Process                  (exitImmediately)
+
+import           Text.Printf                           (printf)
+import           Text.Read                             (read)
+import           Text.Show                             (Show (..))
 
 ppSrcSpan :: SrcSpan -> String
 ppSrcSpan = \case
@@ -195,4 +211,4 @@ runDebugScript dbgChan@DebuggerChan{..} lines' = do
     putStrLn cmd
     case words cmd of
       ["wait-b"] -> waitBreakpoint
-      _ -> parseDebugCommand cmd dbgChan
+      _          -> parseDebugCommand cmd dbgChan

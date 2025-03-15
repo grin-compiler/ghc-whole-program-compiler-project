@@ -159,7 +159,6 @@ type CollectedCCs
   = ( [CostCentre]       -- local cost-centres that need to be decl'd
     , [CostCentreStack]  -- pre-defined "singleton" cost centre stacks
     )
--}
   let ccs       = emptyCollectedCCs :: CollectedCCs
       hpc       = emptyHpcInfo False
 

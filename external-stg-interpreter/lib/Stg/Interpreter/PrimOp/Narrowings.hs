@@ -1,11 +1,17 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE Strict #-}
 module Stg.Interpreter.PrimOp.Narrowings where
 
-import Data.Int
-import Data.Word
+import           Control.Applicative  (Applicative (..))
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Function        (($))
+import           Data.Int             (Int, Int16, Int32, Int8)
+import           Data.Maybe           (Maybe)
+import           Data.Word            (Word, Word16, Word32, Word8)
+
+import           GHC.Real             (fromIntegral)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
@@ -35,4 +41,4 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- narrow32Word# :: Word# -> Word#
   ( "narrow32Word#", [WordV a]) -> pure [WordV $ fromIntegral (fromIntegral a :: Word32)]
 
-  _ -> fallback op args t tc
+  _                             -> fallback op args t tc

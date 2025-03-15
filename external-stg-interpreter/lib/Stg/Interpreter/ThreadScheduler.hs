@@ -1,20 +1,37 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 
 module Stg.Interpreter.ThreadScheduler where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import Data.Time.Clock
+import           Control.Applicative                (Applicative (..))
+import           Control.Monad                      (Functor (..), forM_, when)
+import           Control.Monad.State                (MonadIO (..), gets, modify')
+import qualified Control.Monad.Trans.State.Strict   as Strict
 
-import Data.List
+import           Data.Bool                          (Bool (..), (&&))
+import           Data.Eq                            (Eq (..))
+import           Data.Function                      (flip, id, ($), (.))
+import           Data.Int                           (Int)
+import qualified Data.IntMap                        as IntMap
+import           Data.List                          (drop, elem, null, sortOn, (++))
+import           Data.Maybe                         (maybe)
+import           Data.Ord                           (Ord (..))
+import           Data.Time.Clock                    (getCurrentTime)
 
-import Stg.Interpreter.Base
-import Stg.Interpreter.IOManager
-import qualified Stg.Interpreter.Debugger as Debugger
+import           GHC.Err                            (error, undefined)
+
+import           Stg.Interpreter.Base               (Atom, BlockReason (..), Breakpoint (..), DebugState (..), M,
+                                                     ScheduleReason (..), StgState (..), ThreadState (..),
+                                                     ThreadStatus (..), dumpStgState, getThreadState, lookupMVar, mylog,
+                                                     promptM, promptM_, reportThreads, switchToThread, traceLog,
+                                                     updateThreadState)
+import qualified Stg.Interpreter.Debugger           as Debugger
+import qualified Stg.Interpreter.GC                 as GC
+import           Stg.Interpreter.IOManager          (handleBlockedDelayWait)
 import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
-import qualified Stg.Interpreter.GC as GC
-import Control.Monad
-import qualified Control.Monad.Trans.State.Strict as Strict
+
+import           System.IO                          (IO, print, putStrLn)
+
+import           Text.Show                          (Show (..))
+
 
 runScheduler :: [Atom] -> ScheduleReason -> M [Atom]
 runScheduler result sr = do
@@ -191,7 +208,9 @@ getNextRunnableThread = do
   tidQueue <- gets $ drop 1 . ssScheduledThreadIds
   modify' $ \s -> s {ssScheduledThreadIds = tidQueue}
   case tidQueue of
-    [] -> head <$> calculateNewSchedule
+    [] -> (flip fmap) calculateNewSchedule $ \case
+      [] -> undefined
+      (a : _) -> a
     tid : _ -> do
       ts <- getThreadState tid
       if tsStatus ts == ThreadRunning

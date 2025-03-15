@@ -1,16 +1,23 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.StablePointer where
 
-import Foreign.Ptr
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import qualified Data.Map as Map
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad.State  (gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Enum            (Enum (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($), (.))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import qualified Data.Map             as Map
+import           Data.Maybe           (Maybe (..))
+
+import           Foreign.Ptr          (IntPtr (..), intPtrToPtr)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval, PtrOrigin (..), StgState (..), lookupStablePointerPtr)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern IntV i = IntAtom i -- Literal (LitNumber LitNumInt i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

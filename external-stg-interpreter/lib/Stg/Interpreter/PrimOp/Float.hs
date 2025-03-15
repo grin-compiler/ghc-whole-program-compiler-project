@@ -1,20 +1,32 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
-{-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE Strict        #-}
+{-# LANGUAGE UnboxedTuples #-}
 module Stg.Interpreter.PrimOp.Float where
 
-import GHC.Exts
-import GHC.Float
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
+
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+
+import           GHC.Exts
+import           GHC.Float            (Floating (..), acoshFloat, asinhFloat, atanhFloat, expm1Float, log1pFloat,
+                                       powerFloat)
+import           GHC.Num              (Num (..))
+import           GHC.Real             (Fractional (..), RealFrac (..), realToFrac)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern IntV i = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV :: Float -> Atom
-pattern FloatV f  = FloatAtom f
+pattern FloatV f = FloatAtom f
 pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 

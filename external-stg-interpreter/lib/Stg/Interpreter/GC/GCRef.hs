@@ -1,13 +1,25 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, FlexibleInstances #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use camelCase" #-}
 module Stg.Interpreter.GC.GCRef where
 
-import Control.Monad
-import qualified Data.IntSet as IntSet
-import qualified Data.ByteString.Char8 as BS8
+import           Control.Applicative   (Applicative (..))
+import           Control.Monad         (Monad (..), forM_, mapM_)
 
-import Stg.Interpreter.Base
+import qualified Data.ByteString.Char8 as BS8
+import           Data.Eq               (Eq)
+import           Data.Foldable         (Foldable)
+import           Data.Function         (($), (.))
+import           Data.Int              (Int)
+import qualified Data.IntSet           as IntSet
+import           Data.Ord              (Ord)
+
+import           Stg.Interpreter.Base  (ArrIdx (..), ArrayArrIdx (..), Atom (..), ByteArrayIdx (..), GCSymbol (..),
+                                        HeapObject (..), MVarDescriptor (..), PtrOrigin (..), SmallArrIdx (..),
+                                        StackContinuation (..), TVarDescriptor (..), ThreadState (..),
+                                        WeakPtrDescriptor (..))
+
+import           Text.Read             (Read, read)
+import           Text.Show             (Show (..))
 
 -- HINT: populate datalog database during a traversal
 
@@ -15,12 +27,15 @@ class VisitGCRef a where
   visitGCRef :: Monad m => (GCSymbol -> m ()) -> a -> m ()
 
 instance VisitGCRef Atom where
+  visitGCRef :: Monad m => (GCSymbol -> m ()) -> Atom -> m ()
   visitGCRef action a = visitAtom a action
 
 instance (Foldable t, VisitGCRef a) => VisitGCRef (t a) where
+  visitGCRef :: (Monad m) => (GCSymbol -> m ()) -> t a -> m ()
   visitGCRef action = mapM_ (visitGCRef action)
 
 instance VisitGCRef HeapObject where
+  visitGCRef :: Monad m => (GCSymbol -> m ()) -> HeapObject -> m ()
   visitGCRef action = \case
     Con{..}           -> visitGCRef action hoConArgs
     Closure{..}       -> visitGCRef action hoCloArgs >> visitGCRef action hoEnv
@@ -29,6 +44,7 @@ instance VisitGCRef HeapObject where
     RaiseException ex -> visitGCRef action ex
 
 instance VisitGCRef StackContinuation where
+  visitGCRef :: Monad m => (GCSymbol -> m ()) -> StackContinuation -> m ()
   visitGCRef action = \case
     CaseOf _ _ env _ _ _    -> visitGCRef action env
     Update{}                -> pure () -- HINT: the thunk is under evaluation, its closure is referred from the thread stack
@@ -47,6 +63,7 @@ instance VisitGCRef StackContinuation where
     DebugFrame{}            -> pure ()
 
 instance VisitGCRef ThreadState where
+  visitGCRef :: Monad m => (GCSymbol -> m ()) -> ThreadState -> m ()
   visitGCRef action ThreadState{..} = do
     visitGCRef action tsCurrentResult
     visitGCRef action tsStack
@@ -82,6 +99,7 @@ instance VisitGCRef TLogEntry where
 -}
 instance VisitGCRef WeakPtrDescriptor where
   -- NOTE: the value is not tracked by the GC
+  visitGCRef :: Monad m => (GCSymbol -> m ()) -> WeakPtrDescriptor -> m ()
   visitGCRef action WeakPtrDescriptor{..} = do
     ----------- temporarly track the value -- FIXME
     visitGCRef action wpdValue
@@ -94,11 +112,13 @@ instance VisitGCRef WeakPtrDescriptor where
       visitGCRef action ma2
 
 instance VisitGCRef MVarDescriptor where
+  visitGCRef :: Monad m => (GCSymbol -> m ()) -> MVarDescriptor -> m ()
   visitGCRef action MVarDescriptor{..} = do
     visitGCRef action mvdValue
     forM_ mvdQueue $ \tid -> action $ encodeRef tid NS_Thread
 
 instance VisitGCRef TVarDescriptor where
+  visitGCRef :: Monad m => (GCSymbol -> m ()) -> TVarDescriptor -> m ()
   visitGCRef action TVarDescriptor{..} = do
     visitGCRef action tvdValue
     forM_ (IntSet.toList tvdQueue) $ \tid -> action $ encodeRef tid NS_Thread
@@ -120,7 +140,7 @@ data RefNamespace
   | NS_StablePointer
   | NS_WeakPointer
   | NS_Thread
-  deriving (Eq, Ord, Show, Read)
+  deriving stock (Eq, Ord, Show, Read)
 
 encodeRef :: Int -> RefNamespace -> GCSymbol
 encodeRef i ns = GCSymbol $ BS8.pack $ show (ns, i)
@@ -130,32 +150,32 @@ decodeRef = read . BS8.unpack . unGCSymbol
 
 visitAtom :: Monad m => Atom -> (GCSymbol -> m ()) -> m ()
 visitAtom atom action = case atom of
-  HeapPtr i           -> action $ encodeRef i NS_HeapPtr
-  Literal{}           -> pure ()
-  Void                -> pure ()
+  HeapPtr i               -> action $ encodeRef i NS_HeapPtr
+  Literal{}               -> pure ()
+  Void                    -> pure ()
   PtrAtom (StablePtr i) _ -> action $ encodeRef i NS_StablePointer -- HINT: for debug purposes (track usage) keep this reference
-  PtrAtom{}           -> pure ()
-  IntAtom{}           -> pure ()
-  WordAtom{}          -> pure ()
-  FloatAtom{}         -> pure ()
-  DoubleAtom{}        -> pure ()
-  MVar i              -> action $ encodeRef i NS_MVar
-  MutVar i            -> action $ encodeRef i NS_MutVar
-  TVar i              -> action $ encodeRef i NS_TVar
-  Array i             -> action $ arrIdxToRef i
-  MutableArray i      -> action $ arrIdxToRef i
-  SmallArray i        -> action $ smallArrIdxToRef i
-  SmallMutableArray i -> action $ smallArrIdxToRef i
-  ArrayArray i        -> action $ arrayArrIdxToRef i
-  MutableArrayArray i -> action $ arrayArrIdxToRef i
-  ByteArray i         -> action $ encodeRef (baId i) NS_MutableByteArray
-  MutableByteArray i  -> action $ encodeRef (baId i) NS_MutableByteArray
-  WeakPointer i       -> action $ encodeRef i NS_WeakPointer
-  StableName i        -> action $ encodeRef i NS_StableName
-  ThreadId i          -> action $ encodeRef i NS_Thread -- NOTE: in GHC the ThreadId# prim type is a strong pointer to TSO (thread state oject)
-  LiftedUndefined{}   -> pure ()
-  Rubbish{}           -> pure ()
-  Unbinded{}          -> pure ()
+  PtrAtom{}               -> pure ()
+  IntAtom{}               -> pure ()
+  WordAtom{}              -> pure ()
+  FloatAtom{}             -> pure ()
+  DoubleAtom{}            -> pure ()
+  MVar i                  -> action $ encodeRef i NS_MVar
+  MutVar i                -> action $ encodeRef i NS_MutVar
+  TVar i                  -> action $ encodeRef i NS_TVar
+  Array i                 -> action $ arrIdxToRef i
+  MutableArray i          -> action $ arrIdxToRef i
+  SmallArray i            -> action $ smallArrIdxToRef i
+  SmallMutableArray i     -> action $ smallArrIdxToRef i
+  ArrayArray i            -> action $ arrayArrIdxToRef i
+  MutableArrayArray i     -> action $ arrayArrIdxToRef i
+  ByteArray i             -> action $ encodeRef (baId i) NS_MutableByteArray
+  MutableByteArray i      -> action $ encodeRef (baId i) NS_MutableByteArray
+  WeakPointer i           -> action $ encodeRef i NS_WeakPointer
+  StableName i            -> action $ encodeRef i NS_StableName
+  ThreadId i              -> action $ encodeRef i NS_Thread -- NOTE: in GHC the ThreadId# prim type is a strong pointer to TSO (thread state oject)
+  LiftedUndefined{}       -> pure ()
+  Rubbish{}               -> pure ()
+  Unbinded{}              -> pure ()
   -- _                   -> error $ "internal error - incomplete pattern: " ++ show atom
 
 arrIdxToRef :: ArrIdx -> GCSymbol

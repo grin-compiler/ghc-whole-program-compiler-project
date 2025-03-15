@@ -1,18 +1,33 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+
 module Stg.Interpreter.Debugger where
 
-import GHC.Stack
-import Control.Monad.State
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-import qualified Data.IntMap as IntMap
+import           Control.Applicative                   (Applicative (..))
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
-import Control.Concurrent.MVar
+import           Control.Concurrent.MVar               (putMVar, takeMVar, tryTakeMVar)
+import           Control.Monad                         (Functor (..), Monad (..), unless)
+import           Control.Monad.State                   (MonadIO (..), gets, modify')
 
-import Stg.Interpreter.Base
+import           Data.Bool                             (Bool (..), otherwise)
+import           Data.Enum                             (Enum (..))
+import           Data.Function                         (($))
+import qualified Data.IntMap                           as IntMap
+import           Data.List                             ((++))
+import qualified Data.Map                              as Map
+import           Data.Maybe                            (Maybe (..), maybe)
+import           Data.Ord                              (Ord (..))
+import qualified Data.Set                              as Set
 
-import Stg.Interpreter.Debugger.Internal
-import Control.Monad
+import           GHC.Stack                             (HasCallStack)
+
+import           Stg.Interpreter.Base                  (Atom (..), Breakpoint, DebugCommand (..), DebugEvent (..),
+                                                        DebugOutput (..), DebugState (..), DebuggerChan (..), M,
+                                                        StgState (..), readHeap)
+import           Stg.Interpreter.Debugger.Internal     (runInternalCommand)
+
+import           System.IO                             (putStrLn)
+
+import           Text.Show                             (Show (show))
+
 
 sendDebugEvent :: DebugEvent -> M ()
 sendDebugEvent dbgEvent = do

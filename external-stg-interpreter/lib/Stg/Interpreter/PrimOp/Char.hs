@@ -1,17 +1,26 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE Strict #-}
 module Stg.Interpreter.PrimOp.Char where
 
-import Data.Char
+import           Control.Applicative  (Applicative (..))
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Char            (Char, ord)
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+import           Data.Word            (Word)
+
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Syntax           (Lit (..), Name, TyCon, Type)
 
 pattern CharV :: Char -> Atom
 pattern CharV c = Literal (LitChar c)
 pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern IntV i = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
@@ -37,6 +46,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "leChar#", [CharV a, CharV b]) -> pure [IntV $ if a <= b then 1 else 0]
 
   -- ord# :: Char# -> Int#
-  ( "ord#",    [CharV c]) -> pure [IntV . fromIntegral $ ord c]
+  ( "ord#",    [CharV c])          -> pure [IntV $ ord c]
 
-  _ -> fallback op args t tc
+  _                                -> fallback op args t tc

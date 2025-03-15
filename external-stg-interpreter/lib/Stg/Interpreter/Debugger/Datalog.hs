@@ -1,29 +1,42 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
-
 module Stg.Interpreter.Debugger.Datalog (exportStgState) where
 
-import Control.Monad
-import Control.Monad.State
-import Data.Map (Map)
-import qualified Data.Map as Map
-import qualified Data.IntMap as IntMap
-import Data.IntMap (IntMap)
-import qualified Data.IntSet as IntSet
-import qualified Data.ByteString.Char8 as BS8
-import Data.Vector (Vector)
-import qualified Data.Vector as V
+import           Control.Applicative      (Applicative (..))
+import           Control.Monad            (forM, forM_, mapM, mapM_, void)
+import           Control.Monad.State      (MonadIO (..), MonadState (..), StateT, execStateT)
+
+import           Data.Bool                (Bool (..))
+import qualified Data.ByteString.Char8    as BS8
+import           Data.Function            (flip, ($))
+import           Data.Int                 (Int)
+import           Data.IntMap              (IntMap)
+import qualified Data.IntMap              as IntMap
+import qualified Data.IntSet              as IntSet
+import           Data.List                (intercalate, length, nub, reverse, zip, (++))
+import           Data.Map                 (Map)
+import qualified Data.Map                 as Map
+import           Data.Maybe               (Maybe (..), maybeToList)
 import qualified Data.Primitive.ByteArray as BA
-import Data.Maybe
-import Data.List (intercalate, nub)
-import Text.Printf
+import           Data.String              (String)
+import           Data.Tuple               (snd)
+import           Data.Vector              (Vector)
+import qualified Data.Vector              as V
 
-import System.Directory
-import System.FilePath
-import System.IO
+import           GHC.Err                  (error)
 
+import           Stg.Interpreter.Base     (AddressState (..), ArrIdx (..), ArrayArrIdx (..), Atom (..),
+                                           ByteArrayDescriptor (..), ByteArrayIdx (baId), HeapObject (..),
+                                           MVarDescriptor (..), PtrOrigin (..), Region (..), SmallArrIdx (..),
+                                           StackContinuation (..), StgState (..), TVarDescriptor (..), ThreadState (..),
+                                           WeakPtrDescriptor (..), convertAddressState, debugPrintHeapObject,
+                                           showStackCont)
+import           Stg.Syntax               (Binder (..), DC (..), DataCon (..), Id (..), Name, getModuleName, getUnitId)
 
-import Stg.Interpreter.Base
-import Stg.Syntax
+import           System.Directory         (createDirectoryIfMissing, makeAbsolute)
+import           System.FilePath          (FilePath, (</>))
+import           System.IO                (Handle, IO, IOMode (..), hClose, hPutStrLn, openFile, putStrLn)
+
+import           Text.Printf              (printf)
+import           Text.Show                (Show (..))
 
 
 data Param
@@ -44,7 +57,7 @@ getHandle :: Name -> DL Handle
 getHandle n = do
   DLExport{..} <- get
   case Map.lookup n dleHandleMap of
-    Just h -> pure h
+    Just h  -> pure h
     Nothing -> error $ "missing handle for: " ++ show n
 
 genParam :: Param -> DL String
@@ -105,7 +118,7 @@ emitAtomToRef a = do
     StableName i            -> add $ printf "$R_StableName\t%d" i
     PtrAtom (StablePtr i) _ -> add $ printf "$R_StablePointer\t%d" i
     ThreadId i              -> add $ printf "$R_ThreadId\t%d" i
-    _                   -> pure ()
+    _                       -> pure ()
 
 arrIdxToRef :: ArrIdx -> String
 arrIdxToRef = \case

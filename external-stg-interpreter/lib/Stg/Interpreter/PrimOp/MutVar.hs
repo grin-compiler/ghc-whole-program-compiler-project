@@ -1,16 +1,24 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.MutVar where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad.State  (gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Enum            (Enum (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import           Data.Maybe           (Maybe)
+import           Data.Word            (Word)
+
+import           Stg.Interpreter.Base (Atom (..), HeapObject (..), M, PrimOpEval, Rts (..), StgState (..),
+                                       allocAndStore, lookupMutVar, readHeapClosure)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern IntV i = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern Word32V :: Word -> Atom
 pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 

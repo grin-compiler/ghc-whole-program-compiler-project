@@ -1,8 +1,14 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Unsafe where
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
+
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import           Data.Maybe           (Maybe)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)

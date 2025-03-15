@@ -1,15 +1,28 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.WeakPointer where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import Data.Maybe
-import Foreign.Ptr
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad        (mapM, mapM_, void)
+import           Control.Monad.State  (gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import qualified Stg.Interpreter.FFI as FFI
-import Control.Monad
+import           Data.Enum            (Enum (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import           Data.List            ((++))
+import           Data.Maybe           (Maybe (..), catMaybes, isNothing, maybeToList)
+
+import           Foreign.Ptr          (castPtrToFunPtr)
+
+import           GHC.Err              (error)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval, StgState (..), WeakPtrDescriptor (..),
+                                       liftIOAndBorrowStgState, lookupWeakPointerDescriptor)
+import qualified Stg.Interpreter.FFI  as FFI
+import           Stg.Syntax           (Name, TyCon, Type (..))
+
+import           Text.Show            (Show (..))
+
 
 pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)

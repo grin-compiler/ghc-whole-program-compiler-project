@@ -1,9 +1,20 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.TagToEnum where
 
-import Data.List (findIndex)
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
+
+import           Data.Bool            (Bool (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import           Data.List            (findIndex, (!!), (++))
+import           Data.Maybe           (Maybe (..))
+import           Data.Word            (Word)
+
+import           Stg.Interpreter.Base (Atom (..), HeapObject (..), M, PrimOpEval, StackContinuation (..), allocAndStore,
+                                       readHeapCon, stackPush, stgErrorM)
+import           Stg.Syntax           (CutTyCon (..), DC (..), DataCon (..), Name, TyCon (..), Type)
+
+import           Text.Show            (Show (..))
 
 pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)

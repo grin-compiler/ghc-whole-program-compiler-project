@@ -1,82 +1,125 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
-
 module Stg.Interpreter where
 
-import GHC.Stack
-import Foreign.Ptr
+import           Codec.Archive.Zip                      (mkEntrySelector, saveEntry, withArchive)
 
-import Control.Concurrent
-import Control.Monad.State.Strict
-import Control.Exception
+import           Control.Applicative                    (Applicative (..), (<$>))
+import           Control.Concurrent                     (killThread, newEmptyMVar)
+import           Control.Exception                      (SomeException, handle, throw)
+import           Control.Monad                          (Functor (..), Monad (..), forM, forM_, mapM, mapM_, unless,
+                                                         void, when)
+import           Control.Monad.State.Strict             (MonadIO (..), StateT, execStateT, gets, modify')
 
-import Data.List (partition, isSuffixOf)
-import qualified Data.Map.Strict as StrictMap
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import qualified Data.IntMap as IntMap
-import qualified Data.IntSet as IntSet
-import System.Posix.DynamicLinker
-import Codec.Archive.Zip
-import qualified Data.Yaml as Y
+import           Data.Bool                              (Bool (..), not, otherwise, (&&), (||))
+import           Data.Enum                              (Enum (..))
+import           Data.Eq                                (Eq (..))
+import           Data.Function                          (id, ($), (.))
+import           Data.Int                               (Int)
+import qualified Data.IntMap                            as IntMap
+import qualified Data.IntSet                            as IntSet
+import           Data.List                              (concatMap, elem, isSuffixOf, length, null, partition, reverse,
+                                                         splitAt, unzip, zip, (++))
+import qualified Data.Map                               as Map
+import qualified Data.Map.Strict                        as StrictMap
+import           Data.Maybe                             (Maybe (..), maybe)
+import           Data.Monoid                            (Monoid (..))
+import           Data.Ord                               (Ord (..))
+import qualified Data.Set                               as Set
+import           Data.String                            (String)
+import           Data.Time.Clock                        (getCurrentTime)
+import qualified Data.Yaml                              as Y
 
-import Data.Time.Clock
+import           Foreign.Ptr                            (nullPtr)
 
-import System.FilePath
-import System.IO
-import System.Directory
+import           GHC.Err                                (error, undefined)
+import           GHC.Num                                (Num (..))
+import           GHC.Real                               (fromIntegral, realToFrac)
+import           GHC.Stack                              (HasCallStack)
 
-import Stg.IRLocation
-import Stg.Syntax
-import Stg.IO
-import Stg.Program
-import Stg.Analysis.LiveVariable
-import Stg.Foreign.Linker
-
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimCall
-import Stg.Interpreter.FFI
-import Stg.Interpreter.Rts
-import Stg.Interpreter.Debug
-import qualified Stg.Interpreter.ThreadScheduler as Scheduler
-import qualified Stg.Interpreter.Debugger        as Debugger
-import qualified Stg.Interpreter.Debugger.Region as Debugger
-import qualified Stg.Interpreter.GC as GC
-
-import qualified Stg.Interpreter.PrimOp.Addr          as PrimAddr
-import qualified Stg.Interpreter.PrimOp.Array         as PrimArray
-import qualified Stg.Interpreter.PrimOp.SmallArray    as PrimSmallArray
-import qualified Stg.Interpreter.PrimOp.ArrayArray    as PrimArrayArray
-import qualified Stg.Interpreter.PrimOp.ByteArray     as PrimByteArray
-import qualified Stg.Interpreter.PrimOp.Char          as PrimChar
-import qualified Stg.Interpreter.PrimOp.Concurrency   as PrimConcurrency
-import qualified Stg.Interpreter.PrimOp.DelayWait     as PrimDelayWait
-import qualified Stg.Interpreter.PrimOp.Parallelism   as PrimParallelism
-import qualified Stg.Interpreter.PrimOp.Exceptions    as PrimExceptions
-import qualified Stg.Interpreter.PrimOp.Float         as PrimFloat
-import qualified Stg.Interpreter.PrimOp.Double        as PrimDouble
-import qualified Stg.Interpreter.PrimOp.Word          as PrimWord
-import qualified Stg.Interpreter.PrimOp.Word8         as PrimWord8
-import qualified Stg.Interpreter.PrimOp.Word16        as PrimWord16
-import qualified Stg.Interpreter.PrimOp.Word32        as PrimWord32
-import qualified Stg.Interpreter.PrimOp.Word64        as PrimWord64
-import qualified Stg.Interpreter.PrimOp.Int           as PrimInt
-import qualified Stg.Interpreter.PrimOp.Int8          as PrimInt8
-import qualified Stg.Interpreter.PrimOp.Int16         as PrimInt16
-import qualified Stg.Interpreter.PrimOp.Int32         as PrimInt32
-import qualified Stg.Interpreter.PrimOp.Int64         as PrimInt64
-import qualified Stg.Interpreter.PrimOp.MutVar        as PrimMutVar
-import qualified Stg.Interpreter.PrimOp.MVar          as PrimMVar
-import qualified Stg.Interpreter.PrimOp.Narrowings    as PrimNarrowings
-import qualified Stg.Interpreter.PrimOp.Prefetch      as PrimPrefetch
-import qualified Stg.Interpreter.PrimOp.StablePointer as PrimStablePointer
-import qualified Stg.Interpreter.PrimOp.STM           as PrimSTM
-import qualified Stg.Interpreter.PrimOp.WeakPointer   as PrimWeakPointer
-import qualified Stg.Interpreter.PrimOp.TagToEnum     as PrimTagToEnum
-import qualified Stg.Interpreter.PrimOp.Unsafe        as PrimUnsafe
-import qualified Stg.Interpreter.PrimOp.MiscEtc       as PrimMiscEtc
-import qualified Stg.Interpreter.PrimOp.ObjectLifetime  as PrimObjectLifetime
+import           Stg.Analysis.LiveVariable              (annotateWithLiveVariables)
+import           Stg.Foreign.Linker                     (getExtStgWorkDirectory, linkForeignCbitsSharedLib)
+import           Stg.Interpreter.Base                   (Addr, Atom (..), BlockReason (..), Breakpoint (..),
+                                                         CallGraph (..), CutShow (..), DebugFrame (..), DebugSettings,
+                                                         DebugState (..), DebuggerChan, Env, HeapObject (..), M,
+                                                         Printable (..), PrintableMVar (..), ProgramPoint (..),
+                                                         PtrOrigin (..), Rts (..), ScheduleReason (..),
+                                                         StackContinuation (..), StaticOrigin (..), StgState (..),
+                                                         ThreadState (..), ThreadStatus (..), TracingState (..),
+                                                         addBinderToEnv, addInterClosureCallGraphEdge,
+                                                         addIntraClosureCallGraphEdge, addManyBindersToEnv,
+                                                         addZippedBindersToEnv, allocAndStore, createThread,
+                                                         debugPrintAtom, debugPrintHeapObject, emptyStgState,
+                                                         envToAtoms, freshHeapAddress, getCStringConstantPtrAtom,
+                                                         getCurrentThreadState, getThreadState, isThreadLive, lookupEnv,
+                                                         lookupEnvSO, markClosure, markExecuted, markExecutedId,
+                                                         markFFI, markLNE, markPrimCall, markPrimOp, mylog, promptM,
+                                                         readHeap, readHeapCon, reportThreads, scheduleToTheEnd,
+                                                         setProgramPoint, showStackCont, stackPop, stackPush, stgErrorM,
+                                                         store, switchToThread, traceLog, updateThreadState,
+                                                         wakeupBlackHoleQueueThreads)
+import           Stg.Interpreter.Debug                  (exportCallGraph)
+import qualified Stg.Interpreter.Debugger               as Debugger
+import qualified Stg.Interpreter.Debugger.Region        as Debugger
+import           Stg.Interpreter.FFI                    (buildCWrapperHsTypeMap, evalFCallOp, getFFILabelPtrAtom)
+import qualified Stg.Interpreter.GC                     as GC
+import           Stg.Interpreter.PrimCall               (evalPrimCallOp)
+import qualified Stg.Interpreter.PrimOp.Addr            as PrimAddr
+import qualified Stg.Interpreter.PrimOp.Array           as PrimArray
+import qualified Stg.Interpreter.PrimOp.ArrayArray      as PrimArrayArray
+import qualified Stg.Interpreter.PrimOp.ByteArray       as PrimByteArray
+import qualified Stg.Interpreter.PrimOp.Char            as PrimChar
+import qualified Stg.Interpreter.PrimOp.Concurrency     as PrimConcurrency
+import qualified Stg.Interpreter.PrimOp.DelayWait       as PrimDelayWait
+import qualified Stg.Interpreter.PrimOp.Double          as PrimDouble
+import qualified Stg.Interpreter.PrimOp.Exceptions      as PrimExceptions
+import qualified Stg.Interpreter.PrimOp.Float           as PrimFloat
 import qualified Stg.Interpreter.PrimOp.InfoTableOrigin as PrimInfoTableOrigin
-import Control.Monad
+import qualified Stg.Interpreter.PrimOp.Int             as PrimInt
+import qualified Stg.Interpreter.PrimOp.Int16           as PrimInt16
+import qualified Stg.Interpreter.PrimOp.Int32           as PrimInt32
+import qualified Stg.Interpreter.PrimOp.Int64           as PrimInt64
+import qualified Stg.Interpreter.PrimOp.Int8            as PrimInt8
+import qualified Stg.Interpreter.PrimOp.MiscEtc         as PrimMiscEtc
+import qualified Stg.Interpreter.PrimOp.MutVar          as PrimMutVar
+import qualified Stg.Interpreter.PrimOp.MVar            as PrimMVar
+import qualified Stg.Interpreter.PrimOp.Narrowings      as PrimNarrowings
+import qualified Stg.Interpreter.PrimOp.ObjectLifetime  as PrimObjectLifetime
+import qualified Stg.Interpreter.PrimOp.Parallelism     as PrimParallelism
+import qualified Stg.Interpreter.PrimOp.Prefetch        as PrimPrefetch
+import qualified Stg.Interpreter.PrimOp.SmallArray      as PrimSmallArray
+import qualified Stg.Interpreter.PrimOp.StablePointer   as PrimStablePointer
+import qualified Stg.Interpreter.PrimOp.STM             as PrimSTM
+import qualified Stg.Interpreter.PrimOp.TagToEnum       as PrimTagToEnum
+import qualified Stg.Interpreter.PrimOp.Unsafe          as PrimUnsafe
+import qualified Stg.Interpreter.PrimOp.WeakPointer     as PrimWeakPointer
+import qualified Stg.Interpreter.PrimOp.Word            as PrimWord
+import qualified Stg.Interpreter.PrimOp.Word16          as PrimWord16
+import qualified Stg.Interpreter.PrimOp.Word32          as PrimWord32
+import qualified Stg.Interpreter.PrimOp.Word64          as PrimWord64
+import qualified Stg.Interpreter.PrimOp.Word8           as PrimWord8
+import           Stg.Interpreter.Rts                    (extStgRtsSupportModule, initRtsSupport)
+import qualified Stg.Interpreter.ThreadScheduler        as Scheduler
+import           Stg.IO                                 (readModpakS)
+import           Stg.IRLocation                         (StgPoint (..), binderToStgId)
+import           Stg.Program                            (GhcStgApp (..), getFullpakModules, getGhcStgAppModules,
+                                                         getJSONModules, readGhcStgApp)
+import           Stg.Syntax                             (Alt, Alt' (..), AltCon, AltCon' (..), AltType, AltType' (..),
+                                                         Arg, Arg' (..), Binder (..), Binding, Binding' (..),
+                                                         CCallTarget (..), DC (..), DataCon (..), DataConRep (..), Expr,
+                                                         Expr' (..), ForeignCall (..), Id (..), IdDetails (..),
+                                                         Lit (..), LitNumType (..), Module, Module' (..), Name,
+                                                         PrimRep (..), Rhs, Rhs' (..), StgOp (..), TopBinding' (..),
+                                                         TyCon, Type (..), UpdateFlag (..))
+
+import           System.Directory                       (createDirectoryIfMissing, doesFileExist, getCurrentDirectory,
+                                                         makeAbsolute, setCurrentDirectory)
+import           System.FilePath                        (FilePath, dropExtension, takeDirectory, takeExtension,
+                                                         takeFileName, (</>))
+import           System.IO                              (BufferMode (..), IO, IOMode (..), hClose, hSetBuffering,
+                                                         openFile, print, putStrLn)
+import           System.Posix.DynamicLinker             (DL, RTLDFlags (..), dlclose, dlopen)
+
+import           Text.Show                              (Show (..))
+
 
 {-
   Q: what is the operational semantic of StgApp
@@ -215,7 +258,7 @@ builtinStgEval so a@HeapPtr{} = do
         -}
         let (uf, params, e) = case getCutShowItem hoCloBody of
                   StgRhsClosure _ uf' params' e' -> (uf', params', e')
-                  StgRhsCon _ _ -> error "missed StgRhsClosure"
+                  StgRhsCon _ _                  -> error "missed StgRhsClosure"
         let HeapPtr l = a
             extendedEnv = addManyBindersToEnv SO_CloArg params hoCloArgs hoEnv
         unless (length params == length hoCloArgs) $ do
@@ -411,7 +454,7 @@ evalOnNewThread = evalOnThread False
 evalOnThread :: Bool -> M [Atom] -> M [Atom]
 evalOnThread isMainThread setupAction = do
   -- create main thread
-  (tid, ts) <- createThread
+  (tid, _ts) <- createThread
   scheduleToTheEnd tid
   switchToThread tid
 
@@ -460,13 +503,13 @@ evalStackMachine result = do
       nextResult <- evalStackContinuation result stackCont
       case stackCont of
         RunScheduler{} -> pure ()
-        _ -> contextSwitchTimer
+        _              -> contextSwitchTimer
       evalStackMachine nextResult
 
 peekAtom :: HasCallStack => Atom -> M String
 peekAtom a = case a of
   HeapPtr{} -> debugPrintHeapObject <$> readHeap a
-  _ -> pure $ show a
+  _         -> pure $ show a
 
 peekAtoms :: [Atom] -> StateT StgState IO [String]
 peekAtoms = mapM peekAtom
@@ -504,12 +547,15 @@ evalStackContinuation result = \case
     modify' $ \s -> s {ssCurrentClosure = Just curClosure, ssCurrentClosureAddr = curClosureAddr}
     assertWHNF result altType resultBinder
     let resultId = (Id resultBinder)
+        alt = case getCutShowItem alts of
+          []      -> undefined
+          (a : _) -> a
+        v = case result of
+          [l] -> l
+          _   -> error $ "expected a single value: " ++ show result
     case altType of
       AlgAlt _tc -> do
-        let v = case result of
-              [l] -> l
-              _   -> error $ "expected a single value: " ++ show result
-            extendedEnv = addBinderToEnv SO_Scrut resultBinder v localEnv
+        let extendedEnv = addBinderToEnv SO_Scrut resultBinder v localEnv
         con <- readHeapCon v
         matchFirstCon resultId extendedEnv con $ getCutShowItem alts
 
@@ -522,7 +568,7 @@ evalStackContinuation result = \case
 
       MultiValAlt n -> do -- unboxed tuple
         -- NOTE: result binder is not assigned
-        let [Alt{..}] = getCutShowItem alts
+        let Alt{..} = alt
         when (n /= length altBinders) $ do
           stgErrorM $ "evalStackContinuation - MultiValAlt n broken assumption 2: " ++ show (n, altBinders, result)
         let extendedEnv = if n == 1 && null altBinders
@@ -535,8 +581,7 @@ evalStackContinuation result = \case
         evalExpr extendedEnv altRHS
 
       PolyAlt -> do
-        let [Alt{..}]   = getCutShowItem alts
-            [v]         = result
+        let Alt{..} = alt
             extendedEnv = addBinderToEnv SO_Scrut resultBinder v $                 -- HINT: bind the result
                           localEnv
                           --addManyBindersToEnv SO_AltArg altBinders result localEnv  -- HINT: bind alt params
@@ -753,18 +798,19 @@ evalExpr localEnv = \case
 
 
 matchFirstLit :: HasCallStack => Id -> Env -> Atom -> [Alt] -> M [Atom]
-matchFirstLit resultId localEnv a [Alt AltDefault _ rhs] = do
+matchFirstLit resultId localEnv _a [Alt AltDefault _ rhs] = do
   setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) 0
   evalExpr localEnv rhs
 matchFirstLit resultId localEnv atom alts
   | indexedAlts <- zip [0..] alts
   , indexedAltsWithDefault <- case indexedAlts of
       d@(_, Alt AltDefault _ _) : xs -> xs ++ [d]
-      xs -> xs
-  = case head $ [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchLit atom altCon] ++ (error $ "no lit match" ++ show (resultId, atom, fmap altCon alts)) of
-  (idx, Alt{..}) -> do
-    setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) idx
-    evalExpr localEnv altRHS
+      xs                             -> xs
+  = case [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchLit atom altCon] of
+      [] -> error $ "no lit match" ++ show (resultId, atom, fmap altCon alts)
+      ((idx, Alt{..}) : _) -> do
+        setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) idx
+        evalExpr localEnv altRHS
 
 matchLit :: HasCallStack => Atom -> AltCon -> Bool
 matchLit a = \case
@@ -774,38 +820,38 @@ matchLit a = \case
 
 convertAltLit :: Lit -> Atom
 convertAltLit lit = case lit of
-  LitFloat f                -> FloatAtom $ realToFrac f
-  LitDouble d               -> DoubleAtom $ realToFrac d
-  LitNullAddr               -> PtrAtom RawPtr nullPtr
-  LitNumber LitNumInt n     -> IntAtom $ fromIntegral n
-  LitNumber LitNumInt8 n    -> IntAtom $ fromIntegral n
-  LitNumber LitNumInt16 n   -> IntAtom $ fromIntegral n
-  LitNumber LitNumInt32 n   -> IntAtom $ fromIntegral n
-  LitNumber LitNumInt64 n   -> IntAtom $ fromIntegral n
-  LitNumber LitNumWord n    -> WordAtom $ fromIntegral n
-  LitNumber LitNumWord8 n   -> WordAtom $ fromIntegral n
-  LitNumber LitNumWord16 n  -> WordAtom $ fromIntegral n
-  LitNumber LitNumWord32 n  -> WordAtom $ fromIntegral n
-  LitNumber LitNumWord64 n  -> WordAtom $ fromIntegral n
-  LitLabel{}                -> error $ "invalid alt pattern: " ++ show lit
-  LitString{}               -> error $ "invalid alt pattern: " ++ show lit
-  c@LitChar{}               -> Literal c
-  l -> error $ "unsupported: " ++ show l
+  LitFloat f               -> FloatAtom $ realToFrac f
+  LitDouble d              -> DoubleAtom $ realToFrac d
+  LitNullAddr              -> PtrAtom RawPtr nullPtr
+  LitNumber LitNumInt n    -> IntAtom $ fromIntegral n
+  LitNumber LitNumInt8 n   -> IntAtom $ fromIntegral n
+  LitNumber LitNumInt16 n  -> IntAtom $ fromIntegral n
+  LitNumber LitNumInt32 n  -> IntAtom $ fromIntegral n
+  LitNumber LitNumInt64 n  -> IntAtom $ fromIntegral n
+  LitNumber LitNumWord n   -> WordAtom $ fromIntegral n
+  LitNumber LitNumWord8 n  -> WordAtom $ fromIntegral n
+  LitNumber LitNumWord16 n -> WordAtom $ fromIntegral n
+  LitNumber LitNumWord32 n -> WordAtom $ fromIntegral n
+  LitNumber LitNumWord64 n -> WordAtom $ fromIntegral n
+  LitLabel{}               -> error $ "invalid alt pattern: " ++ show lit
+  LitString{}              -> error $ "invalid alt pattern: " ++ show lit
+  c@LitChar{}              -> Literal c
+  l                        -> error $ "unsupported: " ++ show l
 
 matchFirstCon :: HasCallStack => Id -> Env -> HeapObject -> [Alt] -> M [Atom]
 matchFirstCon resultId localEnv heap alts
   | indexedAlts <- zip [0..] alts
   , indexedAltsWithDefault <- case indexedAlts of
       d@(_, Alt AltDefault _ _) : xs -> xs ++ [d]
-      xs -> xs
+      xs                             -> xs
   = case heap of
       (Con _ (DC dc) args) -> do
         case [a | a@(_idx, Alt{..}) <- indexedAltsWithDefault, matchCon dc altCon] of
           []  -> stgErrorM $ "no matching alts for: " ++ show resultId
           (idx, Alt{..}) : _ -> do
             let extendedEnv = case altCon of
-                                AltDataCon{}  -> addManyBindersToEnv SO_AltArg altBinders args localEnv
-                                _             -> localEnv
+                                AltDataCon{} -> addManyBindersToEnv SO_AltArg altBinders args localEnv
+                                _            -> localEnv
             --unless (length altBinders == length args) $ do
             --  stgErrorM $ "matchFirstCon length mismatch: " ++ show (DC dc, altBinders, args, resultId)
             setProgramPoint . PP_StgPoint $ SP_AltExpr (binderToStgId $ unId resultId) idx
@@ -861,9 +907,11 @@ declareTopBindings mods = do
         StgTopStringLit{} -> True
         _                 -> False
   -- bind string lits
-  stringEnv <- forM strings $ \(StgTopStringLit b str) -> do
-    strPtr <- getCStringConstantPtrAtom str
-    pure (Id b, (SO_TopLevel, strPtr))
+  stringEnv <- forM strings $ \case
+    (StgTopStringLit b str) -> do
+      strPtr <- getCStringConstantPtrAtom str
+      pure (Id b, (SO_TopLevel, strPtr))
+    _ -> error "unsupported"
 
   -- bind closures
   let bindings = concatMap getBindings closures
@@ -899,10 +947,10 @@ loadAndRunProgram :: HasCallStack => Bool -> Bool -> String -> [String] -> Debug
 loadAndRunProgram isQuiet switchCWD fullpak_name progArgs dbgChan dbgState tracing debugSettings = do
 
   mods0 <- case takeExtension fullpak_name of
-    ".fullpak"                          -> getFullpakModules fullpak_name
-    ".json"                             -> getJSONModules fullpak_name
-    ext | "_ghc_stgapp" `isSuffixOf` ext  -> getGhcStgAppModules fullpak_name
-    _                                   -> error "unknown input file format"
+    ".fullpak"                           -> getFullpakModules fullpak_name
+    ".json"                              -> getJSONModules fullpak_name
+    ext | "_ghc_stgapp" `isSuffixOf` ext -> getGhcStgAppModules fullpak_name
+    _                                    -> error "unknown input file format"
   runProgram isQuiet switchCWD fullpak_name mods0 progArgs dbgChan dbgState tracing debugSettings
 
 runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> DebugSettings -> IO ()
@@ -924,9 +972,9 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
         initRtsSupport progName progArgs mods
         env <- gets ssStaticGlobalEnv
         let rootMain = unId $ case [i | i <- Map.keys env, show i == "main_:Main.main"] of
-              [mainId]  -> mainId
-              []        -> error "main_:Main.main not found"
-              _         -> error "multiple main_:Main.main have found"
+              [mainId] -> mainId
+              []       -> error "main_:Main.main not found"
+              _        -> error "multiple main_:Main.main have found"
         limit <- gets ssNextHeapAddr
         modify' $ \s -> s {ssDynamicHeapStart = limit}
         modify' $ \s -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}

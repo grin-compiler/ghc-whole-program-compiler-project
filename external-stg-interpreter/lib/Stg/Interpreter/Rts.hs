@@ -1,24 +1,75 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 
 module Stg.Interpreter.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
 
-import Control.Monad.State
+import           Control.Monad         (Functor (..), forM_)
+import           Control.Monad.State   (MonadIO (..), gets, modify')
 
-import Foreign.Marshal.Utils
+import           Data.Bool             (Bool (..))
+import           Data.Eq               (Eq (..))
+import           Data.Function         (($))
+import           Data.Int              (Int)
+import           Data.List             (concatMap, (++))
+import qualified Data.Map              as Map
+import           Data.Maybe            (Maybe (..))
+import           Data.Monoid           (Monoid (..))
+import qualified Data.Set              as Set
+import           Data.String           (String)
+import           Data.Tuple            (fst)
 
-import qualified Data.Set as Set
-import qualified Data.Map as Map
+import           Foreign.Marshal.Utils (new)
 
-import Stg.Syntax
-import Stg.Reconstruct
-import Stg.Interpreter.Base
-import Control.Monad
+import           GHC.Err               (error, undefined)
+
+import           Stg.Interpreter.Base  (Atom, M, Rts (..), StgState (..), lookupEnv, promptM_)
+import           Stg.Reconstruct       (reconModule)
+import           Stg.Syntax            (Alt' (..), AltCon' (..), AltType' (..), Arg' (..), Binder (..), BinderId (..),
+                                        Binding' (..), DataCon (..), DataConId (..), DataConRep (..), Expr' (..),
+                                        ForeignStubs' (..), IdDetails (..), Module, Module' (..), ModuleName (..), Name,
+                                        PrimRep (..), Rhs' (..), SBinder (..), SDataCon (..), STyCon (..), Scope (..),
+                                        SrcSpan (..), TopBinding' (..), TyCon (..), TyConId (..), Type (..),
+                                        UnhelpfulSpanReason (..), Unique (..), UnitId (..), UpdateFlag (..))
+
+import           System.IO             (print, putStrLn)
+
+import           Text.Show             (Show (..))
 
 emptyRts :: String -> [String] -> Rts
 emptyRts progName progArgs = Rts
   { rtsGlobalStore  = Map.empty
   , rtsProgName     = progName
   , rtsProgArgs     = progArgs
+  , rtsCharCon   = undefined
+  , rtsIntCon    = undefined
+  , rtsInt8Con   = undefined
+  , rtsInt16Con  = undefined
+  , rtsInt32Con  = undefined
+  , rtsInt64Con  = undefined
+  , rtsWordCon   = undefined
+  , rtsWord8Con  = undefined
+  , rtsWord16Con = undefined
+  , rtsWord32Con = undefined
+  , rtsWord64Con = undefined
+  , rtsPtrCon    = undefined
+  , rtsFunPtrCon                 = undefined
+  , rtsFloatCon                  = undefined
+  , rtsDoubleCon                 = undefined
+  , rtsStablePtrCon              = undefined
+  , rtsTrueCon                   = undefined
+  , rtsFalseCon                  = undefined
+  , rtsUnpackCString             = undefined
+  , rtsTopHandlerRunIO           = undefined
+  , rtsTopHandlerRunNonIO        = undefined
+  , rtsTopHandlerFlushStdHandles = undefined
+  , rtsDivZeroException                = undefined
+  , rtsUnderflowException              = undefined
+  , rtsOverflowException               = undefined
+  , rtsNestedAtomically                = undefined
+  , rtsBlockedIndefinitelyOnMVar       = undefined
+  , rtsBlockedIndefinitelyOnSTM        = undefined
+  , rtsNonTermination                  = undefined
+  , rtsApplyFun1Arg                    = undefined
+  , rtsTuple2Proj0                     = undefined
+  , rtsDataSymbol_enabled_capabilities = undefined
   }
 
 initRtsCDataSymbols :: M ()

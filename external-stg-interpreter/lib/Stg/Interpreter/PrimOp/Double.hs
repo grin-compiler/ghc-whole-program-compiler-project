@@ -1,21 +1,31 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, Strict #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE Strict        #-}
+{-# LANGUAGE UnboxedTuples #-}
 module Stg.Interpreter.PrimOp.Double where
 
-import GHC.Word
-import GHC.Int
-import GHC.Float
-import GHC.Exts
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
+
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+
+import           GHC.Exts
+import           GHC.Float            (Floating (..), acoshDouble, asinhDouble, atanhDouble, expm1Double, log1pDouble)
+import           GHC.Num              (Num (..))
+import           GHC.Real             (Fractional (..), RealFrac (..), realToFrac)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern IntV i = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern Int64V :: Int -> Atom
-pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V i = IntAtom i -- Literal (LitNumber LitNumInt i)
 pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
 pattern FloatV :: Float -> Atom
-pattern FloatV f  = FloatAtom f
+pattern FloatV f = FloatAtom f
 pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 

@@ -1,8 +1,13 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Parallelism where
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
+
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import           Data.Maybe           (Maybe)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval, StackContinuation (..), stackPush)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 {-
   NOTE:

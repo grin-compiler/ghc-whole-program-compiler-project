@@ -1,4 +1,3 @@
-{-# LANGUAGE ForeignFunctionInterface, GeneralizedNewtypeDeriving #-}
 {- | The internals of the C library libffi -}
 module Foreign.LibFFI.Closure where
 
@@ -14,7 +13,15 @@ import Data.Word
 import Control.Monad
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array
-import Data.List (genericLength)
+import System.IO
+import Data.Int
+import Data.Eq
+import Text.Show
+import Data.Function
+import Control.Applicative
+import Data.List
+import Data.Ord
+import GHC.Err
 
 -- low level API
 
@@ -28,7 +35,8 @@ foreign import ccall "wrapper" wrap_FFI_Impl :: FFI_Impl -> IO (FunPtr FFI_Impl)
 foreign import ccall ffi_prep_closure_loc :: Closure -> Ptr CIF -> FunPtr FFI_Impl -> Ptr Word8 -> Entry -> IO C_ffi_status
 
 newtype Closure = Closure (Ptr Closure)
-newtype Entry = Entry (FunPtr Entry) deriving (Eq, Ord, Show, Storable)
+newtype Entry = Entry (FunPtr Entry)
+  deriving newtype (Eq, Ord, Show, Storable)
 
 foreign import ccall ffi_closure_alloc :: Int -> Ptr Entry -> IO Closure
 foreign import ccall ffi_closure_free :: Closure -> IO ()

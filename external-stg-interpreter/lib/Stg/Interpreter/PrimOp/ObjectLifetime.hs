@@ -1,8 +1,12 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.ObjectLifetime where
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
+
+import           Data.Function        (($))
+import           Data.Maybe           (Maybe)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval, StackContinuation (..), stackPush)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

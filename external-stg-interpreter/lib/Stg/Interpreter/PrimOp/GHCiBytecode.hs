@@ -1,8 +1,9 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.GHCiBytecode where
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Maybe           (Maybe)
+
+import           Stg.Interpreter.Base (Atom, M, PrimOpEval)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback  = fallback

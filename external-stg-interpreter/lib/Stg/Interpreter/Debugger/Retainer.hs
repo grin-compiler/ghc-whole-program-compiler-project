@@ -1,29 +1,41 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.Debugger.Retainer
  ( exportRetainerGraph
 -- , exportRetainerDominatorTree
  ) where
 
-import Control.Monad.Writer
-import Control.Monad.State
-import Data.Maybe
-import Data.Bimap ( Bimap )
-import qualified Data.Bimap as Bimap
-import Data.Map (Map)
-import Data.Set (Set)
-import Data.IntMap.Strict (IntMap)
-import Data.IntSet (IntSet)
-import qualified Data.Set as Set
-import qualified Data.IntSet as IntSet
-import qualified Data.IntMap.Strict as IntMap
-import qualified Data.Map as Map
-import qualified Data.ByteString.Char8 as BS8
-import System.IO
-import Stg.Interpreter.Base
-import Stg.Interpreter.GC.GCRef
-import Stg.Interpreter.GC.LiveDataAnalysis
-import Stg.Interpreter.Debugger.TraverseState
-import Control.Monad
+import           Control.Applicative                    (Applicative (..))
+import           Control.Monad                          (forM_, when)
+import           Control.Monad.State                    (MonadState (..), StateT, evalStateT, execStateT, gets, modify')
+import           Control.Monad.Writer                   (MonadIO (..), MonadWriter (..), execWriter)
+
+import           Data.Bimap                             (Bimap)
+import qualified Data.Bimap                             as Bimap
+import           Data.Bool                              (Bool (..), not, otherwise)
+import qualified Data.ByteString.Char8                  as BS8
+import           Data.Function                          (flip, id, ($), (.))
+import           Data.Int                               (Int)
+import           Data.IntMap.Strict                     (IntMap)
+import qualified Data.IntMap.Strict                     as IntMap
+import           Data.IntSet                            (IntSet)
+import qualified Data.IntSet                            as IntSet
+import           Data.List                              (drop, (++))
+import           Data.Map                               (Map)
+import qualified Data.Map                               as Map
+import           Data.Maybe                             (Maybe (..), mapMaybe, maybe)
+import           Data.Monoid                            (Monoid (..))
+import           Data.Set                               (Set)
+import qualified Data.Set                               as Set
+import           Data.String                            (String)
+
+import           Stg.Interpreter.Base                   (GCSymbol (..), StgState (..))
+import           Stg.Interpreter.Debugger.TraverseState (getHeapObjectCategory, getHeapObjectSummary)
+import           Stg.Interpreter.GC.GCRef               (RefNamespace (..), decodeRef)
+import           Stg.Interpreter.GC.LiveDataAnalysis    (withGCRootFacts, withReferenceFacts)
+
+import           System.IO                              (FilePath, Handle, IO, IOMode (..), hPutStr, print, withFile)
+
+import           Text.Show                              (Show (..))
+
 
 
 data RetainerState

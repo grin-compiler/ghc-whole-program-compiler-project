@@ -1,12 +1,21 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, Strict #-}
+{-# LANGUAGE Strict #-}
 module Stg.Interpreter.PrimOp.Int8 where
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
 
-import Data.Int
-import Data.Word
-import Data.Bits
+import           Data.Bits            (Bits (unsafeShiftL, unsafeShiftR))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($), (.))
+import           Data.Int             (Int, Int8)
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+import           Data.Word            (Word, Word8)
+
+import           GHC.Num              (Num (..))
+import           GHC.Real             (Integral (..), fromIntegral)
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)

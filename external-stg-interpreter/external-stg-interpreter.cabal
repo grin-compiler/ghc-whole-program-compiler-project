@@ -11,7 +11,137 @@ copyright:           (c) 2020 Csaba Hruska
 category:            Development
 build-type:          Simple
 
+common lang
+  default-language: Haskell2010
+  default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
+    DoAndIfThenElse
+    PatternSynonyms
+  ghc-options:
+    -Wall
+    -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns
+    -Wincomplete-record-updates
+    -Wredundant-constraints
+    -Widentities
+    -Wunused-packages
+    -Wmissing-deriving-strategies
+
 library
+  hs-source-dirs:      lib
+  default-language:    Haskell2010
+  default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
+    DoAndIfThenElse
+    PatternSynonyms
+  import:              lang
+  ghc-options:
+    -Wall
+    -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns
+    -Wincomplete-record-updates
+    -- -Wredundant-constraints
+    -Widentities
+    -Wunused-packages
+    -Wmissing-deriving-strategies
+  ghc-options:         -Wall -fobject-code -O2
+  build-depends:       base,
+                       time,
+                       unix,
+                       filepath,
+                       directory,
+                       libffi,
+                       zip,
+                       yaml,
+                       text,
+                       bytestring,
+                       containers,
+                       transformers,
+                       primitive,
+                       vector,
+                       mtl,
+                       inline-c,
+                       unagi-chan,
+                       pretty-terminal,
+                       pretty-simple,
+                       bimap,
+                       souffle-haskell,
+                       external-stg-syntax,
+                       external-stg
   exposed-modules:
     Foreign.LibFFI.Closure
 
@@ -74,34 +204,6 @@ library
     Stg.Interpreter.PrimOp.Word8
     Stg.Interpreter.PrimOp.Word
 
-  hs-source-dirs:      lib
-  ghc-options:         -Wall -fobject-code -O2
-  build-depends:       base,
-                       time,
-                       unix,
-                       filepath,
-                       directory,
-                       libffi,
-                       zip,
-                       yaml,
-                       text,
-                       bytestring,
-                       containers,
-                       transformers,
-                       primitive,
-                       vector,
-                       mtl,
-                       inline-c,
-                       unagi-chan,
-                       pretty-terminal,
-                       pretty-simple,
-                       dom-lt,
-                       bimap,
-                       souffle-haskell,
-                       external-stg-syntax,
-                       external-stg
-  default-language:    Haskell2010
-
   include-dirs:         datalog
 
 
@@ -115,23 +217,19 @@ library
     extra-libraries:      gomp
 
 executable ext-stg-interpreter
-  default-language:    Haskell2010
+  import:              lang
   hs-source-dirs:      app
   main-is:             ExtStgInterpreter.hs
   build-depends:       base < 5.0,
-                       containers,
-                       bytestring,
                        unagi-chan,
-                       unix,
                        shellwords,
                        optparse-applicative,
-                       external-stg,
                        external-stg-interpreter
 
   ghc-options: -rtsopts -threaded
 
 executable run-stgi-testsuite
-  default-language:    Haskell2010
+  import:              lang
   hs-source-dirs:      app
   main-is:             RunStgiTestsuite.hs
   build-depends:       base < 5.0,
@@ -139,7 +237,8 @@ executable run-stgi-testsuite
                        filepath,
                        directory,
                        bytestring,
-                       ansi-wl-pprint,
+                       prettyprinter,
+                       prettyprinter-ansi-terminal,
                        timeit,
                        filemanip,
                        async-pool,
@@ -148,11 +247,10 @@ executable run-stgi-testsuite
   ghc-options: -rtsopts -threaded
 
 test-suite primop-test
-  default-language:    Haskell2010
+  import:              lang
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  default-extensions:  OverloadedStrings
   build-depends:       base >=4.11
                      , mtl
                      , external-stg

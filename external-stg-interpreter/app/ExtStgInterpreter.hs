@@ -1,15 +1,30 @@
-{-# LANGUAGE LambdaCase, RecordWildCards #-}
-
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
-import Control.Concurrent.MVar
+import           Control.Concurrent.MVar               (newEmptyMVar)
 
-import Options.Applicative
-import Data.Semigroup ((<>))
+import           Data.Bool                             (Bool (..))
+import           Data.Either                           (Either (..))
+import           Data.Eq                               (Eq (..))
+import           Data.Function                         (($))
+import           Data.List                             (dropWhile, (++))
+import           Data.Maybe                            (Maybe (..))
+import           Data.Monoid                           (Monoid (..), (<>))
+import           Data.String                           (String, words)
+
+import           GHC.Err                               (error)
+
+import           Options.Applicative                   (Alternative (..), Applicative (..), Parser, argument,
+                                                        execParser, help, helper, info, long, metavar, optional, short,
+                                                        str, strOption, switch, value, (<$>), (<**>))
+
 import qualified ShellWords
 
-import Stg.Interpreter.Debugger.UI
-import Stg.Interpreter.Base
-import Stg.Interpreter
+import           Stg.Interpreter                       (loadAndRunProgram)
+import           Stg.Interpreter.Base                  (DebugSettings (..), DebugState (..), DebuggerChan (..),
+                                                        defaultDebugSettings)
+import           Stg.Interpreter.Debugger.UI           (debugProgram)
+
+import           System.IO                             (FilePath, IO, readFile)
+
 
 data StgIOpts
   = StgIOpts
@@ -50,10 +65,10 @@ main = do
   argsFromFile <- case appArgsFile of
     Nothing -> pure []
     Just fname -> do
-      str <- readFile fname
-      case ShellWords.parse str of
-        Left err  -> error err
-        Right l   -> pure l
+      str' <- readFile fname
+      case ShellWords.parse str' of
+        Left err -> error err
+        Right l  -> pure l
   let appArgs0  = argsFromFile ++ words appArgs1 ++ appArgs2 ++ appArgs3
       appArgs   = if ignoreRtsArgs then dropRtsOpts appArgs0 else appArgs0
 
@@ -76,7 +91,7 @@ main = do
     False -> loadAndRunProgram isQuiet switchCWD appPath appArgs dbgChan DbgRunProgram doTracing debugSettings
 
 dropRtsOpts :: [String] -> [String]
-dropRtsOpts [] = []
+dropRtsOpts []              = []
 dropRtsOpts ("+RTS" : args) = dropRtsOpts $ dropWhile (/= "-RTS") args
 dropRtsOpts ("-RTS" : args) = dropRtsOpts args
-dropRtsOpts (a : args) = a : dropRtsOpts args
+dropRtsOpts (a : args)      = a : dropRtsOpts args

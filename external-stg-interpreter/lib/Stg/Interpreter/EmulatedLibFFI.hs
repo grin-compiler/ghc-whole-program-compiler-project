@@ -1,25 +1,33 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.EmulatedLibFFI where
 
 ----- FFI experimental
-import qualified GHC.Exts as Exts
-import qualified Data.ByteString as BS
+import           Control.Applicative        (Applicative (..), (<$>))
+import           Control.Monad.State.Strict (MonadIO (..), gets)
 
-import qualified Data.Primitive.ByteArray as BA
------
-import System.IO
-import System.FilePath
-import Text.Printf
+import qualified Data.ByteString            as BS
+import           Data.Char                  (Char)
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($), (.))
+import           Data.Int                   (Int)
+import           Data.List                  (filter, (++))
+import           Data.Maybe                 (Maybe)
+import qualified Data.Primitive.ByteArray   as BA
+import qualified Data.Text                  as Text
+import qualified Data.Text.Encoding         as Text
+import           Data.Word                  (Word)
 
+import qualified GHC.Exts                   as Exts
+import           GHC.Float                  (Double, Float)
 
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
+import           Stg.Interpreter.Base       (Atom (..), ByteArrayDescriptor (..), EvalOnNewThread, M, PtrOrigin (..),
+                                             Rts (..), StgState (..), lookupByteArrayDescriptorI, stgErrorM)
+import           Stg.Syntax                 (CCallTarget (..), ForeignCall (..), Lit (..), TyCon, Type)
 
+import           System.FilePath            (takeBaseName)
+import           System.IO                  (hFlush, hPutStr, hPutStrLn, stderr)
 
-import Control.Monad.State.Strict
-
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Text.Printf                (printf)
+import           Text.Show                  (Show (..))
 
 pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)

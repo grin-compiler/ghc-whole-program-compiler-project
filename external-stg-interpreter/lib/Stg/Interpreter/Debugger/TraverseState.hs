@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.Debugger.TraverseState
  ( exportReachableGraph
  , exportHeapGraph
@@ -6,15 +5,29 @@ module Stg.Interpreter.Debugger.TraverseState
  , getHeapObjectCategory
  ) where
 
-import Control.Monad.State
-import Data.Set (Set)
-import qualified Data.Set as Set
-import qualified Data.IntMap as IntMap
-import qualified Data.ByteString.Char8 as BS8
-import System.IO
-import Stg.Interpreter.Base
-import Stg.Interpreter.GC.GCRef
-import Control.Monad
+import           Control.Applicative      (Applicative (..))
+import           Control.Monad            (forM_, when)
+import           Control.Monad.State      (MonadIO (..), MonadState (..), StateT, evalStateT)
+
+import           Data.Bool                (Bool (..), not)
+import qualified Data.ByteString.Char8    as BS8
+import           Data.Eq                  (Eq (..))
+import           Data.Function            (flip, ($))
+import qualified Data.IntMap              as IntMap
+import           Data.List                (drop, (++))
+import           Data.Maybe               (Maybe (..))
+import           Data.Set                 (Set)
+import qualified Data.Set                 as Set
+import           Data.String              (String)
+
+import           GHC.Err                  (error)
+
+import           Stg.Interpreter.Base     (GCSymbol (..), Heap, HeapObject (..), StgState (..))
+import           Stg.Interpreter.GC.GCRef (RefNamespace (..), VisitGCRef (..), decodeRef, encodeRef)
+
+import           System.IO                (FilePath, Handle, IO, IOMode (..), hPutStr, print, withFile)
+
+import           Text.Show                (Show (..))
 
 {-
   export GCSymbol's reachability graph as gephi compatible .tsv file
@@ -87,26 +100,26 @@ addEdgesFrom hNode hEdge stgState@StgState{..} source isRoot = do
           addEdgesFrom hNode hEdge stgState target False
 
     case ns of
-      NS_Array              -> emitEdge $ IntMap.lookup idx ssArrays
-      NS_ArrayArray         -> emitEdge $ IntMap.lookup idx ssArrayArrays
-      NS_HeapPtr            -> emitEdge $ IntMap.lookup idx ssHeap
-      NS_MutableArray       -> emitEdge $ IntMap.lookup idx ssMutableArrays
-      NS_MutableArrayArray  -> emitEdge $ IntMap.lookup idx ssMutableArrayArrays
-      NS_MutableByteArray   -> pure () -- IntMap.lookup idx ssMutableByteArrays
-      NS_MutVar             -> emitEdge $ IntMap.lookup idx ssMutVars
-      NS_TVar               -> emitEdge $ IntMap.lookup idx ssTVars
-      NS_MVar               -> emitEdge $ IntMap.lookup idx ssMVars
-      NS_SmallArray         -> emitEdge $ IntMap.lookup idx ssSmallArrays
-      NS_SmallMutableArray  -> emitEdge $ IntMap.lookup idx ssSmallMutableArrays
+      NS_Array             -> emitEdge $ IntMap.lookup idx ssArrays
+      NS_ArrayArray        -> emitEdge $ IntMap.lookup idx ssArrayArrays
+      NS_HeapPtr           -> emitEdge $ IntMap.lookup idx ssHeap
+      NS_MutableArray      -> emitEdge $ IntMap.lookup idx ssMutableArrays
+      NS_MutableArrayArray -> emitEdge $ IntMap.lookup idx ssMutableArrayArrays
+      NS_MutableByteArray  -> pure () -- IntMap.lookup idx ssMutableByteArrays
+      NS_MutVar            -> emitEdge $ IntMap.lookup idx ssMutVars
+      NS_TVar              -> emitEdge $ IntMap.lookup idx ssTVars
+      NS_MVar              -> emitEdge $ IntMap.lookup idx ssMVars
+      NS_SmallArray        -> emitEdge $ IntMap.lookup idx ssSmallArrays
+      NS_SmallMutableArray -> emitEdge $ IntMap.lookup idx ssSmallMutableArrays
 {-
       NS_StableName
         | Just obj <- IntMap.lookup idx  -- TODO
 -}
-      NS_StablePointer      -> emitEdge $ IntMap.lookup idx ssStablePointers
-      NS_WeakPointer        -> emitEdge $ IntMap.lookup idx ssWeakPointers
-      NS_Thread             -> emitEdge $ IntMap.lookup idx ssThreads
+      NS_StablePointer     -> emitEdge $ IntMap.lookup idx ssStablePointers
+      NS_WeakPointer       -> emitEdge $ IntMap.lookup idx ssWeakPointers
+      NS_Thread            -> emitEdge $ IntMap.lookup idx ssThreads
 
-      _ -> error $ "unknown StgState item: " ++ show (ns, idx)
+      _                    -> error $ "unknown StgState item: " ++ show (ns, idx)
 
 getHeapObjectSummary :: HeapObject -> String
 getHeapObjectSummary = \case

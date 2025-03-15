@@ -1,14 +1,26 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, TypeApplications, Strict #-}
-{-# LANGUAGE ScopedTypeVariables, MagicHash #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE Strict    #-}
 module Stg.Interpreter.PrimOp.Word where
 
-import Data.Word
-import Data.Bits
-import GHC.Exts
-import GHC.Word
+import           Control.Applicative  (Applicative (..))
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Bits            (Bits (..), FiniteBits (..), testBitDefault)
+import           Data.Bool            ((||))
+import           Data.Enum            (Bounded (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($), (.))
+import           Data.List            (foldl)
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+import           Data.Word            (Word16, Word32, Word64, Word8, byteSwap16, byteSwap32, byteSwap64)
+
+import           GHC.Exts
+import           GHC.Num              (Integer, Num (..))
+import           GHC.Real             (Integral (..), fromIntegral)
+import           GHC.Word             (Word64 (..))
+
+import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Syntax           (Name, TyCon, Type)
 
 type PrimWord = Word64
 
@@ -125,34 +137,34 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "popCnt#",   [WordV a])           -> pure [WordV . fromIntegral $ popCount a]
 
   -- pdep8# :: Word# -> Word# -> Word#
-  ( "pdep8#", [WordV a, WordV b])     -> pure [WordV $ fromIntegral $ pdep8 (fromIntegral a) (fromIntegral b)]
+  ( "pdep8#", [WordV a, WordV b])     -> pure [WordV $ pdep8 a b]
 
   -- pdep16# :: Word# -> Word# -> Word#
-  ( "pdep16#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pdep16 (fromIntegral a) (fromIntegral b)]
+  ( "pdep16#", [WordV a, WordV b])    -> pure [WordV $ pdep16 a b]
 
   -- pdep32# :: Word# -> Word# -> Word#
-  ( "pdep32#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pdep32 (fromIntegral a) (fromIntegral b)]
+  ( "pdep32#", [WordV a, WordV b])    -> pure [WordV $ pdep32 a b]
 
   -- pdep64# :: Word64# -> Word64# -> Word64#
   ( "pdep64#", [Word64V a, Word64V b])  -> pure [Word64V $ fromIntegral $ pdep64 (fromIntegral a) (fromIntegral b)]
 
   -- pdep# :: Word# -> Word# -> Word#
-  ( "pdep#", [WordV a, WordV b])      -> pure [WordV $ fromIntegral $ pdep (fromIntegral a) (fromIntegral b)]
+  ( "pdep#", [WordV a, WordV b])      -> pure [WordV $ pdep a b]
 
   -- pext8# :: Word# -> Word# -> Word#
-  ( "pext8#", [WordV a, WordV b])     -> pure [WordV $ fromIntegral $ pext8 (fromIntegral a) (fromIntegral b)]
+  ( "pext8#", [WordV a, WordV b])     -> pure [WordV $ pext8 a b]
 
   -- pext16# :: Word# -> Word# -> Word#
-  ( "pext16#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pext16 (fromIntegral a) (fromIntegral b)]
+  ( "pext16#", [WordV a, WordV b])    -> pure [WordV $ pext16 a b]
 
   -- pext32# :: Word# -> Word# -> Word#
-  ( "pext32#", [WordV a, WordV b])    -> pure [WordV $ fromIntegral $ pext32 (fromIntegral a) (fromIntegral b)]
+  ( "pext32#", [WordV a, WordV b])    -> pure [WordV $ pext32 a b]
 
   -- pext64# :: Word64# -> Word64# -> Word64#
   ( "pext64#", [Word64V a, Word64V b])    -> pure [Word64V $ fromIntegral $ pext64 (fromIntegral a) (fromIntegral b)]
 
   -- pext# :: Word# -> Word# -> Word#
-  ( "pext#", [WordV a, WordV b])      -> pure [WordV $ fromIntegral $ pext (fromIntegral a) (fromIntegral b)]
+  ( "pext#", [WordV a, WordV b])      -> pure [WordV $ pext a b]
 
   -- clz8# :: Word# -> Word#
   ( "clz8#",   [WordV a]) -> pure [WordV . fromIntegral $ countLeadingZeros (fromIntegral a :: Word8)]
@@ -167,7 +179,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "clz64#",  [Word64V a]) -> pure [WordV . fromIntegral $ countLeadingZeros (fromIntegral a :: Word64)]
 
   -- clz# :: Word# -> Word#
-  ( "clz#",    [WordV a]) -> pure [WordV . fromIntegral $ countLeadingZeros (fromIntegral a :: Word)]
+  ( "clz#",    [WordV a]) -> pure [WordV . fromIntegral $ countLeadingZeros (a :: Word)]
 
   -- ctz8#  :: Word# -> Word#
   ( "ctz8#",   [WordV a]) -> pure [WordV . fromIntegral $ countTrailingZeros (fromIntegral a :: Word8)]
@@ -182,7 +194,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "ctz64#",  [Word64V a]) -> pure [WordV . fromIntegral $ countTrailingZeros (fromIntegral a :: Word64)]
 
   -- ctz# :: Word# -> Word#
-  ( "ctz#",    [WordV a]) -> pure [WordV . fromIntegral $ countTrailingZeros (fromIntegral a :: Word)]
+  ( "ctz#",    [WordV a]) -> pure [WordV . fromIntegral $ countTrailingZeros (a :: Word)]
 
   -- byteSwap16# :: Word# -> Word#
   ( "byteSwap16#", [WordV a])   -> pure [WordV . fromIntegral $ byteSwap16 (fromIntegral a :: Word16)]

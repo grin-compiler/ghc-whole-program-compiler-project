@@ -1,30 +1,42 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, TupleSections #-}
-
 module Stg.Interpreter.Debugger.Internal where
 
-import Text.Printf
-import qualified Text.Read as Text
-import Control.Monad.State
-import qualified Data.List as List
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-import qualified Data.IntMap as IntMap
-import qualified Data.IntSet as IntSet
-import Data.Tree
-import System.Console.Pretty
+import           Control.Applicative                 (Applicative (..), (<$>))
+import           Control.Concurrent                  (myThreadId)
+import           Control.Concurrent.MVar             (putMVar)
+import           Control.Monad                       (Functor (..), Monad (..), forM_, mapM, unless)
+import           Control.Monad.State                 (MonadIO (..), MonadState (get), gets, modify')
 
-import Control.Concurrent (myThreadId)
-import Control.Concurrent.MVar
+import           Data.Bool                           (Bool (..))
+import           Data.Eq                             (Eq (..))
+import           Data.Function                       (const, ($), (.))
+import           Data.Int                            (Int)
+import qualified Data.IntMap                         as IntMap
+import qualified Data.IntSet                         as IntSet
+import           Data.List                           (foldr, length, map, maximum, reverse, take, (++))
+import qualified Data.List                           as List
+import qualified Data.Map                            as Map
+import           Data.Maybe                          (Maybe (..))
+import qualified Data.Set                            as Set
+import           Data.String                         (String, unlines, words)
+import           Data.Tree                           (Tree, drawTree, unfoldTreeM)
 
-import Stg.Interpreter.Base
-import Stg.Syntax
+import           Stg.Interpreter.Base                (AddressState (..), DebugOutput (..), DebuggerChan (..), GCSymbol,
+                                                      M, StgState (..), debugPrintHeapObject, getThreadState)
+import           Stg.Interpreter.Debugger.Datalog    (exportStgState)
+import           Stg.Interpreter.Debugger.Region     (addRegion, delRegion, dumpHeapM, dumpHeapObject, getRegionHeap,
+                                                      showRegion)
+import qualified Stg.Interpreter.GC                  as GC
+import qualified Stg.Interpreter.GC.GCRef            as GC
+import           Stg.Interpreter.GC.RetainerAnalysis (clearRetanerDb, loadRetainerDb2)
+import           Stg.Syntax                          (Binder (..), Id (..))
 
-import qualified Stg.Interpreter.GC as GC
-import qualified Stg.Interpreter.GC.GCRef as GC
-import Stg.Interpreter.Debugger.Region
-import Stg.Interpreter.GC.RetainerAnalysis
-import Stg.Interpreter.Debugger.Datalog
-import Control.Monad
+import           System.Console.Pretty               (Color (..), Pretty (..), Style (..))
+import           System.IO                           (print, putStrLn)
+
+import           Text.Printf                         (printf)
+import qualified Text.Read                           as Text
+import           Text.Show                           (Show (..))
+
 
 showOriginTrace :: Int -> M ()
 showOriginTrace i = do

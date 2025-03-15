@@ -1,19 +1,28 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Stg.Interpreter.GC.RetainerAnalysis where
 
-import Control.Monad.State
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Map (Map)
-import qualified Data.Map as Map
+import           Control.Applicative   (Applicative (..), (<$>))
+import           Control.Monad         (Functor (..), unless)
+import           Control.Monad.State   (MonadIO (..), gets, modify')
 
-import System.Directory
-import System.FilePath
-import Text.Printf
+import           Data.Bool             (Bool)
 import qualified Data.ByteString.Char8 as BS8
+import           Data.Function         (($), (.))
+import           Data.List             ((++))
+import           Data.Map              (Map)
+import qualified Data.Map              as Map
+import           Data.Monoid           (Monoid (..))
+import           Data.Set              (Set)
+import qualified Data.Set              as Set
+import           Data.String           (String)
 
-import Stg.Interpreter.Base
-import Control.Monad
+import           Stg.Interpreter.Base  (GCSymbol (..), M, StgState (..))
+
+import           System.Directory      (makeAbsolute)
+import           System.FilePath       ((</>))
+import           System.IO             (IO, putStrLn)
+
+import           Text.Printf           (printf)
+import           Text.Show             (Show (..))
 
 loadMap :: String -> IO (Map GCSymbol (Set GCSymbol))
 loadMap factPath = do

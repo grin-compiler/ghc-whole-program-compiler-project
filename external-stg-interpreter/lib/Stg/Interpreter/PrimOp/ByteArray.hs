@@ -1,20 +1,38 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.ByteArray where
 
-import Data.Bits
-import Data.Int
-import Data.Word
-import Data.Char
-import Foreign.Ptr
-import Foreign.Storable
-import Foreign.Marshal.Utils
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import qualified Data.Primitive.ByteArray as BA
+import           Control.Applicative      (Applicative (..), (<$>))
+import           Control.Monad            (when)
+import           Control.Monad.State      (MonadIO (..), gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import Control.Monad
+import           Data.Bits                (Bits (..))
+import           Data.Bool                (Bool (..))
+import           Data.Char                (Char, chr, ord)
+import           Data.Enum                (Enum (..))
+import           Data.Eq                  (Eq ((==)))
+import           Data.Function            (($), (.))
+import           Data.Int                 (Int, Int16, Int32, Int64, Int8)
+import qualified Data.IntMap              as IntMap
+import           Data.List                ((++))
+import           Data.Maybe               (Maybe (..))
+import           Data.Ord                 (Ordering (..))
+import qualified Data.Primitive.ByteArray as BA
+import           Data.Word                (Word, Word16, Word32, Word64, Word8)
+
+import           Foreign.Marshal.Utils    (copyBytes, fillBytes)
+import           Foreign.Ptr              (Ptr, castPtr, plusPtr, ptrToIntPtr)
+import           Foreign.Storable         (Storable (..))
+
+import           GHC.Float                (Double, Float)
+import           GHC.Num                  (Num (..))
+import           GHC.Real                 (fromIntegral)
+
+import           Stg.Interpreter.Base     (Atom (..), ByteArrayDescriptor (..), ByteArrayIdx (..), M, PrimOpEval,
+                                           PtrOrigin (..), StgState (..), lookupByteArrayDescriptor, stgErrorM)
+import           Stg.Syntax               (Lit (..), Name, TyCon, Type)
+
+import           System.IO                (IO)
+
+import           Text.Show                (Show (..))
 
 pattern CharV :: Char -> Atom
 pattern CharV c   = Literal (LitChar c)
@@ -769,9 +787,9 @@ evalPrimOp fallback op args t tc = case (op, args) of
     baA <- lookupByteArray baIdA
     baB <- lookupByteArray baIdB
     case BA.compareByteArrays baA offsetA baB offsetB length' of
-      LT  -> pure [IntV (-1)]
-      EQ  -> pure [IntV 0]
-      GT  -> pure [IntV 1]
+      LT -> pure [IntV (-1)]
+      EQ -> pure [IntV 0]
+      GT -> pure [IntV 1]
 
   ---------------------------------------------
   --    copy and fill

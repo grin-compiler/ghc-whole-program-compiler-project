@@ -1,17 +1,35 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
+{-# LANGUAGE QuasiQuotes     #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UnicodeSyntax   #-}
 module Stg.Interpreter.IOManager where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import Data.Time.Clock
+import           Control.Applicative  (Applicative (..))
+import           Control.Monad        (Functor (..), Monad (..), forM_, unless, when)
+import           Control.Monad.State  (MonadIO (..), gets)
 
-import Foreign.C.Types
-import qualified Language.C.Inline as C
+import           Data.Function        (($), (.))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import           Data.List            (maximum, null, (++))
+import           Data.Monoid          ((<>))
+import           Data.Ord             (Ord (..))
+import           Data.Time.Clock      (getCurrentTime)
+import           Data.Tuple           (snd)
 import qualified Data.Vector.Storable as V
 
-import Stg.Interpreter.Base
-import Control.Monad
+import           Foreign.C.Types      (CInt (..), CLong (..))
+
+import           GHC.Err              (error)
+import           GHC.Real             (fromIntegral)
+
+import qualified Language.C.Inline    as C
+
+import           Stg.Interpreter.Base (BlockReason (..), M, StgState (..), ThreadState (..), ThreadStatus (..),
+                                       getThreadState, updateThreadState)
+
+import           System.IO            (IO)
+
+import           Text.Show            (Show (..))
 
 -------- I/O manager
 C.context (C.baseCtx <> C.vecCtx)

@@ -1,11 +1,26 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.MVar where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
+import           Control.Applicative  (Applicative (..))
+import           Control.Monad.State  (MonadState (..), gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Enum            (Enum (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import           Data.List            ((++))
+import           Data.Maybe           (Maybe (..))
+import           Data.Word            (Word)
+
+import           GHC.Err              (error)
+
+import           Stg.Interpreter.Base (Atom (..), BlockReason (..), M, MVarDescriptor (..), PrimOpEval,
+                                       ScheduleReason (..), StackContinuation (..), StgState (..), ThreadState (..),
+                                       ThreadStatus (..), getCurrentThreadState, getThreadState, lookupMVar, stackPush,
+                                       updateThreadState)
+import           Stg.Syntax           (Name, TyCon, Type)
+
+import           Text.Show            (Show (..))
 
 pattern IntV :: Int -> Atom
 pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)

@@ -1,13 +1,23 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings, PatternSynonyms #-}
 
 module Stg.Interpreter.PrimCall where
 
-import Control.Monad.State.Strict
-import Foreign
+import           Control.Applicative               (Applicative (..))
+import           Control.Monad.State.Strict        (MonadIO (..), gets)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Exceptions
+import           Data.Function                     (($))
+import           Data.List                         ((++))
+import           Data.Maybe                        (Maybe)
+
+import           Foreign                           (Ptr, Storable (..), Word, Word32, Word64, castPtr, with)
+
+import           GHC.Float                         (Double, Float)
+import           GHC.Real                          (fromIntegral)
+
+import           Stg.Interpreter.Base              (Atom (..), M, Rts (..), StgState (..), stgErrorM)
+import           Stg.Interpreter.PrimOp.Exceptions (raiseEx)
+import           Stg.Syntax                        (PrimCall (..), TyCon, Type)
+
+import           Text.Show                         (Show (..))
 
 pattern WordV :: Word -> Atom
 pattern WordV i   = WordAtom i

@@ -1,41 +1,57 @@
-{-# LANGUAGE RecordWildCards, OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies, DeriveGeneric #-}
 module Stg.Interpreter.GC.LiveDataAnalysis where
 
-import GHC.Generics
-import Control.Monad.State
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
-import qualified Data.Map as Map
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.Set (Set)
-import qualified Data.Set as Set
-import System.FilePath
-import System.Directory
-import Foreign.Ptr
-import Text.Printf
-import qualified Data.ByteString.Char8 as BS8
+import           Control.Applicative       (Applicative (..), (<$>))
+import           Control.Monad             (Functor (..), Monad, MonadFail (..), foldM, forM_, unless)
+import           Control.Monad.State       (MonadIO (..))
 
-import Language.Souffle.Compiled (SouffleM)
+import           Data.Bool                 (Bool (..))
+import qualified Data.ByteString.Char8     as BS8
+import           Data.Eq                   (Eq)
+import           Data.Function             (const, ($), (.))
+import           Data.IntMap               (IntMap)
+import qualified Data.IntMap               as IntMap
+import           Data.IntSet               (IntSet)
+import qualified Data.IntSet               as IntSet
+import           Data.List                 ((++))
+import qualified Data.Map                  as Map
+import           Data.Maybe                (Maybe (..))
+import           Data.Ord                  (Ord (..))
+import           Data.Set                  (Set)
+import qualified Data.Set                  as Set
+import           Data.String               (String)
+
+import           Foreign.Ptr               (IntPtr (..), intPtrToPtr)
+
+import           GHC.Err                   (error)
+import           GHC.Generics              (Generic)
+
+import           Language.Souffle.Compiled (SouffleM)
 import qualified Language.Souffle.Compiled as Souffle
 
-import Stg.Interpreter.Base
-import Stg.Interpreter.GC.GCRef
-import Control.Monad
+import           Stg.Interpreter.Base      (Atom (..), BlockReason (..), DebugSettings (..), GCSymbol (..),
+                                            HeapObject (..), PtrOrigin (..), RefSet (..), StackContinuation (..),
+                                            StgState (..), ThreadState (..), ThreadStatus (..), emptyRefSet)
+import           Stg.Interpreter.GC.GCRef  (RefNamespace (..), VisitGCRef (..), decodeRef, encodeRef)
+
+import           System.Directory          (createDirectoryIfMissing, makeAbsolute)
+import           System.FilePath           (FilePath, (</>))
+import           System.IO                 (IO, putStrLn)
+
+import           Text.Printf               (printf)
+import           Text.Show                 (Show (..))
 
 -------- souffle program
 
 data ExtStgGC = ExtStgGC
 
 newtype GCRoot = GCRoot String
-  deriving (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic)
 
 data Reference = Reference String String
-  deriving (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic)
 
 newtype MaybeDeadlockingThread = MaybeDeadlockingThread String
-  deriving (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic)
 
 instance Souffle.Program ExtStgGC where
   type ProgramFacts ExtStgGC = [GCRoot, Reference, MaybeDeadlockingThread]
@@ -143,7 +159,7 @@ withGCRootFacts StgState{..} localGCRoots addGCRoot = do
 
 withReferenceFacts :: forall m . Monad m => StgState -> (GCSymbol -> GCSymbol -> m ()) -> m ()
 withReferenceFacts StgState{..} addReference = do
-  let addRefs :: (VisitGCRef a, Monad m) => IntMap a -> RefNamespace -> m ()
+  let addRefs :: (VisitGCRef a) => IntMap a -> RefNamespace -> m ()
       addRefs im ns = do
         let l = IntMap.toList im
         forM_ l $ \(i, v) -> visitGCRef (addReference (encodeRef i ns)) v
@@ -217,21 +233,21 @@ collectGCSymbol dd@RefSet{..} sym = do
   -- HINT: decode datalog value
   let (namespace, idx) = decodeRef sym
   pure $ case namespace of
-    NS_Array              -> dd {rsArrays             = IntSet.insert idx rsArrays}
-    NS_ArrayArray         -> dd {rsArrayArrays        = IntSet.insert idx rsArrayArrays}
-    NS_HeapPtr            -> dd {rsHeap               = IntSet.insert idx rsHeap}
-    NS_MutableArray       -> dd {rsMutableArrays      = IntSet.insert idx rsMutableArrays}
-    NS_MutableArrayArray  -> dd {rsMutableArrayArrays = IntSet.insert idx rsMutableArrayArrays}
-    NS_MutableByteArray   -> dd {rsMutableByteArrays  = IntSet.insert idx rsMutableByteArrays}
-    NS_MutVar             -> dd {rsMutVars            = IntSet.insert idx rsMutVars}
-    NS_TVar               -> dd {rsTVars              = IntSet.insert idx rsTVars}
-    NS_MVar               -> dd {rsMVars              = IntSet.insert idx rsMVars}
-    NS_SmallArray         -> dd {rsSmallArrays        = IntSet.insert idx rsSmallArrays}
-    NS_SmallMutableArray  -> dd {rsSmallMutableArrays = IntSet.insert idx rsSmallMutableArrays}
-    NS_StableName         -> dd {rsStableNames        = IntSet.insert idx rsStableNames}
-    NS_WeakPointer        -> dd {rsWeakPointers       = IntSet.insert idx rsWeakPointers}
-    NS_StablePointer      -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
-    NS_Thread             -> dd {rsThreads            = IntSet.insert idx rsThreads}
+    NS_Array             -> dd {rsArrays             = IntSet.insert idx rsArrays}
+    NS_ArrayArray        -> dd {rsArrayArrays        = IntSet.insert idx rsArrayArrays}
+    NS_HeapPtr           -> dd {rsHeap               = IntSet.insert idx rsHeap}
+    NS_MutableArray      -> dd {rsMutableArrays      = IntSet.insert idx rsMutableArrays}
+    NS_MutableArrayArray -> dd {rsMutableArrayArrays = IntSet.insert idx rsMutableArrayArrays}
+    NS_MutableByteArray  -> dd {rsMutableByteArrays  = IntSet.insert idx rsMutableByteArrays}
+    NS_MutVar            -> dd {rsMutVars            = IntSet.insert idx rsMutVars}
+    NS_TVar              -> dd {rsTVars              = IntSet.insert idx rsTVars}
+    NS_MVar              -> dd {rsMVars              = IntSet.insert idx rsMVars}
+    NS_SmallArray        -> dd {rsSmallArrays        = IntSet.insert idx rsSmallArrays}
+    NS_SmallMutableArray -> dd {rsSmallMutableArrays = IntSet.insert idx rsSmallMutableArrays}
+    NS_StableName        -> dd {rsStableNames        = IntSet.insert idx rsStableNames}
+    NS_WeakPointer       -> dd {rsWeakPointers       = IntSet.insert idx rsWeakPointers}
+    NS_StablePointer     -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
+    NS_Thread            -> dd {rsThreads            = IntSet.insert idx rsThreads}
     -- _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
 
 readbackLiveData :: FilePath -> Bool -> SouffleM RefSet

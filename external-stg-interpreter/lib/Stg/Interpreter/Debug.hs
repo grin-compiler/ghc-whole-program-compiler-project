@@ -1,24 +1,39 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+
 module Stg.Interpreter.Debug where
 
-import qualified GHC.Exts as Exts
-import qualified Data.Set as Set
-import qualified Data.IntMap as IntMap
-import qualified Data.Primitive.ByteArray as BA
-import qualified Data.ByteString.Internal as BS
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Map.Strict as StrictMap
-import Data.List (intercalate, sortOn)
-import System.IO
-import System.Directory
-import System.FilePath
-import Text.Printf
+import           Control.Applicative        ((<$>))
+import           Control.Monad              (Functor (..), forM_, mapM_, unless)
+import           Control.Monad.State.Strict (MonadIO (..), gets)
 
-import Control.Monad.State.Strict
+import           Data.Bool                  (Bool (..))
+import qualified Data.ByteString.Char8      as BS8
+import qualified Data.ByteString.Internal   as BS
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($), (.))
+import           Data.Int                   (Int)
+import qualified Data.IntMap                as IntMap
+import           Data.List                  (intercalate, maximum, minimum, null, sortOn, sum, (++))
+import qualified Data.Map.Strict            as StrictMap
+import           Data.Ord                   (Ord (..))
+import qualified Data.Primitive.ByteArray   as BA
+import qualified Data.Set                   as Set
+import           Data.String                (unlines)
+import           Data.Tuple                 (snd)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import Control.Monad
+import qualified GHC.Exts                   as Exts
+import           GHC.Num                    (Num (..))
+
+import           Stg.Interpreter.Base       (ByteArrayDescriptor (..), CallGraph (..), EvalOnNewThread, HeapObject (..),
+                                             M, Region (..), Rts (..), StaticOrigin (..), StgState (..))
+import           Stg.Syntax                 (Binder (..), DC (..), DataCon (..), Id (Id), getModuleName, getUnitId)
+
+import           System.Directory           (createDirectoryIfMissing, makeAbsolute)
+import           System.FilePath            ((</>))
+import           System.IO                  (FilePath, IO, IOMode (..), hPutStrLn, print, putStrLn, withFile)
+
+import           Text.Printf                (printf)
+import           Text.Show                  (Show (..))
+
 
 showCons :: Int -> M ()
 showCons addr = do
