@@ -12,6 +12,7 @@ import Text.Printf
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Text as T
 import Control.Monad.Trans.Maybe
+import Control.Monad
 
 import Data.Functor.Foldable
 import qualified Data.Foldable

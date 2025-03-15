@@ -4,6 +4,8 @@ packages:
   external-stg
   external-stg-interpreter
   wpc-plugin
+  -- lambda
+  -- external-stg-compiler
 
 source-repository-package
   type: git

@@ -9,7 +9,7 @@ import Data.Functor.Foldable as Foldable
 import Data.Map (Map)
 import qualified Data.Map as Map
 
-subst :: Ord a => fmap a a -> a -> a
+subst :: Ord a => Map a a -> a -> a
 subst env x = Map.findWithDefault x x env
 
 -- monadic recursion schemes

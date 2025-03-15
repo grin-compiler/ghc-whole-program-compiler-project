@@ -13,6 +13,7 @@ import Transformations.Names hiding (mkNameEnv)
 import Transformations.Util hiding (foldNameDefExpF)
 import Lambda.Syntax
 import Lambda.Util
+import Control.Monad
 
 type Env = Map Name Name
 

@@ -16,6 +16,7 @@ import qualified Data.Map as Map
 import Data.Hashable
 
 import Stg.Syntax
+import Control.Monad
 
 data Env
   = Env

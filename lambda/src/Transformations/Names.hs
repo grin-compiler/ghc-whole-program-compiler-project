@@ -15,7 +15,7 @@ import Lambda.Name
 
 data NameEnv
   = NameEnv
-  { namePool  :: fmap Name Int
+  { namePool  :: Map Name Int
   , nameSet   :: Set Name
   }
 
