@@ -1,29 +1,39 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE LambdaCase #-}
 module WPC.Foreign where
 
-import Control.Monad
-import GHC.Plugins
+import           Control.Monad                 (Functor (..), forM)
 
-import GHC.Driver.Hooks
-import Language.Haskell.Syntax.Decls
-import GHC.HsToCore.Types
-import GHC.Types.ForeignStubs
-import GHC.Data.OrdList
-import GHC.Hs.Extension
-import GHC.Tc.Utils.Monad
-import GHC.HsToCore.Foreign.Decl
-import GHC.Types.ForeignCall
-import GHC.Types.RepType
-import GHC.Core.TyCo.Compare
-import GHC.Core.TyCo.Rep
-import GHC.Tc.Utils.TcType
+import           Data.Bool                     (Bool (..), otherwise)
+import           Data.Function                 (($), (.))
+import           Data.IORef                    (modifyIORef)
+import           Data.List                     (concat, concatMap, map, unzip3, (++))
+import           Data.Maybe                    (Maybe (..), mapMaybe)
+import           Data.Monoid                   (Monoid (..))
+import           Data.String                   (String)
+import           Data.Tuple                    (snd)
 
-import WPC.GlobalEnv
-import WPC.ForeignStubDecls
-import Data.IORef
-import Data.Maybe
-import Data.List
+import           GHC.Core.TyCo.Rep             (Scaled (..))
+import           GHC.Data.OrdList              (OrdList, fromOL)
+import           GHC.Driver.Hooks              (Hooks (..))
+import           GHC.Hs.Extension              (GhcTc)
+import           GHC.HsToCore.Foreign.Decl     (dsForeigns)
+import           GHC.HsToCore.Types            (DsM)
+import           GHC.Plugins                   (Alt (..), Bind (..), Coercion, CoreAlt, CoreBind, CoreExpr, Expr (..),
+                                                FastString, FunctionOrData (..), GenLocated (..), HscEnv (..), Id,
+                                                Literal (..), NamedThing (..), Outputable (..), TyCon, Type,
+                                                anonPiTyBinderType_maybe, coercionLKind, getOccString, liftIO, pprPanic,
+                                                tcSplitTyConApp_maybe, unLoc)
+import           GHC.Tc.Utils.Monad            (Applicative (..), updTopEnv)
+import           GHC.Tc.Utils.TcType           (tcSplitForAllInvisTyVars, tcSplitFunTys, tcSplitIOType_maybe,
+                                                tcSplitPiTys)
+import           GHC.Types.ForeignStubs        (ForeignStubs)
+import           GHC.Types.RepType             (unwrapType)
+
+import           Language.Haskell.Syntax.Decls (CImportSpec (..), ForeignDecl (..), ForeignImport (..), LForeignDecl)
+
+import           Prelude                       (putStrLn)
+
+import           WPC.ForeignStubDecls          (StubDecl (..), StubImpl (..), mergeForeignStubs)
+import           WPC.GlobalEnv                 (GlobalEnv (..), globalEnvIORef)
 
 dsForeignsFun :: [LForeignDecl GhcTc] -> DsM (ForeignStubs, OrdList (Id, CoreExpr))
 dsForeignsFun fos = do
@@ -43,7 +53,7 @@ dsForeignsFun fos = do
     pure (mergeForeignStubs stubList, mconcat bindingList)
 
 mkStubDecl :: ForeignStubs -> OrdList (Id, CoreExpr) -> LForeignDecl GhcTc -> (ForeignStubs, StubDecl)
-mkStubDecl stub bindings (L loc decl) = case decl of
+mkStubDecl stub bindings (L _loc decl) = case decl of
   ForeignImport{..} -> (stub, StubDeclImport fd_fi (mkStubImpl bindings decl))
   ForeignExport{..} -> (stub, StubDeclExport fd_fe (unLoc fd_name))
 
@@ -73,18 +83,18 @@ mkStubImpl bindings decl = case decl of
 
   getWrapperName :: CoreExpr -> [FastString]
   getWrapperName expr = case expr of
-    App e a       -> getWrapperName e ++ getWrapperName a
-    Lam _ e       -> getWrapperName e
-    Let b e       -> goBind b ++ getWrapperName e
-    Case e _ _ l  -> getWrapperName e ++ concatMap goAlt l
-    Cast e _      -> getWrapperName e
-    Tick _ e      -> getWrapperName e
+    App e a                                     -> getWrapperName e ++ getWrapperName a
+    Lam _ e                                     -> getWrapperName e
+    Let b e                                     -> goBind b ++ getWrapperName e
+    Case e _ _ l                                -> getWrapperName e ++ concatMap goAlt l
+    Cast e _                                    -> getWrapperName e
+    Tick _ e                                    -> getWrapperName e
 
-    Var{}         -> []
+    Var{}                                       -> []
     Lit (LitLabel fe_nm _mb_sz_args IsFunction) -> [fe_nm]
-    Lit{}         -> []
-    Type{}        -> []
-    Coercion{}    -> []
+    Lit{}                                       -> []
+    Type{}                                      -> []
+    Coercion{}                                  -> []
 
 getCWrapperDescriptor :: Coercion -> (Bool, String, [String]) -- is IO, result type, arg types
 getCWrapperDescriptor ffiCo = (is_IO_res_ty, showFFIType res_ty, fmap showFFIType fe_arg_tys)
@@ -103,9 +113,9 @@ getCWrapperDescriptor ffiCo = (is_IO_res_ty, showFFIType res_ty, fmap showFFITyp
     -- If it's plain t, return      (t, False)
     (res_ty, is_IO_res_ty) = case tcSplitIOType_maybe orig_res_ty of
                              -- The function already returns IO t
-                             Just (_ioTyCon, res_ty) -> (res_ty, True)
+                             Just (_ioTyCon, res_ty') -> (res_ty', True)
                              -- The function returns t
-                             Nothing                 -> (orig_res_ty, False)
+                             Nothing                  -> (orig_res_ty, False)
 
     showFFIType :: Type -> String
     showFFIType t = getOccString (getName (typeTyCon t))

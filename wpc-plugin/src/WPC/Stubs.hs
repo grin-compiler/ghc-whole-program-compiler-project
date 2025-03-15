@@ -1,28 +1,50 @@
 module WPC.Stubs where
 
-import GHC.Plugins
-import GHC.Types.ForeignStubs
-import GHC.Types.ForeignCall
-import GHC.Driver.CodeOutput
-import GHC.Driver.Pipeline.Execute
-import Language.Haskell.Syntax.Decls
-import WPC.ForeignStubDecls
+import           Control.Monad                 (mapM_)
 
-import System.Directory
-import System.FilePath
+import           Data.Maybe                    (fromMaybe)
 
-import Data.Maybe
+import           GHC.Driver.CodeOutput         (outputForeignStubs)
+import           GHC.Driver.Pipeline.Execute   (compileStub)
+import           GHC.Plugins                   (DynFlags (..), GenLocated (..), GenModule (..), HscEnv (..),
+                                                ModLocation, Module, ModuleName, Outputable (..), hsc_units, showSDoc,
+                                                split)
+import           GHC.Types.ForeignCall         (CCallConv (..))
+import           GHC.Types.ForeignStubs        (ForeignStubs)
 
-outputCapiStubs :: HscEnv -> Module -> ModLocation -> [(ForeignStubs, StubDecl)] -> IO ()
+import           Language.Haskell.Syntax.Decls (ForeignImport (..))
+
+import           Prelude                       (Bool (..), Foldable (..), IO, String, putStrLn, ($), (++), (.))
+
+import           System.Directory              (copyFile, createDirectoryIfMissing)
+import           System.FilePath               (FilePath, takeDirectory, takeExtension, (</>))
+
+import           WPC.ForeignStubDecls          (StubDecl (..), mergeForeignStubs)
+
+outputCapiStubs
+  :: HscEnv
+  -> Module
+  -> ModLocation
+  -> [(ForeignStubs, StubDecl)]
+  -> IO ()
 outputCapiStubs hscEnv cg_module modLocation stubDecls = do
   let dflags        = hsc_dflags hscEnv
       tmpfs         = hsc_tmpfs hscEnv
       logger        = hsc_logger hscEnv
       modName       = moduleName cg_module
 
-      capiStubs = mergeForeignStubs [s | (s, StubDeclImport (CImport  _srcText(L _ CApiConv) _safety _mHeader _spec) _) <- stubDecls]
+      capiStubs = mergeForeignStubs
+        [s | (s, StubDeclImport (CImport  _ (L _ CApiConv) _ _ _) _) <- stubDecls]
 
-  (_has_h, maybe_capi_stub_c) <- outputForeignStubs logger tmpfs dflags (hsc_units hscEnv) cg_module modLocation capiStubs
+  (_has_h, maybe_capi_stub_c) <-
+    outputForeignStubs
+      logger
+      tmpfs
+      dflags
+      (hsc_units hscEnv)
+      cg_module
+      modLocation
+      capiStubs
   mapM_ (compileCapiStubs hscEnv modName) maybe_capi_stub_c
 
 compileCapiStubs :: HscEnv -> ModuleName -> FilePath -> IO ()
@@ -35,7 +57,13 @@ compileCapiStubs hscEnv modName capi_stub_c = do
       pp = showSDoc dflags . ppr
 
       stubPath    = foldr1 (</>) . split '.' $ pp modName
-      wpcCapiStub = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "capi-stubs" </> stubPath </> "capi_stub" ++ takeExtension capi_stub_o
+      wpcCapiStub =
+        odir
+          </> "extra-compilation-artifacts"
+          </> "wpc-plugin"
+          </> "capi-stubs"
+          </> stubPath
+          </> "capi_stub" ++ takeExtension capi_stub_o
 
   putStrLn $ "compileCapiStubs odir        - " ++ odir
   putStrLn $ "compileCapiStubs capi_stub_o - " ++ capi_stub_o

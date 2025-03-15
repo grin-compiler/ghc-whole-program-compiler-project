@@ -21,7 +21,59 @@ maintainer:         csaba.hruska@gmail.com
 -- category:
 extra-source-files: CHANGELOG.md
 
+common lang
+  default-language: Haskell2010
+  default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
+  ghc-options:
+    -Wall
+    -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns
+    -Wincomplete-record-updates
+    -Wredundant-constraints
+    -Widentities
+    -Wunused-packages
+    -Wmissing-deriving-strategies
+
 library
+    import:           lang
     exposed-modules:  WPC.Plugin
                       WPC.Modpak
                       WPC.StgToExtStg
@@ -49,11 +101,10 @@ library
                       ghc-boot,
                       mtl
     hs-source-dirs:   src
-    default-language: Haskell2010
 
 foreign-library wpc-plugin
-  type:                native-shared
-  default-language:    Haskell2010
+  import:             lang
+  type:               native-shared
   hs-source-dirs:     src
 
   ghc-options:         -this-unit-id wpc-plugin-unit

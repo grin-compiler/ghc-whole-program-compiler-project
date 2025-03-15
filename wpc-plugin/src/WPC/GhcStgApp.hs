@@ -1,39 +1,33 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE NamedFieldPuns #-}
 module WPC.GhcStgApp where
 
-import GHC.Prelude
+import           Data.Containers.ListUtils (nubOrd)
+import           Data.List                 (isPrefixOf)
+import qualified Data.Set                  as Set
+import           Data.Version
 
-import GHC.Data.Maybe
-import GHC.Platform.ArchOS
-import GHC.Utils.Outputable
-import GHC.Unit.Info
-import GHC.Unit.Home.ModInfo
-import GHC.Unit.Module.Deps
-import GHC.Linker.Static.Utils
-import GHC.Linker.Types
-import GHC.Unit.Module.ModIface
+import           GHC.Data.Maybe
+import qualified GHC.Data.ShortText        as ST
+import           GHC.Driver.Ppr
+import           GHC.Driver.Session
+import           GHC.Linker.Static.Utils
+import           GHC.Linker.Types
+import           GHC.Platform
+import           GHC.Platform.ArchOS
+import           GHC.Prelude
+import           GHC.Unit.Env
+import           GHC.Unit.Home.ModInfo
+import           GHC.Unit.Info
+import           GHC.Unit.Module.Deps
+import           GHC.Unit.Module.ModIface
+import           GHC.Unit.State
+import           GHC.Unit.Types
+import           GHC.Utils.Json
+import           GHC.Utils.Outputable
 
-import GHC.Driver.Ppr
-import GHC.Driver.Session
+import           System.Directory
+import           System.FilePath
 
-import qualified GHC.Data.ShortText as ST
-
-import GHC.Utils.Json
-
-import Data.List                 ( isPrefixOf )
-import Data.Containers.ListUtils ( nubOrd )
-import qualified Data.Set as Set
-import Data.Version
-import GHC.Unit.State
-import GHC.Unit.Env
-import GHC.Unit.Types
-import GHC.Platform
-
-import System.FilePath
-import System.Directory
-
-import WPC.Yaml
+import           WPC.Yaml
 
 {-
 TODO:
@@ -77,7 +71,7 @@ writeGhcStgApp dflags unit_env hpt = do
           , ("framework-dirs",    arrOfAbsPathST unitExtDepFrameworkDirs)
           , ("extra-frameworks",  JSArray $ fmap (JSString . ST.unpack) unitExtDepFrameworks)
           , ("ld-options",        JSArray $ fmap (JSString . ST.unpack) unitLinkerOptions)
-          , ("exposed-modules",   JSArray $ fmap (JSString . pp) [mod | (mod, Nothing) <- unitExposedModules])
+          , ("exposed-modules",   JSArray $ fmap (JSString . pp) [mod' | (mod', Nothing) <- unitExposedModules])
           , ("hidden-modules",    JSArray $ fmap (JSString . pp) unitHiddenModules)
           , ("depends",           JSArray $ fmap (JSString . pp) unitDepends)
           ]
