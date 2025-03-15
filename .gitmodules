@@ -1,0 +1,4 @@
+
+[submodule "souffle"]
+	path = souffle
+	url = https://github.com/souffle-lang/souffle
