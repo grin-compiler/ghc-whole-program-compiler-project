@@ -1,21 +1,31 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
-module Stg.Fullpak
-  ( mkFullpak
-  ) where
+module Stg.Fullpak (mkFullpak) where
 
-import Control.Monad
-import System.FilePath
-import System.Directory
-import Codec.Archive.Zip
-import Codec.Archive.Zip.Unix
-import Text.Printf
+import           Codec.Archive.Zip      (CompressionMethod (..), ZipArchive, addEntry, copyEntry, createArchive,
+                                         doesEntryExist, loadEntry, mkEntrySelector, setExternalFileAttrs,
+                                         unEntrySelector, withArchive)
+import           Codec.Archive.Zip.Unix (fromFileMode)
 
-import qualified Data.Map as Map
-import qualified Data.Yaml as Y
+import           Control.Applicative    (Applicative (..))
+import           Control.Monad          (Functor (..), Monad (..), filterM, forM, forM_, mapM)
 
-import Stg.Program
-import Stg.Foreign.Linker
-import qualified Stg.GHC.Symbols as GHCSymbols
+import           Data.Bool              (Bool (..))
+import           Data.Function          (($))
+import           Data.List              (length, (++))
+import qualified Data.Map               as Map
+import qualified Data.Yaml              as Y
+
+import           Stg.Foreign.Linker     (getExtStgWorkDirectory, linkForeignCbitsSharedLib)
+import qualified Stg.GHC.Symbols        as GHCSymbols
+import           Stg.Program            (AppInfo (..), CodeInfo (..), StgAppForeignSourceInfo (..),
+                                         StgAppLicenseInfo (..), StgModuleInfo (..), collectProgramModules,
+                                         getAppForeignFiles, getAppLicenseInfo, getAppModuleMapping)
+
+import           System.Directory       (doesFileExist)
+import           System.FilePath        (FilePath, takeFileName, (</>))
+import           System.IO              (IO, putStrLn)
+
+import           Text.Printf            (printf)
+import           Text.Show              (Show (..))
 
 getModuleList :: [StgModuleInfo] -> IO [FilePath]
 getModuleList modinfoList = do
@@ -36,7 +46,7 @@ mkFullpak ghcstgappPath stgbinsOnly includeAll fullpakName = do
   modinfoList <- getAppModuleMapping ghcstgappPath
   appModpaks <- if includeAll
     then getModuleList modinfoList
-    else collectProgramModules (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
+    else collectProgramModules (fmap modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
 
   let modpakMap       = Map.fromList [(modModpakPath m , m) | m <- modinfoList]
       fullpakModules  = [modpakMap Map.! m | m <- appModpaks]

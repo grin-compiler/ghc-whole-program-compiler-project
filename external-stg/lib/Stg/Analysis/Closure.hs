@@ -1,7 +1,9 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 module Stg.Analysis.Closure (getAllClosures) where
 
-import Stg.Syntax
+import           Data.List  (concatMap, (++))
+import           Data.Tuple (uncurry)
+
+import           Stg.Syntax
 
 getAllClosures :: Module -> [(Id, Rhs)]
 getAllClosures = visitModule
@@ -32,5 +34,5 @@ visitExpr = \case
 
 visitRhs :: Binder -> Rhs -> [(Id, Rhs)]
 visitRhs b rhs = case rhs of
-  StgRhsClosure _ _ _ expr  -> (Id b, rhs) : visitExpr expr
-  _                         -> []
+  StgRhsClosure _ _ _ expr -> (Id b, rhs) : visitExpr expr
+  _                        -> []

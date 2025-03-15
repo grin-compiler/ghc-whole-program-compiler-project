@@ -1,16 +1,27 @@
-{-# LANGUAGE LambdaCase #-}
 module Stg.Foreign.Stubs where
 
-import qualified Data.ByteString.Char8 as BS8
+import           Control.Applicative   (Applicative (..))
+import           Control.Monad         (Functor (..))
 
-import Stg.Program
-import Stg.Syntax
-import Stg.GHC.Symbols
+import           Data.Bool             (Bool (..), not)
+import qualified Data.ByteString.Char8 as BS8
+import           Data.Function         (($), (.))
+import           Data.List             (concat, filter, null, (++))
+import           Data.String           (String, unlines)
+
+import           Stg.GHC.Symbols       (Symbol (..), rtsSymbols)
+import           Stg.Program           (getGhcStgAppModules)
+import           Stg.Syntax            (CExportSpec (..), ForeignExport (..), ForeignStubs' (..), Module' (..),
+                                        StubDecl, StubDecl' (StubDeclExport, StubDeclImport))
+
+import           System.IO             (FilePath, IO)
+
+import           Text.Show             (Show (..))
 
 genStubs :: FilePath -> IO String
 genStubs ghcstgappFname = do
   mods <- getGhcStgAppModules ghcstgappFname
-  let stubs           = concat $ [map genStubCode l | ForeignStubs _ _ _ _ l <- fmap moduleForeignStubs $ mods]
+  let stubs           = concat $ [fmap genStubCode l | ForeignStubs _ _ _ _ l <- fmap moduleForeignStubs $ mods]
       fileIncludes    = [ "#include <stdio.h>"
                         , "#include <stdlib.h>"
                         -- , "#include \"HsFFI.h\""

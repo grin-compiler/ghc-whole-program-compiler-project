@@ -1,35 +1,41 @@
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Stg.Pretty where
-import Control.Applicative ( Alternative(..) )
-import Control.Monad.Identity ( Identity(..) )
-import Control.Monad.Reader ( ReaderT(ReaderT), MonadReader )
-import Control.Monad.Writer ( MonadWriter )
-import Control.Monad.State ( gets, modify', execState, MonadState, State )
-import Control.Monad.RWS ( RWST(..) )
-import Data.Maybe ( fromMaybe )
-import Data.String (IsString(..))
-import Data.Text (Text)
-import qualified Data.Text as T
+import           Control.Applicative                           (Alternative (..))
+import           Control.Monad.Identity                        (Identity (..))
+import           Control.Monad.Reader                          (MonadReader, ReaderT (ReaderT))
+import           Control.Monad.RWS                             (RWST (..))
+import           Control.Monad.State                           (MonadState, State, execState, gets, modify')
+import           Control.Monad.Writer                          (MonadWriter)
 
-import Stg.Syntax
-import Stg.IRLocation ( StgPoint(..), binderToStgId )
+import qualified Data.ByteString.Char8                         as BS
+import           Data.Maybe                                    (fromMaybe)
+import           Data.Ratio                                    (denominator, numerator)
+import           Data.String                                   (IsString (..))
+import           Data.Text                                     (Text)
+import qualified Data.Text                                     as T
 
-import Data.Ratio ( denominator, numerator )
-import qualified Data.ByteString.Char8 as BS
-import Text.PrettyPrint.Final
-import Text.PrettyPrint.Final.Words ( braces, comma, parens )
-import Text.PrettyPrint.Final.Extensions.Environment
-import Prelude hiding (exp, mod)
+import           Prelude                                       hiding (exp, mod)
+
+import           Stg.IRLocation                                (StgPoint (..), binderToStgId)
+import           Stg.Syntax                                    (Alt, Alt' (..), AltCon, AltCon' (..), AltType,
+                                                                AltType' (..), Arg, Arg' (..), Binder (..),
+                                                                BinderId (..), Binding, Binding' (..), CCallConv,
+                                                                CCallTarget (..), DataCon (..), DataConRep (..), Expr,
+                                                                Expr' (..), ForeignCall (..), ForeignStubs,
+                                                                ForeignStubs' (..), Id (Id), Lit (..), LitNumType (..),
+                                                                Module, Module' (..), ModuleName, Name, PrimCall (..),
+                                                                PrimRep (VecRep), RealSrcSpan (..), Rhs, Rhs' (..),
+                                                                Safety, Scope (..), StgOp (..), Tickish (..),
+                                                                TopBinding, TopBinding' (..), TyCon (..), Type (..),
+                                                                UnitId, getModuleName, getUnitId)
+
+import           Text.PrettyPrint.Final                        (Atom (..), Chunk (..), Failure (..), Layout (..), Line,
+                                                                Measure (..), MonadPretty, PEnv (..), POut (..),
+                                                                PState (..), align, annotate, char, collection, grouped,
+                                                                hsep, nest, newline, text, vsep)
+import           Text.PrettyPrint.Final.Extensions.Environment (EnvT (..), MonadPrettyEnv, MonadReaderEnv (..), runEnvT)
+import           Text.PrettyPrint.Final.Words                  (braces, comma, parens)
 
 ---------------------------------------------------------
 type SrcPos = (Int, Int)
@@ -80,7 +86,7 @@ code
   Expr              - code
   Rhs
     StgRhsClosure   - none ; expr covers it
-    StgRhsCon       - 
+    StgRhsCon       -
 -}
 
 {-
@@ -137,8 +143,7 @@ spEnv0 cfg = SPEnv
 
 -- For plain text pretty printing
 newtype DocM a = DocM { unDocM :: EnvT SPEnv (RWST (PEnv Int StgPoint ()) (POut Int StgPoint) (PState Int ()) Maybe) a }
-  deriving
-    ( Functor, Applicative, Monad, Alternative
+  deriving newtype (Functor, Applicative, Monad, Alternative
     , MonadReader (PEnv Int StgPoint ())
     , MonadWriter (POut Int StgPoint)
     , MonadState (PState Int ())
@@ -158,39 +163,48 @@ execDoc :: Config -> Doc -> POut Int StgPoint
 execDoc cfg d =
   let rM = runDocM env0 (spEnv0 cfg) state0 d
   in case rM of
-    Nothing -> PAtom $ AChunk $ CText "<internal pretty printing error>"
+    Nothing         -> PAtom $ AChunk $ CText "<internal pretty printing error>"
     Just (_, o, ()) -> o
 
 type Doc = DocM ()
 
 instance Semigroup Doc where
+  (<>) :: Doc -> Doc -> Doc
   (<>) = (>>)
 
 instance Monoid Doc where
+  mempty :: Doc
   mempty = return ()
 
 class Pretty a where
   pretty :: a -> Doc
 
 instance Pretty Doc where
+  pretty :: Doc -> Doc
   pretty = id
 
 instance Pretty Int where
+  pretty :: Int -> Doc
   pretty = text . T.pack . show
 
 instance Pretty Integer where
+  pretty :: Integer -> Doc
   pretty = text . T.pack . show
 
 instance Measure Int () DocM where
+  measure :: Line Int () -> DocM Int
   measure = return . runIdentity . measure
 
 instance Pretty Text where
+  pretty :: Text -> Doc
   pretty = text . T.pack . show
 
 instance Pretty String where
+  pretty :: String -> Doc
   pretty = text . T.pack
 
 instance Pretty Name where
+  pretty :: Name -> Doc
   pretty = text . T.pack . BS.unpack
 
 ---------------------------------------------------------
@@ -233,9 +247,9 @@ textS = text . T.pack
 
 ppType :: Type -> Doc
 ppType t = red $ case t of
-  SingleValue r   -> ppPrimRep r
-  UnboxedTuple l  -> braces $ hsep (map ppPrimRep l)
-  PolymorphicRep  -> text "PolymorphicRep"
+  SingleValue r  -> ppPrimRep r
+  UnboxedTuple l -> braces $ hsep (map ppPrimRep l)
+  PolymorphicRep -> text "PolymorphicRep"
 
 ppPrimRep :: PrimRep -> Doc
 ppPrimRep = \case
@@ -244,9 +258,9 @@ ppPrimRep = \case
 
 colorBinderExport :: Binder -> Doc -> Doc
 colorBinderExport b = case binderScope b of
-  ClosurePrivate  -> id
-  ModulePrivate   -> id
-  ModulePublic    -> green
+  ClosurePrivate -> id
+  ModulePrivate  -> id
+  ModulePublic   -> green
 
 pprBinderTypeSig :: Binder -> Doc
 pprBinderTypeSig b = pprVar b <+> text "::" <+> ppType (binderType b)
@@ -272,18 +286,22 @@ pprVar b@Binder{..}
     BinderId u = binderId
 
 instance Pretty Type where
+    pretty :: Type -> Doc
     pretty = ppType
 
 instance Pretty UnitId where
+    pretty :: UnitId -> Doc
     pretty = text . T.pack . BS.unpack . getUnitId
 
 instance Pretty ModuleName where
+    pretty :: ModuleName -> Doc
     pretty = text . T.pack . BS.unpack . getModuleName
 
 pprRational :: Rational -> Doc
 pprRational r = pretty (numerator r) <> "/" <> pretty (denominator r)
 
 instance Pretty LitNumType where
+  pretty :: LitNumType -> Doc
   pretty = \case
     LitNumInt     -> "Int"
     LitNumInt8    -> "Int8"
@@ -297,21 +315,24 @@ instance Pretty LitNumType where
     LitNumWord64  -> "Word64"
 
 instance Pretty Lit where
-    pretty (LitChar x) = text (T.pack $ show x)
-    pretty (LitString x) = text (T.pack $ show x)
-    pretty LitNullAddr = "nullAddr#"
-    pretty (LitFloat x) = pprRational x
-    pretty (LitDouble x) = pprRational x
-    pretty (LitLabel x s) = text "LABEL" <+> parens (pretty x) <+> textS (show s)
+    pretty :: Lit -> Doc
+    pretty (LitChar x)      = text (T.pack $ show x)
+    pretty (LitString x)    = text (T.pack $ show x)
+    pretty LitNullAddr      = "nullAddr#"
+    pretty (LitFloat x)     = pprRational x
+    pretty (LitDouble x)    = pprRational x
+    pretty (LitLabel x s)   = text "LABEL" <+> parens (pretty x) <+> textS (show s)
     pretty (LitNumber _t i) = pretty i
-    pretty (LitRubbish t) = text "#Rubbish" <+> pretty t
+    pretty (LitRubbish t)   = text "#Rubbish" <+> pretty t
 
 instance Pretty AltCon where
+    pretty :: AltCon -> Doc
     pretty (AltDataCon dc) = pprDataConName dc
-    pretty (AltLit l) = pretty l
-    pretty AltDefault = text "_"
+    pretty (AltLit l)      = pretty l
+    pretty AltDefault      = text "_"
 
 instance Pretty AltType where
+    pretty :: AltType -> Doc
     pretty = \case
       PolyAlt       -> text "PolyAlt"
       MultiValAlt i -> text "MultiValAlt" <+> pretty i
@@ -329,18 +350,23 @@ pprArg = \case
   StgLitArg l -> pretty l
 
 instance Pretty Safety where
+  pretty :: Safety -> Doc
   pretty = textS . show
 
 instance Pretty CCallConv where
+  pretty :: CCallConv -> Doc
   pretty = textS . show
 
 instance Pretty CCallTarget where
+  pretty :: CCallTarget -> Doc
   pretty = textS . show
 
 instance Pretty ForeignCall where
+  pretty :: ForeignCall -> Doc
   pretty ForeignCall{..} = braces $ hsep [pretty foreignCSafety, pretty foreignCConv, pretty foreignCTarget]
 
 instance Pretty PrimCall where
+  pretty :: PrimCall -> Doc
   pretty (PrimCall lbl uid) = braces $ hsep [pretty uid, pretty lbl]
 
 pprOp :: StgOp -> Doc
@@ -349,7 +375,7 @@ pprOp = \case
   StgPrimCallOp (PrimCall sym _uid) -> text "cmmcall" <+> pretty (show sym)-- <+> text "-- from package:" <+> pretty uid
   StgFCallOp ForeignCall{..} -> case foreignCTarget of
     StaticTarget _ sym _ _ -> text "foreigncall" <+> pretty (show sym)
-    DynamicTarget -> text "foreigncall dynamic_call_target"
+    DynamicTarget          -> text "foreigncall dynamic_call_target"
 
 {-
   - put infix names to parenthesis
@@ -381,13 +407,14 @@ pprOp = \case
 
 putDefaultLast :: [Alt] -> [Doc] -> [Doc]
 putDefaultLast (Alt AltDefault _ _ : _) (first : rest) = rest ++ [first]
-putDefaultLast _ l = l
+putDefaultLast _ l                                     = l
 
 pprRealSrcSpan :: RealSrcSpan -> Doc
 pprRealSrcSpan RealSrcSpan'{..} = pretty srcSpanFile <+> pprPos srcSpanSLine srcSpanSCol <> text "-" <> pprPos srcSpanELine srcSpanECol
   where pprPos line col = parens $ pretty line <> text ":" <> pretty col
 
 instance Pretty RealSrcSpan where
+  pretty :: RealSrcSpan -> Doc
   pretty = pprRealSrcSpan
 
 pprTickish :: Tickish -> Doc
@@ -398,6 +425,7 @@ pprTickish = \case
   SourceNote{..}  -> text "-- SourceNote for" <+> pretty sourceName <+> pretty sourceSpan
 
 instance Pretty Tickish where
+  pretty :: Tickish -> Doc
   pretty = pprTickish
 
 pprExpr :: Expr -> Doc
@@ -438,12 +466,13 @@ pprExpr exp = do
         else pprExpr e
 
 instance Pretty Expr where
+  pretty :: Expr -> Doc
   pretty = pprExpr
 
 addUnboxedCommentIfNecessary :: DataCon -> Doc -> Doc
 addUnboxedCommentIfNecessary DataCon{..} doc = case dcRep of
   UnboxedTupleCon{} -> doc -- vsep [text "-- stack allocated unboxed tuple", doc]
-  _ -> doc
+  _                 -> doc
 {-
 pprSrcSpan :: SrcSpan -> Doc
 pprSrcSpan = \case
@@ -456,7 +485,7 @@ pprRhs :: Id -> Rhs -> Doc
 pprRhs (Id rhsBinder) = \case
   StgRhsClosure _ _ bs e ->
     annotate (SP_Binding $ binderToStgId rhsBinder) $
-      pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do" 
+      pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do"
         <> newline
         <> indent 2 (withStgPoint (SP_RhsClosureExpr $ binderToStgId rhsBinder) $ pprExpr e)
   StgRhsCon dc vs ->
@@ -486,6 +515,7 @@ pprTopBinding = \case
       , mempty
       ]
 instance Pretty TopBinding where
+  pretty :: TopBinding -> Doc
   pretty = pprTopBinding
 
 ppTyConName :: TyCon -> Doc
@@ -498,7 +528,7 @@ pprTyCon TyCon{..} = {-pretty tcUnitId <> text "_" <> pretty tcModule <> text ".
 pprDataConDef :: DataCon -> Doc
 pprDataConDef DataCon{..} = case dcRep of
   AlgDataCon dcArgsRep -> pretty dcName <+> hsep (map ppPrimRep dcArgsRep)
-  x -> textS $ "-- " ++ show x
+  x                    -> textS $ "-- " ++ show x
 
 pprDataConName :: DataCon -> Doc
 pprDataConName DataCon{..} = {-pretty dcUnitId <> text "_" <> pretty dcModule <> text "." <> -}pretty dcName{- <+> text "::" <+> textS (show dcRep) <+> parens (textS (show dcId))-}
@@ -548,6 +578,7 @@ getTopBinders = concatMap go
       StgTopLifted (StgRec l) -> fmap fst l
 
 instance Pretty Module where
+  pretty :: Module -> Doc
   pretty = pprModule
 
 pprForeignStubs :: ForeignStubs -> Doc
@@ -567,10 +598,10 @@ comment x = text "{-" <+> x <+> text "-}"
 
 data StgPointState
   = StgPointState
-  { spsRow        :: Int
-  , spsCol        :: Int
-  , spsStgPoints  :: [(StgPoint, SrcRange)]
-  , spsOutput     :: [Text]
+  { spsRow       :: Int
+  , spsCol       :: Int
+  , spsStgPoints :: [(StgPoint, SrcRange)]
+  , spsOutput    :: [Text]
   }
 emptyStgPointState :: StgPointState
 emptyStgPointState = StgPointState

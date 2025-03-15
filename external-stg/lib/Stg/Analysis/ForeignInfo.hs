@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 module Stg.Analysis.ForeignInfo
   ( ForeignInfo(..)
   , getForeignInfo
@@ -7,24 +6,36 @@ module Stg.Analysis.ForeignInfo
   , emptyForeignInfo
   ) where
 
-import Control.Monad.State
+import           Control.Applicative (Applicative (..))
+import           Control.Monad       (mapM_)
+import           Control.Monad.State
 
+import           Data.Eq             (Eq)
+import           Data.Function       (($), (.))
+import           Data.Int            (Int)
+import           Data.Map            (Map)
+import qualified Data.Map            as Map
+import           Data.Ord            (Ord)
+import           Data.Tuple          (snd)
 
-import Data.Map (Map)
-import qualified Data.Map as Map
+import           GHC.Num             (Num (..))
 
-import Stg.Syntax
+import           Prelude             (($!))
+
+import           Stg.Syntax
+
+import           Text.Show           (Show)
 
 data ForeignInfo
   = ForeignInfo
-  { fiLitLabels     :: !(Map Lit Int)
-  , fiPrimCalls     :: !(Map PrimCall Int)
-  , fiForeignCalls  :: !(Map ForeignCall Int)
-  , fiPrimOps       :: !(Map Name Int)
-  , fiLiterals      :: !(Map Lit Int)
-  , fiTopStrings    :: !(Map Name Int)
+  { fiLitLabels    :: !(Map Lit Int)
+  , fiPrimCalls    :: !(Map PrimCall Int)
+  , fiForeignCalls :: !(Map ForeignCall Int)
+  , fiPrimOps      :: !(Map Name Int)
+  , fiLiterals     :: !(Map Lit Int)
+  , fiTopStrings   :: !(Map Name Int)
   }
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 emptyForeignInfo :: ForeignInfo
 emptyForeignInfo = ForeignInfo
@@ -118,9 +129,9 @@ visitExpr e = case e of
   StgOpApp op args _ _ -> do
     mapM_ visitArg args
     case op of
-      StgPrimOp p       -> addPrimOp p
-      StgPrimCallOp pc  -> addPrimCall pc
-      StgFCallOp fc     -> addForeignCall fc
+      StgPrimOp p      -> addPrimOp p
+      StgPrimCallOp pc -> addPrimCall pc
+      StgFCallOp fc    -> addForeignCall fc
 
   StgCase expr _ _ alts -> do
     visitExpr expr
@@ -148,5 +159,5 @@ visitLit :: Lit -> M ()
 visitLit l = do
   addLit l
   case l of
-    LitLabel{}  -> addLitLabel l
-    _           -> pure ()
+    LitLabel{} -> addLitLabel l
+    _          -> pure ()

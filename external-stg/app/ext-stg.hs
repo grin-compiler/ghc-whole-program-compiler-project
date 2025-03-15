@@ -1,12 +1,20 @@
-import Control.Monad
-import Data.List
+import           Control.Monad
 
-import Options.Applicative
+import           Data.Bool            (not)
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.Text.IO as T
+import           Data.Function        (($), (.))
+import           Data.List
+import           Data.Monoid          (Monoid (..), (<>))
+import           Data.String          (String)
+import qualified Data.Text.IO         as T
+import           Data.Tuple           (fst)
 
-import Stg.Pretty
-import Stg.IO
+import           Options.Applicative
+
+import           Stg.IO
+import           Stg.Pretty
+
+import           System.IO            (FilePath, IO)
 
 modes :: Parser (IO ())
 modes = subparser
@@ -27,7 +35,7 @@ modes = subparser
             dump <- case () of
               _ | isSuffixOf "modpak" fname -> Stg.IO.readModpakL fname modpakStgbinPath decodeStgbin
               _ | isSuffixOf "stgbin" fname -> decodeStgbin <$> BSL.readFile fname
-              _ -> fail "unknown file format"
+              _                             -> fail "unknown file format"
             let cfg = Config
                   { cfgPrintTickish = not hideTickish
                   }

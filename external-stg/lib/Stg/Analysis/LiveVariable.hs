@@ -1,10 +1,19 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 module Stg.Analysis.LiveVariable (annotateWithLiveVariables) where
 
-import Data.Set (Set)
-import qualified Data.Set as Set
+import           Control.Monad (Functor (..))
 
-import Stg.Syntax
+import           Data.Bool     (not)
+import           Data.Function (($), (.))
+import           Data.List     (foldr, unzip, (++))
+import           Data.Set      (Set)
+import qualified Data.Set      as Set
+import           Data.Tuple    (fst)
+
+import           GHC.Err       (error)
+
+import           Stg.Syntax
+
+import           Text.Show     (Show (..))
 
 type UsedLocal = Set Id
 

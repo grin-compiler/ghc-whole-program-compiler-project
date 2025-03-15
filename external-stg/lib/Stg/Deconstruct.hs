@@ -1,7 +1,15 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 module Stg.Deconstruct (deconModule) where
 
-import Stg.Syntax
+import           Control.Monad (Functor (..))
+
+import           Data.Function (($))
+
+import           Stg.Syntax    (Alt, Alt' (..), AltCon, AltCon' (..), AltType, AltType' (..), Arg, Arg' (..),
+                                Binder (..), BinderId, Binding, Binding' (..), DataCon (..), DataConId, Expr,
+                                Expr' (..), ForeignStubs, ForeignStubs' (..), Module, Module' (..), Rhs, Rhs' (..),
+                                SAlt, SAltCon, SAltType, SArg, SBinder (..), SBinding, SDataCon (..), SExpr,
+                                SForeignStubs, SModule, SRhs, SStubDecl, STopBinding, STyCon (..), StubDecl,
+                                StubDecl' (..), TopBinding, TopBinding' (..), TyCon (..), TyConId)
 
 deconModule :: Module -> SModule
 deconModule Module{..} = smod where
@@ -71,8 +79,8 @@ deconBinding = \case
 
 deconRhs :: Rhs -> SRhs
 deconRhs = \case
-  StgRhsClosure idOccList uf idBndList e  -> StgRhsClosure (map deconIdOcc idOccList) uf (map deconIdBnd idBndList) (deconExpr e)
-  StgRhsCon dcOcc args                    -> StgRhsCon (deconDcOcc dcOcc) (map deconArg args)
+  StgRhsClosure idOccList uf idBndList e  -> StgRhsClosure (fmap deconIdOcc idOccList) uf (fmap deconIdBnd idBndList) (deconExpr e)
+  StgRhsCon dcOcc args                    -> StgRhsCon (deconDcOcc dcOcc) (fmap deconArg args)
 
 deconArg :: Arg -> SArg
 deconArg = \case
@@ -81,11 +89,11 @@ deconArg = \case
 
 deconExpr :: Expr -> SExpr
 deconExpr = \case
-  StgApp idOcc args       -> StgApp (deconIdOcc idOcc) (map deconArg args)
+  StgApp idOcc args       -> StgApp (deconIdOcc idOcc) (fmap deconArg args)
   StgLit lit              -> StgLit lit
-  StgConApp dcOcc args ts -> StgConApp (deconDcOcc dcOcc) (map deconArg args) ts
-  StgOpApp op args t mTc  -> StgOpApp op (map deconArg args) t (fmap deconTcOcc mTc)
-  StgCase e idBnd at alts -> StgCase (deconExpr e) (deconIdBnd idBnd) (deconAltType at) (map deconAlt alts)
+  StgConApp dcOcc args ts -> StgConApp (deconDcOcc dcOcc) (fmap deconArg args) ts
+  StgOpApp op args t mTc  -> StgOpApp op (fmap deconArg args) t (fmap deconTcOcc mTc)
+  StgCase e idBnd at alts -> StgCase (deconExpr e) (deconIdBnd idBnd) (deconAltType at) (fmap deconAlt alts)
   StgLet b e              -> StgLet (deconBinding b) (deconExpr e)
   StgLetNoEscape b e      -> StgLetNoEscape (deconBinding b) (deconExpr e)
   StgTick t e             -> StgTick t (deconExpr e)
@@ -98,7 +106,7 @@ deconAltType = \case
   AlgAlt tcOcc  -> AlgAlt (deconTcOcc tcOcc)
 
 deconAlt :: Alt -> SAlt
-deconAlt Alt{..} = Alt (deconAltCon altCon) (map deconIdBnd altBinders) (deconExpr altRHS)
+deconAlt Alt{..} = Alt (deconAltCon altCon) (fmap deconIdBnd altBinders) (deconExpr altRHS)
 
 deconAltCon :: AltCon -> SAltCon
 deconAltCon = \case

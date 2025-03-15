@@ -1,18 +1,29 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use camelCase" #-}
+
 module Stg.IRLocation where
 
-import Stg.Syntax
+import           Data.Eq    (Eq)
+import           Data.Int   (Int)
+import           Data.Maybe (Maybe (..))
+import           Data.Ord   (Ord)
+
+import           GHC.Err    (undefined)
+
+import           Stg.Syntax (Alt, Arg, Binder (..), BinderId (..), Binding, Expr, Module, Name, Rhs, Scope (..),
+                             TopBinding, Unique, getModuleName, getUnitId)
+
+import           Text.Read  (Read)
+import           Text.Show  (Show)
 
 data StgId
   = StgId
-  { siUnitId      :: Name
-  , siModuleName  :: Name
-  , siName        :: Name
-  , siUnique      :: Maybe Unique
+  { siUnitId     :: Name
+  , siModuleName :: Name
+  , siName       :: Name
+  , siUnique     :: Maybe Unique
   }
-  deriving (Eq, Ord, Show, Read)
+  deriving stock (Eq, Ord, Show, Read)
 
 binderToStgId :: Binder -> StgId
 binderToStgId Binder{..} = StgId
@@ -35,7 +46,7 @@ data StgPoint
   | SP_RhsCon             { spRhsBinderName :: StgId }
   | SP_Binding            { spBinderName :: StgId }
   | SP_Tickish            { spParent :: StgPoint }
-  deriving (Eq, Ord, Show, Read)
+  deriving stock (Eq, Ord, Show, Read)
 
 {-
   breakpoint types:
@@ -116,7 +127,7 @@ data FieldSelector
   -- Alt
   | FS_Alt_altBinders             Int   -- selects: Alt        -> Binder
   | FS_Alt_altRHS                       -- selects: Alt        -> Expr
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 type IRPath = [FieldSelector]
 
@@ -129,7 +140,7 @@ data IR
   | IR_Expr       Expr
   | IR_Alt        Alt
   | IR_Binder     Binder
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 lookupIR :: IR -> IRPath -> IR
 lookupIR = undefined

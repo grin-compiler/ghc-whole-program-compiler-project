@@ -1,10 +1,20 @@
-{-# LANGUAGE LambdaCase #-}
 module Stg.Tickish where
 
-import Control.Monad.RWS
+import           Control.Applicative (Applicative (..))
+import           Control.Monad       (Monad (..), mapM_, sequence_)
+import           Control.Monad.RWS   (MonadReader (..), MonadWriter (..), RWS, evalRWS)
 
-import Stg.Syntax
-import Stg.IRLocation
+import           Data.Function       (const, ($))
+import           Data.Int            (Int)
+import           Data.List           (zip)
+import           Data.Maybe          (Maybe (..))
+import           Data.Tuple          (snd, uncurry)
+
+import           GHC.Err             (error)
+
+import           Stg.IRLocation      (StgPoint (..), binderToStgId)
+import           Stg.Syntax          (Alt, Alt' (..), Binder, Binding, Binding' (..), Expr, Expr' (..), Id (..), Module,
+                                      Module' (..), Rhs, Rhs' (..), Tickish, TopBinding, TopBinding' (..))
 
 type M = RWS (Maybe StgPoint) [(StgPoint, Tickish)] ()
 

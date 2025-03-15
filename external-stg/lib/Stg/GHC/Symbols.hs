@@ -1,5 +1,12 @@
 module Stg.GHC.Symbols where
 
+import           Data.Eq     (Eq)
+import           Data.List   ((++))
+import           Data.Ord    (Ord)
+import           Data.String (String)
+
+import           Text.Show   (Show)
+
 
 liveSymbols :: [(String, String, String)]
 liveSymbols =
@@ -74,7 +81,7 @@ data Symbol
   | CData   { getSymbolName :: String }
   | CmmFun  { getSymbolName :: String }
   | CmmData { getSymbolName :: String }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 rtsSymbols :: [Symbol]
 rtsSymbols =

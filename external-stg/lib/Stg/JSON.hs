@@ -1,13 +1,24 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
+
 module Stg.JSON where
 
-import Data.Aeson
-import Stg.Syntax
+import           Control.Monad         (Functor (..))
 
+import           Data.Aeson            (FromJSON (..), ToJSON (..), Value)
 import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Text.Lazy as Text
+import           Data.Function         ((.))
+import qualified Data.Text.Lazy        as Text
+
+import           Stg.Syntax            (Alt', AltCon', AltType', Arg', Binder, BinderId, Binding', BufSpan, CCallConv,
+                                        CCallTarget, CExportSpec, CImportSpec, CbvMark, DataConId, DataConRep, Expr',
+                                        ForeignCall, ForeignExport, ForeignImport, ForeignStubs', Header, IdDetails,
+                                        LabelSpec, Lit, LitNumType, Module', ModuleCLabel, ModuleLabelKind, ModuleName,
+                                        PrimCall, PrimElemRep, PrimRep, RealSrcSpan, Rhs', SBinder, SDataCon, STyCon,
+                                        Safety, Scope, SourceText, SrcSpan, StgOp, StubDecl', StubImpl, Tickish,
+                                        TopBinding', TyConId, Type, UnhelpfulSpanReason, Unique, UnitId, UpdateFlag)
 
 instance ToJSON BS8.ByteString where
+  toJSON :: BS8.ByteString -> Value
   toJSON = toJSON . Text.pack . BS8.unpack
 
 instance ToJSON Unique

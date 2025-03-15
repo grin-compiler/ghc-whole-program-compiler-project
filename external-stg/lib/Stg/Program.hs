@@ -1,35 +1,52 @@
-{-# LANGUAGE LambdaCase, RecordWildCards, OverloadedStrings #-}
 module Stg.Program where
 
-import Control.Monad.IO.Class
-import Control.Monad
-import Text.Printf
+import           Codec.Archive.Zip         (getEntry, mkEntrySelector, withArchive)
 
-import Data.Maybe
-import Data.List (isPrefixOf, foldl')
-import Data.Containers.ListUtils (nubOrd)
+import           Control.Applicative       (Applicative (..), (<$>))
+import           Control.Monad             (Functor (..), Monad (..), MonadFail (..), filterM, forM, forM_, unless,
+                                            when)
+import           Control.Monad.IO.Class    (MonadIO (..))
 
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteString.Lazy as BSL
-import qualified Data.Aeson as Aeson
+import qualified Data.Aeson                as Aeson
+import           Data.Bool                 (Bool (..), not, otherwise, (&&))
+import qualified Data.ByteString.Char8     as BS8
+import qualified Data.ByteString.Lazy      as BSL
+import           Data.Containers.ListUtils (nubOrd)
+import           Data.Either               (Either (..))
+import           Data.Eq                   (Eq ((==)))
+import           Data.Function             (($), (.))
+import           Data.List                 (concat, drop, dropWhile, foldl, foldl', isPrefixOf, length, map, takeWhile,
+                                            unlines, unzip, zip, (++))
+import qualified Data.Map                  as Map
+import           Data.Maybe                (Maybe (..), catMaybes, listToMaybe, maybeToList)
+import           Data.Monoid               (Monoid (..))
+import           Data.Ord                  (Ord)
+import qualified Data.Set                  as Set
+import           Data.String               (String)
+import           Data.Tuple                (fst)
+import           Data.Yaml                 (FromJSON (..), ToJSON (..), object, (.!=), (.:), (.:?), (.=))
+import qualified Data.Yaml                 as Y
 
-import System.Process
-import System.Directory
-import System.FilePath
-import System.FilePath.Find
-import Codec.Archive.Zip
+import           GHC.Err                   (error, undefined)
 
-import qualified Data.Yaml as Y
-import Data.Yaml (ToJSON(..), FromJSON(..), (.:), (.:?), (.!=), (.=), object)
+import qualified Stg.GHC.Symbols           as GHCSymbols
+import           Stg.IO                    (decodeStgbin, decodeStgbinInfo, fullpakAppInfoPath, modpakStgbinPath,
+                                            readModpakL)
+import           Stg.JSON                  ()
+import           Stg.Reconstruct           (reconModule)
+import           Stg.Syntax                (Module, ModuleName (..), UnitId (..))
 
-import Stg.Syntax
-import Stg.IO
-import Stg.JSON ()
-import Stg.Reconstruct (reconModule)
-import qualified Stg.GHC.Symbols as GHCSymbols
-import Prelude hiding (mod)
+import           System.Directory          (createDirectoryIfMissing, doesDirectoryExist, doesFileExist,
+                                            getHomeDirectory)
+import           System.FilePath           (FilePath, makeRelative, splitFileName, (-<.>), (<.>), (</>))
+import           System.FilePath.Find      (FileType (..), FilterPredicate, RecursionPredicate, always, extension,
+                                            fileType, find, (==?))
+import           System.IO                 (IO, putStrLn)
+import           System.Process            (callCommand)
+
+import           Text.Printf               (printf)
+import           Text.Read                 (read)
+import           Text.Show                 (Show (show))
 
 moduleToModpak :: String -> String -> FilePath
 moduleToModpak modpakExt moduleName = replaceEq '.' '/' moduleName ++ modpakExt
@@ -38,37 +55,38 @@ moduleToModpak modpakExt moduleName = replaceEq '.' '/' moduleName ++ modpakExt
     replaceEq from to = fmap (\cur -> if cur == from then to else cur)
 
 parseSection :: [String] -> String -> [String]
-parseSection content n = fmap (read . tail) . takeWhile (isPrefixOf "-") . tail . dropWhile (not . isPrefixOf n) $ content
+parseSection content n = fmap (read . drop 1) . takeWhile (isPrefixOf "-") . drop 1 . dropWhile (not . isPrefixOf n) $ content
 
 printSection :: Show a => [a] -> String
 printSection l = unlines ["- " ++ x | x <- nubOrd $ fmap show l]
 
 data StgModuleInfo
   = StgModuleInfo
-  { modModuleName           :: String
-  , modModpakPath           :: FilePath
-  , modPackageName          :: String
-  , modPackageVersion       :: String
-  , modUnitId               :: String
+  { modModuleName     :: String
+  , modModpakPath     :: FilePath
+  , modPackageName    :: String
+  , modPackageVersion :: String
+  , modUnitId         :: String
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 data UnitLinkerInfo =
   UnitLinkerInfo
-  { unitName            :: String
-  , unitVersion         :: String
-  , unitId              :: String
-  , unitImportDirs      :: [FilePath]
-  , unitLibraries       :: [String]
-  , unitLibDirs         :: [FilePath]
-  , unitExtraLibs       :: [String]
-  , unitLdOptions       :: [String]
-  , unitExposedModules  :: [String]
-  , unitHiddenModules   :: [String]
-  , unitArtifactsDir    :: Maybe FilePath
-  } deriving (Eq, Show)
+  { unitName           :: String
+  , unitVersion        :: String
+  , unitId             :: String
+  , unitImportDirs     :: [FilePath]
+  , unitLibraries      :: [String]
+  , unitLibDirs        :: [FilePath]
+  , unitExtraLibs      :: [String]
+  , unitLdOptions      :: [String]
+  , unitExposedModules :: [String]
+  , unitHiddenModules  :: [String]
+  , unitArtifactsDir   :: Maybe FilePath
+  } deriving stock (Eq, Show)
 
 instance FromJSON UnitLinkerInfo where
+  parseJSON :: Y.Value -> Y.Parser UnitLinkerInfo
   parseJSON (Y.Object v) =
     UnitLinkerInfo
       <$> v .: "name"
@@ -104,9 +122,10 @@ data GhcStgApp
   , appExtraLibDirs   :: [FilePath]
   , appLdOptions      :: [String]
   , appLibDeps        :: [UnitLinkerInfo]
-  } deriving (Eq, Show)
+  } deriving stock (Eq, Show)
 
 instance FromJSON GhcStgApp where
+  parseJSON :: Y.Value -> Y.Parser GhcStgApp
   parseJSON (Y.Object v) =
     GhcStgApp
       <$> v .:? "ways" .!= []
@@ -240,25 +259,25 @@ getJSONModules path = do
 
 data StgLibLinkerInfo
   = StgLibLinkerInfo
-  { stglibName            :: String
-  , stglibCbitsPaths      :: [FilePath]
-  , stglibCapiStubsPaths  :: [FilePath]
-  , stglibExtraLibs       :: [String]
-  , stglibExtraLibDirs    :: [FilePath]
-  , stglibLdOptions       :: [String]
+  { stglibName           :: String
+  , stglibCbitsPaths     :: [FilePath]
+  , stglibCapiStubsPaths :: [FilePath]
+  , stglibExtraLibs      :: [String]
+  , stglibExtraLibDirs   :: [FilePath]
+  , stglibLdOptions      :: [String]
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 data StgAppLinkerInfo
   = StgAppLinkerInfo
-  { stgappCObjects      :: [FilePath]
-  , stgappExtraLibs     :: [String]
-  , stgappExtraLibDirs  :: [FilePath]
-  , stgappLdOptions     :: [String]
-  , stgappPlatformOS    :: String
-  , stgappNoHsMain      :: Bool
+  { stgappCObjects     :: [FilePath]
+  , stgappExtraLibs    :: [String]
+  , stgappExtraLibDirs :: [FilePath]
+  , stgappLdOptions    :: [String]
+  , stgappPlatformOS   :: String
+  , stgappNoHsMain     :: Bool
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 findIfExists :: RecursionPredicate -> FilterPredicate -> FilePath -> IO [FilePath]
 findIfExists rp fp path = do
@@ -311,7 +330,7 @@ newtype StgAppLicenseInfo
   = StgAppLicenseInfo
   { stgappUnitConfs :: [FilePath]
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 getAppLicenseInfo :: FilePath -> IO StgAppLicenseInfo
 getAppLicenseInfo ghcStgAppFname = do
@@ -339,13 +358,13 @@ getAppLicenseInfo ghcStgAppFname = do
 
 data StgAppInfo
   = StgAppInfo
-  { _appIncludePaths   :: [String]
-  , _appLibPaths       :: [String]
-  , _appLdOptions      :: [String]
-  , _appCLikeObjFiles  :: [String]
-  , _appNoHsMain       :: Bool
+  { _appIncludePaths  :: [String]
+  , _appLibPaths      :: [String]
+  , _appLdOptions     :: [String]
+  , _appCLikeObjFiles :: [String]
+  , _appNoHsMain      :: Bool
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 getAppInfo :: FilePath -> IO StgAppInfo
 getAppInfo _ghcStgAppFname = pure undefined
@@ -358,7 +377,7 @@ data StgAppForeignSourceInfo
   , stgForeignSourceRelPath :: FilePath
   , stgForeignUnitId        :: String
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 getAppForeignFiles :: FilePath -> IO [StgAppForeignSourceInfo]
 getAppForeignFiles ghcStgAppFname = do
@@ -462,14 +481,15 @@ getFoundationPakForGhcStgApp ghcstgapp = do
 
 data PakUnitInfo
   = PakUnitInfo
-  { pakUnitName     :: String
-  , pakUnitVersion  :: String
-  , pakUnitId       :: String
-  , pakUnitDir      :: FilePath
+  { pakUnitName    :: String
+  , pakUnitVersion :: String
+  , pakUnitId      :: String
+  , pakUnitDir     :: FilePath
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 instance FromJSON PakUnitInfo where
+  parseJSON :: Y.Value -> Y.Parser PakUnitInfo
   parseJSON (Y.Object v) =
     PakUnitInfo
       <$> v .: "name"
@@ -483,9 +503,10 @@ data PakYaml
   { pakyamlPathPrefix :: FilePath
   , pakyamlPackages   :: [PakUnitInfo]
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 instance FromJSON PakYaml where
+  parseJSON :: Y.Value -> Y.Parser PakYaml
   parseJSON (Y.Object v) =
     PakYaml
       <$> v .: "path-prefix"
@@ -517,9 +538,10 @@ data CodeInfo
   , ciUnitId      :: String
   , ciModuleName  :: String
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 instance FromJSON CodeInfo where
+  parseJSON :: Y.Value -> Y.Parser CodeInfo
   parseJSON (Y.Object v) =
     CodeInfo
       <$> v .: "package-name"
@@ -528,6 +550,7 @@ instance FromJSON CodeInfo where
   parseJSON _ = fail "Expected Object for CodeInfo value"
 
 instance ToJSON CodeInfo where
+  toJSON :: CodeInfo -> Y.Value
   toJSON CodeInfo{..} =
     object
       [ "package-name"  .= ciPackageName
@@ -539,15 +562,17 @@ data AppInfo
   = AppInfo
   { aiLiveCode :: [CodeInfo]
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 instance FromJSON AppInfo where
+  parseJSON :: Y.Value -> Y.Parser AppInfo
   parseJSON (Y.Object v) =
     AppInfo
       <$> v .: "live-code"
   parseJSON _ = fail "Expected Object for AppInfo value"
 
 instance ToJSON AppInfo where
+  toJSON :: AppInfo -> Y.Value
   toJSON AppInfo{..} =
     object
       [ "live-code"  .= aiLiveCode

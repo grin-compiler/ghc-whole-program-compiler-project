@@ -1,9 +1,13 @@
-{-# LANGUAGE RecordWildCards #-}
-import System.FilePath
-import Options.Applicative
-import Data.Semigroup ((<>))
+import           Data.Bool           (Bool)
+import           Data.Monoid         (Monoid (..))
+import           Data.Semigroup      ((<>))
 
-import Stg.Fullpak
+import           Options.Applicative
+
+import           Stg.Fullpak
+
+import           System.FilePath
+import           System.IO           (IO)
 
 data FullpakOptions
   = FullpakOptions

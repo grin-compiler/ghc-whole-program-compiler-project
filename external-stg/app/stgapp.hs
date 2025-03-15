@@ -1,36 +1,44 @@
-{-# LANGUAGE ScopedTypeVariables, RecordWildCards, OverloadedStrings #-}
+import           Control.Monad
 
-import Control.Monad
-import Data.Maybe
-import Data.List (isSuffixOf)
-import Data.Monoid
-import Data.Ord
-import Data.Semigroup ((<>))
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-import System.Directory
-import System.FilePath
-import System.IO
-import System.Posix.DynamicLinker
-import Text.Printf
-import Foreign
+import           Data.Bool                  (Bool (..))
+import qualified Data.ByteString.Char8      as BS8
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (flip, ($), (.))
+import           Data.List                  (concatMap, isSuffixOf, length, take, (++))
+import qualified Data.Map                   as Map
+import           Data.Maybe
+import           Data.Monoid
+import           Data.Ord
+import qualified Data.Set                   as Set
+import           Data.String                (String)
 
-import Options.Applicative
+import           Foreign
 
-import Stg.Syntax
-import Stg.Analysis.Closure
-import Stg.Analysis.ForeignInfo
-import Stg.Program
-import Stg.GHC.Symbols
-import Stg.Foreign.Linker
+import           GHC.Num                    (Integer, Num (..))
+
+import           Options.Applicative
+
+import           Stg.Analysis.Closure
+import           Stg.Analysis.ForeignInfo
+import           Stg.Foreign.Linker
+import           Stg.GHC.Symbols
+import           Stg.Program
+import           Stg.Syntax
+
+import           System.Directory
+import           System.FilePath
+import           System.IO
+import           System.Posix.DynamicLinker
+
+import           Text.Printf
+import           Text.Show                  (Show (..))
 
 loadModules :: FilePath -> IO [Module]
 loadModules fname = case () of
   _ | isSuffixOf "fullpak" fname    -> Stg.Program.getFullpakModules fname
   _ | isSuffixOf "ghc_stgapp" fname -> Stg.Program.getGhcStgAppModules fname
   _ | isSuffixOf "json" fname       -> Stg.Program.getJSONModules fname
-  _ -> fail "unknown file format"
+  _                                 -> fail "unknown file format"
 
 modes :: Parser (IO ())
 modes = subparser
@@ -141,8 +149,8 @@ modes = subparser
             moduleList <- loadModules fname
             let ForeignInfo{..} = getForeignInfos moduleList
             printf "used top level strings: %d\n" (Map.size fiTopStrings)
-            forM_ (Map.toList fiTopStrings) $ \(str, count) -> do
-              printf "%-10d %s\n" count (show str)
+            forM_ (Map.toList fiTopStrings) $ \(str', count) -> do
+              printf "%-10d %s\n" count (show str')
 
     undefMode :: Parser (IO ())
     undefMode =
@@ -176,7 +184,7 @@ modes = subparser
             printf "undefined symbols: %d\n" (Set.size undefSet)
             mapM_ BS8.putStrLn $ Set.toList undefSet
 
-            let nonRTSUndefSet = undefSet Set.\\ Set.fromList (map (BS8.pack . getSymbolName) rtsSymbols)
+            let nonRTSUndefSet = undefSet Set.\\ Set.fromList (fmap (BS8.pack . getSymbolName) rtsSymbols)
             printf "\nnon RTS undefined symbols: %d\n" (Set.size nonRTSUndefSet)
             mapM_ BS8.putStrLn $ Set.toList nonRTSUndefSet
 
@@ -229,7 +237,7 @@ modes = subparser
             printf "missing source filepath for: %s %s\n" (BS8.unpack $ getUnitId $ moduleUnitId m) (BS8.unpack $ getModuleName $ moduleName m)
 
           -- report ambiguous moduleSourceFilePath
-          let moduleMaps  = [Map.singleton srcPath (1, [m]) | m <- moduleList, srcPath <- maybeToList $ moduleSourceFilePath m]
+          let moduleMaps  = [Map.singleton srcPath (1 :: Integer, [m]) | m <- moduleList, srcPath <- maybeToList $ moduleSourceFilePath m]
               duplicates  = Map.filter (\(n, _) -> n > 1) $ Map.unionsWith (\(n1, l1) (n2, l2) -> (n1 + n2, l1 ++ l2)) moduleMaps
           forM_ (Map.toList duplicates) $ \(srcPath, (_, mods)) -> forM_ mods $ \m -> do
             printf "duplicate source filepath: %s %s %s\n"

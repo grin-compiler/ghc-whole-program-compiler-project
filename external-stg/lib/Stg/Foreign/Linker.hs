@@ -1,14 +1,23 @@
-{-# LANGUAGE RecordWildCards #-}
 module Stg.Foreign.Linker where
 
-import Data.List
-import System.Directory
-import System.FilePath
-import System.Process
-import Text.Printf
+import           Control.Applicative (Applicative (..))
+import           Control.Monad       (Monad (..))
 
-import Stg.Program
-import Stg.Foreign.Stubs
+import           Data.Bool           (Bool (..))
+import           Data.Eq             (Eq (..))
+import           Data.Function       (($), (.))
+import           Data.List           (concat, concatMap, filter, intercalate, map, unlines, unwords, (++))
+
+import           Stg.Foreign.Stubs   (genStubs)
+import           Stg.Program         (StgAppLinkerInfo (..), StgLibLinkerInfo (..), getAppLinkerInfo)
+
+import           System.Directory    (createDirectoryIfMissing, makeAbsolute)
+import           System.FilePath     (FilePath, takeBaseName, takeDirectory, (</>))
+import           System.IO           (IO, writeFile)
+import           System.Process      (callCommand)
+
+import           Text.Printf         (printf)
+import           Text.Show           (Show (..))
 
 getExtStgWorkDirectory :: FilePath -> IO FilePath
 getExtStgWorkDirectory ghcstgappFname = do
@@ -65,8 +74,8 @@ linkForeignCbitsSharedLib ghcstgappFname = do
           [ "#!/usr/bin/env bash"
           , "set -e"
           , case stgappPlatformOS of
-              "darwin"  -> "gcc -o cbits.so -shared \\"
-              _         -> "gcc -o cbits.so -shared -Wl,--no-as-needed \\"
+              "darwin" -> "gcc -o cbits.so -shared \\"
+              _        -> "gcc -o cbits.so -shared -Wl,--no-as-needed \\"
           ] ++
         intercalate " \\\n" (map ("  " ++) . filter (/= "") $ arList ++ cbitsOpts ++ stgappCObjects ++ [appOpts] ++ stubOpts) ++ "\n"
 
