@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns #-}
+{-# LANGUAGE MagicHash, UnboxedTuples #-}
 
 module PrimOp.Int16Spec where
 
@@ -6,7 +6,6 @@ import Control.Monad.State.Strict
 
 import Test.Hspec
 import Test.QuickCheck
-import Test.QuickCheck.Modifiers
 import Test.QuickCheck.Monadic
 
 import Stg.Syntax (Name, Type(..))
@@ -15,6 +14,12 @@ import Stg.Interpreter.PrimOp.Int16
 
 import GHC.Exts
 import GHC.Int
+import System.IO
+import Data.Maybe
+import Control.Applicative
+import Data.Function
+import Data.Eq
+import GHC.Real
 
 runTests :: IO ()
 runTests = hspec spec

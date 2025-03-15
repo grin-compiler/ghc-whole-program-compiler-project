@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, Strict #-}
+{-# LANGUAGE MagicHash, UnboxedTuples, Strict #-}
 
 module PrimOp.CharSpec where
 
@@ -6,7 +6,6 @@ import Control.Monad.State.Strict
 
 import Test.Hspec
 import Test.QuickCheck
-import Test.QuickCheck.Modifiers
 import Test.QuickCheck.Monadic
 
 import Stg.Syntax (Name, Type(..))
@@ -14,6 +13,11 @@ import Stg.Interpreter.Base
 import Stg.Interpreter.PrimOp.Char
 
 import GHC.Exts
+import System.IO
+import Data.Maybe
+import Control.Applicative
+import Data.Function
+import Data.Eq
 
 runTests :: IO ()
 runTests = hspec spec

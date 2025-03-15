@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, CPP, ScopedTypeVariables #-}
+{-# LANGUAGE MagicHash, UnboxedTuples, CPP #-}
 
 module PrimOp.FloatSpec where
 
@@ -6,7 +6,6 @@ import Control.Monad.State.Strict
 
 import Test.Hspec
 import Test.QuickCheck
-import Test.QuickCheck.Modifiers
 import Test.QuickCheck.Monadic
 
 import Stg.Syntax (Name, Type(..))
@@ -14,6 +13,13 @@ import Stg.Interpreter.Base
 import Stg.Interpreter.PrimOp.Float
 
 import GHC.Exts
+import System.IO
+import Text.Show
+import Data.Maybe
+import Control.Applicative
+import Control.Monad
+import Data.Function
+import Data.Eq
 
 runTests :: IO ()
 runTests = hspec spec
@@ -37,7 +43,7 @@ evalOp2 op args = do
 unboxFloat :: Float -> Float#
 unboxFloat (F# x) = x
 
-shouldReturnShow :: (HasCallStack, Show a, Eq a) => IO a -> a -> Expectation
+shouldReturnShow :: (HasCallStack, Show a) => IO a -> a -> Expectation
 shouldReturnShow m a = fmap show m `shouldReturn` show a
 
 spec :: Spec

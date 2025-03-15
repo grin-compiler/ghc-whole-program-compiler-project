@@ -253,12 +253,9 @@ test-suite primop-test
   main-is:             Spec.hs
   build-depends:       base >=4.11
                      , mtl
-                     , external-stg
                      , external-stg-syntax
                      , external-stg-interpreter
                      , hspec
-                     , hspec-core
-                     , hspec-discover
                      , QuickCheck
 
   other-modules:       PrimOp.Word8Spec
