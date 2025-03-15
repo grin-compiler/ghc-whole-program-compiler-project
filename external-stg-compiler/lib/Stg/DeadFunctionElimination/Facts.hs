@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, TupleSections, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+
 module Stg.DeadFunctionElimination.Facts where
 
 import Data.Map (Map)
