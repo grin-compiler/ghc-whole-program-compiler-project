@@ -1,4 +1,4 @@
-resolver: lts-20.18
+resolver: lts-22.43
 
 packages:
   - 'external-stg-syntax'
@@ -8,8 +8,11 @@ packages:
 #  - 'external-stg-compiler'
 
 extra-deps:
+  - dom-lt-0.2.3
   - github: david-christiansen/final-pretty-printer
     commit: 048e8fa2d8b2b7a6f9e4e209db4f67361321eec8
 
   - github: zlonast/souffle-haskell
-    commit: b3420f24c0955e16c2bf1bdf6233f0ec9a93fea9
+    commit: d6074faaf921a55e12bda65c8dcd40aca001b46b
+
+allow-newer: true
