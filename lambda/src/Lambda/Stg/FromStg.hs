@@ -364,7 +364,6 @@ ffiArgType = \case
       "ghc-prim_GHC.Prim.coercionToken#"  -> pure (SO_Builtin, Void)
       "ghc-prim_GHC.Prim.proxy#"          -> pure (SO_Builtin, Void)
       "ghc-prim_GHC.Prim.(##)"            -> pure (SO_Builtin, Void)
--}
 
 ffiRetType :: C.Type -> MaybeT CG Ty
 ffiRetType = \case

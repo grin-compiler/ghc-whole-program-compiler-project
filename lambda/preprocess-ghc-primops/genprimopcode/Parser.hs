@@ -1471,7 +1471,6 @@ happyFail  0# tk old_st (HappyCons ((action)) (sts))
                                                 (saved_tok `HappyStk` _ `HappyStk` stk) =
 --      trace ("discarding state, depth " ++ show (length stk))  $
         happyDoAction 0# tk action sts ((saved_tok`HappyStk`stk))
--}
 
 -- Enter error recovery: generate an error token,
 --                       save the old token and carry on.
