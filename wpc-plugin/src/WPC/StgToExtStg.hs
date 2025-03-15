@@ -554,7 +554,6 @@ cvtExpr = \case
   GHC.StgLet _ b e          -> StgLet <$> cvtBind b <*> cvtExpr e
   GHC.StgLetNoEscape _ b e  -> StgLetNoEscape <$> cvtBind b <*> cvtExpr e
   GHC.StgTick t e           -> StgTick (cvtTickish t) <$> cvtExpr e
-  e                         -> error $ "invalid stg expression: " ++ ppr (GHC.pprStgExpr GHC.panicStgPprOpts e)
 
 -- stg rhs conversion (heap objects)
 

@@ -3,6 +3,7 @@ packages:
   external-stg-syntax
   external-stg
   external-stg-interpreter
+  wpc-plugin
 
 source-repository-package
   type: git
