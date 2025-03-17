@@ -19,4 +19,20 @@ executable hello
   main-is:             Main.hs
   build-depends:       base, vector, random
   -- hs-source-dirs:      
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    AllowAmbiguousTypes
+    DeriveAnyClass
+    DerivingVia
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    NoStarIsType
+    OverloadedStrings
+    RecordWildCards
+    TemplateHaskell
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    ImplicitParams
+    PatternSynonyms

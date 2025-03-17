@@ -56,7 +56,23 @@ library
     , transformers
     , hashable
 
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    AllowAmbiguousTypes
+    DeriveAnyClass
+    DerivingVia
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    NoStarIsType
+    OverloadedStrings
+    RecordWildCards
+    TemplateHaskell
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    ImplicitParams
+    PatternSynonyms
 
 
 source-repository head
@@ -102,10 +118,42 @@ test-suite lambda-test
                      PrimOpStablePtrSpec
                      PrimOpSTMSpec
                      PrimOpWeakPtrSpec
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    AllowAmbiguousTypes
+    DeriveAnyClass
+    DerivingVia
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    NoStarIsType
+    OverloadedStrings
+    RecordWildCards
+    TemplateHaskell
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    ImplicitParams
+    PatternSynonyms
 
 executable mklampak
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    AllowAmbiguousTypes
+    DeriveAnyClass
+    DerivingVia
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    NoStarIsType
+    OverloadedStrings
+    RecordWildCards
+    TemplateHaskell
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    ImplicitParams
+    PatternSynonyms
   hs-source-dirs:      app
   main-is:             mklampak.hs
   build-depends:       base
@@ -125,7 +173,23 @@ executable mklampak
                      , lambda
 
 executable mkfacts
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    AllowAmbiguousTypes
+    DeriveAnyClass
+    DerivingVia
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    NoStarIsType
+    OverloadedStrings
+    RecordWildCards
+    TemplateHaskell
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    ImplicitParams
+    PatternSynonyms
   hs-source-dirs:      app
   main-is:             mkfacts.hs
   build-depends:       base
@@ -140,7 +204,23 @@ executable mkfacts
                      , external-stg-syntax
 
 executable strip-fullpak
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    AllowAmbiguousTypes
+    DeriveAnyClass
+    DerivingVia
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    NoStarIsType
+    OverloadedStrings
+    RecordWildCards
+    TemplateHaskell
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    ImplicitParams
+    PatternSynonyms
   hs-source-dirs:      app
   main-is:             strip-fullpak.hs
   build-depends:       base
@@ -158,7 +238,23 @@ executable strip-fullpak
                      , lambda
 
 executable catlambda
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    AllowAmbiguousTypes
+    DeriveAnyClass
+    DerivingVia
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    NoStarIsType
+    OverloadedStrings
+    RecordWildCards
+    TemplateHaskell
+    TypeFamilies
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    ImplicitParams
+    PatternSynonyms
   hs-source-dirs:      app
   main-is:             catlambda.hs
   build-depends:       base

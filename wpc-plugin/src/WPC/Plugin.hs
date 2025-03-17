@@ -8,7 +8,7 @@ import           Data.Eq                     (Eq (..))
 import           Data.Function               (($), (.))
 import           Data.IORef                  (modifyIORef, readIORef)
 import           Data.List                   ((++))
-import           Data.Maybe                  (Maybe (..), fromMaybe)
+import           Data.Maybe                  (Maybe (..), fromMaybe, fromJust)
 
 import           GHC.Cmm                     (CmmGroup, CmmGroupSRTs, RawCmmGroup)
 import           GHC.Cmm.Info                (cmmToRawCmm)
@@ -195,10 +195,10 @@ runPhaseFun phase = do
       --writeIORef globalEnvIORef (emptyModpakData {geHscEnv = Just hscEnv})
       modifyIORef globalEnvIORef $ \d -> d {geHscEnv = Just hscEnv}
       let CgGuts{..}            = hscs_guts
-          Just (mg@ModGuts{..}) = geModGuts
-          Just ms               = geModSummary
-          Just stgBinds         = geStgBinds
-          Just stubDecls        = geStubDecls
+          (mg@ModGuts{..}) = fromJust $ geModGuts
+          ms               = fromJust $ geModSummary
+          stgBinds         = fromJust $ geStgBinds
+          stubDecls        = fromJust $ geStubDecls
 
       ----------------
       -- handle stubs
@@ -252,7 +252,7 @@ linkFun :: GhcLink -> DynFlags -> Bool -> HomePackageTable -> IO SuccessFlag
 linkFun ghcLink dflags isBatchMode hpt = do
   putStrLn " ###### linkFun"
   GlobalEnv{..} <- readIORef globalEnvIORef
-  let Just HscEnv{..} = geHscEnv
+  let HscEnv{..} = fromJust $ geHscEnv
       hooks = hsc_hooks {linkHook = Nothing}
   result <- Pipeline.link ghcLink hsc_logger hsc_tmpfs hsc_FC hooks dflags hsc_unit_env isBatchMode Nothing hpt
   {-
