@@ -197,17 +197,20 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- sizeofByteArray# :: ByteArray# -> Int#
   ( "sizeofByteArray#", [ByteArray ByteArrayIdx{..}]) -> do
     ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
-    pure [IntV $ BA.sizeofMutableByteArray baaMutableByteArray]
+    sz <- BA.getSizeofMutableByteArray baaMutableByteArray
+    pure [IntV sz]
 
   -- sizeofMutableByteArray# :: MutableByteArray# s -> Int#
   ( "sizeofMutableByteArray#", [MutableByteArray ByteArrayIdx{..}]) -> do
     ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
-    pure [IntV $ BA.sizeofMutableByteArray baaMutableByteArray]
+    sz <- BA.getSizeofMutableByteArray baaMutableByteArray
+    pure [IntV sz]
 
   -- getSizeofMutableByteArray# :: MutableByteArray# s -> State# s -> (# State# s, Int# #)
   ( "getSizeofMutableByteArray#", [MutableByteArray ByteArrayIdx{..}, _s]) -> do
     ByteArrayDescriptor{..} <- lookupByteArrayDescriptor baId
-    pure [IntV $ BA.sizeofMutableByteArray baaMutableByteArray]
+    sz <- BA.getSizeofMutableByteArray baaMutableByteArray
+    pure [IntV sz]
 
   ---------------------------------------------
   --    read ByteArray (pure)

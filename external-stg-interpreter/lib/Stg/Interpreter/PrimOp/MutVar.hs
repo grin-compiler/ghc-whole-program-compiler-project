@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-incomplete-record-updates #-}
 module Stg.Interpreter.PrimOp.MutVar where
 
 import           Control.Applicative  (Applicative (..), (<$>))

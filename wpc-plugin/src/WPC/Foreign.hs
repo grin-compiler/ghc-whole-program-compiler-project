@@ -1,6 +1,7 @@
 module WPC.Foreign where
 
 import           Control.Monad                 (Functor (..), forM)
+import           System.IO                     (putStrLn)
 
 import           Data.Bool                     (Bool (..), otherwise)
 import           Data.Function                 (($), (.))
@@ -27,10 +28,9 @@ import           GHC.Tc.Utils.TcType           (tcSplitForAllInvisTyVars, tcSpli
                                                 tcSplitPiTys)
 import           GHC.Types.ForeignStubs        (ForeignStubs)
 import           GHC.Types.RepType             (unwrapType)
+import           GHC.Err                       (undefined)
 
 import           Language.Haskell.Syntax.Decls (CImportSpec (..), ForeignDecl (..), ForeignImport (..), LForeignDecl)
-
-import           Prelude                       (putStrLn)
 
 import           WPC.ForeignStubDecls          (StubDecl (..), StubImpl (..), mergeForeignStubs)
 import           WPC.GlobalEnv                 (GlobalEnv (..), globalEnvIORef)
@@ -103,7 +103,10 @@ getCWrapperDescriptor ffiCo = (is_IO_res_ty, showFFIType res_ty, fmap showFFITyp
     ffiTy                   = coercionLKind ffiCo
     (_,sans_foralls)        = tcSplitForAllInvisTyVars ffiTy
     -- example for arg_ty: Int -> IO Int
-    ([Scaled _ arg_ty], _)  = tcSplitFunTys sans_foralls
+    Scaled _ arg_ty = case tcSplitFunTys sans_foralls of
+      ([], _) -> undefined
+      (a : _, _) -> a
+
 
     (bndrs, orig_res_ty)   = tcSplitPiTys arg_ty
     fe_arg_tys             = mapMaybe anonPiTyBinderType_maybe bndrs

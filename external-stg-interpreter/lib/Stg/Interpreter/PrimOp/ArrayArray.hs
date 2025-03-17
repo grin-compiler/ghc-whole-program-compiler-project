@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 module Stg.Interpreter.PrimOp.ArrayArray where
 
 import           Control.Applicative  (Applicative (..))

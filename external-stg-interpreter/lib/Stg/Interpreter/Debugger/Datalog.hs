@@ -165,7 +165,8 @@ exportStgStateM stgState@StgState{..} = do
     addFact "StableName" [I i, A a]
 
   forM_ (IntMap.toList ssMutableByteArrays) $ \(i, ByteArrayDescriptor{..}) -> do
-    addFact "MutableByteArray" [I i, S (show baaPinned), I baaAlignment, I $ BA.sizeofMutableByteArray baaMutableByteArray]
+    sz <- BA.getSizeofMutableByteArray baaMutableByteArray
+    addFact "MutableByteArray" [I i, S (show baaPinned), I baaAlignment, I sz]
 
   -- mvars
   forM_ (IntMap.toList ssMVars) $ \(i, mv@MVarDescriptor{..}) -> do
