@@ -33,7 +33,10 @@ The wpc-plugin is a compiler plugin for GHC 9.6 or newer. It exports the STG IR 
 ## Build
 #### external stg tooling
    ```
-   stack install
+   cabal install ext-stg
+   cabal install stgapp
+   cabal install mkfullpak
+   cabal install ext-stg-interpreter
    ```
 #### `wpc-plugin`
 
@@ -41,11 +44,10 @@ The wpc-plugin is a compiler plugin for GHC 9.6 or newer. It exports the STG IR 
    ```
    cabal install zip-cmd
    ```
-2. Compile the `wpc-plugin`
-   The `wpc-plugin` has a speparate `stack.yaml` because it uses the plugin API of `GHC 9.10.1`.  
+2. Compile the `wpc-plugin` it uses the plugin API of `GHC 9.10.1`.
    ```
    cd wpc-plugin
-   stack build
+   cabal build
    ```
 3. Find the built `libwpc-plugin.[so|dylib|dll]`
    ```
@@ -62,16 +64,6 @@ package *
   ghc-options:
     -fplugin-trustworthy
     -fplugin-library=PATH_TO/libwpc-plugin.so;wpc-plugin-unit;WPC.Plugin;[]
-```
-
-#### stack
-Add the following lines to your project's `stack.yaml`:
-```
-apply-ghc-options: everything
-ghc-options:
-  "$everything":
-      -fplugin-trustworthy
-      -fplugin-library=PATH_TO/libwpc-plugin.so;wpc-plugin-unit;WPC.Plugin;[]
 ```
 
 ## TODO
