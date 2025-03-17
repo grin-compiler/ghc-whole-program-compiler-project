@@ -1,4 +1,4 @@
-cabal-version:       2.4
+cabal-version:       3.0
 name:                external-stg-interpreter
 version:             0.1.0.1
 synopsis:            External STG interpreter
@@ -14,20 +14,11 @@ build-type:          Simple
 common lang
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
   ghc-options:
     -Wall
     -Wnoncanonical-monad-instances
@@ -42,22 +33,14 @@ library
   hs-source-dirs:      lib
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
     TypeFamilies
-    UndecidableInstances
-    ViewPatterns
     MultiWayIf
-    ImplicitParams
     PatternSynonyms
-  import:              lang
   ghc-options:
     -Wall
     -Wnoncanonical-monad-instances
@@ -67,7 +50,7 @@ library
     -Widentities
     -Wunused-packages
     -Wmissing-deriving-strategies
-  ghc-options:         -Wall -fobject-code -O2
+  ghc-options:         -fobject-code -O2
   build-depends:       base,
                        time,
                        unix,

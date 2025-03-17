@@ -1,4 +1,4 @@
-cabal-version:       2.4
+cabal-version:       3.0
 name:                external-stg-syntax
 version:             1.0.2
 synopsis:            GHC independent STG IR definition
@@ -11,24 +11,14 @@ copyright:           (c) 2022 Csaba Hruska
 category:            Development
 build-type:          Simple
 
-common lang
+library
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
-    PatternSynonyms
   ghc-options:
     -Wall
     -Wnoncanonical-monad-instances
@@ -38,10 +28,6 @@ common lang
     -Widentities
     -Wunused-packages
     -Wmissing-deriving-strategies
-
-
-library
-  import:              lang
   exposed-modules:     Stg.Syntax
   hs-source-dirs:      lib
   build-depends:       base,

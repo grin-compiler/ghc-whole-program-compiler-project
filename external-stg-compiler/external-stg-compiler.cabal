@@ -1,4 +1,4 @@
-cabal-version:       2.4
+cabal-version:       3.0
 name:                external-stg-compiler
 version:             0.1.0.0
 -- synopsis:
@@ -42,20 +42,11 @@ library
 
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
   cpp-options:          -DEXTERNAL_STG_COMPILER_PACKAGE
 
   include-dirs:         cbits
@@ -86,20 +77,11 @@ executable gen-exe
 
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
 
 executable gen-obj
   hs-source-dirs:      app
@@ -112,20 +94,11 @@ executable gen-obj
                      , external-stg-compiler
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
 
 executable gen-exe2
   hs-source-dirs:      app
@@ -144,20 +117,11 @@ executable gen-exe2
 
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
 
 executable gen-obj2
   hs-source-dirs:      app
@@ -173,20 +137,11 @@ executable gen-obj2
                      , external-stg-compiler
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
 
 executable show-ghc-stg
   hs-source-dirs:      app
@@ -200,20 +155,11 @@ executable show-ghc-stg
                      , filepath
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
 
 executable dce-fullpak
   hs-source-dirs:      app
@@ -231,17 +177,8 @@ executable dce-fullpak
 
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams

@@ -1,4 +1,4 @@
-cabal-version:       2.4
+cabal-version:       3.0
 name:                external-stg
 version:             0.1.0.1
 synopsis:            A library to dump GHC's STG representation.
@@ -14,20 +14,11 @@ build-type:          Simple
 common lang
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
   ghc-options:
     -Wall
     -Wnoncanonical-monad-instances

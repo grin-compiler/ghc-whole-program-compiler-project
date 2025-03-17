@@ -1,4 +1,4 @@
-cabal-version:       2.4
+cabal-version:       3.0
 Name: ghc-primop-gen
 Version: 0.1
 Copyright: XXX
@@ -36,18 +36,8 @@ library
 
   default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
     DeriveAnyClass
-    DerivingVia
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
-    NoStarIsType
     OverloadedStrings
     RecordWildCards
-    TemplateHaskell
-    TypeFamilies
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    ImplicitParams
-    PatternSynonyms
