@@ -3,7 +3,7 @@
 The project consists of GHC **wpc-plugin** and the corresponding **External STG IR** and **tooling**.
 
 
-The wpc-plugin is a compiler plugin for GHC 9.6 or newer. It exports the STG IR `(.modpak)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
+The wpc-plugin is a compiler plugin for GHC 9.10.1. It exports the STG IR `(.modpak)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
 
 <img height="350" src="https://user-images.githubusercontent.com/877489/114280753-0d311300-9a3b-11eb-8d50-facad35f0e9a.png"/>
 
@@ -33,10 +33,7 @@ The wpc-plugin is a compiler plugin for GHC 9.6 or newer. It exports the STG IR 
 ## Build
 #### external stg tooling
    ```
-   cabal install ext-stg
-   cabal install stgapp
-   cabal install mkfullpak
-   cabal install ext-stg-interpreter
+   cabal install ext-stg stgapp mkfullpak ext-stg-interpreter
    ```
 #### `wpc-plugin`
 
@@ -46,8 +43,7 @@ The wpc-plugin is a compiler plugin for GHC 9.6 or newer. It exports the STG IR 
    ```
 2. Compile the `wpc-plugin` it uses the plugin API of `GHC 9.10.1`.
    ```
-   cd wpc-plugin
-   cabal build
+   cabal build wpc-plugin
    ```
 3. Find the built `libwpc-plugin.[so|dylib|dll]`
    ```
