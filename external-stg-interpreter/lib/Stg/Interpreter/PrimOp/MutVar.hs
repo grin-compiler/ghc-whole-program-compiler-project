@@ -4,7 +4,7 @@ module Stg.Interpreter.PrimOp.MutVar where
 import           Control.Applicative  (Applicative (..), (<$>))
 import           Control.Monad.State  (gets, modify')
 
-import           Data.Enum            (Enum (..))
+import Prelude (Enum (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($))
 import           Data.Int             (Int)

@@ -5,7 +5,7 @@ import           Control.Monad        (Monad (..), forM_, mapM, when)
 import           Control.Monad.State  (gets, modify')
 
 import           Data.Bool            (Bool (..), not)
-import           Data.Enum            (Enum (..))
+import Prelude (Enum (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (const, ($))
 import           Data.Int             (Int)

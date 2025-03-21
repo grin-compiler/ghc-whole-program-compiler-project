@@ -40,8 +40,46 @@ library
     , souffle-haskell
     , time
 
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -75,8 +113,46 @@ executable gen-exe
                      , containers
                      , bytestring
 
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -92,8 +168,46 @@ executable gen-obj
                      , ghc-paths
                      , external-stg
                      , external-stg-compiler
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -115,8 +229,46 @@ executable gen-exe2
                      , filepath
                      , bytestring
 
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -135,8 +287,46 @@ executable gen-obj2
                      , bytestring
                      , external-stg
                      , external-stg-compiler
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -153,8 +343,46 @@ executable show-ghc-stg
                      , external-stg
                      , external-stg-compiler
                      , filepath
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -175,8 +403,46 @@ executable dce-fullpak
                      , bytestring
                      , zip
 
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude

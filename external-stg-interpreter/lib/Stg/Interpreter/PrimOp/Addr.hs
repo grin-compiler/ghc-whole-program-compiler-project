@@ -1,4 +1,4 @@
-{-# LANGUAGE Strict #-}
+-- {-# LANGUAGE Strict #-}
 module Stg.Interpreter.PrimOp.Addr where
 
 import           Control.Applicative  (Applicative (..), (<$>))

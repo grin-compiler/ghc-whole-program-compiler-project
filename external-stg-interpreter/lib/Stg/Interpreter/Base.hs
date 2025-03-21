@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant <$>" #-}
 {-# HLINT ignore "Use camelCase" #-}
+
 module Stg.Interpreter.Base where
 
 import           Control.Applicative                   (Applicative (..), (<$>))
@@ -15,7 +16,9 @@ import           Data.Bool                             (Bool (..), otherwise)
 import           Data.ByteString.Char8                 (ByteString)
 import qualified Data.ByteString.Char8                 as BS8
 import qualified Data.ByteString.Internal              as BS
-import           Data.Enum                             (Enum (..))
+
+import Prelude (Enum (..))
+
 import           Data.Eq                               (Eq (..))
 import           Data.Function                         (($), (.))
 import           Data.Int                              (Int)

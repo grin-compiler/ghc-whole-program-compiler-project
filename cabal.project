@@ -3,7 +3,7 @@ packages:
   external-stg-syntax
   external-stg
   external-stg-interpreter
-  wpc-plugin
+  -- wpc-plugin
   -- external-stg-compiler
   -- lambda
 

@@ -6,7 +6,7 @@ import           Control.Applicative  (Applicative (..))
 
 import           Data.Bits            (Bits (..), FiniteBits (..), testBitDefault)
 import           Data.Bool            ((||))
-import           Data.Enum            (Bounded (..))
+import Prelude (Bounded (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($), (.))
 import           Data.List            (foldl)

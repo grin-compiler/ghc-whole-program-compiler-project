@@ -1,4 +1,4 @@
-{-# LANGUAGE Strict #-}
+-- {-# LANGUAGE Strict #-}
 module Stg.Interpreter.PrimOp.Int16 where
 
 import           Control.Applicative  (Applicative (..))

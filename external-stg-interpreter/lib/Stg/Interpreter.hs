@@ -1,3 +1,4 @@
+
 module Stg.Interpreter where
 
 import           Codec.Archive.Zip                      (mkEntrySelector, saveEntry, withArchive)
@@ -10,7 +11,8 @@ import           Control.Monad                          (Functor (..), Monad (..
 import           Control.Monad.State.Strict             (MonadIO (..), StateT, execStateT, gets, modify')
 
 import           Data.Bool                              (Bool (..), not, otherwise, (&&), (||))
-import           Data.Enum                              (Enum (..))
+
+import Prelude (Enum (..))
 import           Data.Eq                                (Eq (..))
 import           Data.Function                          (id, ($), (.))
 import           Data.Int                               (Int)

@@ -8,7 +8,7 @@ import           Control.Monad                       (Monad (..), mapM, mapM_, u
 import           Control.Monad.State                 (MonadIO (..), MonadState (..), gets, modify')
 
 import           Data.Bool                           (Bool (..), not, (&&), (||))
-import           Data.Enum                           (Enum (..))
+import Prelude (Enum (..))
 import           Data.Eq                             (Eq (..))
 import           Data.Function                       (($), (.))
 import qualified Data.IntMap                         as IntMap

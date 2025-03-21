@@ -7,7 +7,7 @@ import           Control.Applicative  (Applicative (..))
 
 import           Data.Bits            (Bits (..))
 import           Data.Bool            ((||))
-import           Data.Enum            (Bounded (..))
+import Prelude (Bounded (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($), (.))
 import           Data.Int             (Int64)

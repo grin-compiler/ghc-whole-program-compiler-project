@@ -194,7 +194,7 @@ runPhaseFun phase = do
       GlobalEnv{..} <- readIORef globalEnvIORef
       --writeIORef globalEnvIORef (emptyModpakData {geHscEnv = Just hscEnv})
       modifyIORef globalEnvIORef $ \d -> d {geHscEnv = Just hscEnv}
-      let CgGuts{..}            = hscs_guts
+      let CgGuts{..}       = hscs_guts
           (mg@ModGuts{..}) = fromJust $ geModGuts
           ms               = fromJust $ geModSummary
           stgBinds         = fromJust $ geStgBinds
@@ -256,7 +256,7 @@ linkFun ghcLink dflags isBatchMode hpt = do
       hooks = hsc_hooks {linkHook = Nothing}
   result <- Pipeline.link ghcLink hsc_logger hsc_tmpfs hsc_FC hooks dflags hsc_unit_env isBatchMode Nothing hpt
   {-
-    IDEA: generate ghcstgapp file along with modpak file for the main module
+    IDEA: generate ghc_stgapp file along with modpak file for the main module
             do not use the link hook
             this will make the plugin work for 'ghc -c' + 'ghc Main.o -o ExeName' use cases
           OR

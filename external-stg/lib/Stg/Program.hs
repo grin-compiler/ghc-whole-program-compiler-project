@@ -522,13 +522,16 @@ downloadFoundationPakIfMissing ghcVersionString foundationPakPath = do
   exists <- doesDirectoryExist foundationPakPath
   unless exists $ do
     let (pakDir, pakName) = splitFileName foundationPakPath
-        pakFileName       = pakName <.> ".pak.tar.xz"
+        pakFileName       = pakName <.> ".pak.tar.zst"
         pakURL            = foundationPakURL </> ghcVersionString </> pakFileName
     printf "downloading %s into %s\n" pakURL pakDir
     createDirectoryIfMissing True pakDir
-    callCommand $ printf "(cd %s ; curl -L %s -o %s)" pakDir pakURL pakFileName
-    callCommand $ printf "(cd %s ; tar xf %s)"  pakDir pakFileName
-    callCommand $ printf "(cd %s ; rm %s)"      pakDir pakFileName
+    callCommand $
+      printf "(cd %s ; curl -L %s -o %s)"                        pakDir pakURL pakFileName
+    callCommand $
+      printf "(cd %s ; tar --use-compress-program=unzstd xf %s)" pakDir        pakFileName
+    callCommand $
+      printf "(cd %s ; rm %s)"                                   pakDir        pakFileName
 
 -- fullpak related
 

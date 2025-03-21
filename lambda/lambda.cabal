@@ -56,8 +56,46 @@ library
     , transformers
     , hashable
 
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -108,8 +146,46 @@ test-suite lambda-test
                      PrimOpStablePtrSpec
                      PrimOpSTMSpec
                      PrimOpWeakPtrSpec
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -117,8 +193,46 @@ test-suite lambda-test
     RecordWildCards
 
 executable mklampak
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -143,8 +257,46 @@ executable mklampak
                      , lambda
 
 executable mkfacts
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -164,8 +316,46 @@ executable mkfacts
                      , external-stg-syntax
 
 executable strip-fullpak
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -188,8 +378,46 @@ executable strip-fullpak
                      , lambda
 
 executable catlambda
-  default-language: GHC2024
+  default-language: GHC2021
   default-extensions:
+    AllowAmbiguousTypes
+    BangPatterns
+    DataKinds
+    DeriveAnyClass
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImportQualifiedPost
+    InstanceSigs
+    LambdaCase
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoStarIsType
+    NumericUnderscores
+    OverloadedStrings
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    UndecidableInstances
+    ViewPatterns
+    MultiWayIf
+    TupleSections
+    ImplicitParams
+    NamedFieldPuns
+    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
