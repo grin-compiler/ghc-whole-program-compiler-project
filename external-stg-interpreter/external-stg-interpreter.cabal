@@ -214,10 +214,10 @@ library
 
   include-dirs:        
     datalog
-    souffle
-    souffle/src/include
   cxx-options:          -D__EMBEDDED_SOUFFLE__ -std=c++17 -Wno-deprecated-declarations
   cxx-sources:          datalog/ext-stg-gc.cpp
+  include-dirs:
+    ../souffle/src/include
 
 executable ext-stg-interpreter
   import:              lang
