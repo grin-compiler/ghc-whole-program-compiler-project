@@ -6,6 +6,7 @@ import           Control.Monad.State       (MonadIO (..))
 
 import           Data.Bool                 (Bool (..))
 import qualified Data.ByteString.Char8     as BS8
+import           Data.Data                 (Proxy)
 import           Data.Eq                   (Eq)
 import           Data.Function             (const, ($), (.))
 import           Data.IntMap               (IntMap)
@@ -55,18 +56,22 @@ newtype MaybeDeadlockingThread = MaybeDeadlockingThread String
 
 instance Souffle.Program ExtStgGC where
   type ProgramFacts ExtStgGC = [GCRoot, Reference, MaybeDeadlockingThread]
+  programName :: ExtStgGC -> String
   programName = const "ext_stg_gc"
 
 instance Souffle.Fact GCRoot where
   type FactDirection GCRoot = 'Souffle.Input
+  factName :: Proxy GCRoot -> String
   factName = const "GCRoot"
 
 instance Souffle.Fact Reference where
   type FactDirection Reference = 'Souffle.Input
+  factName :: Proxy Reference -> String
   factName = const "Reference"
 
 instance Souffle.Fact MaybeDeadlockingThread where
   type FactDirection MaybeDeadlockingThread = 'Souffle.Input
+  factName :: Proxy MaybeDeadlockingThread -> String
   factName = const "MaybeDeadlockingThread"
 
 instance Souffle.Marshal GCRoot
@@ -139,7 +144,7 @@ withGCRootFacts StgState{..} localGCRoots addGCRoot = do
   visitGCRef (addGCRoot "stable pointer") [PtrAtom (StablePtr idx) (intPtrToPtr $ IntPtr idx) | idx <- IntMap.keys ssStablePointers]
 
   -- CAFs
-  visitGCRef (addGCRoot "CAF") $ fmap HeapPtr $ IntSet.toList ssCAFSet
+  visitGCRef (addGCRoot "CAF") (HeapPtr <$> IntSet.toList ssCAFSet)
 
   -- stack continuations of live threads
   forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of

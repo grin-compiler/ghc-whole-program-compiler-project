@@ -1,44 +1,50 @@
-import           Control.Monad
+import           Control.Applicative         (Applicative (..), (<$>))
+import           Control.Monad               (Functor (..), MonadFail (..), filterM, forM_, join, mapM_)
 
-import           Data.Bool                  (Bool (..))
-import qualified Data.ByteString.Char8      as BS8
-import           Data.Eq                    (Eq (..))
-import           Data.Function              (flip, ($), (.))
-import           Data.List                  (concatMap, isSuffixOf, length, take, (++))
-import qualified Data.Map                   as Map
-import           Data.Maybe
-import           Data.Monoid
-import           Data.Ord
-import qualified Data.Set                   as Set
-import           Data.String                (String)
+import           Data.Bool                   (Bool (..))
+import qualified Data.ByteString.Char8       as BS8
+import           Data.Eq                     (Eq (..))
+import           Data.Function               (flip, ($), (.))
+import           Data.List                   (concatMap, isSuffixOf, length, take, (++))
+import qualified Data.Map                    as Map
+import           Data.Maybe                  (Maybe (..), isNothing, maybeToList)
+import           Data.Monoid                 (Monoid (..), (<>))
+import           Data.Ord                    (Ord (..))
+import qualified Data.Set                    as Set
+import           Data.String                 (String)
 
-import           Foreign
+import           Foreign                     (nullFunPtr)
 
-import           GHC.Num                    (Integer, Num (..))
+import           GHC.Num                     (Integer, Num (..))
 
-import           Options.Applicative
+import           Options.Applicative         (CommandFields, InfoMod, Mod, Parser)
+import           Options.Applicative.Builder (argument, command, help, info, metavar, progDesc, str, subparser)
+import           Options.Applicative.Extra   (execParser, helper)
 
-import           Stg.Analysis.Closure
-import           Stg.Analysis.ForeignInfo
-import           Stg.Foreign.Linker
-import           Stg.GHC.Symbols
-import           Stg.Program
-import           Stg.Syntax
+import           Stg.Analysis.Closure        (getAllClosures)
+import           Stg.Analysis.ForeignInfo    (ForeignInfo (..), getForeignInfos)
+import           Stg.Foreign.Linker          (getExtStgWorkDirectory, linkForeignCbitsSharedLib)
+import           Stg.GHC.Symbols             (getSymbolName, handledRTSSymbols, rtsSymbols)
+import           Stg.Program                 (StgModuleInfo (..), getAppModuleMapping, getFullpakModules,
+                                              getGhcStgAppModules, getJSONModules)
+import           Stg.Syntax                  (CCallTarget (..), ForeignCall (..), ForeignStubs' (..), Lit (..), Module,
+                                              Module' (..), PrimCall (..), StubDecl' (..), StubImpl (..), getModuleName,
+                                              getUnitId)
 
-import           System.Directory
-import           System.FilePath
-import           System.IO
-import           System.Posix.DynamicLinker
+import           System.Directory            (createDirectoryIfMissing, doesFileExist, makeAbsolute)
+import           System.FilePath             (FilePath, takeExtension, (-<.>), (</>))
+import           System.IO                   (IO, IOMode (..), hPutStrLn, putStrLn, withFile)
+import           System.Posix.DynamicLinker  (RTLDFlags (..), c_dlsym, dlopen, packDL)
 
-import           Text.Printf
-import           Text.Show                  (Show (..))
+import           Text.Printf                 (printf)
+import           Text.Show                   (Show (..))
 
 loadModules :: FilePath -> IO [Module]
 loadModules fname = case () of
-  _ | isSuffixOf "fullpak" fname    -> Stg.Program.getFullpakModules fname
-  _ | isSuffixOf "ghc_stgapp" fname -> Stg.Program.getGhcStgAppModules fname
-  _ | isSuffixOf "json" fname       -> Stg.Program.getJSONModules fname
-  _                                 -> fail "unknown file format"
+  _ | "fullpak" `isSuffixOf` fname    -> getFullpakModules fname
+  _ | "ghc_stgapp" `isSuffixOf` fname -> getGhcStgAppModules fname
+  _ | "json" `isSuffixOf` fname       -> getJSONModules fname
+  _                                   -> fail "unknown file format"
 
 modes :: Parser (IO ())
 modes = subparser
@@ -115,7 +121,7 @@ modes = subparser
                 symbols = Set.fromList $
                   [n | LitLabel n _ <- Map.keys fiLitLabels] ++
                   [n | PrimCall n _ <- Map.keys fiPrimCalls] ++
-                  [n | StaticTarget _ n _ _ <- fmap foreignCTarget $ Map.keys fiForeignCalls]
+                  [n | StaticTarget _ n _ _ <- foreignCTarget <$> Map.keys fiForeignCalls]
 
             printf "foreign symbols: %d\n" (Set.size symbols)
             mapM_ BS8.putStrLn $ Set.toList symbols
@@ -138,8 +144,7 @@ modes = subparser
             moduleList <- loadModules fname
             let ForeignInfo{..} = getForeignInfos moduleList
             printf "used literals: %d\n" (Map.size fiLiterals)
-            forM_ (Map.toList fiLiterals) $ \(lit, count) -> do
-              printf "%-10d %s\n" count (show lit)
+            forM_ (Map.toList fiLiterals) $ \(lit, count) -> printf "%-10d %s\n" count (show lit)
 
     stringsMode :: Parser (IO ())
     stringsMode =
@@ -149,8 +154,7 @@ modes = subparser
             moduleList <- loadModules fname
             let ForeignInfo{..} = getForeignInfos moduleList
             printf "used top level strings: %d\n" (Map.size fiTopStrings)
-            forM_ (Map.toList fiTopStrings) $ \(str', count) -> do
-              printf "%-10d %s\n" count (show str')
+            forM_ (Map.toList fiTopStrings) $ \(str', count) -> printf "%-10d %s\n" count (show str')
 
     undefMode :: Parser (IO ())
     undefMode =
@@ -169,16 +173,15 @@ modes = subparser
                 symbols = Set.fromList $
                   [n | LitLabel n _ <- Map.keys fiLitLabels] ++
                   [n | PrimCall n _ <- Map.keys fiPrimCalls] ++
-                  [n | StaticTarget _ n _ _ <- fmap foreignCTarget $ Map.keys fiForeignCalls]
+                  [n | StaticTarget _ n _ _ <- foreignCTarget <$> Map.keys fiForeignCalls]
 
             -- get known symbols from .cbits.so
             soName <- makeAbsolute (fname -<.> ".cbits.so")
             dl <- dlopen soName [{-RTLD_NOW-}RTLD_LAZY, RTLD_LOCAL]
 
-            undefList <- flip filterM (Set.toList symbols) $ \sym -> do
-              BS8.useAsCString sym $ \s -> do
-                symPtr <- c_dlsym (packDL dl) s
-                pure (symPtr == nullFunPtr)
+            undefList <- flip filterM (Set.toList symbols) $ \sym -> BS8.useAsCString sym $ \s -> do
+              symPtr <- c_dlsym (packDL dl) s
+              pure (symPtr == nullFunPtr)
 
             let undefSet = Set.fromList undefList Set.\\ ignoredSymbols
             printf "undefined symbols: %d\n" (Set.size undefSet)
@@ -193,15 +196,13 @@ modes = subparser
     linkMode =
         run <$> fullpakFile
       where
-        run fname = case isSuffixOf "ghc_stgapp" fname of
-          False -> do
-            printf "linking is not supported for %s\n" . show $ takeExtension fname
-          True  -> do
-            workDir <- getExtStgWorkDirectory fname
-            createDirectoryIfMissing True workDir
-            let soName = workDir </> "cbits.so"
-            printf "linking %s\n" soName
-            linkForeignCbitsSharedLib fname
+        run fname = if "ghc_stgapp" `isSuffixOf` fname then (do
+          workDir <- getExtStgWorkDirectory fname
+          createDirectoryIfMissing True workDir
+          let soName = workDir </> "cbits.so"
+          printf "linking %s\n" soName
+          linkForeignCbitsSharedLib fname) else (do
+          printf "linking is not supported for %s\n" . show $ takeExtension fname)
 
     hiListMode :: Parser (IO ())
     hiListMode =
@@ -214,9 +215,7 @@ modes = subparser
           forM_ moduleInfoList $ \StgModuleInfo{..} -> do
             let hiName = take (length modModpakPath - 8) modModpakPath ++ "hi"
             ok <- doesFileExist hiName
-            case ok of
-              True  -> printf "OK: %s\n" modModuleName
-              False -> printf "MISSING: %s\n" hiName
+            (if ok then printf "OK: %s\n" modModuleName else printf "MISSING: %s\n" hiName)
 
     srcpathMode :: Parser (IO ())
     srcpathMode =
@@ -233,17 +232,15 @@ modes = subparser
                               (BS8.unpack srcPath)
 
           -- report empty moduleSourceFilePath
-          forM_ [m | m <- moduleList, isNothing $ moduleSourceFilePath m] $ \m -> do
-            printf "missing source filepath for: %s %s\n" (BS8.unpack $ getUnitId $ moduleUnitId m) (BS8.unpack $ getModuleName $ moduleName m)
+          forM_ [m | m <- moduleList, isNothing $ moduleSourceFilePath m] $ \m -> printf "missing source filepath for: %s %s\n" (BS8.unpack $ getUnitId $ moduleUnitId m) (BS8.unpack $ getModuleName $ moduleName m)
 
           -- report ambiguous moduleSourceFilePath
           let moduleMaps  = [Map.singleton srcPath (1 :: Integer, [m]) | m <- moduleList, srcPath <- maybeToList $ moduleSourceFilePath m]
               duplicates  = Map.filter (\(n, _) -> n > 1) $ Map.unionsWith (\(n1, l1) (n2, l2) -> (n1 + n2, l1 ++ l2)) moduleMaps
-          forM_ (Map.toList duplicates) $ \(srcPath, (_, mods)) -> forM_ mods $ \m -> do
-            printf "duplicate source filepath: %s %s %s\n"
-              (BS8.unpack $ getUnitId $ moduleUnitId m)
-              (BS8.unpack $ getModuleName $ moduleName m)
-              (BS8.unpack srcPath)
+          forM_ (Map.toList duplicates) $ \(srcPath, (_, mods)) -> forM_ mods $ \m -> printf "duplicate source filepath: %s %s %s\n"
+            (BS8.unpack $ getUnitId $ moduleUnitId m)
+            (BS8.unpack $ getModuleName $ moduleName m)
+            (BS8.unpack srcPath)
 
 main :: IO ()
 main = join $ execParser $ info (helper <*> modes) mempty

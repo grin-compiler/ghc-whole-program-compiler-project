@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 module Stg.Syntax where
 
 import           Data.Binary           (Binary)
@@ -72,6 +74,7 @@ instance Ord TC where
     x  -> x
 
 instance Show TC where
+  show :: TC -> String
   show (TC a) = BS8.unpack $ tcUniqueName a
 
 -- idinfo
@@ -261,7 +264,7 @@ instance Ord CutTyCon where
 
 instance Show CutTyCon where
   show :: CutTyCon -> String
-  show (CutTyCon tc) = "CutTyCon " ++ (BS8.unpack $ tcUniqueName tc)
+  show (CutTyCon tc) = "CutTyCon " ++ BS8.unpack (tcUniqueName tc)
 
 -- user friendly data con
 data DataCon

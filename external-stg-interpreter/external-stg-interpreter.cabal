@@ -212,17 +212,12 @@ library
     Stg.Interpreter.PrimOp.Word8
     Stg.Interpreter.PrimOp.Word
 
-  include-dirs:         datalog
-
-
+  include-dirs:        
+    datalog
+    souffle
+    souffle/src/include
+  cxx-options:          -D__EMBEDDED_SOUFFLE__ -std=c++17 -Wno-deprecated-declarations
   cxx-sources:          datalog/ext-stg-gc.cpp
-  cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
-  if os(darwin)
-    ld-options:           "-Wl,-all_load"
-    extra-libraries:      omp stdc++
-  else
-    ld-options:           "-Wl,-u,__factory_Sf_ext_stg_gc_instance"
-    extra-libraries:      gomp
 
 executable ext-stg-interpreter
   import:              lang

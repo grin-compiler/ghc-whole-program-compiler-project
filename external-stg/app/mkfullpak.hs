@@ -1,13 +1,17 @@
-import           Data.Bool           (Bool)
-import           Data.Monoid         (Monoid (..))
-import           Data.Semigroup      ((<>))
+import           Control.Applicative         (Applicative (..), (<$>), (<**>))
 
-import           Options.Applicative
+import           Data.Bool                   (Bool)
+import           Data.Monoid                 (Monoid (..))
+import           Data.Semigroup              ((<>))
 
-import           Stg.Fullpak
+import           Options.Applicative         (Parser)
+import           Options.Applicative.Builder (argument, help, info, long, metavar, short, str, switch)
+import           Options.Applicative.Extra   (execParser, helper)
 
-import           System.FilePath
-import           System.IO           (IO)
+import           Stg.Fullpak                 (mkFullpak)
+
+import           System.FilePath             (FilePath, (-<.>))
+import           System.IO                   (IO)
 
 data FullpakOptions
   = FullpakOptions
