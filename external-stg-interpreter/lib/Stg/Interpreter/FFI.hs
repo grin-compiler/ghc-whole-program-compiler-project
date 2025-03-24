@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Redundant <$>" #-}
 module Stg.Interpreter.FFI where
 
 ----- FFI experimental

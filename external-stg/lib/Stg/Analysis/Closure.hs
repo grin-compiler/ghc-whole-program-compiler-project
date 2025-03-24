@@ -3,7 +3,8 @@ module Stg.Analysis.Closure (getAllClosures) where
 import           Data.List  (concatMap, (++))
 import           Data.Tuple (uncurry)
 
-import           Stg.Syntax
+import           Stg.Syntax (Alt, Alt' (..), Binder, Binding, Binding' (..), Expr, Expr' (..), Id (..), Module,
+                             Module' (..), Rhs, Rhs' (..), TopBinding, TopBinding' (..))
 
 getAllClosures :: Module -> [(Id, Rhs)]
 getAllClosures = visitModule

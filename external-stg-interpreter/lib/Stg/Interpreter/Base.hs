@@ -1,7 +1,3 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Redundant <$>" #-}
-{-# HLINT ignore "Use camelCase" #-}
-
 module Stg.Interpreter.Base where
 
 import           Control.Applicative                   (Applicative (..), (<$>))

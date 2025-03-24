@@ -548,7 +548,7 @@ evalStackContinuation result = \case
   CaseOf curClosureAddr curClosure localEnv (Id resultBinder) (CutShow altType) alts -> do
     modify' $ \s -> s {ssCurrentClosure = Just curClosure, ssCurrentClosureAddr = curClosureAddr}
     assertWHNF result altType resultBinder
-    let resultId = (Id resultBinder)
+    let resultId = Id resultBinder
         alt = case getCutShowItem alts of
           []      -> undefined
           (a : _) -> a
@@ -584,8 +584,7 @@ evalStackContinuation result = \case
 
       PolyAlt -> do
         let Alt{..} = alt
-            extendedEnv = addBinderToEnv SO_Scrut resultBinder v $                 -- HINT: bind the result
-                          localEnv
+            extendedEnv = addBinderToEnv SO_Scrut resultBinder v localEnv             -- HINT: bind the result
                           --addManyBindersToEnv SO_AltArg altBinders result localEnv  -- HINT: bind alt params
         {-
         unless (length altBinders == length result) $ do
@@ -784,7 +783,7 @@ evalExpr localEnv = \case
               putStrLn   "  args:"
               forM_ l $ \a -> do
                 putStrLn $ "    " ++ show a
-            stgErrorM $ "illegal createAdjustor call"
+            stgErrorM "illegal createAdjustor call"
       _ -> mapM (evalArg localEnv) l
     --mylog $ show ("executing", foreignCall, args)
     evalFCallOp evalOnNewThread foreignCall args t tc
@@ -881,7 +880,7 @@ declareBinding isLetNoEscape localEnv = \case
   StgRec l -> do
     (ls, newEnvItems) <- fmap unzip . forM l $ \(b, _) -> do
       addr <- freshHeapAddress
-      pure (addr, (b, (HeapPtr addr)))
+      pure (addr, (b, HeapPtr addr))
     let extendedEnv = addZippedBindersToEnv SO_Let newEnvItems localEnv
     forM_ (zip ls l) $ \(addr, (b, rhs)) -> do
       storeRhs isLetNoEscape extendedEnv b addr rhs
@@ -979,7 +978,7 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
               _        -> error "multiple main_:Main.main have found"
         limit <- gets ssNextHeapAddr
         modify' $ \s -> s {ssDynamicHeapStart = limit}
-        modify' $ \s -> s {ssStgErrorAction = Printable $ Debugger.processCommandsUntilExit}
+        modify' $ \s -> s {ssStgErrorAction = Printable Debugger.processCommandsUntilExit}
 
         -- TODO: check how it is done in the native RTS: call hs_main
         mainAtom <- lookupEnv mempty rootMain
@@ -1229,6 +1228,6 @@ evalPrimOp =
   PrimUnsafe.evalPrimOp $
   PrimMiscEtc.evalPrimOp $
   PrimObjectLifetime.evalPrimOp $
-  PrimInfoTableOrigin.evalPrimOp $
+  PrimInfoTableOrigin.evalPrimOp
   unsupported where
     unsupported op args _t _tc = stgErrorM $ "unsupported StgPrimOp: " ++ show op ++ " args: " ++ show args

@@ -8,7 +8,7 @@ module Stg.Analysis.ForeignInfo
 
 import           Control.Applicative (Applicative (..))
 import           Control.Monad       (mapM_)
-import           Control.Monad.State
+import           Control.Monad.State (State, execState, gets, modify')
 
 import           Data.Eq             (Eq)
 import           Data.Function       (($), (.))
@@ -22,7 +22,9 @@ import           GHC.Num             (Num (..))
 
 import           Prelude             (($!))
 
-import           Stg.Syntax
+import           Stg.Syntax          (Alt, Alt' (..), Arg, Arg' (..), Binding, Binding' (..), Expr, Expr' (..),
+                                      ForeignCall, Lit (LitLabel), Module, Module' (..), Name, PrimCall, Rhs, Rhs' (..),
+                                      StgOp (..), TopBinding, TopBinding' (..))
 
 import           Text.Show           (Show)
 

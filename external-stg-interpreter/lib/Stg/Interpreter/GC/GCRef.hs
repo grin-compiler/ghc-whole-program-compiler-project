@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use camelCase" #-}
 module Stg.Interpreter.GC.GCRef where
 
 import           Control.Applicative   (Applicative (..))

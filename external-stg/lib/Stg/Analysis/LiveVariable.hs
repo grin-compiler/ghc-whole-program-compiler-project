@@ -11,7 +11,8 @@ import           Data.Tuple    (fst)
 
 import           GHC.Err       (error)
 
-import           Stg.Syntax
+import           Stg.Syntax    (Alt, Alt' (..), Arg' (..), Binder (..), Binding, Binding' (..), Expr, Expr' (..),
+                                Id (..), Module, Module' (..), Rhs, Rhs' (..), TopBinding, TopBinding' (..))
 
 import           Text.Show     (Show (..))
 
