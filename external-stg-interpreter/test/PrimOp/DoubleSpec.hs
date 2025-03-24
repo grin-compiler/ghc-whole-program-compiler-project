@@ -1,23 +1,28 @@
-{-# LANGUAGE MagicHash, UnboxedTuples, CPP #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module PrimOp.DoubleSpec where
 
-import Control.Monad.State.Strict
+import           Control.Applicative           (Applicative (..))
+import           Control.Monad                 (Functor (..))
+import           Control.Monad.State.Strict    (evalStateT)
 
-import Test.Hspec
-import Test.QuickCheck
+import           Data.Function                 (($))
+import           Data.Maybe                    (Maybe (..))
 
-import Stg.Syntax (Name, Type(..))
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Double
+import           GHC.Exts
 
-import GHC.Exts
-import System.IO
-import Text.Show
-import Data.Maybe
-import Control.Applicative
-import Control.Monad
-import Data.Function
+import           Stg.Interpreter.Base          (Atom, fakeStgStateForPrimopTests)
+import           Stg.Interpreter.PrimOp.Double
+import           Stg.Syntax                    (Name, Type (..))
+
+import           System.IO                     (IO)
+
+import           Test.Hspec                    (Expectation, HasCallStack, Spec, describe, hspec, it, shouldReturn)
+import           Test.QuickCheck               (NonZero (..), Testable (..))
+
+import           Text.Show                     (Show (..))
 
 runTests :: IO ()
 runTests = hspec spec

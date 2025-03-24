@@ -54,10 +54,6 @@ red = annotate (color Red)
 -}
 
 {-
-#test_path = '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/'
--}
-
-{-
   TODO
     done - save exit code
     clean ext stg work dir

@@ -346,7 +346,7 @@ data StaticOrigin
   | SO_ClosureResult
   deriving stock (Show, Eq, Ord)
 
-data DebugSettings
+newtype DebugSettings
   = DebugSettings
   { dsKeepGCFacts :: Bool
   }

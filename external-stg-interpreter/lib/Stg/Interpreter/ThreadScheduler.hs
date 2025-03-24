@@ -6,7 +6,7 @@ import           Control.Monad                      (Functor (..), forM_, when)
 import           Control.Monad.State                (MonadIO (..), gets, modify')
 import qualified Control.Monad.Trans.State.Strict   as Strict
 
-import           Data.Bool                          (Bool (..), (&&))
+import           Data.Bool                          (Bool (..), (&&), not)
 import           Data.Eq                            (Eq (..))
 import           Data.Function                      (flip, id, ($), (.))
 import           Data.Int                           (Int)
@@ -112,13 +112,13 @@ yield result = do
 
 
   -- validate ex mask state
-  when (tsInterruptible nextTS && tsBlockExceptions nextTS == False) $ do
+  when (tsInterruptible nextTS && not (tsBlockExceptions nextTS)) $ do
     reportThreads
     error $ "invalid ex mask: " ++ show (nextTid, tsBlockExceptions nextTS, tsInterruptible nextTS)
 
   -- TODO: rethink, validate, reimplement this correctly, check how it is done in native
   -- try to raise async exceptions from the queue if possible
-  if (tsBlockExceptions nextTS == False) --  || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
+  if (not (tsBlockExceptions nextTS)) --  || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
     then case tsBlockedExceptions nextTS of
       []          -> pure $ tsCurrentResult nextTS
       (thowingTid, exception) : waitingTids -> do

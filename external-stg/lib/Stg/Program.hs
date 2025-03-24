@@ -561,7 +561,7 @@ instance ToJSON CodeInfo where
       , "module-name"   .= ciModuleName
       ]
 
-data AppInfo
+newtype AppInfo
   = AppInfo
   { aiLiveCode :: [CodeInfo]
   }

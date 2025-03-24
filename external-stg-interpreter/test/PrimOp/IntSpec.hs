@@ -1,24 +1,28 @@
-{-# LANGUAGE MagicHash, UnboxedTuples, CPP #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module PrimOp.IntSpec where
 
-import Control.Monad.State.Strict
+import           Control.Applicative        (Applicative (..))
+import           Control.Monad.State.Strict (evalStateT)
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.QuickCheck.Monadic
+import           Data.Char                  (ord)
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($))
+import           Data.Maybe                 (Maybe (..))
 
-import Stg.Syntax (Name, Type(..))
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Int
+import           GHC.Exts
 
-import GHC.Exts
-import Data.Char
-import System.IO
-import Data.Maybe
-import Control.Applicative
-import Data.Function
-import Data.Eq
+import           Stg.Interpreter.Base       (Atom, fakeStgStateForPrimopTests)
+import           Stg.Interpreter.PrimOp.Int
+import           Stg.Syntax                 (Name, Type (..))
+
+import           System.IO                  (IO)
+
+import           Test.Hspec                 (Spec, describe, hspec, it)
+import           Test.QuickCheck            (Arbitrary (..), Gen, NonZero (..), Testable (..), forAll)
+import           Test.QuickCheck.Monadic    (PropertyM, assert, monadicIO, run)
 
 runTests :: IO ()
 runTests = hspec spec

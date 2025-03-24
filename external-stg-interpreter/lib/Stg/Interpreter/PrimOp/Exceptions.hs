@@ -4,7 +4,7 @@ import           Control.Applicative                (Applicative (..))
 import           Control.Monad                      (Monad (..), unless, when)
 import           Control.Monad.State                (MonadIO (..), gets)
 
-import           Data.Bool                          (Bool (..), not, (&&))
+import           Data.Bool                          (Bool (..), not, (&&), (||))
 import           Data.Eq                            (Eq (..))
 import           Data.Function                      (($))
 import           Data.Int                           (Int)
@@ -278,9 +278,9 @@ raiseEx0 ex = unwindStack where
         -- mask async exceptions before running the handler
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = if bEx then iEx else True}
+        updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = not bEx || iEx}
         unless bEx $ do
-          stackPush $ RestoreExMask (True, if bEx then iEx else True) bEx iEx
+          stackPush $ RestoreExMask (True, not bEx || iEx) bEx iEx
 
         -- run the exception handler
         stackPush $ Apply [ex, Void]
