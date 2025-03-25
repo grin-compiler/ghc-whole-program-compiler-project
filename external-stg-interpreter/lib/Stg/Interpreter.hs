@@ -956,8 +956,10 @@ loadAndRunProgram isQuiet switchCWD fullpak_name progArgs dbgChan dbgState traci
 
 runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> DebuggerChan -> DebugState -> Bool -> DebugSettings -> IO ()
 runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing debugSettings = do
-  let mods      = fmap annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
-      progName  = dropExtension progFilePath
+  let mods     = fmap annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
+      progName = dropExtension progFilePath
+  
+  print mods
 
   usesMultiThreadedRts progFilePath >>= \case
     True  -> error "TODO: implement concurrent FFI semantics"
