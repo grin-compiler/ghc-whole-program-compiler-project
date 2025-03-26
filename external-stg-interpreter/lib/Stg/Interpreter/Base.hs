@@ -12,9 +12,6 @@ import           Data.Bool                             (Bool (..), otherwise)
 import           Data.ByteString.Char8                 (ByteString)
 import qualified Data.ByteString.Char8                 as BS8
 import qualified Data.ByteString.Internal              as BS
-
-import Prelude (Enum (..))
-
 import           Data.Eq                               (Eq (..))
 import           Data.Function                         (($), (.))
 import           Data.Int                              (Int)
@@ -34,7 +31,7 @@ import           Data.Set                              (Set)
 import qualified Data.Set                              as Set
 import           Data.String                           (String)
 import qualified Data.Text.Lazy.IO                     as Text
-import           Data.Time.Clock                       (UTCTime, getCurrentTime)
+import           Data.Time.Clock                       (UTCTime)
 import           Data.Tuple                            (snd)
 import           Data.Vector                           (Vector)
 import           Data.Word                             (Word, Word8)
@@ -47,6 +44,8 @@ import           GHC.Err                               (error, undefined)
 import           GHC.Float                             (Double, Float)
 import           GHC.Num                               (Num (..))
 import           GHC.Stack                             (HasCallStack, callStack, prettyCallStack)
+
+import           Prelude                               (Enum (..))
 
 import           Stg.IRLocation                        (StgPoint)
 import           Stg.Syntax                            (Alt, AltType, Binder (..), DC (..), DataCon (..), ForeignCall,
@@ -92,12 +91,15 @@ data ByteArrayDescriptor
   , baaAlignment        :: !Int
   }
 instance Show ByteArrayDescriptor where
+  show :: ByteArrayDescriptor -> String
   show _ = "ByteArrayDescriptor (TODO)"
 
 instance Eq ByteArrayDescriptor where
+  (==) :: ByteArrayDescriptor -> ByteArrayDescriptor -> Bool
   _ == _ = True -- TODO
 
 instance Ord ByteArrayDescriptor where
+  compare :: ByteArrayDescriptor -> ByteArrayDescriptor -> Ordering
   _ `compare` _ = EQ -- TODO
 
 data PtrOrigin
@@ -168,6 +170,7 @@ newtype CutShow a = CutShow {getCutShowItem :: a}
   deriving stock (Eq, Ord)
 
 instance Show (CutShow a) where
+  show :: CutShow a -> String
   show _ = "<cut-show>"
 
 data HeapObject
@@ -243,11 +246,13 @@ data ScheduleReason
 
 newtype Printable a = Printable {unPrintable :: a}
 instance Show (Printable a) where
+  show :: Printable a -> String
   show _ = "Printable"
 
 newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a}
   deriving stock Eq
 instance Show (PrintableMVar a) where
+  show :: PrintableMVar a -> String
   show _ = "MVar"
 
 data DebuggerChan
@@ -260,6 +265,7 @@ data DebuggerChan
   deriving stock Eq
 
 instance Show DebuggerChan where
+  show :: DebuggerChan -> String
   show _ = "DebuggerChan"
 
 data DebugEvent
@@ -652,7 +658,7 @@ data Rts
   , rtsFalseCon                        :: DataCon
 
   -- closures used by FFI wrapper code ; heap address of the closure
-  , rtsUnpackCString                   :: Atom
+  -- , rtsUnpackCString                   :: Atom
   , rtsTopHandlerRunIO                 :: Atom
   , rtsTopHandlerRunNonIO              :: Atom
   , rtsTopHandlerFlushStdHandles       :: Atom
@@ -766,11 +772,11 @@ stgErrorM :: HasCallStack => String -> M a
 stgErrorM msg = do
   tid <- gets ssCurrentThreadId
   liftIO $ do
-    putStrLn $ " * stgErrorM: " ++ show msg
     putStrLn $ "current thread id: " ++ show tid
   reportThread tid
   curClosure <- gets ssCurrentClosure
   liftIO $ do
+    putStrLn $ " * stgErrorM: " ++ show msg
     putStrLn $ "current closure: " ++ show curClosure
     putStrLn $ " * native estgi call stack:"
     putStrLn $ prettyCallStack callStack
@@ -1006,24 +1012,24 @@ getCStringConstantPtrAtom key = do
 ---------------------------------------------
 -- stm
 
-promptM :: IO () -> M ()
+promptM :: HasCallStack => IO () -> M ()
 promptM ioAction = do
   isQuiet <- gets ssIsQuiet
-  tid <- gets ssCurrentThreadId
+  -- tid <- gets ssCurrentThreadId
   pp <- gets ssCurrentProgramPoint
   _cc <- gets ssCurrentClosure
-  tsList <- gets $ IntMap.toList . ssThreads
+  -- tsList <- gets $ IntMap.toList . ssThreads
   liftIO . unless isQuiet $ do
-    now <- getCurrentTime
-    putStrLn $ "  now           = " ++ show now
-    putStrLn $ "  tid           = " ++ show tid ++ "    thread status list: " ++ show [(tid', tsStatus ts) | (tid', ts) <- tsList]
+    -- now <- getCurrentTime
+    -- putStrLn $ "  now           = " ++ show now
+    -- putStrLn $ "  tid           = " ++ show tid ++ "    thread status list: " ++ show [(tid', tsStatus ts) | (tid', ts) <- tsList]
     putStrLn $ "  program point = " ++ show pp
     ioAction
     --putStrLn "[press enter]"
     --getLine
     pure ()
 
-promptM_ :: M () -> M ()
+promptM_ :: HasCallStack => M () -> M ()
 promptM_ ioAction = do
   isQuiet <- gets ssIsQuiet
   unless isQuiet $ do

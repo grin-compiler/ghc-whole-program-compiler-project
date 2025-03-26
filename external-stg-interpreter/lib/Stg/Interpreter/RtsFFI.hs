@@ -8,6 +8,7 @@ import           Control.Monad.State.Strict (MonadIO (..), MonadState (..), gets
 
 import           Data.Bool                  (Bool (..))
 import qualified Data.ByteString            as BS
+import qualified Data.ByteString.Internal   as BS
 import           Data.Char                  (Char)
 import           Data.Eq                    (Eq (..))
 import           Data.Function              (($), (.))
@@ -23,16 +24,21 @@ import qualified Data.Text.Encoding         as Text
 import           Data.Time.Clock            (UTCTime (..), diffTimeToPicoseconds, getCurrentTime)
 import           Data.Word                  (Word, Word64)
 
+import           Foreign                    (Int64, fromBool)
 import           Foreign.C.String           (CString, newCString, peekCString)
-import           Foreign.C.Types            (CInt (..))
+import           Foreign.C.Types            (CBool (..), CInt (..))
+import           Foreign.ForeignPtr.Unsafe  (unsafeForeignPtrToPtr)
 import           Foreign.Marshal.Array      (newArray, peekArray)
-import           Foreign.Ptr                (Ptr, castPtr, nullPtr)
+import           Foreign.Ptr                (Ptr, castPtr, nullPtr, plusPtr)
 import           Foreign.Storable           (Storable (..))
 
 import qualified GHC.Exts                   as Exts
 import           GHC.Float                  (Double, Float)
 import           GHC.Num                    (Num (..))
 import           GHC.Real                   (Integral (..), fromIntegral)
+import           GHC.Stack                  (HasCallStack)
+
+import           Prelude                    (Enum (..))
 
 import           Stg.Interpreter.Base       (Atom (..), ByteArrayDescriptor (..), EvalOnNewThread, M, PtrOrigin (..),
                                              Rts (..), StgState (..), lookupByteArrayDescriptorI,
@@ -77,7 +83,7 @@ pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 
 {-# NOINLINE evalFCallOp #-}
-evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalFCallOp :: HasCallStack => EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalFCallOp _evalOnNewThread fCall@ForeignCall{..} args t _tc = do
     --liftIO $ putStrLn $ "[evalFCallOp]  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
@@ -281,7 +287,29 @@ evalFCallOp _evalOnNewThread fCall@ForeignCall{..} args t _tc = do
               Nothing -> state $ \s@StgState{..} -> ([value], s {ssRtsSupport = ssRtsSupport {rtsGlobalStore = Map.insert foreignSymbol value store'}})
               Just v  -> pure [v]
 
-      _ -> stgErrorM $ "unsupported RTS StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
+      -- Assume charset names are ASCII
+      StaticTarget _ "localeEncoding" _ _
+        | [Void] <- args
+        , UnboxedTuple [AddrRep] <- t
+        -> do
+          let bsCString = "UTF-8"
+              (bsFPtr, bsOffset, _bsLen) = BS.toForeignPtr bsCString
+          pure [PtrAtom (CStringPtr bsCString) $ plusPtr (unsafeForeignPtrToPtr bsFPtr) bsOffset]
+
+      --  1 => Input ready, 0 => not ready, -1 => error
+      StaticTarget _ "fdReady" _ _
+        | [IntAtom i, WordAtom b, IntAtom ii, WordAtom bb, Void] <- args
+        -> do
+          let i' = toEnum i
+              b' = Foreign.fromBool $ if b == 0 then True else False
+              ii' = toEnum ii
+              bb' = Foreign.fromBool $ if bb == 0 then True else False
+          fd <- liftIO $ fdReady i' b' ii' bb'
+          pure [IntAtom $ fromEnum fd]
+
+      StaticTarget _ _ _ _ -> stgErrorM $ "unsupported RTS StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
+
+      DynamicTarget -> stgErrorM "unsupported DynamicTarget"
 
 
 foreign import ccall unsafe "__int_encodeDouble"  rts_intEncodeDouble  :: Int  -> Int -> Double
@@ -291,3 +319,4 @@ foreign import ccall unsafe "__word_encodeFloat"  rts_wordEncodeFloat  :: Word -
 
 foreign import ccall unsafe "lockFile"    lockFile    :: Word64 -> Word64 -> Word64 -> CInt -> IO CInt
 foreign import ccall unsafe "unlockFile"  unlockFile  :: Word64 -> IO CInt
+foreign import ccall   safe "fdReady"     fdReady     :: CInt -> CBool -> Foreign.Int64 -> CBool -> IO CInt

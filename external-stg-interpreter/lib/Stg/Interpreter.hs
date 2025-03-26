@@ -453,7 +453,7 @@ evalOnMainThread = evalOnThread True
 evalOnNewThread :: M [Atom] -> M [Atom]
 evalOnNewThread = evalOnThread False
 
-evalOnThread :: Bool -> M [Atom] -> M [Atom]
+evalOnThread :: HasCallStack => Bool -> M [Atom] -> M [Atom]
 evalOnThread isMainThread setupAction = do
   -- create main thread
   (tid, _ts) <- createThread
@@ -464,7 +464,8 @@ evalOnThread isMainThread setupAction = do
   result0 <- setupAction
   --liftIO $ putStrLn $ "evalOnThread result0 = " ++ show result0
   --Debugger.reportState
-  let loop resultIn = do
+  let loop :: HasCallStack => [Atom] -> StateT StgState IO [Atom]
+      loop resultIn = do
         resultOut <- evalStackMachine resultIn
         ThreadState{..} <- getThreadState tid
         if isThreadLive tsStatus then
@@ -492,11 +493,11 @@ evalStackMachine result = do
   stackPop >>= \case
     Nothing         -> pure result
     Just stackCont  -> do
-      promptM $ do
-        putStrLn $ "  input result = " ++ show result
-        putStrLn $ "  stack-cont   = " ++ showStackCont stackCont
+      -- promptM $ do
+      --   putStrLn $ "  input result = " ++ show result
+      --   putStrLn $ "  stack-cont   = " ++ showStackCont stackCont
 
-      _doTrace <- gets ssPrimOpTrace
+      -- _doTrace <- gets ssPrimOpTrace
       do -- when doTrace $ do
         resultStr <- mapM debugPrintAtom result
         traceLog $ showStackCont stackCont ++ " current-result: " ++ show resultStr
@@ -649,7 +650,7 @@ evalStackContinuation result = \case
 
   x -> error $ "unsupported continuation: " ++ show x ++ ", result: " ++ show result
 
-evalDebugFrame :: [Atom] -> DebugFrame -> M [Atom]
+evalDebugFrame :: HasCallStack => [Atom] -> DebugFrame -> M [Atom]
 evalDebugFrame result = \case
   RestoreProgramPoint currentClosure progPoint -> do
     modify' $ \s -> s {ssCurrentClosure = currentClosure}
@@ -912,7 +913,7 @@ declareTopBindings mods = do
     (StgTopStringLit b str) -> do
       strPtr <- getCStringConstantPtrAtom str
       pure (Id b, (SO_TopLevel, strPtr))
-    _ -> error "unsupported"
+    StgTopLifted _ -> error "unsupported"
 
   -- bind closures
   let bindings = concatMap getBindings closures
@@ -959,16 +960,15 @@ runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracin
   let mods     = fmap annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName = dropExtension progFilePath
   
-  print mods
-
   usesMultiThreadedRts progFilePath >>= \case
     True  -> error "TODO: implement concurrent FFI semantics"
     False -> pure ()
 
   currentDir <- liftIO getCurrentDirectory
   stgappDir <- makeAbsolute $ takeDirectory progFilePath
-  --putStrLn $ "progName: " ++ show progName ++ " progArgs: " ++ show progArgs
-  let run = do
+
+  let run ::HasCallStack => StateT StgState IO ()
+      run = do
         when switchCWD $ liftIO $ setCurrentDirectory stgappDir
         declareTopBindings mods
         buildCWrapperHsTypeMap mods

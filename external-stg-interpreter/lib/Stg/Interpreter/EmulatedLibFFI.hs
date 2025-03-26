@@ -1,3 +1,5 @@
+{-# LANGUAGE CApiFFI #-}
+{-# LANGUAGE CPP     #-}
 module Stg.Interpreter.EmulatedLibFFI where
 
 ----- FFI experimental
@@ -14,17 +16,24 @@ import           Data.Maybe                 (Maybe)
 import qualified Data.Primitive.ByteArray   as BA
 import qualified Data.Text                  as Text
 import qualified Data.Text.Encoding         as Text
-import           Data.Word                  (Word)
+import           Data.Word                  (Word, Word8)
+
+import           Foreign.C.Types            (CInt (..), CSize (..))
+import           Foreign.Ptr                (Ptr)
 
 import qualified GHC.Exts                   as Exts
 import           GHC.Float                  (Double, Float)
+import           GHC.Stack                  (HasCallStack)
+
+import           Prelude                    (Enum (..))
 
 import           Stg.Interpreter.Base       (Atom (..), ByteArrayDescriptor (..), EvalOnNewThread, M, PtrOrigin (..),
                                              Rts (..), StgState (..), lookupByteArrayDescriptorI, stgErrorM)
 import           Stg.Syntax                 (CCallTarget (..), ForeignCall (..), Lit (..), TyCon, Type)
 
 import           System.FilePath            (takeBaseName)
-import           System.IO                  (hFlush, hPutStr, hPutStrLn, stderr)
+import           System.IO                  (IO, hFlush, hPutStr, hPutStrLn, stderr)
+import           System.Posix               (CSsize (..))
 
 import           Text.Printf                (printf)
 import           Text.Show                  (Show (..))
@@ -57,7 +66,7 @@ pattern DoubleV :: Double -> Atom
 pattern DoubleV d = DoubleAtom d
 
 {-# NOINLINE evalFCallOp #-}
-evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalFCallOp :: HasCallStack => EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalFCallOp _evalOnNewThread fCall@ForeignCall{..} args t _tc = do
     --liftIO $ putStrLn $ "[evalFCallOp]  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
@@ -89,7 +98,21 @@ evalFCallOp _evalOnNewThread fCall@ForeignCall{..} args t _tc = do
           Rts{..} <- gets ssRtsSupport
           liftIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
           pure []
+
+      -- #include <unistd.h> c_write :: CInt -> Ptr Word8 -> CSize -> IO CSsize
+      -- https://pubs.opengroup.org/onlinepubs/7908799/xsh/write.html
+      StaticTarget _ "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite" _ _
+        | [IntAtom i, PtrAtom (ByteArrayPtr _) ptr, WordAtom w, Void] <- args
+        -> do
+          let i' = toEnum i
+              w' = toEnum $ fromEnum w
+          res <- liftIO $ c_write i' ptr w'
+          pure [IntV $ fromEnum res]
+
       StaticTarget _ "errorBelch2" _ _
         -> stgErrorM $ "unsupported StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
 
       _ -> stgErrorM $ "unsupported emulation of user StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
+
+foreign import capi unsafe "unistd.h write"
+   c_write :: CInt -> Ptr Word8 -> CSize -> IO CSsize

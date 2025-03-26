@@ -86,12 +86,13 @@ emulatedLibrarySymbolSet :: Set Name
 emulatedLibrarySymbolSet = Set.fromList
   [ "errorBelch2"
   , "debugBelch2"
+  , "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite"
   ]
 
 rtsSymbolSet :: Set Name
 rtsSymbolSet = Set.fromList $ fmap (BS8.pack . getSymbolName) rtsSymbols
 
-getFFISymbol :: Name -> M (FunPtr a)
+getFFISymbol :: HasCallStack => Name -> M (FunPtr a)
 getFFISymbol name
   | Set.member name rtsSymbolSet
   = case name of
@@ -110,27 +111,27 @@ getFFISymbol name = do
       then stgErrorM $ "this RTS symbol is not implemented yet: " ++ BS8.unpack name
       else stgErrorM $ "unknown foreign symbol: " ++ BS8.unpack name
 
-getFFILabelPtrAtom :: Name -> LabelSpec -> M Atom
+getFFILabelPtrAtom :: HasCallStack => Name -> LabelSpec -> M Atom
 getFFILabelPtrAtom labelName labelSpec = do
   funPtr <- getFFISymbol labelName
   pure $ PtrAtom (LabelPtr labelName labelSpec) $ castFunPtrToPtr funPtr
 
-mkFFIArg :: Atom -> M (Maybe FFI.Arg)
+mkFFIArg :: HasCallStack => Atom -> M (Maybe FFI.Arg)
 mkFFIArg = \case
-  Void              -> pure Nothing
-  PtrAtom _ p       -> pure . Just $ FFI.argPtr p
-  IntV i            -> pure . Just $ FFI.argInt64 $ fromIntegral i
-  Int8V i           -> pure . Just $ FFI.argInt8 $ fromIntegral i
-  Int16V i          -> pure . Just $ FFI.argInt16 $ fromIntegral i
-  Int32V i          -> pure . Just $ FFI.argInt32 $ fromIntegral i
-  Int64V i          -> pure . Just $ FFI.argInt64 $ fromIntegral i
-  WordV w           -> pure . Just $ FFI.argWord64 $ fromIntegral w
-  Word8V w          -> pure . Just $ FFI.argWord8 $ fromIntegral w
-  Word16V w         -> pure . Just $ FFI.argWord16 $ fromIntegral w
-  Word32V w         -> pure . Just $ FFI.argWord32 $ fromIntegral w
-  Word64V w         -> pure . Just $ FFI.argWord64 $ fromIntegral w
-  FloatAtom f       -> pure . Just . FFI.argCFloat $ CFloat f
-  DoubleAtom d      -> pure . Just . FFI.argCDouble $ CDouble d
+  Void         -> pure Nothing
+  PtrAtom _ p  -> pure . Just $ FFI.argPtr p
+  IntV i       -> pure . Just $ FFI.argInt64 $ fromIntegral i
+  Int8V i      -> pure . Just $ FFI.argInt8 $ fromIntegral i
+  Int16V i     -> pure . Just $ FFI.argInt16 $ fromIntegral i
+  Int32V i     -> pure . Just $ FFI.argInt32 $ fromIntegral i
+  Int64V i     -> pure . Just $ FFI.argInt64 $ fromIntegral i
+  WordV w      -> pure . Just $ FFI.argWord64 $ fromIntegral w
+  Word8V w     -> pure . Just $ FFI.argWord8 $ fromIntegral w
+  Word16V w    -> pure . Just $ FFI.argWord16 $ fromIntegral w
+  Word32V w    -> pure . Just $ FFI.argWord32 $ fromIntegral w
+  Word64V w    -> pure . Just $ FFI.argWord64 $ fromIntegral w
+  FloatAtom f  -> pure . Just . FFI.argCFloat $ CFloat f
+  DoubleAtom d -> pure . Just . FFI.argCDouble $ CDouble d
   ByteArray bai -> do
     ba <- baaMutableByteArray <$> lookupByteArrayDescriptorI bai
     pure . Just . FFI.argPtr $ BA.mutableByteArrayContents ba
@@ -141,14 +142,14 @@ mkFFIArg = \case
   a -> error $ "mkFFIArg - unsupported atom: " ++ show a
 
 
-evalForeignCall :: FunPtr a -> [FFI.Arg] -> Type -> IO [Atom]
+evalForeignCall :: HasCallStack => FunPtr a -> [FFI.Arg] -> Type -> IO [Atom]
 evalForeignCall funPtr cArgs retType = do
   --BS8.putStrLn "[FFI.callFFI - start]"
   result <- evalForeignCall0 funPtr cArgs retType
   --BS8.putStrLn "[FFI.callFFI - end]"
   pure result
 
-evalForeignCall0 :: FunPtr a -> [FFI.Arg] -> Type -> IO [Atom]
+evalForeignCall0 :: HasCallStack => FunPtr a -> [FFI.Arg] -> Type -> IO [Atom]
 evalForeignCall0 funPtr cArgs retType = case retType of
   UnboxedTuple [] -> do
     _result <- FFI.callFFI funPtr FFI.retVoid cArgs
@@ -209,7 +210,7 @@ evalForeignCall0 funPtr cArgs retType = case retType of
   _ -> error $ "unsupported retType: " ++ show retType
 
 {-# NOINLINE evalFCallOp #-}
-evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalFCallOp :: HasCallStack => EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t tc = do
     --liftIO $ putStrLn $ "[evalFCallOp]  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
