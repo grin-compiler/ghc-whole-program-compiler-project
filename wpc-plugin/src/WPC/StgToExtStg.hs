@@ -774,7 +774,7 @@ cvtModule' phase unit' modName' mSrcPath binds foreignStubs foreignDecls =
         | m <- catMaybes $ fmap (GHC.nameModule_maybe . GHC.getName) $ IntMap.elems envTyCons
         ]
       dependencies =
-        fmap (fmap (map fst)) $
+        fmap (fmap (fmap fst)) $
           groupByUnitIdAndModule $
             [ ((u, m), ())
             | (u, ml) <- externalIds

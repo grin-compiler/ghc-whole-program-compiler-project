@@ -22,7 +22,8 @@ import           Data.Maybe                (Maybe (..), catMaybes, listToMaybe, 
 import           Data.Monoid               (Monoid (..))
 import           Data.Ord                  (Ord)
 import qualified Data.Set                  as Set
-import           Data.String               (String)
+import           Data.String               (IsString (..), String)
+import           Data.Text                 (Text, replace, unpack)
 import           Data.Tuple                (fst)
 import           Data.Yaml                 (FromJSON (..), ToJSON (..), object, (.!=), (.:), (.:?), (.=))
 import qualified Data.Yaml                 as Y
@@ -46,7 +47,7 @@ import           System.Process            (callCommand)
 
 import           Text.Printf               (printf)
 import           Text.Read                 (read)
-import           Text.Show                 (Show (show))
+import           Text.Show                 (Show (..))
 
 moduleToModpak :: String -> String -> FilePath
 moduleToModpak modpakExt moduleName = replaceEq '.' '/' moduleName ++ modpakExt
@@ -170,7 +171,7 @@ getAppModuleMapping ghcStgAppFname = do
   libModules <- filterM (check . modModpakPath) $
         [ StgModuleInfo
           { modModuleName     = mod
-          , modModpakPath     = dir </> wpcModpaksPath </> moduleToModpak modpakExt mod
+          , modModpakPath     = newDir </> wpcModpaksPath </> moduleToModpak modpakExt mod
           , modPackageName    = unitName
           , modPackageVersion = unitVersion
           , modUnitId         = unitId
@@ -182,6 +183,7 @@ getAppModuleMapping ghcStgAppFname = do
         -- TODO: make this better somehow
         -- HINT: this module does not exist, it's a GHC builtin for primops
         , let builtin = mod == "GHC.Prim" && unitName == "ghc-prim"
+              newDir = unpack $ replace "bindist" "foundation-pak" $ fromString @Text dir
         , not builtin
 
         ]
@@ -208,20 +210,29 @@ collectProgramModules' :: Bool -> [FilePath] -> String -> String -> [(String, St
 collectProgramModules' showLog modpakFileNames unitId mod liveSymbols = do
   -- filter dependenies only
   (fexportedList, depList) <- fmap unzip . forM modpakFileNames $ \fname -> do
-    (_, u, m, _, _, hasForeignExport, deps) <- readModpakL fname modpakStgbinPath decodeStgbinInfo
-    let fexport = if hasForeignExport then Just (u, m) else Nothing
-    pure (fexport, ((u, m), [(du, dm) | (du, dl) <- deps, dm <- dl]))
-  let fnameMap  = Map.fromList $ zip (map fst depList) modpakFileNames
-      mnameMap  = Map.fromList $ zip modpakFileNames (map fst depList)
+    (_, unitId', module', _, _, hasForeignExport, deps) <- readModpakL fname modpakStgbinPath decodeStgbinInfo
+    let fexport = if hasForeignExport then Just (unitId', module') else Nothing
+    pure
+      ( fexport,
+      ( (unitId', module'),
+        [(depUnitId, depModule)
+        | (depUnitId, depModuleNames) <- deps
+        , depModule <- depModuleNames
+        ]
+      )
+      )
+  let fnameMap  = Map.fromList $ zip (fmap fst depList) modpakFileNames
+      mnameMap  = Map.fromList $ zip modpakFileNames (fmap fst depList)
       depMap    = Map.fromList depList
       calcDep s n
         | Set.member n s = s
         | Just l <- Map.lookup n depMap = foldl' calcDep (Set.insert n s) l
-        | otherwise = Set.insert n s -- error $ printf "missing module: %s" . show $ getModuleName n
+        | otherwise = Set.insert n s -- error $ printf "missing module: %s" . show $ snd n
 
       keyMain = (UnitId $ BS8.pack unitId, ModuleName $ BS8.pack mod)
-      prunedDeps = catMaybes [Map.lookup m fnameMap | m <- Set.toList $ foldl calcDep mempty $ keyMain : rtsDeps ++ catMaybes fexportedList]
       rtsDeps = [(UnitId $ BS8.pack u, ModuleName $ BS8.pack m) | (u, m, _) <- liveSymbols]
+
+      prunedDeps = catMaybes [Map.lookup m fnameMap | m <- Set.toList $ foldl calcDep mempty $ keyMain : rtsDeps ++ catMaybes fexportedList]
 
   when showLog $ do
     putStrLn $ "all modules: " ++ show (length modpakFileNames)

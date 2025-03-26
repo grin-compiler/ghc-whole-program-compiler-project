@@ -100,6 +100,15 @@ rtsSymbols =
   , CFun "getRTSStatsEnabled"                -- c fun
   , CFun "getRTSStats"                       -- c fun
 
+  -- Assume charset names are ASCII
+  , CFun "localeEncoding"                    -- c fun
+
+  -- [Windows types]
+  -- , CFun "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite" -- c fun
+
+  -- checks to see whether input is available on the file descriptor
+  , CFun "fdReady"                           -- c fun
+
   -- used by haskell base library ; stack trace
   , CFun "backtraceFree"                     -- c fun
   , CFun "libdwGetBacktrace"                 -- c fun

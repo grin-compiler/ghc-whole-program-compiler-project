@@ -9,9 +9,11 @@ import           Control.Applicative    (Applicative (..))
 import           Control.Monad          (Functor (..), Monad (..), filterM, forM, forM_, mapM)
 
 import           Data.Bool              (Bool (..))
+import           Data.Eq                (Eq (..))
 import           Data.Function          (($))
-import           Data.List              (length, (++))
+import           Data.List              (find, length, (++))
 import qualified Data.Map               as Map
+import           Data.Maybe             (fromJust)
 import qualified Data.Yaml              as Y
 
 import           Stg.Foreign.Linker     (getExtStgWorkDirectory, linkForeignCbitsSharedLib)
@@ -44,9 +46,12 @@ mkFullpak :: FilePath -> Bool -> Bool -> FilePath -> IO ()
 mkFullpak ghcstgappPath stgbinsOnly includeAll fullpakName = do
   -- mk .fullpak
   modinfoList <- getAppModuleMapping ghcstgappPath
+
+  let mainUnitId = modUnitId $ fromJust $ find (\a -> modModuleName a == "Main") modinfoList
+
   appModpaks <- if includeAll
     then getModuleList modinfoList
-    else collectProgramModules (fmap modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
+    else collectProgramModules (fmap modModpakPath modinfoList) mainUnitId "Main" GHCSymbols.liveSymbols
 
   let modpakMap       = Map.fromList [(modModpakPath m , m) | m <- modinfoList]
       fullpakModules  = [modpakMap Map.! m | m <- appModpaks]

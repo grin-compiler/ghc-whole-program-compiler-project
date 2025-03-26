@@ -13,7 +13,7 @@ import           Data.Maybe            (Maybe (..))
 import           Data.Monoid           ((<>))
 import           Data.Ord              (Ord (..), Ordering (..))
 import           Data.Ratio            (Rational)
-import           Data.String           (String)
+import           Data.String           (String, IsString)
 
 import           GHC.Generics          (Generic)
 import           GHC.Num               (Integer, Num (..))
@@ -332,6 +332,7 @@ newtype ModuleName
   = ModuleName Name
   deriving stock (Eq, Ord, Generic, Show)
   deriving anyclass (Binary)
+  deriving newtype (IsString)
 
 getModuleName :: ModuleName -> Name
 getModuleName (ModuleName n) = n
