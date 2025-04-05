@@ -11,7 +11,7 @@ import           Data.Maybe                        (Maybe (..))
 
 import           GHC.Exts
 
-import           Stg.Interpreter.Base              (Atom, fakeStgStateForPrimopTests)
+import           Stg.Interpreter.Base 
 import           Stg.Interpreter.PrimOp.Narrowings
 import           Stg.Syntax                        (Name, Type (..))
 

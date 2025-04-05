@@ -15,7 +15,7 @@ import           Foreign.Ptr                 (WordPtr (..), wordPtrToPtr)
 
 import           GHC.Exts
 
-import           Stg.Interpreter.Base        (Atom (..), PtrOrigin (..), fakeStgStateForPrimopTests)
+import           Stg.Interpreter.Base       
 import           Stg.Interpreter.PrimOp.Addr
 import           Stg.Syntax                  (Name, Type (..))
 

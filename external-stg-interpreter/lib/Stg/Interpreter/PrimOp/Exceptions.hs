@@ -7,28 +7,19 @@ import           Control.Monad.State                (MonadIO (..), gets)
 import           Data.Bool                          (Bool (..), not, (&&), (||))
 import           Data.Eq                            (Eq (..))
 import           Data.Function                      (($))
-import           Data.Int                           (Int)
 import           Data.List                          (drop, null)
 import           Data.Maybe                         (Maybe (..), fromJust)
 import           Data.Monoid                        (Monoid (..))
 
 import           GHC.Err                            (error, undefined)
 
-import           Stg.Interpreter.Base               (Atom (..), BlockReason (..), HeapObject (..), M, PrimOpEval,
-                                                     Rts (..), ScheduleReason (..), StackContinuation (..),
-                                                     StgState (..), ThreadState (..), ThreadStatus (..),
-                                                     getCurrentThreadState, getThreadState, mylog, promptM_,
-                                                     reportThreads, stackPop, stackPush, store, updateThreadState,
-                                                     validateTLog, wakeupBlackHoleQueueThreads)
+import           Stg.Interpreter.Base
 import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
 import           Stg.Syntax                         (Name, TyCon, Type)
 
 import           System.IO                          (print)
 
 import           Text.Show                          (Show (..))
-
-pattern IntV :: Int -> Atom
-pattern IntV i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

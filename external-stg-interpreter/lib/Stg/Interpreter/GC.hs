@@ -8,7 +8,6 @@ import           Control.Monad                       (Monad (..), mapM, mapM_, u
 import           Control.Monad.State                 (MonadIO (..), MonadState (..), gets, modify')
 
 import           Data.Bool                           (Bool (..), not, (&&), (||))
-import Prelude (Enum (..))
 import           Data.Eq                             (Eq (..))
 import           Data.Function                       (($), (.))
 import qualified Data.IntMap                         as IntMap
@@ -24,6 +23,8 @@ import           Data.Time.Clock                     (getCurrentTime)
 import           GHC.Float                           (Float)
 import           GHC.Num                             (Num (..))
 import           GHC.Real                            (Fractional (..), fromIntegral)
+
+import           Prelude                             (Enum (..))
 
 import           Stg.Interpreter.Base                (Atom, HeapObject (..), M, PrintableMVar (..), RefSet (..),
                                                       StgState (..), ThreadState (..), getAddressState, isThreadLive,

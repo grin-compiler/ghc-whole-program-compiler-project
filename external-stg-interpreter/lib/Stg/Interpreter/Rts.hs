@@ -132,7 +132,7 @@ initRtsSupport progName progArgs mods = do
 
   forM_ wiredInClosures $ \(u, m, n, setter) -> do
     case Map.lookup (u, m, n) closureMap of
-        Nothing -> liftIO $ putStrLn $ "missing wired in closure: " ++ show (u, m, n)-- ++ "\n" ++ unlines (map show $ Map.keys closureMap)
+        Nothing -> liftIO $ putStrLn $ "missing wired in closure: " ++ show (u, m, n)-- ++ "\n" ++ unlines (fmap show $ Map.keys closureMap)
         Just b  -> do
           cl <- lookupEnv mempty b
           modify' $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport cl}

@@ -4,24 +4,15 @@ module Stg.Interpreter.PrimOp.MutVar where
 import           Control.Applicative  (Applicative (..), (<$>))
 import           Control.Monad.State  (gets, modify')
 
-import Prelude (Enum (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($))
-import           Data.Int             (Int)
 import qualified Data.IntMap          as IntMap
 import           Data.Maybe           (Maybe)
-import           Data.Word            (Word)
 
-import           Stg.Interpreter.Base (Atom (..), HeapObject (..), M, PrimOpEval, Rts (..), StgState (..),
-                                       allocAndStore, lookupMutVar, readHeapClosure)
+import           Prelude              (Enum (..))
+
+import           Stg.Interpreter.Base
 import           Stg.Syntax           (Name, TyCon, Type)
-
-pattern IntV :: Int -> Atom
-pattern IntV i = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV :: Word -> Atom
-pattern WordV i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V :: Word -> Atom
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

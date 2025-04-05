@@ -4,7 +4,6 @@ import           Control.Applicative  (Applicative (..), (<$>))
 import           Control.Monad        (mapM, mapM_, void)
 import           Control.Monad.State  (gets, modify')
 
-import Prelude (Enum (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($))
 import           Data.Int             (Int)
@@ -16,16 +15,13 @@ import           Foreign.Ptr          (castPtrToFunPtr)
 
 import           GHC.Err              (error)
 
-import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval, StgState (..), WeakPtrDescriptor (..),
-                                       liftIOAndBorrowStgState, lookupWeakPointerDescriptor)
+import           Prelude              (Enum (..))
+
+import           Stg.Interpreter.Base
 import qualified Stg.Interpreter.FFI  as FFI
 import           Stg.Syntax           (Name, TyCon, Type (..))
 
 import           Text.Show            (Show (..))
-
-
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
 
 newWeakPointer :: Atom -> Atom -> Maybe Atom -> M Int
 newWeakPointer key value finalizer = do

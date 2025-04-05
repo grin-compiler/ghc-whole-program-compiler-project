@@ -14,7 +14,7 @@ import           Data.Maybe                   (Maybe (..))
 
 import           GHC.Exts
 
-import           Stg.Interpreter.Base         (Atom, fakeStgStateForPrimopTests)
+import           Stg.Interpreter.Base        
 import           Stg.Interpreter.PrimOp.Float
 import           Stg.Syntax                   (Name, Type (..))
 
@@ -132,7 +132,6 @@ spec = do
         [FloatV stgVal] <- evalOp "logFloat#" [FloatV a]
         assert $ stgVal == (F# (logFloat# (unboxFloat a)))
 
-#if __GLASGOW_HASKELL__ >= 810
     it "expm1Float#" $
       property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
         [FloatV stgVal] <- evalOp "expm1Float#" [FloatV a]
@@ -142,7 +141,6 @@ spec = do
       property $ forAll (arbitrary :: Gen (Positive Float)) $ \(Positive a) -> monadicIO $ do
         [FloatV stgVal] <- evalOp "log1pFloat#" [FloatV a]
         assert $ stgVal == (F# (log1pFloat# (unboxFloat a)))
-#endif
 
     it "logFloat#" $
       property $ forAll (arbitrary :: Gen (Positive Float)) $ \(Positive a) -> monadicIO $ do

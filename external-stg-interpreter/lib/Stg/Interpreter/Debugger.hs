@@ -8,7 +8,6 @@ import           Control.Monad                         (Functor (..), Monad (..)
 import           Control.Monad.State                   (MonadIO (..), gets, modify')
 
 import           Data.Bool                             (Bool (..), otherwise)
-import Prelude (Enum (..))
 import           Data.Function                         (($))
 import qualified Data.IntMap                           as IntMap
 import           Data.List                             ((++))
@@ -19,6 +18,8 @@ import qualified Data.Set                              as Set
 
 import           GHC.Stack                             (HasCallStack)
 
+import           Prelude                               (Enum (..))
+
 import           Stg.Interpreter.Base                  (Atom (..), Breakpoint, DebugCommand (..), DebugEvent (..),
                                                         DebugOutput (..), DebugState (..), DebuggerChan (..), M,
                                                         StgState (..), readHeap)
@@ -26,7 +27,7 @@ import           Stg.Interpreter.Debugger.Internal     (runInternalCommand)
 
 import           System.IO                             (putStrLn)
 
-import           Text.Show                             (Show (show))
+import           Text.Show                             (Show (..))
 
 
 sendDebugEvent :: DebugEvent -> M ()

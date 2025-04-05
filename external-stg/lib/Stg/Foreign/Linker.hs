@@ -6,7 +6,8 @@ import           Control.Monad       (Monad (..))
 import           Data.Bool           (Bool (..))
 import           Data.Eq             (Eq (..))
 import           Data.Function       (($), (.))
-import           Data.List           (concat, concatMap, filter, intercalate, map, unlines, unwords, (++))
+import Data.Functor (Functor(..))
+import           Data.List           (concat, concatMap, filter, intercalate, unlines, unwords, (++))
 
 import           Stg.Foreign.Stubs   (genStubs)
 import           Stg.Program         (StgAppLinkerInfo (..), StgLibLinkerInfo (..), getAppLinkerInfo)
@@ -77,7 +78,7 @@ linkForeignCbitsSharedLib ghcstgappFname = do
               "darwin" -> "gcc -o cbits.so -shared \\"
               _        -> "gcc -o cbits.so -shared -Wl,--no-as-needed \\"
           ] ++
-        intercalate " \\\n" (map ("  " ++) . filter (/= "") $ arList ++ cbitsOpts ++ stgappCObjects ++ [appOpts] ++ stubOpts) ++ "\n"
+        intercalate " \\\n" (fmap ("  " ++) . filter (/= "") $ arList ++ cbitsOpts ++ stgappCObjects ++ [appOpts] ++ stubOpts) ++ "\n"
 
   let scriptFname = workDir </> "cbits.so.sh"
   writeFile scriptFname linkScript

@@ -3,21 +3,18 @@ module Stg.Interpreter.PrimOp.StablePointer where
 import           Control.Applicative  (Applicative (..), (<$>))
 import           Control.Monad.State  (gets, modify')
 
-import Prelude (Enum (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($), (.))
-import           Data.Int             (Int)
 import qualified Data.IntMap          as IntMap
 import qualified Data.Map             as Map
 import           Data.Maybe           (Maybe (..))
 
 import           Foreign.Ptr          (IntPtr (..), intPtrToPtr)
 
-import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval, PtrOrigin (..), StgState (..), lookupStablePointerPtr)
-import           Stg.Syntax           (Name, TyCon, Type)
+import           Prelude              (Enum (..))
 
-pattern IntV :: Int -> Atom
-pattern IntV i = IntAtom i -- Literal (LitNumber LitNumInt i)
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

@@ -6,7 +6,7 @@ import           Control.Monad                      (Functor (..), forM_, when)
 import           Control.Monad.State                (MonadIO (..), gets, modify')
 import qualified Control.Monad.Trans.State.Strict   as Strict
 
-import           Data.Bool                          (Bool (..), (&&), not)
+import           Data.Bool                          (Bool (..), not, (&&))
 import           Data.Eq                            (Eq (..))
 import           Data.Function                      (flip, id, ($), (.))
 import           Data.Int                           (Int)

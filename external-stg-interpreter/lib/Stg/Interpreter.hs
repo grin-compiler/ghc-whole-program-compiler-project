@@ -11,8 +11,6 @@ import           Control.Monad                          (Functor (..), Monad (..
 import           Control.Monad.State.Strict             (MonadIO (..), StateT, execStateT, gets, modify')
 
 import           Data.Bool                              (Bool (..), not, otherwise, (&&), (||))
-
-import Prelude (Enum (..))
 import           Data.Eq                                (Eq (..))
 import           Data.Function                          (id, ($), (.))
 import           Data.Int                               (Int)
@@ -36,6 +34,8 @@ import           GHC.Err                                (error, undefined)
 import           GHC.Num                                (Num (..))
 import           GHC.Real                               (fromIntegral, realToFrac)
 import           GHC.Stack                              (HasCallStack)
+
+import           Prelude                                (Enum (..))
 
 import           Stg.Analysis.LiveVariable              (annotateWithLiveVariables)
 import           Stg.Foreign.Linker                     (getExtStgWorkDirectory, linkForeignCbitsSharedLib)
@@ -959,7 +959,7 @@ runProgram :: HasCallStack => Bool -> Bool -> String -> [Module] -> [String] -> 
 runProgram isQuiet switchCWD progFilePath mods0 progArgs dbgChan dbgState tracing debugSettings = do
   let mods     = fmap annotateWithLiveVariables $ extStgRtsSupportModule : mods0 -- NOTE: add RTS support module
       progName = dropExtension progFilePath
-  
+
   usesMultiThreadedRts progFilePath >>= \case
     True  -> error "TODO: implement concurrent FFI semantics"
     False -> pure ()

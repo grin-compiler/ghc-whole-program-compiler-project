@@ -3,31 +3,21 @@ module Stg.Interpreter.PrimOp.MVar where
 import           Control.Applicative  (Applicative (..))
 import           Control.Monad.State  (MonadState (..), gets, modify')
 
-import Prelude (Enum (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($))
 import           Data.Int             (Int)
 import qualified Data.IntMap          as IntMap
 import           Data.List            ((++))
 import           Data.Maybe           (Maybe (..))
-import           Data.Word            (Word)
 
 import           GHC.Err              (error)
 
-import           Stg.Interpreter.Base (Atom (..), BlockReason (..), M, MVarDescriptor (..), PrimOpEval,
-                                       ScheduleReason (..), StackContinuation (..), StgState (..), ThreadState (..),
-                                       ThreadStatus (..), getCurrentThreadState, getThreadState, lookupMVar, stackPush,
-                                       updateThreadState)
+import           Prelude              (Enum (..))
+
+import           Stg.Interpreter.Base
 import           Stg.Syntax           (Name, TyCon, Type)
 
 import           Text.Show            (Show (..))
-
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V :: Word -> Atom
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 handleTakeMVarValueFullCase :: Int -> MVarDescriptor -> M ()
 handleTakeMVarValueFullCase m mvd@MVarDescriptor{..} = do

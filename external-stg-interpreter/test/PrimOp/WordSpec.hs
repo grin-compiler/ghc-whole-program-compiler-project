@@ -17,7 +17,7 @@ import           GHC.Exts
 
 import           Prelude                     (Enum (..))
 
-import           Stg.Interpreter.Base        (Atom, fakeStgStateForPrimopTests)
+import           Stg.Interpreter.Base       
 import           Stg.Interpreter.PrimOp.Word
 import           Stg.Syntax                  (Name, Type (..))
 
@@ -204,7 +204,7 @@ spec = do
 
     it "pdep64#" $
       property $ \(a :: Word, b :: Word) -> do
-        let a' = wordToWord64#(unboxWord a)
+        let a' = wordToWord64# (unboxWord a)
         let b' = wordToWord64# (unboxWord b)
         evalOp "pdep64#" [WordV a, WordV b] `shouldReturn` [WordV (W# (word64ToWord# (pdep64# a' b')))]
 
@@ -226,7 +226,7 @@ spec = do
 
     it "pext64#" $
       property $ \(a :: Word, b :: Word) -> do
-        let a' = wordToWord64#(unboxWord a)
+        let a' = wordToWord64# (unboxWord a)
         let b' = wordToWord64# (unboxWord b)
         evalOp "pext64#" [WordV a, WordV b] `shouldReturn` [WordV (W# (word64ToWord# (pext64# a' b')))]
 
@@ -248,7 +248,7 @@ spec = do
 
     it "clz64#" $
       property $ \(a :: Word) -> do
-        let a' = wordToWord64#(unboxWord a)
+        let a' = wordToWord64# (unboxWord a)
         evalOp "clz64#" [WordV a] `shouldReturn` [WordV (W# (clz64# a'))]
 
     it "clz#" $
@@ -269,7 +269,7 @@ spec = do
 
     it "ctz64#" $
       property $ \(a :: Word) -> do
-        let a' = wordToWord64#(unboxWord a)
+        let a' = wordToWord64# (unboxWord a)
         evalOp "ctz64#" [WordV a] `shouldReturn` [WordV (W# (ctz64# a'))]
 
     it "ctz#" $
@@ -286,14 +286,13 @@ spec = do
 
     it "byteSwap64#" $
       property $ \(a :: Word) -> do
-        let a' = wordToWord64#(unboxWord a)
+        let a' = wordToWord64# (unboxWord a)
         evalOp "byteSwap64#" [WordV a] `shouldReturn` [WordV (W# (word64ToWord# (byteSwap64# a')))]
 
     it "byteSwap#" $
       property $ \(a :: Word) -> do
         evalOp "byteSwap#" [WordV a] `shouldReturn` [WordV (W# (byteSwap# (unboxWord a)))]
 
-#if __GLASGOW_HASKELL__ >= 810
     it "bitReverse8#" $
       property $ \(a :: Word) -> do
         evalOp "bitReverse8#" [WordV a] `shouldReturn` [WordV (W# (bitReverse8# (unboxWord a)))]
@@ -314,4 +313,3 @@ spec = do
     it "bitReverse#" $
       property $ \(a :: Word) -> do
         evalOp "bitReverse#" [WordV a] `shouldReturn` [WordV (W# (bitReverse# (unboxWord a)))]
-#endif

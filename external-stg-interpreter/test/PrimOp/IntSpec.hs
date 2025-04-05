@@ -14,7 +14,7 @@ import           Data.Maybe                 (Maybe (..))
 
 import           GHC.Exts
 
-import           Stg.Interpreter.Base       (Atom, fakeStgStateForPrimopTests)
+import           Stg.Interpreter.Base      
 import           Stg.Interpreter.PrimOp.Int
 import           Stg.Syntax                 (Name, Type (..))
 
@@ -61,14 +61,12 @@ spec = do
         [IntV stgVal] <- evalOp "*#" [IntV a, IntV b]
         assert $ stgVal == (I# ((unboxInt a) *# (unboxInt b)))
 
-#if __GLASGOW_HASKELL__ >= 900
     it "timesInt2#" $
       property $ forAll (arbitrary :: Gen (Int, Int)) $ \(a, b) -> monadicIO $ do
         [IntV stgVal1, IntV stgVal2, IntV stgVal3] <- evalOp "timesInt2#" [IntV a, IntV b]
 
         let !(# x, y, z #) = timesInt2# (unboxInt a) (unboxInt b)
         assert $ (stgVal1, stgVal2, stgVal3) == (I# x, I# y, I# z)
-#endif
 
     it "mulIntMayOflo#" $
       property $ forAll (arbitrary :: Gen (Int, Int)) $ \(a, b) -> monadicIO $ do

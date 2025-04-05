@@ -5,23 +5,13 @@ import           Control.Applicative  (Applicative (..))
 import           Data.Bool            (Bool (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($))
-import           Data.Int             (Int)
 import           Data.List            (findIndex, (!!), (++))
 import           Data.Maybe           (Maybe (..))
-import           Data.Word            (Word)
 
-import           Stg.Interpreter.Base (Atom (..), HeapObject (..), M, PrimOpEval, StackContinuation (..), allocAndStore,
-                                       readHeapCon, stackPush, stgErrorM)
+import           Stg.Interpreter.Base
 import           Stg.Syntax           (CutTyCon (..), DC (..), DataCon (..), Name, TyCon (..), Type)
 
 import           Text.Show            (Show (..))
-
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V :: Word -> Atom
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 dataToTagOp :: [Atom] -> M [Atom]
 dataToTagOp [whnf@HeapPtr{}] = do

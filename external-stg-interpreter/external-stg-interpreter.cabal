@@ -12,46 +12,8 @@ category:            Development
 build-type:          Simple
 
 common lang
-  default-language: GHC2021
+  default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
-    BangPatterns
-    DataKinds
-    DeriveAnyClass
-    DeriveFoldable
-    DeriveFunctor
-    DeriveGeneric
-    DeriveLift
-    DeriveTraversable
-    DerivingStrategies
-    DerivingVia
-    ExplicitNamespaces
-    FlexibleContexts
-    FlexibleInstances
-    GeneralizedNewtypeDeriving
-    ImportQualifiedPost
-    InstanceSigs
-    LambdaCase
-    MultiParamTypeClasses
-    NoImplicitPrelude
-    NoStarIsType
-    NumericUnderscores
-    OverloadedStrings
-    RankNTypes
-    RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TemplateHaskell
-    TypeApplications
-    TypeFamilies
-    TypeOperators
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    TupleSections
-    ImplicitParams
-    NamedFieldPuns
-    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -69,46 +31,8 @@ common lang
 
 library
   hs-source-dirs:      lib
-  default-language: GHC2021
+  default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
-    BangPatterns
-    DataKinds
-    DeriveAnyClass
-    DeriveFoldable
-    DeriveFunctor
-    DeriveGeneric
-    DeriveLift
-    DeriveTraversable
-    DerivingStrategies
-    DerivingVia
-    ExplicitNamespaces
-    FlexibleContexts
-    FlexibleInstances
-    GeneralizedNewtypeDeriving
-    ImportQualifiedPost
-    InstanceSigs
-    LambdaCase
-    MultiParamTypeClasses
-    NoImplicitPrelude
-    NoStarIsType
-    NumericUnderscores
-    OverloadedStrings
-    RankNTypes
-    RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TemplateHaskell
-    TypeApplications
-    TypeFamilies
-    TypeOperators
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    TupleSections
-    ImplicitParams
-    NamedFieldPuns
-    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude
@@ -214,10 +138,9 @@ library
 
   include-dirs:        
     datalog
+    /home/ilya/projects/ghc-whole-program-compiler-project/souffle/src/include
   cxx-options:          -D__EMBEDDED_SOUFFLE__ -std=c++17 -Wno-deprecated-declarations
   cxx-sources:          datalog/ext-stg-gc.cpp
-  include-dirs:
-    /home/ilya/projects/ghc-whole-program-compiler-project/souffle/src/include
 
 executable ext-stg-interpreter
   import:              lang

@@ -3,10 +3,9 @@ module Stg.Interpreter.PrimOp.Parallelism where
 import           Control.Applicative  (Applicative (..))
 
 import           Data.Function        (($))
-import           Data.Int             (Int)
 import           Data.Maybe           (Maybe)
 
-import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval, StackContinuation (..), stackPush)
+import           Stg.Interpreter.Base
 import           Stg.Syntax           (Name, TyCon, Type)
 
 {-
@@ -15,9 +14,6 @@ import           Stg.Syntax           (Name, TyCon, Type)
     - on single core evaluation they do nothing
     - the ext-stg interpreter is a single core evaluator
 -}
-
-pattern IntV :: Int -> Atom
-pattern IntV i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

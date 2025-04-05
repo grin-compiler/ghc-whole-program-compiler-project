@@ -6,7 +6,6 @@ import           Control.Applicative  (Applicative (..))
 
 import           Data.Bits            (Bits (..), FiniteBits (..), testBitDefault)
 import           Data.Bool            ((||))
-import Prelude (Bounded (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($), (.))
 import           Data.List            (foldl)
@@ -19,17 +18,12 @@ import           GHC.Num              (Integer, Num (..))
 import           GHC.Real             (Integral (..), fromIntegral)
 import           GHC.Word             (Word64 (..))
 
-import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Prelude              (Bounded (..))
+
+import           Stg.Interpreter.Base
 import           Stg.Syntax           (Name, TyCon, Type)
 
 type PrimWord = Word64
-
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word64V :: Word -> Atom
-pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

@@ -17,20 +17,12 @@ import           Foreign.Ptr           (castPtr)
 
 import           GHC.Err               (error, undefined)
 
-import           Stg.Interpreter.Base  (Atom (..), BlockReason (..), HeapObject (..), M, MVarDescriptor (..),
-                                        PrimOpEval, ScheduleReason (..), StackContinuation (..), StgState (..),
-                                        ThreadState (..), ThreadStatus (..), createThread, getCurrentThreadState,
-                                        getThreadState, mylog, promptM, readHeap, reportThread, requestContextSwitch,
-                                        scheduleToTheEnd, stackPush, store, unsubscribeTVarWaitQueues,
-                                        updateThreadState, wakeupBlackHoleQueueThreads)
+import           Stg.Interpreter.Base
 import           Stg.Syntax            (Name, TyCon, Type)
 
 import           System.IO             (print, putStrLn)
 
 import           Text.Show             (Show (..))
-
-pattern IntV :: Int -> Atom
-pattern IntV i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

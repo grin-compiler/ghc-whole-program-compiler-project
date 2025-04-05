@@ -103,9 +103,6 @@ rtsSymbols =
   -- Assume charset names are ASCII
   , CFun "localeEncoding"                    -- c fun
 
-  -- [Windows types]
-  -- , CFun "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite" -- c fun
-
   -- checks to see whether input is available on the file descriptor
   , CFun "fdReady"                           -- c fun
 

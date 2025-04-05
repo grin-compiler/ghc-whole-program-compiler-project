@@ -14,7 +14,7 @@ import           GHC.Exts
 import           GHC.Real                      (fromIntegral)
 import           GHC.Word                      (Word16 (..))
 
-import           Stg.Interpreter.Base          (Atom, fakeStgStateForPrimopTests)
+import           Stg.Interpreter.Base         
 import           Stg.Interpreter.PrimOp.Word16
 import           Stg.Syntax                    (Name, Type (..))
 

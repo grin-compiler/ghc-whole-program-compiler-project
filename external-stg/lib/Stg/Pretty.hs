@@ -1,21 +1,36 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Stg.Pretty where
-import           Control.Applicative                           (Alternative (..))
+import           Control.Applicative                           (Alternative (..), Applicative (..), (<$>))
+import           Control.Monad                                 (Monad (..))
 import           Control.Monad.Identity                        (Identity (..))
 import           Control.Monad.Reader                          (MonadReader, ReaderT (ReaderT))
 import           Control.Monad.RWS                             (RWST (..))
 import           Control.Monad.State                           (MonadState, State, execState, gets, modify')
 import           Control.Monad.Writer                          (MonadWriter)
 
+import           Data.Bool                                     (Bool (..), otherwise)
 import qualified Data.ByteString.Char8                         as BS
-import           Data.Maybe                                    (fromMaybe)
-import           Data.Ratio                                    (denominator, numerator)
-import           Data.String                                   (IsString (..))
+import           Data.Eq                                       (Eq (..))
+import           Data.Function                                 (const, id, ($), (.))
+import           Data.Functor                                  (Functor (..))
+import           Data.Int                                      (Int)
+import           Data.List                                     (concatMap, filter, repeat, replicate, reverse, zip,
+                                                                (++))
+import           Data.Maybe                                    (Maybe (..), fromMaybe)
+import           Data.Monoid                                   (Monoid (..))
+import           Data.Ord                                      (Ord (..))
+import           Data.Ratio                                    (Rational, denominator, numerator)
+import           Data.Semigroup                                (Semigroup (..))
+import           Data.String                                   (IsString (..), String)
 import           Data.Text                                     (Text)
 import qualified Data.Text                                     as T
+import           Data.Tuple                                    (fst)
 
-import           Prelude                                       hiding (exp, mod)
+import           GHC.Err                                       (error)
+import           GHC.Num                                       (Integer, Num (..))
+
+import           Prelude                                       (Enum (..))
 
 import           Stg.IRLocation                                (StgPoint (..), binderToStgId)
 import           Stg.Syntax                                    (Alt, Alt' (..), AltCon, AltCon' (..), AltType,
@@ -36,6 +51,7 @@ import           Text.PrettyPrint.Final                        (Atom (..), Chunk
                                                                 hsep, nest, newline, text, vsep)
 import           Text.PrettyPrint.Final.Extensions.Environment (EnvT (..), MonadPrettyEnv, MonadReaderEnv (..), runEnvT)
 import           Text.PrettyPrint.Final.Words                  (braces, comma, parens)
+import           Text.Show                                     (Show (..))
 
 ---------------------------------------------------------
 type SrcPos = (Int, Int)
@@ -248,7 +264,7 @@ textS = text . T.pack
 ppType :: Type -> Doc
 ppType t = red $ case t of
   SingleValue r  -> ppPrimRep r
-  UnboxedTuple l -> braces $ hsep (map ppPrimRep l)
+  UnboxedTuple l -> braces $ hsep (fmap ppPrimRep l)
   PolymorphicRep -> text "PolymorphicRep"
 
 ppPrimRep :: PrimRep -> Doc
@@ -451,9 +467,9 @@ pprExpr exp = do
                             , text "case" <+> pprVar b <+> text "of"
                             , indent 2 $ vcat $ putDefaultLast alts [pprAlt (Id b) idx a | (idx, a) <- zip [0..] alts]
                             ]
-    StgApp f args         -> pprVar f <+> hsep (map pprArg args)
-    StgOpApp op args _ty _n -> pprOp op <+> hsep (map pprArg args){- <+> text "::" <+> (pretty ty) <+> maybe mempty (parens . ppTyConName) n -}
-    StgConApp dc args _t  -> addUnboxedCommentIfNecessary dc $ pprDataConName dc <+> hsep (map pprArg args)
+    StgApp f args         -> pprVar f <+> hsep (fmap pprArg args)
+    StgOpApp op args _ty _n -> pprOp op <+> hsep (fmap pprArg args){- <+> text "::" <+> (pretty ty) <+> maybe mempty (parens . ppTyConName) n -}
+    StgConApp dc args _t  -> addUnboxedCommentIfNecessary dc $ pprDataConName dc <+> hsep (fmap pprArg args)
     StgLet b e            -> text "let" <+> align (pprBinding b) <$$> align (withStgPoint (SP_LetExpr stgPoint) $ pprExpr e)
     StgLetNoEscape b e    -> vsep
       [ text "-- stack allocating let"
@@ -485,19 +501,19 @@ pprRhs :: Id -> Rhs -> Doc
 pprRhs (Id rhsBinder) = \case
   StgRhsClosure _ _ bs e ->
     annotate (SP_Binding $ binderToStgId rhsBinder) $
-      pprBinder rhsBinder <+> hsep (map pprBinder bs) <+> text "= do"
+      pprBinder rhsBinder <+> hsep (fmap pprBinder bs) <+> text "= do"
         <> newline
         <> indent 2 (withStgPoint (SP_RhsClosureExpr $ binderToStgId rhsBinder) $ pprExpr e)
   StgRhsCon dc vs ->
     annotate (SP_RhsCon $ binderToStgId rhsBinder) $
       pprBinder rhsBinder
         <+> text "="
-        <+> addUnboxedCommentIfNecessary dc (pprDataConName dc <+> hsep (map pprArg vs))
+        <+> addUnboxedCommentIfNecessary dc (pprDataConName dc <+> hsep (fmap pprArg vs))
 
 pprBinding :: Binding -> Doc
 pprBinding = \case
   StgNonRec b r  -> pprBind (b,r)
-  StgRec bs      -> vsep (map pprBind bs)
+  StgRec bs      -> vsep (fmap pprBind bs)
   where
     pprBind (b,rhs) =
       pprRhs (Id b) rhs
@@ -505,7 +521,7 @@ pprBinding = \case
 pprTopBinding :: TopBinding -> Doc
 pprTopBinding = \case
   StgTopLifted (StgNonRec b r)  -> pprTopBind (b,r)
-  StgTopLifted (StgRec bs)      -> vsep (map pprTopBind bs)
+  StgTopLifted (StgRec bs)      -> vsep (fmap pprTopBind bs)
   StgTopStringLit b s           -> pprTopBind' (\(Id b') str -> pprBinder b' <+> text "=" <+> (textS . show $ str)) (b,s)
   where
     pprTopBind = pprTopBind' pprRhs
@@ -527,7 +543,7 @@ pprTyCon TyCon{..} = {-pretty tcUnitId <> text "_" <> pretty tcModule <> text ".
 
 pprDataConDef :: DataCon -> Doc
 pprDataConDef DataCon{..} = case dcRep of
-  AlgDataCon dcArgsRep -> pretty dcName <+> hsep (map ppPrimRep dcArgsRep)
+  AlgDataCon dcArgsRep -> pretty dcName <+> hsep (fmap ppPrimRep dcArgsRep)
   x                    -> textS $ "-- " ++ show x
 
 pprDataConName :: DataCon -> Doc
@@ -555,7 +571,7 @@ pprModule Module{..} = vsep
     , modName == moduleName
     , tc <- tl
     ]
-  , vsep (map pprTopBinding moduleTopBindings)
+  , vsep (fmap pprTopBinding moduleTopBindings)
   ]
 
 pprImportList :: UnitId -> ModuleName -> [Binder] -> Doc

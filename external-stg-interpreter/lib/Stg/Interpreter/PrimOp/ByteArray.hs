@@ -7,7 +7,6 @@ import           Control.Monad.State      (MonadIO (..), gets, modify')
 import           Data.Bits                (Bits (..))
 import           Data.Bool                (Bool (..))
 import           Data.Char                (Char, chr, ord)
-import Prelude (Enum (..))
 import           Data.Eq                  (Eq ((==)))
 import           Data.Function            (($), (.))
 import           Data.Int                 (Int, Int16, Int32, Int64, Int8)
@@ -26,36 +25,14 @@ import           GHC.Float                (Double, Float)
 import           GHC.Num                  (Num (..))
 import           GHC.Real                 (fromIntegral)
 
-import           Stg.Interpreter.Base     (Atom (..), ByteArrayDescriptor (..), ByteArrayIdx (..), M, PrimOpEval,
-                                           PtrOrigin (..), StgState (..), lookupByteArrayDescriptor, stgErrorM)
-import           Stg.Syntax               (Lit (..), Name, TyCon, Type)
+import           Prelude                  (Enum (..))
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax               (Name, TyCon, Type)
 
 import           System.IO                (IO)
 
 import           Text.Show                (Show (..))
-
-pattern CharV :: Char -> Atom
-pattern CharV c   = Literal (LitChar c)
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int8V :: Int -> Atom
-pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int16V :: Int -> Atom
-pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int32V :: Int -> Atom
-pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int64V :: Int -> Atom
-pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word8V :: Word -> Atom
-pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word16V :: Word -> Atom
-pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V :: Word -> Atom
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word64V :: Word -> Atom
-pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 lookupByteArray :: Int -> M BA.ByteArray
 lookupByteArray baId = do

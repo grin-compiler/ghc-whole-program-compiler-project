@@ -4,22 +4,18 @@ module Stg.Interpreter.PrimOp.Array where
 import           Control.Applicative  (Applicative (..))
 import           Control.Monad.State  (MonadState (..), gets, modify')
 
-import Prelude (Enum (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($))
-import           Data.Int             (Int)
 import qualified Data.IntMap          as IntMap
 import           Data.Maybe           (Maybe)
 import qualified Data.Vector          as V
 
 import           GHC.Num              (Num (..))
 
-import           Stg.Interpreter.Base (ArrIdx (..), Atom (..), M, PrimOpEval, StgState (..), lookupArray,
-                                       lookupMutableArray)
-import           Stg.Syntax           (Name, TyCon, Type)
+import           Prelude              (Enum (..))
 
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 lookupArrIdx :: ArrIdx -> M (V.Vector Atom)
 lookupArrIdx = \case

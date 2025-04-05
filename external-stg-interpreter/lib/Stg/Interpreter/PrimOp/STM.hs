@@ -5,7 +5,6 @@ import           Control.Monad        (Monad (..), forM_, mapM, when)
 import           Control.Monad.State  (gets, modify')
 
 import           Data.Bool            (Bool (..), not)
-import Prelude (Enum (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (const, ($))
 import           Data.Int             (Int)
@@ -17,6 +16,8 @@ import           Data.Monoid          (Monoid (..))
 
 import           GHC.Err              (error, undefined)
 import           GHC.Stack            (HasCallStack)
+
+import           Prelude              (Enum (..))
 
 import           Stg.Interpreter.Base (Atom (..), BlockReason (..), M, PrimOpEval, Rts (..), ScheduleReason (..),
                                        StackContinuation (..), StgState (..), TLog, TLogEntry (..), TVarDescriptor (..),

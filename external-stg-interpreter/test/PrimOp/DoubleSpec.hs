@@ -13,7 +13,7 @@ import           Data.Maybe                    (Maybe (..))
 
 import           GHC.Exts
 
-import           Stg.Interpreter.Base          (Atom, fakeStgStateForPrimopTests)
+import           Stg.Interpreter.Base         
 import           Stg.Interpreter.PrimOp.Double
 import           Stg.Syntax                    (Name, Type (..))
 
@@ -110,7 +110,6 @@ spec = do
       property $ \(a :: Double) -> do
         evalOp "logDouble#" [DoubleV a] `shouldReturnShow` [DoubleV (D# (logDouble# (unboxDouble a)))]
 
-#if __GLASGOW_HASKELL__ >= 810
     it "expm1Double#" $
       property $ \(a :: Double) -> do
         evalOp "expm1Double#" [DoubleV a] `shouldReturn` [DoubleV (D# (expm1Double# (unboxDouble a)))]
@@ -118,7 +117,6 @@ spec = do
     it "log1pDouble#" $
       property $ \(a :: Double) -> do
         evalOp "log1pDouble#" [DoubleV a] `shouldReturnShow` [DoubleV (D# (log1pDouble# (unboxDouble a)))]
-#endif
 
     it "sqrtDouble#" $
       property $ \(a :: Double) -> do

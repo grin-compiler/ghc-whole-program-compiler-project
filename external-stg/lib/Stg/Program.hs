@@ -15,7 +15,7 @@ import           Data.Containers.ListUtils (nubOrd)
 import           Data.Either               (Either (..))
 import           Data.Eq                   (Eq ((==)))
 import           Data.Function             (($), (.))
-import           Data.List                 (concat, drop, dropWhile, foldl, foldl', isPrefixOf, length, map, takeWhile,
+import           Data.List                 (concat, drop, dropWhile, foldl, foldl', isPrefixOf, length, takeWhile,
                                             unlines, unzip, zip, (++))
 import qualified Data.Map                  as Map
 import           Data.Maybe                (Maybe (..), catMaybes, listToMaybe, maybeToList)
@@ -257,7 +257,7 @@ getFullpakModules fullpakPath = withArchive fullpakPath $ do
 getGhcStgAppModules :: FilePath -> IO [Module]
 getGhcStgAppModules ghcstgappPath = do
   modinfoList <- getAppModuleMapping ghcstgappPath
-  appModpaks <- collectProgramModules' False (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
+  appModpaks <- collectProgramModules' False (fmap modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
   forM appModpaks $ \modpakName -> readModpakL modpakName modpakStgbinPath decodeStgbin
 
 -- .json

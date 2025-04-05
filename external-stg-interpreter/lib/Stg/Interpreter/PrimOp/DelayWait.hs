@@ -7,7 +7,6 @@ import           Control.Monad.State  (MonadIO (..), gets)
 import           Data.Eq              (Eq (..))
 import           Data.Fixed           (Pico)
 import           Data.Function        (($))
-import           Data.Int             (Int)
 import           Data.List            ((++))
 import           Data.Maybe           (Maybe)
 import           Data.Time.Clock      (addUTCTime, getCurrentTime, secondsToNominalDiffTime)
@@ -15,15 +14,10 @@ import           Data.Time.Clock      (addUTCTime, getCurrentTime, secondsToNomi
 import           GHC.Err              (error)
 import           GHC.Real             (Fractional (..), fromIntegral)
 
-import           Stg.Interpreter.Base (Atom (..), BlockReason (..), M, PrimOpEval, ScheduleReason (..),
-                                       StackContinuation (..), StgState (..), ThreadState (..), ThreadStatus (..),
-                                       getCurrentThreadState, stackPush, updateThreadState)
+import           Stg.Interpreter.Base
 import           Stg.Syntax           (Name, TyCon, Type)
 
 import           Text.Show            (Show (..))
-
-pattern IntV :: Int -> Atom
-pattern IntV i = IntAtom i
 
 {-
   NOTE:

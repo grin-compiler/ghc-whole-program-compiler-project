@@ -7,7 +7,7 @@ import           Control.Monad.State      (MonadIO (..), gets, modify, modify')
 
 import           Data.Bool                (Bool, otherwise, (&&))
 import qualified Data.ByteString.Char8    as BS8
-import Prelude (Enum (..))
+import           Prelude                  (Enum (..))
 import           Data.Eq                  (Eq (..))
 import           Data.Function            (($), (.))
 import           Data.Int                 (Int)

@@ -12,7 +12,7 @@ import           Data.Function                       (const, ($), (.))
 import           Data.Int                            (Int)
 import qualified Data.IntMap                         as IntMap
 import qualified Data.IntSet                         as IntSet
-import           Data.List                           (foldr, length, map, maximum, reverse, take, (++))
+import           Data.List                           (foldr, length, maximum, reverse, take, (++))
 import qualified Data.List                           as List
 import qualified Data.Map                            as Map
 import           Data.Maybe                          (Maybe (..))
@@ -174,7 +174,7 @@ dbgCommands =
     , wrapWithDbgOut $ \patterns -> do
         env <- gets ssStaticGlobalEnv
         let filterPattern pat resultList = [n | n <- resultList, pat `List.isInfixOf` n]
-            matches = foldr filterPattern (map show $ Map.keys env) patterns
+            matches = foldr filterPattern (fmap show $ Map.keys env) patterns
         liftIO $ putStrLn $ unlines matches
     )
 

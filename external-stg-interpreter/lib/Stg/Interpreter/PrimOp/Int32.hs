@@ -9,22 +9,13 @@ import           Data.Function        (($), (.))
 import           Data.Int             (Int, Int32)
 import           Data.Maybe           (Maybe)
 import           Data.Ord             (Ord (..))
-import           Data.Word            (Word, Word32)
+import           Data.Word            (Word32)
 
 import           GHC.Num              (Num (..))
 import           GHC.Real             (Integral (..), fromIntegral)
 
-import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Interpreter.Base
 import           Stg.Syntax           (Name, TyCon, Type)
-
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int32V :: Int -> Atom
-pattern Int32V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V :: Word -> Atom
-pattern Word32V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = do

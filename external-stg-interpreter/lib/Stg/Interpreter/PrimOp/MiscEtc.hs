@@ -4,21 +4,16 @@ import           Control.Applicative             (Applicative (..))
 import           Control.Monad.State             (MonadIO (..), gets, modify')
 
 import           Data.Function                   (($))
-import           Data.Int                        (Int)
 import           Data.Maybe                      (Maybe)
 
 import           Foreign.C                       (peekCString)
 import           Foreign.Ptr                     (castPtr, nullPtr)
 
-import           Stg.Interpreter.Base            (Atom (..), M, PrimOpEval, PtrOrigin (..), StgState (..),
-                                                  getAddressState)
+import           Stg.Interpreter.Base
 import           Stg.Interpreter.Debugger.Region (evalRegionCommand)
 import           Stg.Syntax                      (Name, TyCon, Type)
 
 import           System.IO                       (print)
-
-pattern Int64V :: Int -> Atom
-pattern Int64V i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

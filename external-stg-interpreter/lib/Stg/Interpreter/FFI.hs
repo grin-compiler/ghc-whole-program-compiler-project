@@ -8,7 +8,6 @@ import           Control.Monad.State.Strict     (MonadIO (..), MonadState (..), 
 
 import           Data.Bool                      (Bool (..))
 import qualified Data.ByteString.Char8          as BS8
-import           Data.Char                      (Char)
 import           Data.Eq                        (Eq (..))
 import           Data.Function                  (flip, ($), (.))
 import           Data.Int                       (Int, Int16, Int32, Int64, Int8)
@@ -32,17 +31,11 @@ import           Foreign.Ptr                    (FunPtr, Ptr, castFunPtrToPtr, c
 import           Foreign.Storable               (Storable (..))
 
 import           GHC.Err                        (error)
-import           GHC.Float                      (Double, Float)
 import           GHC.Real                       (fromIntegral)
 import           GHC.Stack                      (HasCallStack)
 
 import           Stg.GHC.Symbols                (Symbol (..), rtsSymbols)
-import           Stg.Interpreter.Base           (Atom (..), ByteArrayDescriptor (..), EvalOnNewThread, HeapObject (..),
-                                                 M, PrintableMVar (..), PtrOrigin (..), Rts (..), ScheduleReason (..),
-                                                 StackContinuation (..), StgState (..), ThreadState (..), allocAndStore,
-                                                 debugPrintHeapObject, getCurrentThreadState, liftIOAndBorrowStgState,
-                                                 lookupByteArrayDescriptorI, lookupStablePointerPtr, readHeap,
-                                                 stackPush, stgErrorM, traceLog)
+import           Stg.Interpreter.Base
 import qualified Stg.Interpreter.EmulatedLibFFI as EmulatedLibFFI
 import           Stg.Interpreter.Rts            (globalStoreSymbols)
 import qualified Stg.Interpreter.RtsFFI         as RtsFFI
@@ -54,33 +47,6 @@ import           System.IO                      (IO)
 import           System.Posix.DynamicLinker     (c_dlsym, packDL)
 
 import           Text.Show                      (Show (..))
-
-pattern CharV :: Char -> Atom
-pattern CharV c   = Literal (LitChar c)
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int8V :: Int -> Atom
-pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int16V :: Int -> Atom
-pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int32V :: Int -> Atom
-pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int64V :: Int -> Atom
-pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word8V :: Word -> Atom
-pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word16V :: Word -> Atom
-pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V :: Word -> Atom
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word64V :: Word -> Atom
-pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern FloatV :: Float -> Atom
-pattern FloatV f  = FloatAtom f
-pattern DoubleV :: Double -> Atom
-pattern DoubleV d = DoubleAtom d
 
 emulatedLibrarySymbolSet :: Set Name
 emulatedLibrarySymbolSet = Set.fromList

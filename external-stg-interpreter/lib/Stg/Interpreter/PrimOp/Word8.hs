@@ -1,4 +1,3 @@
--- {-# LANGUAGE Strict #-}
 module Stg.Interpreter.PrimOp.Word8 where
 
 import           Control.Applicative  (Applicative (..))
@@ -6,7 +5,6 @@ import           Control.Applicative  (Applicative (..))
 import           Data.Bits            (Bits (..))
 import           Data.Eq              (Eq (..))
 import           Data.Function        (($), (.))
-import           Data.Int             (Int)
 import           Data.Maybe           (Maybe)
 import           Data.Ord             (Ord (..))
 import           Data.Word            (Word, Word8)
@@ -14,17 +12,8 @@ import           Data.Word            (Word, Word8)
 import           GHC.Num              (Num (..))
 import           GHC.Real             (Integral (..), fromIntegral)
 
-import           Stg.Interpreter.Base (Atom (..), M, PrimOpEval)
+import           Stg.Interpreter.Base
 import           Stg.Syntax           (Name, TyCon, Type)
-
-pattern IntV :: Int -> Atom
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int8V :: Int -> Atom
-pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV :: Word -> Atom
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word8V :: Word -> Atom
-pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = do
