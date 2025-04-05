@@ -33,6 +33,9 @@ import           System.FilePath            (FilePath, makeRelative, replaceExte
 
 import           WPC.ForeignStubDecls       (ForeignStubDecls)
 import qualified WPC.StgToExtStg            as ExtStg
+import Data.Maybe(fromJust)
+import GHC.Data.OsPath (unsafeDecodeUtf)
+import GHC.Iface.Binary ( CompressionIFace(..) )
 
 outputModPak
   :: HscEnv
@@ -94,7 +97,7 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
   let (mod_guts, mod_summary) = fromMaybe (error "missing ModGuts for fullcore .hi") mb_mod_guts
 
   fullcoreHiFile <- newTempName logger tmpfs (tmpDir dflags) TFL_CurrentModule (objectSuf dflags ++ "_fullcore-hi")
-  writeFullCoreInterface hsc_env mod_guts mod_summary fullcoreHiFile
+  writeFullCoreInterface hsc_env mod_guts mod_summary fullcoreHiFile foreign_stubs0
 
   -- module compilation info
   let ppYamlList key l = unlines $ key : ["- " ++ x | x <- nubOrd $ fmap show l]
@@ -133,7 +136,7 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
       Just fn -> addToZip "module.hs" fn
     ) ++
     (if has_stub_h
-      then addToZip "module_stub.h" (mkStubPaths (initFinderOpts dflags) modName location)
+      then addToZip "module_stub.h" $ unsafeDecodeUtf $ fromJust $ mkStubPaths (initFinderOpts dflags) modName location
       else []
     ) ++
     (case m_stub_c of
@@ -155,7 +158,7 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
     Nothing -> pure ()
     Just fn -> copyToDir "module.hs" fn
   if has_stub_h
-    then copyToDir "module_stub.h" (mkStubPaths (initFinderOpts dflags) modName location)
+    then copyToDir "module_stub.h" $ unsafeDecodeUtf $ fromJust $ mkStubPaths (initFinderOpts dflags) modName location
     else pure ()
   case m_stub_c of
     Nothing -> pure ()
@@ -171,8 +174,8 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
     ]
   -}
 
-writeFullCoreInterface :: HscEnv -> ModGuts -> ModSummary -> FilePath -> IO ()
-writeFullCoreInterface hscEnv0 mod_guts mod_summary output_name = do
+writeFullCoreInterface :: HscEnv -> ModGuts -> ModSummary -> FilePath -> ForeignStubs -> IO ()
+writeFullCoreInterface hscEnv0 mod_guts mod_summary output_name foreign_stubs = do
   let logger  = hsc_logger hscEnv0
       dflags0 = hsc_dflags hscEnv0
       -- HINT: export the whole module core IR
@@ -186,9 +189,9 @@ writeFullCoreInterface hscEnv0 mod_guts mod_summary output_name = do
         {-# SCC "GHC.Driver.Main.mkPartialIface" #-}
         -- This `force` saves 2M residency in test T10370
         -- See Note [Avoiding space leaks in toIface*] for details.
-        force (mkPartialIface hscEnv (cg_binds cg_guts) details mod_summary mod_guts)
+        force (mkPartialIface hscEnv (cg_binds cg_guts) details mod_summary [] mod_guts)
 
   -- In interpreted mode the regular codeGen backend is not run so we
   -- generate a interface without codeGen info.
-  final_iface <- mkFullIface hscEnv partial_iface Nothing Nothing
-  writeIface logger (targetProfile dflags) output_name final_iface
+  final_iface <- mkFullIface hscEnv partial_iface Nothing Nothing foreign_stubs []
+  writeIface logger (targetProfile dflags) NormalCompression output_name final_iface

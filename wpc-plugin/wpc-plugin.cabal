@@ -3,7 +3,7 @@ name:               wpc-plugin
 version:            1.1.0
 
 -- A short (one-line) description of the package.
-synopsis: WPC plugin for GHC 9.10.1
+synopsis: WPC plugin for GHC 9.12.2
 
 -- A longer description of the package.
 -- description:
@@ -22,46 +22,8 @@ maintainer:         csaba.hruska@gmail.com
 extra-source-files: CHANGELOG.md
 
 common lang
-  default-language: GHC2021
+  default-language: GHC2024
   default-extensions:
-    AllowAmbiguousTypes
-    BangPatterns
-    DataKinds
-    DeriveAnyClass
-    DeriveFoldable
-    DeriveFunctor
-    DeriveGeneric
-    DeriveLift
-    DeriveTraversable
-    DerivingStrategies
-    DerivingVia
-    ExplicitNamespaces
-    FlexibleContexts
-    FlexibleInstances
-    GeneralizedNewtypeDeriving
-    ImportQualifiedPost
-    InstanceSigs
-    LambdaCase
-    MultiParamTypeClasses
-    NoImplicitPrelude
-    NoStarIsType
-    NumericUnderscores
-    OverloadedStrings
-    RankNTypes
-    RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TemplateHaskell
-    TypeApplications
-    TypeFamilies
-    TypeOperators
-    UndecidableInstances
-    ViewPatterns
-    MultiWayIf
-    TupleSections
-    ImplicitParams
-    NamedFieldPuns
-    PatternGuards
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     NoImplicitPrelude

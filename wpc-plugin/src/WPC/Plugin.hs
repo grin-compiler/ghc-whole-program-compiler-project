@@ -12,7 +12,6 @@ import           Data.Maybe                  (Maybe (..), fromMaybe, fromJust)
 
 import           GHC.Cmm                     (CmmGroup, CmmGroupSRTs, RawCmmGroup)
 import           GHC.Cmm.Info                (cmmToRawCmm)
-import           GHC.Data.Stream             (Stream)
 import qualified GHC.Data.Stream             as Stream
 import           GHC.Driver.CodeOutput       (outputForeignStubs)
 import           GHC.Driver.Hooks            (Hooks (..))
@@ -22,7 +21,7 @@ import           GHC.Driver.Pipeline.Phases  (PhaseHook (..))
 import           GHC.Plugins                 (CgGuts (..), CommandLineOption, CoreM, CoreToDo (..), DynFlags (..),
                                               GhcLink, HscEnv (..), IsDoc (..), ModGuts (..), ModLocation (..), Module,
                                               NamePprCtx (..), OutputableP (..), Plugin (..), QualifyName (..),
-                                              SuccessFlag, TyCon, alwaysPrintPromTick, blankLine, defaultPlugin,
+                                              SuccessFlag, TyCon, OccName, alwaysPrintPromTick, blankLine, defaultPlugin,
                                               hsc_units, liftIO, mkDumpStyle, neverQualifyModules, neverQualifyPackages,
                                               objectSuf, showSDoc, targetProfile, withPprStyle)
 import           GHC.Stg.Syntax              (CgStgTopBinding)
@@ -30,7 +29,6 @@ import qualified GHC.StgToCmm                as StgToCmm (codeGen)
 import           GHC.StgToCmm.Config         (StgToCmmConfig)
 import           GHC.StgToCmm.Types          (ModuleLFInfos)
 import           GHC.Types.CostCentre        (CollectedCCs)
-import           GHC.Types.HpcInfo           (HpcInfo)
 import           GHC.Types.IPE               (InfoTableProvMap)
 import           GHC.Unit.Home.ModInfo       (HomePackageTable)
 import           GHC.Unit.Module.Status      (HscBackendAction (..))
@@ -48,6 +46,9 @@ import           WPC.GhcStgApp               (writeGhcStgApp)
 import           WPC.GlobalEnv               (GlobalEnv (..), globalEnvIORef)
 import           WPC.Modpak                  (outputModPak)
 import           WPC.Stubs                   (outputCapiStubs)
+import GHC.StgToCmm.CgUtils ( CgStream )
+import GHC.Types.Unique.DSM ( UniqDSMT )
+import Data.Tuple (fst)
 
 plugin :: Plugin
 plugin = defaultPlugin
@@ -66,7 +67,7 @@ coreToDosFun _cmdOpts todo0 = do
       todo = todo0 ++ [CoreDoPluginPass "capture IR" captureCore]
 
   --putMsgS $ "wpc-plugin coreToDosFun cmdOpts: " ++ show cmdOpts
-  --putMsg $ text "wpc-plugin coreToDosFun todo: " <+> vcat (map ppr todo)
+  --putMsg $ text "wpc-plugin coreToDosFun todo: " <+> vcat (fmap ppr todo)
   return todo
 
 driverFun :: [CommandLineOption] -> HscEnv -> IO HscEnv
@@ -218,14 +219,14 @@ runPhaseFun phase = do
 
     _ -> runPhase phase
 
-stgToCmmFun :: HscEnv -> StgToCmmConfig -> InfoTableProvMap -> [TyCon] -> CollectedCCs -> [CgStgTopBinding] -> HpcInfo -> Stream IO CmmGroup ModuleLFInfos
-stgToCmmFun hscEnv cfg itpm tcList ccc stgBinds hpcInfo = do
+stgToCmmFun :: HscEnv -> StgToCmmConfig -> InfoTableProvMap -> [TyCon] -> CollectedCCs -> [CgStgTopBinding] -> CgStream CmmGroup ModuleLFInfos
+stgToCmmFun hscEnv cfg itpm tcList ccc stgBinds = do
   liftIO $ do
     putStrLn $ " ###### run stgToCmmFun"
     modifyIORef globalEnvIORef $ \d -> d {geStgBinds = Just stgBinds}
-  StgToCmm.codeGen (hsc_logger hscEnv) (hsc_tmpfs hscEnv) cfg itpm tcList ccc stgBinds hpcInfo
+  fmap fst $ StgToCmm.codeGen (hsc_logger hscEnv) (hsc_tmpfs hscEnv) cfg itpm tcList ccc stgBinds
 
-cmmToRawCmmFun :: Handle -> HscEnv -> DynFlags -> Maybe Module -> Stream IO CmmGroupSRTs a -> IO (Stream IO RawCmmGroup a)
+cmmToRawCmmFun ::forall a. Handle -> HscEnv -> DynFlags -> Maybe Module -> CgStream CmmGroupSRTs a -> IO (CgStream RawCmmGroup a)
 cmmToRawCmmFun cmmHandle hscEnv dflags mMod cmms = do
   let logger    = hsc_logger hscEnv
       profile   = targetProfile dflags
@@ -233,7 +234,8 @@ cmmToRawCmmFun cmmHandle hscEnv dflags mMod cmms = do
   rawcmms0 <- cmmToRawCmm logger profile cmms
 
   -- name pretty printer setup
-  let qualifyImportedNames mod _
+  let qualifyImportedNames :: Module -> OccName -> QualifyName
+      qualifyImportedNames mod _
         | Just mod == mMod  = NameUnqual
         | otherwise         = NameNotInScope1
       print_unqual = QueryQualify qualifyImportedNames
@@ -242,10 +244,12 @@ cmmToRawCmmFun cmmHandle hscEnv dflags mMod cmms = do
                                   alwaysPrintPromTick
       dumpStyle = mkDumpStyle print_unqual
 
-  let dump a = do
+  let dump :: RawCmmGroup -> UniqDSMT IO RawCmmGroup
+      dump a = do
         let cmmDoc = vcat $ fmap (\i -> pdoc platform i $$ blankLine) a
-        hPutStr cmmHandle . showSDoc dflags $ withPprStyle dumpStyle cmmDoc
+        liftIO $ hPutStr cmmHandle . showSDoc dflags $ withPprStyle dumpStyle cmmDoc
         pure a
+
   pure $ Stream.mapM dump rawcmms0
 
 linkFun :: GhcLink -> DynFlags -> Bool -> HomePackageTable -> IO SuccessFlag

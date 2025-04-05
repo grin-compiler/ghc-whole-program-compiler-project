@@ -3,7 +3,7 @@
 The project consists of GHC **wpc-plugin** and the corresponding **External STG IR** and **tooling**.
 
 
-The wpc-plugin is a compiler plugin for GHC 9.10.1. It exports the STG IR `(.modpak)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
+The wpc-plugin is a compiler plugin for GHC 9.12.2. It exports the STG IR `(.modpak)` for the compiled modules and linker metadata (`.ghc_stgapp`) at application link time.  
 
 <img height="350" src="https://user-images.githubusercontent.com/877489/114280753-0d311300-9a3b-11eb-8d50-facad35f0e9a.png"/>
 
@@ -41,7 +41,7 @@ The wpc-plugin is a compiler plugin for GHC 9.10.1. It exports the STG IR `(.mod
    ```
    cabal install zip-cmd
    ```
-2. Compile the `wpc-plugin` it uses the plugin API of `GHC 9.10.1`.
+2. Compile the `wpc-plugin` it uses the plugin API of `GHC 9.12.2`.
    ```
    cabal build wpc-plugin
    ```
@@ -51,7 +51,7 @@ The wpc-plugin is a compiler plugin for GHC 9.10.1. It exports the STG IR `(.mod
    ```
 
 ## Usage
-It is required to use GHC 9.10.1.
+It is required to use GHC 9.12.2.
 
 #### cabal
 Add the following lines to your project's `cabal.project`:

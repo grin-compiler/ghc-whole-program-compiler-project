@@ -115,7 +115,7 @@ writeGhcStgApp dflags unit_env hpt = do
     , ("framework-dirs",    arrOfAbsPath $ frameworkPaths dflags)
     , ("extra-frameworks",  JSArray $ fmap JSString $ cmdlineFrameworks dflags)
     , ("ld-options",        arrOfStr appLdOptions)
-    , ("unit-db-paths",     arrOfAbsPath $ maybe [] (map unitDatabasePath) $ ue_unit_dbs unit_env)
+    , ("unit-db-paths",     arrOfAbsPath $ maybe [] (fmap unitDatabasePath) $ ue_unit_dbs unit_env)
     , ("wired-in-unit-ids", JSArray $ fmap (JSString . pp) wiredInUnitIds)
     , ("app-deps",          app_deps)
     ]

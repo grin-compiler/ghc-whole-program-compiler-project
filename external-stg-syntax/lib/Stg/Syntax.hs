@@ -496,7 +496,7 @@ data AltType' tcOcc
   | AlgAlt      tcOcc
   deriving stock (Eq, Ord, Generic, Show)
 
-data UpdateFlag = ReEntrant | Updatable | SingleEntry
+data UpdateFlag = ReEntrant | Updatable | SingleEntry | JumpedTo
   deriving stock (Eq, Ord, Generic, Show)
 
 data Rhs' idBnd idOcc dcOcc tcOcc

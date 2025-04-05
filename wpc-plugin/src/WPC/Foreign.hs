@@ -6,7 +6,7 @@ import           System.IO                     (putStrLn)
 import           Data.Bool                     (Bool (..), otherwise)
 import           Data.Function                 (($), (.))
 import           Data.IORef                    (modifyIORef)
-import           Data.List                     (concat, concatMap, map, unzip3, (++))
+import           Data.List                     (concat, concatMap, unzip3, (++))
 import           Data.Maybe                    (Maybe (..), mapMaybe)
 import           Data.Monoid                   (Monoid (..))
 import           Data.String                   (String)
@@ -61,7 +61,7 @@ mkStubImpl :: OrdList (Id, CoreExpr) -> ForeignDecl GhcTc -> Maybe StubImpl
 mkStubImpl bindings decl = case decl of
   ForeignImport{..}
     | CImport _srcText _cconv _safety _mHeader CWrapper <- fd_fi
-    , [wrapperCName] <- concat $ (map (getWrapperName . snd) $ fromOL bindings)
+    , [wrapperCName] <- concat $ (fmap (getWrapperName . snd) $ fromOL bindings)
     , (isIOCall, retTy, argTys) <- getCWrapperDescriptor fd_i_ext
     -> Just $ StubImplImportCWrapper
         { siCWrapperLabel   = wrapperCName
@@ -83,18 +83,18 @@ mkStubImpl bindings decl = case decl of
 
   getWrapperName :: CoreExpr -> [FastString]
   getWrapperName expr = case expr of
-    App e a                                     -> getWrapperName e ++ getWrapperName a
-    Lam _ e                                     -> getWrapperName e
-    Let b e                                     -> goBind b ++ getWrapperName e
-    Case e _ _ l                                -> getWrapperName e ++ concatMap goAlt l
-    Cast e _                                    -> getWrapperName e
-    Tick _ e                                    -> getWrapperName e
+    App e a      -> getWrapperName e ++ getWrapperName a
+    Lam _ e      -> getWrapperName e
+    Let b e      -> goBind b ++ getWrapperName e
+    Case e _ _ l -> getWrapperName e ++ concatMap goAlt l
+    Cast e _     -> getWrapperName e
+    Tick _ e     -> getWrapperName e
 
-    Var{}                                       -> []
-    Lit (LitLabel fe_nm _mb_sz_args IsFunction) -> [fe_nm]
-    Lit{}                                       -> []
-    Type{}                                      -> []
-    Coercion{}                                  -> []
+    Var{}                           -> []
+    Lit (LitLabel fe_nm IsFunction) -> [fe_nm]
+    Lit{}                           -> []
+    Type{}                          -> []
+    Coercion{}                      -> []
 
 getCWrapperDescriptor :: Coercion -> (Bool, String, [String]) -- is IO, result type, arg types
 getCWrapperDescriptor ffiCo = (is_IO_res_ty, showFFIType res_ty, fmap showFFIType fe_arg_tys)

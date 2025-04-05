@@ -307,6 +307,9 @@ builtinStgEval so a@HeapPtr{} = do
             --stackPush (Update l) -- FIX??? Q: what will remove the backhole if there is no update? Q: is the value linear?
             --store l (BlackHole o) -- Q: is this a bug?
             evalExpr extendedEnv e
+          JumpedTo -> do
+            -- TODO: i don't know what
+            evalExpr extendedEnv e
     -- _ -> stgErrorM $ "expected evaluable heap object, got: " ++ show a ++ " heap-object: " ++ show o ++ " static-origin: " ++ show so
 builtinStgEval so a = stgErrorM $ "expected a thunk, got: " ++ show a ++ ", static-origin: " ++ show so
 

@@ -342,7 +342,7 @@ cvtTypeNormal t
   = PolymorphicRep
 
   | GHC.isUnboxedSumType t || GHC.isUnboxedTupleType t
-  = UnboxedTuple (map cvtPrimRep $ GHC.typePrimRep t)
+  = UnboxedTuple (fmap cvtPrimRep $ GHC.typePrimRep t)
 
   | [rep] <- GHC.typePrimRep t
   = SingleValue (cvtPrimRep rep)
@@ -416,7 +416,7 @@ cvtLit = \case
   GHC.LitNullAddr     -> LitNullAddr
   GHC.LitFloat x      -> LitFloat x
   GHC.LitDouble x     -> LitDouble x
-  GHC.LitLabel x i d  -> LitLabel (GHC.bytesFS  x) (cvtLabelSpec i d)
+  GHC.LitLabel x d  -> LitLabel (GHC.bytesFS  x) (cvtLabelSpec Nothing d) -- todo: maybe need fix
   GHC.LitNumber t i   -> LitNumber (cvtLitNumType t) i
   r@GHC.LitRubbish{}  -> LitRubbish (cvtType "LitRubbish" $ GHC.literalType r)
 
@@ -453,7 +453,7 @@ cvtIdDetails i = case GHC.idDetails i of
   GHC.TickBoxOpId{}   -> pure TickBoxOpId
   GHC.DFunId{}        -> pure DFunId
   GHC.CoVarId{}       -> pure CoVarId
-  GHC.JoinId ar m     -> pure $ JoinId ar (fmap (map cvtCbvMark) m)
+  GHC.JoinId ar m     -> pure $ JoinId ar (fmap (fmap cvtCbvMark) m)
   GHC.WorkerLikeId l  -> pure $ WorkerLikeId $ fmap cvtCbvMark l
 
 cvtScope :: GHC.Id -> Scope
@@ -611,6 +611,7 @@ cvtUpdateFlag = \case
   GHC.ReEntrant   -> ReEntrant
   GHC.Updatable   -> Updatable
   GHC.SingleEntry -> SingleEntry
+  GHC.JumpedTo    -> JumpedTo
 
 cvtRhs :: (?ienv :: ImplicitEnv) => GHC.CgStgRhs -> M SRhs
 cvtRhs = \case
@@ -669,7 +670,7 @@ cvtCExportSpec (GHC.CExportStatic t n cc) =
 cvtStubImpl :: WPC.StubImpl -> StubImpl
 cvtStubImpl = \case
   WPC.StubImplImportCWrapper n m b r a ->
-    StubImplImportCWrapper (GHC.bytesFS n) m b (BS8.pack r) (map BS8.pack a)
+    StubImplImportCWrapper (GHC.bytesFS n) m b (BS8.pack r) (fmap BS8.pack a)
 
 cvtForeignImport :: GHC.ForeignImport GHC.GhcTc -> ForeignImport
 cvtForeignImport (GHC.CImport t cc s m is) =
@@ -700,8 +701,8 @@ cvtForeignStubs stubs (WPC.ForeignStubDecls decls) = case stubs of
     -> ForeignStubs
         (bs8SDoc $ GHC.pprCode h)
         (bs8SDoc $ GHC.pprCode c)
-        [] -- TODO: (map cvtModuleCLabel iList)
-        [] -- TODO: (map cvtModuleCLabel fList)
+        [] -- TODO: (fmap cvtModuleCLabel iList)
+        [] -- TODO: (fmap cvtModuleCLabel fList)
         <$> mapM cvtStubDecl [d | (_, d) <- decls]
 {-
 cvtModuleLabelKind :: GHC.ModuleLabelKind -> ModuleLabelKind
