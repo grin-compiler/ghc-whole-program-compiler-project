@@ -1,17 +1,26 @@
 module WPC.Modpak where
 
+import           Control.Applicative        (Applicative (..))
 import           Control.DeepSeq            (force)
 
 import           Data.Binary                (encode)
+import           Data.Bool                  (Bool (..), otherwise)
 import qualified Data.ByteString.Lazy       as BSL
 import qualified Data.ByteString.Lazy.Char8 as BSL8
 import           Data.Containers.ListUtils  (nubOrd)
-import           Data.Maybe                 (Maybe (..), fromMaybe)
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($), (.))
+import           Data.Functor               (Functor (..))
+import           Data.List                  (unlines, unwords, (++))
+import           Data.Maybe                 (Maybe (..), fromJust, fromMaybe)
 
 import           GHC.Core.Ppr               (pprCoreBindings)
 import qualified GHC.Data.EnumSet           as EnumSet
+import           GHC.Data.OsPath            (unsafeDecodeUtf)
 import           GHC.Driver.Config.Finder   (initFinderOpts)
 import           GHC.Driver.Config.Tidy     (initTidyOpts)
+import           GHC.Err                    (error)
+import           GHC.Iface.Binary           (CompressionIFace (..))
 import           GHC.Iface.Load             (writeIface)
 import           GHC.Iface.Make             (mkFullIface, mkPartialIface)
 import           GHC.Iface.Tidy             (tidyProgram)
@@ -20,8 +29,6 @@ import           GHC.Plugins                (CgGuts (..), CoreProgram, DynFlags 
                                              Module, NamePprCtx (..), Option (..), QualifyName (..),
                                              alwaysPrintPromTick, gopt_set, mkDumpStyle, neverQualifyModules,
                                              neverQualifyPackages, objectSuf, showSDoc, targetProfile, withPprStyle)
-import           GHC.Prelude                (Applicative (..), Bool (..), Eq (..), Functor (..), IO, Show (..), error,
-                                             otherwise, unlines, unwords, writeFile, ($), (++), (.))
 import           GHC.Stg.Syntax             (CgStgTopBinding, panicStgPprOpts, pprStgTopBindings)
 import           GHC.SysTools.Process       (runSomething)
 import           GHC.Types.ForeignStubs     (ForeignStubs)
@@ -29,13 +36,13 @@ import           GHC.Unit.Finder            (mkStubPaths)
 import           GHC.Utils.TmpFs            (TempFileLifetime (..), newTempName)
 
 import           System.Directory           (copyFile, createDirectoryIfMissing, renameFile)
-import           System.FilePath            (FilePath, makeRelative, replaceExtension, takeDirectory, (</>))
+import           System.FilePath            (makeRelative, replaceExtension, takeDirectory, (</>))
+import           System.IO                  (FilePath, IO, writeFile)
+
+import           Text.Show                  (Show (..))
 
 import           WPC.ForeignStubDecls       (ForeignStubDecls)
 import qualified WPC.StgToExtStg            as ExtStg
-import Data.Maybe(fromJust)
-import GHC.Data.OsPath (unsafeDecodeUtf)
-import GHC.Iface.Binary ( CompressionIFace(..) )
 
 outputModPak
   :: HscEnv
@@ -57,18 +64,18 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
       tmpfs  = hsc_tmpfs hsc_env
 
   --- save stg ---
-  let stgBin      = encode (ExtStg.cvtModule dflags "stg" modUnitId modName mSrcPath stg_binds foreign_stubs0 foreign_decls)
-      modName     = moduleName this_mod
-      modUnitId   = moduleUnit this_mod
-      mSrcPath    = ml_hs_file location
+  let stgBin    = encode (ExtStg.cvtModule dflags "stg" modUnitId modName mSrcPath stg_binds foreign_stubs0 foreign_decls)
+      modName   = moduleName this_mod
+      modUnitId = moduleUnit this_mod
+      mSrcPath  = ml_hs_file location
 
-      odir            = fromMaybe "." (objectDir dflags)
-      modpak_output0  = replaceExtension (ml_hi_file location) (objectSuf dflags ++ "_modpak")
-      modpak_output   = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "modpaks" </> makeRelative odir modpak_output0
+      odir           = fromMaybe "." (objectDir dflags)
+      modpak_output0 = replaceExtension (ml_hi_file location) (objectSuf dflags ++ "_modpak")
+      modpak_output  = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "modpaks" </> makeRelative odir modpak_output0
   createDirectoryIfMissing True (takeDirectory modpak_output)
 
-  let moddir_output0  = replaceExtension (ml_hi_file location) (objectSuf dflags)
-  let moddir_output   = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "hs-modules" </> makeRelative odir moddir_output0
+  let moddir_output0 = replaceExtension (ml_hi_file location) (objectSuf dflags)
+  let moddir_output  = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "hs-modules" </> makeRelative odir moddir_output0
   createDirectoryIfMissing True moddir_output
 
   -- stgbin
@@ -102,6 +109,7 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
   -- module compilation info
   let ppYamlList key l = unlines $ key : ["- " ++ x | x <- nubOrd $ fmap show l]
       ppYamlSingle key v = unwords [key, show v]
+
   infoFile <- newTempName logger tmpfs (tmpDir dflags) TFL_CurrentModule (objectSuf dflags ++ "_info")
   writeFile infoFile $ unlines
     [ ppYamlSingle "ghc_name:"              (ghcNameVersion_programName $ ghcNameVersion dflags)

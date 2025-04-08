@@ -2,21 +2,28 @@
 
 module WPC.StgToExtStg where
 
+import           Control.Applicative        (Applicative (..))
 import           Control.Exception          (SomeException, catch, evaluate, throw, throwIO)
-import           Control.Monad              (forM_, when)
+import           Control.Monad              (forM_, mapM, sequence, when)
 import           Control.Monad.State.Strict (MonadState (..), State, gets, modify', runState)
 
+import           Data.Bool                  (not, otherwise, (||))
 import qualified Data.ByteString.Char8      as BS8
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (id, ($), (.))
+import           Data.Functor               (Functor (..), (<$>))
+import           Data.Int                   (Int)
 import           Data.IntMap                (IntMap)
 import qualified Data.IntMap                as IntMap
 import           Data.IntSet                (IntSet)
 import qualified Data.IntSet                as IntSet
-import           Data.List                  (isInfixOf)
+import           Data.List                  (concatMap, isInfixOf, null, unwords, (++))
 import qualified Data.Map                   as Map
-import           Data.Maybe                 (catMaybes)
+import           Data.Maybe                 (Maybe (..), catMaybes)
+import           Data.Ord                   (Ord)
 import qualified Data.Set                   as Set
-
-import           Debug.Trace                (trace)
+import           Data.String                (String)
+import           Data.Tuple                 (fst)
 
 import qualified GHC
 import qualified GHC.Builtin.PrimOps        as GHC
@@ -29,7 +36,8 @@ import qualified GHC.Core.Type              as GHC
 import qualified GHC.Data.FastString        as GHC
 import qualified GHC.Data.Strict            as GHC
 import qualified GHC.Driver.Ppr             as GHC
-import           GHC.Prelude
+import           GHC.Err                    (error)
+import           GHC.Real                   (fromIntegral)
 import qualified GHC.Stg.Syntax             as GHC
 import qualified GHC.Types.Basic            as GHC
 import qualified GHC.Types.ForeignCall      as GHC
@@ -46,6 +54,8 @@ import qualified GHC.Types.Unique           as GHC
 import qualified GHC.Unit.Types             as GHC
 import qualified GHC.Utils.Outputable       as GHC
 
+import           Prelude                    (seq)
+
 import           Stg.Syntax                 (Alt' (..), AltCon' (..), AltType' (..), Arg' (..), BinderId (..),
                                              Binding' (..), BufSpan (..), CCallConv (..), CCallTarget (..),
                                              CExportSpec (..), CImportSpec (..), CbvMark (..), DataConId (..),
@@ -60,7 +70,10 @@ import           Stg.Syntax                 (Alt' (..), AltCon' (..), AltType' (
                                              TyConId (..), Type (..), UnhelpfulSpanReason (..), Unique (..),
                                              UnitId (..), UpdateFlag (..))
 
+import           System.IO                  (FilePath, IO, putStrLn)
 import           System.IO.Unsafe           (unsafePerformIO)
+
+import           Text.Show                  (Show (..))
 
 import qualified WPC.ForeignStubDecls       as WPC
 
@@ -241,13 +254,15 @@ cvtDataTyConId tc
 instance GHC.Outputable Type where
   ppr = GHC.text . show
 
+{-
 trpp
-  :: (GHC.Outputable o, GHC.Outputable a, ?ienv :: ImplicitEnv) 
+  :: (GHC.Outputable o, GHC.Outputable a, ?ienv :: ImplicitEnv)
   => String -> (o -> a) -> o -> a
 trpp msg f a = trace (unwords [msg, ":"]) $
                trace ('\t' : ppr a) $
                trace (unwords ["\t\t=", ppr (f a), "\n-----------\n"]) $
                f a
+-}
 
 {-# INLINE debugCvtAppType #-}
 debugCvtAppType
@@ -512,7 +527,7 @@ cvtSourceText = \case
 
 cvtCCallTarget :: GHC.CCallTarget -> CCallTarget
 cvtCCallTarget = \case
-  GHC.StaticTarget s l u b -> 
+  GHC.StaticTarget s l u b ->
     StaticTarget
       (cvtSourceText s)
       (GHC.bytesFS l)
@@ -616,7 +631,7 @@ cvtUpdateFlag = \case
 cvtRhs :: (?ienv :: ImplicitEnv) => GHC.CgStgRhs -> M SRhs
 cvtRhs = \case
   GHC.StgRhsClosure _ _ u bs e _ ->
-    StgRhsClosure [] (cvtUpdateFlag u) 
+    StgRhsClosure [] (cvtUpdateFlag u)
       <$> mapM (cvtBinderIdClosureParamM "StgRhsClosure") bs
       <*> cvtExpr e
   GHC.StgRhsCon _ dc _ _ args _  ->
@@ -737,8 +752,8 @@ cvtModule dflags phase unit' modName' mSrcPath binds foreignStubs foreignDecls =
 
 cvtModule'
   :: (?ienv :: ImplicitEnv)
-  => String 
-  -> GHC.Unit 
+  => String
+  -> GHC.Unit
   -> GHC.ModuleName
   -> Maybe FilePath
   -> [GHC.CgStgTopBinding]

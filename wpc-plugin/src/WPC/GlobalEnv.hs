@@ -1,12 +1,12 @@
 module WPC.GlobalEnv where
 
+import           Data.Function          (($))
 import           Data.IORef             (IORef, newIORef)
+import           Data.Maybe             (Maybe (..))
 
 import           GHC.Plugins            (HscEnv, ModGuts, ModSummary)
 import           GHC.Stg.Syntax         (CgStgTopBinding)
 import           GHC.Types.ForeignStubs (ForeignStubs)
-
-import           Prelude                (Maybe (..), ($))
 
 import           System.IO.Unsafe       (unsafePerformIO)
 

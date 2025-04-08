@@ -2,7 +2,11 @@ module WPC.Stubs where
 
 import           Control.Monad                 (mapM_)
 
-import           Data.Maybe                    (fromMaybe)
+import           Data.Bool                     (Bool (..))
+import           Data.Function                 (($), (.))
+import Data.List ( (++), foldr1 )                    
+import Data.Maybe ( fromMaybe )                    
+import           Data.String                   (String)
 
 import           GHC.Driver.CodeOutput         (outputForeignStubs)
 import           GHC.Driver.Pipeline.Execute   (compileStub)
@@ -14,10 +18,9 @@ import           GHC.Types.ForeignStubs        (ForeignStubs)
 
 import           Language.Haskell.Syntax.Decls (ForeignImport (..))
 
-import           Prelude                       (Bool (..), Foldable (..), IO, String, putStrLn, ($), (++), (.))
-
 import           System.Directory              (copyFile, createDirectoryIfMissing)
 import           System.FilePath               (FilePath, takeDirectory, takeExtension, (</>))
+import           System.IO                     (IO, putStrLn)
 
 import           WPC.ForeignStubDecls          (StubDecl (..), mergeForeignStubs)
 

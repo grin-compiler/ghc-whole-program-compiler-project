@@ -51,26 +51,30 @@ newtype GCRoot = GCRoot String
 data Reference = Reference String String
   deriving stock (Eq, Show, Generic)
 
-newtype MaybeDeadlockingThread = MaybeDeadlockingThread String
+data MaybeDeadlockingThread = MaybeDeadlockingThread String
   deriving stock (Eq, Show, Generic)
 
 instance Souffle.Program ExtStgGC where
   type ProgramFacts ExtStgGC = [GCRoot, Reference, MaybeDeadlockingThread]
+
   programName :: ExtStgGC -> String
   programName = const "ext_stg_gc"
 
 instance Souffle.Fact GCRoot where
   type FactDirection GCRoot = 'Souffle.Input
+
   factName :: Proxy GCRoot -> String
   factName = const "GCRoot"
 
 instance Souffle.Fact Reference where
   type FactDirection Reference = 'Souffle.Input
+
   factName :: Proxy Reference -> String
   factName = const "Reference"
 
 instance Souffle.Fact MaybeDeadlockingThread where
   type FactDirection MaybeDeadlockingThread = 'Souffle.Input
+
   factName :: Proxy MaybeDeadlockingThread -> String
   factName = const "MaybeDeadlockingThread"
 
@@ -172,6 +176,7 @@ withReferenceFacts StgState{..} addReference = do
   -- HINT: these types are tracked by GC
   let dynamicHeap = IntMap.filterWithKey (\a _ -> a >= ssDynamicHeapStart) ssHeap
       cafHeap     = IntMap.restrictKeys ssHeap ssCAFSet
+
   addRefs dynamicHeap           NS_HeapPtr
   addRefs cafHeap               NS_HeapPtr
   addRefs ssWeakPointers        NS_WeakPointer

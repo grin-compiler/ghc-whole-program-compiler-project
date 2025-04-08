@@ -1,33 +1,43 @@
 module WPC.GhcStgApp where
 
+import           Control.Applicative       (Applicative (..))
+
+import           Data.Bool                 (Bool (..), not, otherwise)
 import           Data.Containers.ListUtils (nubOrd)
-import           Data.List                 (isPrefixOf)
+import           Data.Eq                   (Eq (..))
+import           Data.Function             (($), (.))
+import           Data.Functor              (Functor (..))
+import           Data.List                 (isPrefixOf, (++))
 import qualified Data.Set                  as Set
-import           Data.Version
+import           Data.String               (String)
+import           Data.Version              (showVersion)
 
-import           GHC.Data.Maybe
+import           GHC.Data.Maybe            (Maybe (..), fromMaybe, maybe, maybeToList)
 import qualified GHC.Data.ShortText        as ST
-import           GHC.Driver.Ppr
-import           GHC.Driver.Session
-import           GHC.Linker.Static.Utils
-import           GHC.Linker.Types
-import           GHC.Platform
-import           GHC.Platform.ArchOS
-import           GHC.Prelude
-import           GHC.Unit.Env
-import           GHC.Unit.Home.ModInfo
-import           GHC.Unit.Info
-import           GHC.Unit.Module.Deps
-import           GHC.Unit.Module.ModIface
-import           GHC.Unit.State
-import           GHC.Unit.Types
-import           GHC.Utils.Json
-import           GHC.Utils.Outputable
+import           GHC.Driver.Ppr            (showSDoc)
+import           GHC.Driver.Session        (DynFlags (..), GeneralFlag (..), GhcNameVersion (..), Option (..),
+                                            PlatformMisc (..), gopt, objectSuf, ways)
+import           GHC.Linker.Static.Utils   (exeFileName)
+import           GHC.Linker.Types          (linkableObjs)
+import           GHC.Platform              (Platform (..), platformOS)
+import           GHC.Platform.ArchOS       (stringEncodeOS)
+import           GHC.Unit.Env              (UnitEnv (..), preloadUnitsInfo', ue_unit_dbs)
+import           GHC.Unit.Home.ModInfo     (HomeModInfo (..), HomeModLinkable (..), HomePackageTable, eltsHpt)
+import           GHC.Unit.Info             (GenericUnitInfo (..))
+import           GHC.Unit.Module.Deps      (Dependencies (..))
+import           GHC.Unit.Module.ModIface  (ModIface_ (..))
+import           GHC.Unit.State            (UnitDatabase (..), mayThrowUnitErr)
+import           GHC.Unit.Types            (GenModule (..), wiredInUnitIds)
+import           GHC.Utils.Json            (JsonDoc (..))
+import           GHC.Utils.Outputable      (Outputable (..))
 
-import           System.Directory
-import           System.FilePath
+import           System.Directory          (getCurrentDirectory)
+import           System.FilePath           (FilePath, isAbsolute, makeRelative, (</>))
+import           System.IO                 (IO, putStrLn, writeFile)
 
-import           WPC.Yaml
+import           Text.Show                 (Show (..))
+
+import           WPC.Yaml                  (renderYAML)
 
 {-
 TODO:
@@ -54,11 +64,15 @@ writeGhcStgApp dflags unit_env hpt = do
   dep_unit_infos <- mayThrowUnitErr (preloadUnitsInfo' unit_env dep_units)
   let pp :: Outputable a => a -> String
       pp = showSDoc dflags . ppr
+
+      toAbsPath :: FilePath -> FilePath
       toAbsPath p
         | isAbsolute p  = p
         | otherwise     = root </> p
+
       arrOfAbsPathST = arrOfAbsPath . fmap ST.unpack
       arrOfAbsPath = JSArray . fmap JSString . nubOrd . fmap toAbsPath
+
       app_deps = JSArray
         [ JSObject
           [ ("name",              JSString $ pp unitPackageName)
@@ -78,19 +92,19 @@ writeGhcStgApp dflags unit_env hpt = do
         | GenericUnitInfo{..} <- dep_unit_infos
         ]
 
-  let arrOfStr      = JSArray . fmap JSString . nubOrd
-      appLdOptions  = [ o
-                      | Option o <- ldInputs dflags
-                      , not $ isPrefixOf "-l" o
-                      ]
-      odir          = fromMaybe "." (objectDir dflags)
-      mainModName   = mainModuleNameIs dflags
-      mainModObjs   = [ makeRelative odir o
-                      | HomeModInfo{..} <- home_mod_infos
-                      , mainModName == moduleName (mi_module hm_iface)
-                      , l <- maybeToList $ homeMod_object hm_linkable
-                      , o <- linkableObjs l
-                      ]
+  let arrOfStr     = JSArray . fmap JSString . nubOrd
+      appLdOptions = [ o
+                     | Option o <- ldInputs dflags
+                     , not $ isPrefixOf "-l" o
+                     ]
+      odir        = fromMaybe "." $ objectDir dflags
+      mainModName = mainModuleNameIs dflags
+      mainModObjs = [ makeRelative odir o
+                    | HomeModInfo{..} <- home_mod_infos
+                    , mainModName == moduleName (mi_module hm_iface)
+                    , l <- maybeToList $ homeMod_object hm_linkable
+                    , o <- linkableObjs l
+                    ]
   mainModObj <- case mainModObjs of
     [o] -> pure $ JSString o
     l   -> do

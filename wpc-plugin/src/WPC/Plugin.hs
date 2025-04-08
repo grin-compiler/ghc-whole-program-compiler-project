@@ -8,7 +8,8 @@ import           Data.Eq                     (Eq (..))
 import           Data.Function               (($), (.))
 import           Data.IORef                  (modifyIORef, readIORef)
 import           Data.List                   ((++))
-import           Data.Maybe                  (Maybe (..), fromMaybe, fromJust)
+import           Data.Maybe                  (Maybe (..), fromJust, fromMaybe)
+import           Data.Tuple                  (fst)
 
 import           GHC.Cmm                     (CmmGroup, CmmGroupSRTs, RawCmmGroup)
 import           GHC.Cmm.Info                (cmmToRawCmm)
@@ -20,25 +21,27 @@ import           GHC.Driver.Pipeline.Execute (runCcPhase)
 import           GHC.Driver.Pipeline.Phases  (PhaseHook (..))
 import           GHC.Plugins                 (CgGuts (..), CommandLineOption, CoreM, CoreToDo (..), DynFlags (..),
                                               GhcLink, HscEnv (..), IsDoc (..), ModGuts (..), ModLocation (..), Module,
-                                              NamePprCtx (..), OutputableP (..), Plugin (..), QualifyName (..),
-                                              SuccessFlag, TyCon, OccName, alwaysPrintPromTick, blankLine, defaultPlugin,
+                                              NamePprCtx (..), OccName, OutputableP (..), Plugin (..), QualifyName (..),
+                                              SuccessFlag, TyCon, alwaysPrintPromTick, blankLine, defaultPlugin,
                                               hsc_units, liftIO, mkDumpStyle, neverQualifyModules, neverQualifyPackages,
                                               objectSuf, showSDoc, targetProfile, withPprStyle)
 import           GHC.Stg.Syntax              (CgStgTopBinding)
 import qualified GHC.StgToCmm                as StgToCmm (codeGen)
+import           GHC.StgToCmm.CgUtils        (CgStream)
 import           GHC.StgToCmm.Config         (StgToCmmConfig)
 import           GHC.StgToCmm.Types          (ModuleLFInfos)
 import           GHC.Types.CostCentre        (CollectedCCs)
 import           GHC.Types.IPE               (InfoTableProvMap)
+import           GHC.Types.Unique.DSM        (UniqDSMT)
 import           GHC.Unit.Home.ModInfo       (HomePackageTable)
 import           GHC.Unit.Module.Status      (HscBackendAction (..))
 import           GHC.Utils.TmpFs             (TempFileLifetime (..), newTempName)
 
-import           Prelude                     (Show (..))
-
 import           System.Directory            (copyFile, createDirectoryIfMissing)
 import           System.FilePath             (makeRelative, replaceExtension, takeDirectory, (</>))
 import           System.IO                   (Handle, IO, IOMode (..), hClose, hPutStr, openFile, putStrLn)
+
+import           Text.Show                   (Show (..))
 
 import           WPC.Foreign                 (dsForeignsFun)
 import           WPC.ForeignStubDecls        (ForeignStubDecls (..))
@@ -46,9 +49,6 @@ import           WPC.GhcStgApp               (writeGhcStgApp)
 import           WPC.GlobalEnv               (GlobalEnv (..), globalEnvIORef)
 import           WPC.Modpak                  (outputModPak)
 import           WPC.Stubs                   (outputCapiStubs)
-import GHC.StgToCmm.CgUtils ( CgStream )
-import GHC.Types.Unique.DSM ( UniqDSMT )
-import Data.Tuple (fst)
 
 plugin :: Plugin
 plugin = defaultPlugin

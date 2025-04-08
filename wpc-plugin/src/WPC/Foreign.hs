@@ -1,7 +1,6 @@
 module WPC.Foreign where
 
 import           Control.Monad                 (Functor (..), forM)
-import           System.IO                     (putStrLn)
 
 import           Data.Bool                     (Bool (..), otherwise)
 import           Data.Function                 (($), (.))
@@ -15,6 +14,7 @@ import           Data.Tuple                    (snd)
 import           GHC.Core.TyCo.Rep             (Scaled (..))
 import           GHC.Data.OrdList              (OrdList, fromOL)
 import           GHC.Driver.Hooks              (Hooks (..))
+import           GHC.Err                       (undefined)
 import           GHC.Hs.Extension              (GhcTc)
 import           GHC.HsToCore.Foreign.Decl     (dsForeigns)
 import           GHC.HsToCore.Types            (DsM)
@@ -28,9 +28,10 @@ import           GHC.Tc.Utils.TcType           (tcSplitForAllInvisTyVars, tcSpli
                                                 tcSplitPiTys)
 import           GHC.Types.ForeignStubs        (ForeignStubs)
 import           GHC.Types.RepType             (unwrapType)
-import           GHC.Err                       (undefined)
 
 import           Language.Haskell.Syntax.Decls (CImportSpec (..), ForeignDecl (..), ForeignImport (..), LForeignDecl)
+
+import           System.IO                     (putStrLn)
 
 import           WPC.ForeignStubDecls          (StubDecl (..), StubImpl (..), mergeForeignStubs)
 import           WPC.GlobalEnv                 (GlobalEnv (..), globalEnvIORef)
@@ -83,12 +84,12 @@ mkStubImpl bindings decl = case decl of
 
   getWrapperName :: CoreExpr -> [FastString]
   getWrapperName expr = case expr of
-    App e a      -> getWrapperName e ++ getWrapperName a
-    Lam _ e      -> getWrapperName e
-    Let b e      -> goBind b ++ getWrapperName e
-    Case e _ _ l -> getWrapperName e ++ concatMap goAlt l
-    Cast e _     -> getWrapperName e
-    Tick _ e     -> getWrapperName e
+    App e a                         -> getWrapperName e ++ getWrapperName a
+    Lam _ e                         -> getWrapperName e
+    Let b e                         -> goBind b ++ getWrapperName e
+    Case e _ _ l                    -> getWrapperName e ++ concatMap goAlt l
+    Cast e _                        -> getWrapperName e
+    Tick _ e                        -> getWrapperName e
 
     Var{}                           -> []
     Lit (LitLabel fe_nm IsFunction) -> [fe_nm]
@@ -100,25 +101,26 @@ getCWrapperDescriptor :: Coercion -> (Bool, String, [String]) -- is IO, result t
 getCWrapperDescriptor ffiCo = (is_IO_res_ty, showFFIType res_ty, fmap showFFIType fe_arg_tys)
   where
     -- example for ffiTy: (Int -> IO Int) -> IO (FunPtr (Int -> IO Int))
-    ffiTy                   = coercionLKind ffiCo
-    (_,sans_foralls)        = tcSplitForAllInvisTyVars ffiTy
+    ffiTy            = coercionLKind ffiCo
+    (_,sans_foralls) = tcSplitForAllInvisTyVars ffiTy
     -- example for arg_ty: Int -> IO Int
     Scaled _ arg_ty = case tcSplitFunTys sans_foralls of
-      ([], _) -> undefined
+      ([], _)    -> undefined
       (a : _, _) -> a
 
 
-    (bndrs, orig_res_ty)   = tcSplitPiTys arg_ty
-    fe_arg_tys             = mapMaybe anonPiTyBinderType_maybe bndrs
+    (bndrs, orig_res_ty) = tcSplitPiTys arg_ty
+    fe_arg_tys           = mapMaybe anonPiTyBinderType_maybe bndrs
 
     -- Look at the result type of the exported function, orig_res_ty
     -- If it's IO t, return         (t, True)
     -- If it's plain t, return      (t, False)
-    (res_ty, is_IO_res_ty) = case tcSplitIOType_maybe orig_res_ty of
-                             -- The function already returns IO t
-                             Just (_ioTyCon, res_ty') -> (res_ty', True)
-                             -- The function returns t
-                             Nothing                  -> (orig_res_ty, False)
+    (res_ty, is_IO_res_ty) =
+      case tcSplitIOType_maybe orig_res_ty of
+        -- The function already returns IO t
+        Just (_ioTyCon, res_ty') -> (res_ty', True)
+        -- The function returns t
+        Nothing                  -> (orig_res_ty, False)
 
     showFFIType :: Type -> String
     showFFIType t = getOccString (getName (typeTyCon t))

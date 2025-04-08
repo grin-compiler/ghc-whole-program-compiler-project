@@ -1,14 +1,16 @@
 module WPC.ForeignStubDecls where
 
+import           Data.Bool                     (Bool (..))
+import           Data.Int                      (Int)
+import           Data.Maybe                    (Maybe)
 import           Data.Monoid                   (Monoid (..))
+import           Data.String                   (String)
 
 import           GHC.Hs.Extension              (GhcTc)
 import           GHC.Plugins                   (FastString, Id)
 import           GHC.Types.ForeignStubs        (ForeignStubs (..))
 
 import           Language.Haskell.Syntax.Decls (ForeignExport, ForeignImport)
-
-import           Prelude                       (Bool, Int, Maybe (..), String)
 
 -- | Foreign export stub detailed declarations
 newtype ForeignStubDecls = ForeignStubDecls [(ForeignStubs, StubDecl)]
