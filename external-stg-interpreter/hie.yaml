@@ -1,0 +1,13 @@
+cradle:
+  cabal:
+    - path: "lib"
+      component: "lib:external-stg-interpreter"
+
+    - path: "app/ExtStgInterpreter.hs"
+      component: "external-stg-interpreter:exe:ext-stg-interpreter"
+
+    - path: "app/RunStgiTestsuite.hs"
+      component: "external-stg-interpreter:exe:run-stgi-testsuite"
+
+    - path: "test"
+      component: "external-stg-interpreter:test:primop-test"

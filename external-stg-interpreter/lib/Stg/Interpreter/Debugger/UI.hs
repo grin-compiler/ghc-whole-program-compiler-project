@@ -1,23 +1,35 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 module Stg.Interpreter.Debugger.UI where
 
-import System.Exit
-import System.Posix.Process
-import Control.Concurrent
-import Control.Concurrent.MVar
-import Control.Monad
-import qualified Data.ByteString.Char8 as BS8
+import           Control.Applicative                   (Applicative (..), (<$>))
+import           Control.Concurrent                    (forkIO, putMVar, takeMVar)
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
-import qualified Data.List as List
-import qualified Data.Map as Map
-import Text.Printf
-import Text.Read
-import Data.Maybe
+import           Control.Monad                         (Functor (..), Monad (..), forM_, mapM_, void)
 
-import Stg.Interpreter.Base
-import Stg.Interpreter
-import Stg.Syntax
-import Stg.IRLocation
+import           Data.Bool                             (Bool (..), otherwise)
+import qualified Data.ByteString.Char8                 as BS8
+import           Data.Char                             (Char)
+import           Data.Eq                               (Eq (..))
+import           Data.Function                         (($), (.))
+import           Data.List                             (length, maximum, sum, (++))
+import qualified Data.List                             as List
+import qualified Data.Map                              as Map
+import           Data.Maybe                            (Maybe (..))
+import           Data.String                           (String, lines, unlines, words)
+
+import           Stg.Interpreter                       (loadAndRunProgram)
+import           Stg.Interpreter.Base                  (DebugCommand (..), DebugEvent (..), DebugOutput (..),
+                                                        DebugSettings, DebugState (..), DebuggerChan (..), Env,
+                                                        HeapObject (..), reportThreadIO)
+import           Stg.Syntax                            (Binder (..), BinderId (..), DC (..), DataCon (..), Id (..),
+                                                        RealSrcSpan (..), SrcSpan (..), getModuleName)
+
+import           System.Exit                           (ExitCode (..))
+import           System.IO                             (IO, getLine, print, putStrLn, readFile)
+import           System.Posix.Process                  (exitImmediately)
+
+import           Text.Printf                           (printf)
+import           Text.Read                             (read)
+import           Text.Show                             (Show (..))
 
 ppSrcSpan :: SrcSpan -> String
 ppSrcSpan = \case
@@ -33,11 +45,10 @@ debugProgram switchCWD appPath appArgs dbgChan dbgScript debugSettings = do
   case dbgScript of
     Just fname -> do
       dbgScriptLines <- lines <$> readFile fname
-      forkIO $ do
+      void $ forkIO $ do
         runDebugScript dbgChan dbgScriptLines
         -- HINT: start REPL when the script is finished
         startDebuggerReplUI dbgChan
-      pure ()
 
     Nothing -> do
       -- start debug REPL UI
@@ -54,25 +65,23 @@ startDebuggerReplUI dbgChan@DebuggerChan{..} = do
   printHelp
   putMVar dbgSyncRequest (CmdInternal "?") -- HINT: print internal debug commands at start
 
-  forkIO $ do
+  void $ forkIO $ do
     printDebugOutputLoop dbgChan
 
-  forkIO $ do
+  void $ forkIO $ do
     debugger dbgChan
-
-  pure ()
 
 printEnv :: Env -> IO ()
 printEnv env = do
   let unBinderId (BinderId u) = u
-      l = maximum . map (\(Id Binder{..}) -> sum [BS8.length $ getModuleName binderModule, 2, BS8.length binderName, 1, length $ show $ unBinderId binderId]) $ Map.keys env
+      l = maximum . fmap (\(Id Binder{..}) -> sum [BS8.length $ getModuleName binderModule, 2, BS8.length binderName, 1, length $ show $ unBinderId binderId]) $ Map.keys env
 
-      showItem (n@(Id Binder{..}), v) = printf ("  %-" ++ show l ++ "s  =  %s") (mod ++ "  " ++ name) (show v)
+      showItem (Id Binder{..}, v) = printf ("  %-" ++ show l ++ "s  =  %s") (mod' ++ "  " ++ name) (show v)
         where
           BinderId u  = binderId
           name        = BS8.unpack binderName ++ ('_' : show u)
-          mod         = BS8.unpack $ getModuleName binderModule
-      str = List.sort $ map showItem $ Map.toList env
+          mod'        = BS8.unpack $ getModuleName binderModule
+      str = List.sort (showItem <$> Map.toList env)
   putStrLn $ unlines str
 
 printDebugOutputLoop :: DebuggerChan -> IO ()
@@ -109,8 +118,8 @@ printDebugOutput = \case
 
   DbgOutByteString msg -> BS8.putStrLn msg
 
-  DbgOutStgState stgState -> do
-    putStrLn $ "stg state: TODO"
+  DbgOutStgState _stgState -> do
+    putStrLn "stg state: TODO"
     pure ()
 
   DbgOut -> pure ()
@@ -165,22 +174,22 @@ debugger dbgChan = do
   debugger dbgChan
 
 parseDebugCommand :: String -> DebuggerChan -> IO ()
-parseDebugCommand line dbgChan@DebuggerChan{..} = do
+parseDebugCommand line DebuggerChan{..} = do
   case words line of
     ["help"]      -> printHelp >> putMVar dbgSyncRequest (CmdInternal "?")
     --["+b", name]        -> putMVar dbgSyncRequest $ CmdAddBreakpoint (BkpStgPoint . SP_RhsClosureExpr $ BS8.pack name) 0
     --["+b", name, fuel]  -> putMVar dbgSyncRequest $ CmdAddBreakpoint (BkpStgPoint . SP_RhsClosureExpr $ BS8.pack name) (fromMaybe 0 $ readMaybe fuel)
     --["-b", name]  -> putMVar dbgSyncRequest $ CmdRemoveBreakpoint $ BkpStgPoint . SP_RhsClosureExpr $ BS8.pack name
-    ["list"]      -> putMVar dbgSyncRequest $ CmdListClosures
-    ["clear"]     -> putMVar dbgSyncRequest $ CmdClearClosureList
-    ["step"]      -> putMVar dbgSyncRequest $ CmdStep
-    ["s"]         -> putMVar dbgSyncRequest $ CmdStep
-    ["continue"]  -> putMVar dbgSyncRequest $ CmdContinue
-    ["c"]         -> putMVar dbgSyncRequest $ CmdContinue
-    ["k"]         -> putMVar dbgSyncRequest $ CmdCurrentClosure
+    ["list"]      -> putMVar dbgSyncRequest CmdListClosures
+    ["clear"]     -> putMVar dbgSyncRequest CmdClearClosureList
+    ["step"]      -> putMVar dbgSyncRequest CmdStep
+    ["s"]         -> putMVar dbgSyncRequest CmdStep
+    ["continue"]  -> putMVar dbgSyncRequest CmdContinue
+    ["c"]         -> putMVar dbgSyncRequest CmdContinue
+    ["k"]         -> putMVar dbgSyncRequest CmdCurrentClosure
     ["e"]         -> do
-      putMVar dbgSyncRequest $ CmdCurrentClosure
-      putMVar dbgSyncRequest $ CmdStep
+      putMVar dbgSyncRequest CmdCurrentClosure
+      putMVar dbgSyncRequest CmdStep
     ["quit"]        -> exitImmediately ExitSuccess
     ["stop"]        -> putMVar dbgSyncRequest CmdStop
     ["peek", addr]  -> putMVar dbgSyncRequest $ CmdPeekHeap $ read addr
@@ -190,7 +199,7 @@ parseDebugCommand line dbgChan@DebuggerChan{..} = do
     _ -> putMVar dbgSyncRequest $ CmdInternal line
 
 runDebugScript :: DebuggerChan -> [String] -> IO ()
-runDebugScript dbgChan@DebuggerChan{..} lines = do
+runDebugScript dbgChan@DebuggerChan{..} lines' = do
   let waitBreakpoint = do
         msg <- Unagi.readChan dbgAsyncEventOut
         print msg
@@ -198,8 +207,8 @@ runDebugScript dbgChan@DebuggerChan{..} lines = do
           DbgEventHitBreakpoint{} -> putMVar dbgSyncRequest $ CmdInternal "get-current-thread-state"
           _                       -> waitBreakpoint
 
-  forM_ lines $ \cmd -> do
+  forM_ lines' $ \cmd -> do
     putStrLn cmd
     case words cmd of
       ["wait-b"] -> waitBreakpoint
-      _ -> parseDebugCommand cmd dbgChan
+      _          -> parseDebugCommand cmd dbgChan

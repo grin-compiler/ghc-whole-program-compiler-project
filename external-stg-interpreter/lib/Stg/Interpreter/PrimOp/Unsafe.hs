@@ -1,10 +1,13 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Unsafe where
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Maybe           (Maybe)
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

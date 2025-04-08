@@ -70,7 +70,7 @@ simpleDataCon tc name args tag workerName = dataCon
   where
     dataCon       = mkDataCon
                       name False (error "TyConRepName") [] [] [] [] [] [] []
-                      [tymult t | t <- map primRepToType args] ({-error "Original result type"-}primRepToType LiftedRep) (error "RuntimeRepInfo")
+                      [tymult t | t <- fmap primRepToType args] ({-error "Original result type"-}primRepToType LiftedRep) (error "RuntimeRepInfo")
                       tc tag [] workerId NoDataConRep
     workerId      = mkDataConWorkId workerName dataCon
 
@@ -144,12 +144,12 @@ setAlgTyCons tyCons = do
         dataCons = [(edc, simpleDataCon tyCon conName (getConRep dcRep) tag workerName) | ((conName, workerName), edc@Ext.DataCon{..}, tag) <- zip3 dcNames tcDataCons [1..]]
 
         tyCon :: TyCon
-        tyCon = simpleTyCon tyConName $ map snd dataCons
+        tyCon = simpleTyCon tyConName $ fmap snd dataCons
 
         getConRep :: Ext.DataConRep -> [PrimRep]
         getConRep = \case
           Ext.UnboxedTupleCon{} -> error $ "UnboxedTupleCon in alg TyCon: " ++ show (tcUnitId, tcModule, tcName)
-          Ext.AlgDataCon l      -> map cvtPrimRep l
+          Ext.AlgDataCon l      -> fmap cvtPrimRep l
 
     modify' $ \env@Env{..} -> env { envADTTyConMap = Map.insert tcId tyCon envADTTyConMap
                                   , envDataConMap = foldr (\(k, v) m -> Map.insert k v m) envDataConMap [(dcId, dc) | (Ext.DataCon{..}, dc) <- dataCons]
@@ -284,7 +284,7 @@ cvtPrimRepType :: Ext.Type -> Type
 cvtPrimRepType = \case
   Ext.SingleValue Ext.VoidRep -> mkTupleTy Unboxed []
   Ext.SingleValue r   -> primRepToType $ cvtPrimRep r
-  Ext.UnboxedTuple l  -> mkTupleTy Unboxed $ map (primRepToType . cvtPrimRep) l
+  Ext.UnboxedTuple l  -> mkTupleTy Unboxed $ fmap (primRepToType . cvtPrimRep) l
   Ext.PolymorphicRep  -> mkInfForAllTy runtimeRep2TyVar
                           $ mkSpecForAllTys [openBetaTyVar]
                           $ mkTyVarTy openBetaTyVar

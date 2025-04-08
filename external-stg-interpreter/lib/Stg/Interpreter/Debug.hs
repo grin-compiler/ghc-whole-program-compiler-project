@@ -1,29 +1,44 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+
 module Stg.Interpreter.Debug where
 
-import qualified GHC.Exts as Exts
-import qualified Data.Set as Set
-import qualified Data.IntMap as IntMap
-import qualified Data.Primitive.ByteArray as BA
-import qualified Data.ByteString.Internal as BS
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Map as Map
-import qualified Data.Map.Strict as StrictMap
-import Data.List (intercalate, foldl', sortOn)
-import System.IO
-import System.Directory
-import System.FilePath
-import Text.Printf
+import           Control.Applicative        ((<$>))
+import           Control.Monad              (Functor (..), forM_, mapM_, unless)
+import           Control.Monad.State.Strict (MonadIO (..), gets)
 
-import Control.Monad.State.Strict
+import           Data.Bool                  (Bool (..))
+import qualified Data.ByteString.Char8      as BS8
+import qualified Data.ByteString.Internal   as BS
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($), (.))
+import           Data.Int                   (Int)
+import qualified Data.IntMap                as IntMap
+import           Data.List                  (intercalate, maximum, minimum, null, sortOn, sum, (++))
+import qualified Data.Map.Strict            as StrictMap
+import           Data.Ord                   (Ord (..))
+import qualified Data.Primitive.ByteArray   as BA
+import qualified Data.Set                   as Set
+import           Data.String                (unlines)
+import           Data.Tuple                 (snd)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import qualified GHC.Exts                   as Exts
+import           GHC.Num                    (Num (..))
+
+import           Stg.Interpreter.Base       (ByteArrayDescriptor (..), CallGraph (..), EvalOnNewThread, HeapObject (..),
+                                             M, Region (..), Rts (..), StaticOrigin (..), StgState (..))
+import           Stg.Syntax                 (Binder (..), DC (..), DataCon (..), Id (Id), getModuleName, getUnitId)
+
+import           System.Directory           (createDirectoryIfMissing, makeAbsolute)
+import           System.FilePath            ((</>))
+import           System.IO                  (FilePath, IO, IOMode (..), hPutStrLn, print, putStrLn, withFile)
+
+import           Text.Printf                (printf)
+import           Text.Show                  (Show (..))
+
 
 showCons :: Int -> M ()
 showCons addr = do
   h <- gets ssHeap
-  liftIO $ mapM_ print [(i, dcUniqueName $ unDC dc, args) | x@(i, c@(Con _ dc args)) <- IntMap.toAscList h, i >= addr]
+  liftIO $ mapM_ print [(i, dcUniqueName $ unDC dc, args) | (i, Con _ dc args) <- IntMap.toAscList h, i >= addr]
 
 {-
   | Closure
@@ -54,7 +69,7 @@ showClosures addr = do
   h <- gets ssHeap
   executed <- gets ssExecutedClosures
   let thunks = [x | x@(i, Closure{..}) <- IntMap.toAscList h, i >= addr, Set.notMember i executed, hoCloMissing == 0]
-  liftIO $ mapM_ print [(i, getUnitId binderUnitId, getModuleName binderModule, hoName, hoCloMissing, hoCloArgs) | x@(i, c@Closure{..}) <- thunks, let Id Binder{..} = hoName]
+  liftIO $ mapM_ print [(i, getUnitId binderUnitId, getModuleName binderModule, hoName, hoCloMissing, hoCloArgs) | (i, Closure{..}) <- thunks, let Id Binder{..} = hoName]
   {-
   forM_ thunks $ \(i, _) -> do
     liftIO $ do
@@ -77,7 +92,7 @@ showByteArrays :: M ()
 showByteArrays = do
   arrs <- gets ssMutableByteArrays
   liftIO $ forM_ (IntMap.toList arrs) $ \(i, ByteArrayDescriptor{..}) -> do
-    arr <- map BS.w2c . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
+    arr <- fmap BS.w2c . Exts.toList <$> BA.unsafeFreezeByteArray baaMutableByteArray
     print (i, arr)
     putStrLn "\n-------------------------------------------\n"
 {-
@@ -100,8 +115,8 @@ showMarked = do
     mapM_ print prims
 
 showDebug :: EvalOnNewThread -> M ()
-showDebug evalOnNewThread = do
-  limit <- gets ssDynamicHeapStart
+showDebug _evalOnNewThread = do
+  _limit <- gets ssDynamicHeapStart
   liftIO $ putStrLn "\n-------------------------------------------\n"
   liftIO $ putStrLn "Used primops and foreign functions:"
   liftIO $ putStrLn "\n-------------------------------------------\n"
@@ -181,7 +196,7 @@ writeCallGraph fname CallGraph{..} = do
         , show from
         , show to
         ]
-    forM_ (sortOn (negate . snd) $ StrictMap.toList cgIntraClosureCallGraph) $ \((from, so, to), count) -> do
+    forM_ (sortOn (negate . snd) $ StrictMap.toList cgIntraClosureCallGraph) $ \((from, _so, to), count) -> do
       hPutStrLn h $ intercalate "\t"
         [ show count
         , "direct"

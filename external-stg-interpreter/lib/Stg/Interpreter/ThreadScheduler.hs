@@ -1,26 +1,43 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+
 module Stg.Interpreter.ThreadScheduler where
 
-import Control.Monad.State
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.Time.Clock
-import System.IO
+import           Control.Applicative                (Applicative (..))
+import           Control.Monad                      (Functor (..), forM_, when)
+import           Control.Monad.State                (MonadIO (..), gets, modify')
+import qualified Control.Monad.Trans.State.Strict   as Strict
 
-import Text.Pretty.Simple (pShowNoColor)
-import qualified Data.Text.Lazy.IO as Text
-import Data.List
+import           Data.Bool                          (Bool (..), not, (&&))
+import           Data.Eq                            (Eq (..))
+import           Data.Function                      (flip, id, ($), (.))
+import           Data.Int                           (Int)
+import qualified Data.IntMap                        as IntMap
+import           Data.List                          (drop, elem, null, sortOn, (++))
+import           Data.Maybe                         (maybe)
+import           Data.Ord                           (Ord (..))
+import           Data.Time.Clock                    (getCurrentTime)
 
-import Stg.Interpreter.Base
-import Stg.Interpreter.IOManager
-import qualified Stg.Interpreter.Debugger as Debugger
+import           GHC.Err                            (error, undefined)
+
+import           Stg.Interpreter.Base               (Atom, BlockReason (..), Breakpoint (..), DebugState (..), M,
+                                                     ScheduleReason (..), StgState (..), ThreadState (..),
+                                                     ThreadStatus (..), dumpStgState, getThreadState, lookupMVar, mylog,
+                                                     promptM, promptM_, reportThreads, switchToThread, traceLog,
+                                                     updateThreadState)
+import qualified Stg.Interpreter.Debugger           as Debugger
+import qualified Stg.Interpreter.GC                 as GC
+import           Stg.Interpreter.IOManager          (handleBlockedDelayWait)
 import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
-import qualified Stg.Interpreter.GC as GC
+
+import           System.IO                          (IO, print, putStrLn)
+
+import           Text.Show                          (Show (..))
+
+
 runScheduler :: [Atom] -> ScheduleReason -> M [Atom]
 runScheduler result sr = do
   --debugAsyncExceptions
   tid <- gets ssCurrentThreadId
-  threads <- gets ssThreads
+  _threads <- gets ssThreads
   promptM $ do
     putStrLn $ " * scheduler: " ++ show sr ++ " thread: " ++ show tid ++ " result: " ++ show result
     --Text.putStrLn $ pShowNoColor threads
@@ -50,6 +67,7 @@ runScheduler result sr = do
 
     SR_ThreadYield    -> yield result
 
+yield :: [Atom] -> Strict.StateT StgState IO [Atom]
 yield result = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
@@ -82,7 +100,7 @@ yield result = do
     now <- liftIO $ getCurrentTime
     --putStrLn $ show now ++ " * scheduler next runnable thread: " ++ show nextTid ++ " " ++ show [(i, tsStatus t) | (i, t) <- IntMap.toList threads, tsStatus t == ThreadRunning]
     liftIO $ putStrLn $ show now ++ " * scheduler next runnable thread: " ++ show nextTid ++ " " ++ show [(i, tsStatus t, tsLabel t) | (i, t) <- IntMap.toList threads]
-    forM_ [(i, tsStatus t) | (i, t) <- IntMap.toList threads] $ \(i, status) -> case status of
+    forM_ [(i, tsStatus t) | (i, t) <- IntMap.toList threads] $ \(_i, status') -> case status' of
       ThreadBlocked (BlockedOnMVar mid _) -> do
         md <- lookupMVar mid
         liftIO $ putStrLn $ "mvarId: " ++ show mid ++ " " ++ show md
@@ -94,13 +112,13 @@ yield result = do
 
 
   -- validate ex mask state
-  when (tsInterruptible nextTS && tsBlockExceptions nextTS == False) $ do
+  when (tsInterruptible nextTS && not (tsBlockExceptions nextTS)) $ do
     reportThreads
     error $ "invalid ex mask: " ++ show (nextTid, tsBlockExceptions nextTS, tsInterruptible nextTS)
 
   -- TODO: rethink, validate, reimplement this correctly, check how it is done in native
   -- try to raise async exceptions from the queue if possible
-  if (tsBlockExceptions nextTS == False) --  || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
+  if (not (tsBlockExceptions nextTS)) --  || (tsInterruptible nextTS && interruptible (tsStatus nextTS)))
     then case tsBlockedExceptions nextTS of
       []          -> pure $ tsCurrentResult nextTS
       (thowingTid, exception) : waitingTids -> do
@@ -181,16 +199,18 @@ data ThreadStatus
   , tsInterruptible     :: !Bool  -- interruptible blocking of async exception
 -}
 tryRaiseBlockedException :: [Atom] -> M [Atom]
-tryRaiseBlockedException result = do
+tryRaiseBlockedException _result = do
   pure []
 
 getNextRunnableThread :: M Int
 getNextRunnableThread = do
   -- HINT: drop current thread id
   tidQueue <- gets $ drop 1 . ssScheduledThreadIds
-  modify' $ \s@StgState{..} -> s {ssScheduledThreadIds = tidQueue}
+  modify' $ \s -> s {ssScheduledThreadIds = tidQueue}
   case tidQueue of
-    [] -> head <$> calculateNewSchedule
+    [] -> (flip fmap) calculateNewSchedule $ \case
+      [] -> undefined
+      (a : _) -> a
     tid : _ -> do
       ts <- getThreadState tid
       if tsStatus ts == ThreadRunning
@@ -279,12 +299,12 @@ stopIfThereIsNoRunnableThread = do
       --reportThreads
       tsList <- gets $ IntMap.toList . ssThreads
       liftIO $ do
-        putStrLn $ "[stopIfThereIsNoRunnableThread] No runnable threads, STOP!"
-        putStrLn $ "[stopIfThereIsNoRunnableThread] - all thread status list: "
+        putStrLn "[stopIfThereIsNoRunnableThread] No runnable threads, STOP!"
+        putStrLn "[stopIfThereIsNoRunnableThread] - all thread status list: "
         forM_ tsList $ \(tid, ts) -> do
-          putStrLn $ show (tid, tsStatus ts, tsBlockExceptions ts, tsInterruptible ts, tsBlockedExceptions ts, tsLabel ts)
+          print (tid, tsStatus ts, tsBlockExceptions ts, tsInterruptible ts, tsBlockedExceptions ts, tsLabel ts)
       dumpStgState
-      modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+      modify' $ \s -> s {ssDebugState = DbgStepByStep}
       Debugger.checkBreakpoint [] $ BkpCustom "thread-scheduler"
 
 {-

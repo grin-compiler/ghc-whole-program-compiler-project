@@ -1,0 +1,4 @@
+
+[submodule "external-stg-interpreter/souffle"]
+	path = external-stg-interpreter/souffle
+	url = https://github.com/souffle-lang/souffle

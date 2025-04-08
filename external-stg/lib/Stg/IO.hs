@@ -15,19 +15,22 @@ module Stg.IO
     , modpakStgbinPath
     ) where
 
-import Prelude hiding (readFile)
+import           Codec.Archive.Zip    (doesEntryExist, getEntry, mkEntrySelector, withArchive)
 
-import Control.Monad.IO.Class
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BS8
+import           Control.Applicative  ((<$>))
+
+import           Data.Binary          (decode)
+import           Data.Bool            (Bool)
+import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as BSL
-import Data.Binary
-import Data.Binary.Get
-import Codec.Archive.Zip
-import System.FilePath
+import           Data.Function        (($), (.))
+import           Data.Maybe           (Maybe)
+import           Data.String          (String)
 
-import Stg.Syntax
-import Stg.Reconstruct
+import           Stg.Reconstruct      (reconModule)
+import           Stg.Syntax           (Module, ModuleName, Name, SForeignStubs, SModule, UnitId)
+
+import           System.IO            (FilePath, IO)
 
 -- from .modpak file
 

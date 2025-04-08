@@ -1,18 +1,22 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, Strict #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE Strict        #-}
+{-# LANGUAGE UnboxedTuples #-}
 module Stg.Interpreter.PrimOp.Double where
 
-import GHC.Word
-import GHC.Int
-import GHC.Float
-import GHC.Exts
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern FloatV f  = FloatAtom f
-pattern DoubleV d = DoubleAtom d
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+
+import           GHC.Exts
+import           GHC.Float            (Floating (..), acoshDouble, asinhDouble, atanhDouble, expm1Double, log1pDouble)
+import           GHC.Num              (Num (..))
+import           GHC.Real             (Fractional (..), RealFrac (..), realToFrac)
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -115,14 +119,15 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- decodeDouble_2Int# :: Double# -> (# Int#, Word#, Word#, Int# #)
   ( "decodeDouble_2Int#", [DoubleV (D# x)]) -> do
-    -- NOTE: map back to GHC primop
+    -- NOTE: fmap back to GHC primop
     let !(# a, b, c, d #) = decodeDouble_2Int# x
     pure [IntV (I# a), WordV (W# b), WordV (W# c), IntV (I# d)]
 
   -- decodeDouble_Int64# :: Double# -> (# Int64#, Int# #)
   ( "decodeDouble_Int64#", [DoubleV (D# x)]) -> do
-    -- NOTE: map back to GHC primop
+    -- NOTE: fmap back to GHC primop
     let !(# a, b #) = decodeDouble_Int64# x
-    pure [Int64V (I# a), IntV (I# b)]
+    let a' = int64ToInt# a
+    pure [Int64V (I# a'), IntV (I# b)]
 
   _ -> fallback op args t tc

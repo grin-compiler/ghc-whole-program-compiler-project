@@ -1,15 +1,18 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# OPTIONS_GHC -Wno-incomplete-record-updates #-}
 module Stg.Interpreter.PrimOp.MutVar where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad.State  (gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import qualified Data.IntMap          as IntMap
+import           Data.Maybe           (Maybe)
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+import           Prelude              (Enum (..))
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

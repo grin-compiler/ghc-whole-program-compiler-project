@@ -1,19 +1,35 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
-{-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
+{-# LANGUAGE QuasiQuotes     #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UnicodeSyntax   #-}
 module Stg.Interpreter.IOManager where
 
-import Control.Monad.State
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.Time.Clock
+import           Control.Applicative  (Applicative (..))
+import           Control.Monad        (Functor (..), Monad (..), forM_, unless, when)
+import           Control.Monad.State  (MonadIO (..), gets)
 
-import Data.Monoid ((<>))
-import Foreign.C.Types
-import qualified Language.C.Inline as C
+import           Data.Function        (($), (.))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import           Data.List            (maximum, null, (++))
+import           Data.Monoid          ((<>))
+import           Data.Ord             (Ord (..))
+import           Data.Time.Clock      (getCurrentTime)
+import           Data.Tuple           (snd)
 import qualified Data.Vector.Storable as V
-import qualified Data.Vector.Storable.Mutable as VM
 
-import Stg.Interpreter.Base
+import           Foreign.C.Types      (CInt (..), CLong (..))
+
+import           GHC.Err              (error)
+import           GHC.Real             (fromIntegral)
+
+import qualified Language.C.Inline    as C
+
+import           Stg.Interpreter.Base (BlockReason (..), M, StgState (..), ThreadState (..), ThreadStatus (..),
+                                       getThreadState, updateThreadState)
+
+import           System.IO            (IO)
+
+import           Text.Show            (Show (..))
 
 -------- I/O manager
 C.context (C.baseCtx <> C.vecCtx)
@@ -147,16 +163,16 @@ fdPollWriteState fd = do
 handleBlockedDelayWait :: M ()
 handleBlockedDelayWait = do
   tsList <- gets $ IntMap.toList . fmap tsStatus . ssThreads
-  now <- liftIO getCurrentTime
-  let maxSeconds  = 31 * 24 * 60 * 60 -- some OS have this constraint
-      maxDelay    = secondsToNominalDiffTime maxSeconds
-      delaysT     = [(tid, t `diffUTCTime` now) | (tid, ThreadBlocked (BlockedOnDelay t)) <- tsList]
-      minDelay    = max 0 $ minimum $ maxDelay : delays
+  _now <- liftIO getCurrentTime
+  let -- maxSeconds  = 31 * 24 * 60 * 60 -- some OS have this constraint
+      -- maxDelay    = secondsToNominalDiffTime maxSeconds
+      -- delaysT     = [(tid, t `diffUTCTime` now) | (tid, ThreadBlocked (BlockedOnDelay t)) <- tsList]
+      -- minDelay    = max 0 $ minimum $ maxDelay : delays
       readFDsT    = [(tid, fromIntegral fd :: CInt) | (tid, ThreadBlocked (BlockedOnRead fd)) <- tsList]
       writeFDsT   = [(tid, fromIntegral fd :: CInt) | (tid, ThreadBlocked (BlockedOnWrite fd)) <- tsList]
-      delays      = map snd delaysT
-      readFDs     = map snd readFDsT
-      writeFDs    = map snd writeFDsT
+      -- delays      = fmap snd delaysT
+      readFDs     = fmap snd readFDsT
+      writeFDs    = fmap snd writeFDsT
       fdList      = readFDs ++ writeFDs
       maxFD       = maximum fdList
   -- TODO: detect deadlocks

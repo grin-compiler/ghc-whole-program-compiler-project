@@ -1,0 +1,4 @@
+cradle:
+  stack:
+    - path: "hello/./Main.hs"
+      component: "hello:exe:hello"

@@ -1,56 +1,81 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies, DeriveGeneric #-}
 module Stg.Interpreter.GC.LiveDataAnalysis where
 
-import GHC.Generics
-import Control.Monad.State
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
-import qualified Data.Map as Map
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.Set (Set)
-import qualified Data.Set as Set
-import System.FilePath
-import System.Directory
-import Foreign.Ptr
-import Text.Printf
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as BS8
+import           Control.Applicative       (Applicative (..), (<$>))
+import           Control.Monad             (Functor (..), Monad, MonadFail (..), foldM, forM_, unless)
+import           Control.Monad.State       (MonadIO (..))
 
-import Language.Souffle.Compiled (SouffleM)
+import           Data.Bool                 (Bool (..))
+import qualified Data.ByteString.Char8     as BS8
+import           Data.Data                 (Proxy)
+import           Data.Eq                   (Eq)
+import           Data.Function             (const, ($), (.))
+import           Data.IntMap               (IntMap)
+import qualified Data.IntMap               as IntMap
+import           Data.IntSet               (IntSet)
+import qualified Data.IntSet               as IntSet
+import           Data.List                 ((++))
+import qualified Data.Map                  as Map
+import           Data.Maybe                (Maybe (..))
+import           Data.Ord                  (Ord (..))
+import           Data.Set                  (Set)
+import qualified Data.Set                  as Set
+import           Data.String               (String)
+
+import           Foreign.Ptr               (IntPtr (..), intPtrToPtr)
+
+import           GHC.Err                   (error)
+import           GHC.Generics              (Generic)
+
+import           Language.Souffle.Compiled (SouffleM)
 import qualified Language.Souffle.Compiled as Souffle
 
-import Stg.Interpreter.Base
-import Stg.Interpreter.GC.GCRef
+import           Stg.Interpreter.Base      (Atom (..), BlockReason (..), DebugSettings (..), GCSymbol (..),
+                                            HeapObject (..), PtrOrigin (..), RefSet (..), StackContinuation (..),
+                                            StgState (..), ThreadState (..), ThreadStatus (..), emptyRefSet)
+import           Stg.Interpreter.GC.GCRef  (RefNamespace (..), VisitGCRef (..), decodeRef, encodeRef)
+
+import           System.Directory          (createDirectoryIfMissing, makeAbsolute)
+import           System.FilePath           (FilePath, (</>))
+import           System.IO                 (IO, putStrLn)
+
+import           Text.Printf               (printf)
+import           Text.Show                 (Show (..))
 
 -------- souffle program
 
 data ExtStgGC = ExtStgGC
 
-data GCRoot = GCRoot String
-  deriving (Eq, Show, Generic)
+newtype GCRoot = GCRoot String
+  deriving stock (Eq, Show, Generic)
 
 data Reference = Reference String String
-  deriving (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic)
 
 data MaybeDeadlockingThread = MaybeDeadlockingThread String
-  deriving (Eq, Show, Generic)
+  deriving stock (Eq, Show, Generic)
 
 instance Souffle.Program ExtStgGC where
   type ProgramFacts ExtStgGC = [GCRoot, Reference, MaybeDeadlockingThread]
+
+  programName :: ExtStgGC -> String
   programName = const "ext_stg_gc"
 
 instance Souffle.Fact GCRoot where
   type FactDirection GCRoot = 'Souffle.Input
+
+  factName :: Proxy GCRoot -> String
   factName = const "GCRoot"
 
 instance Souffle.Fact Reference where
   type FactDirection Reference = 'Souffle.Input
+
+  factName :: Proxy Reference -> String
   factName = const "Reference"
 
 instance Souffle.Fact MaybeDeadlockingThread where
   type FactDirection MaybeDeadlockingThread = 'Souffle.Input
+
+  factName :: Proxy MaybeDeadlockingThread -> String
   factName = const "MaybeDeadlockingThread"
 
 instance Souffle.Marshal GCRoot
@@ -100,8 +125,8 @@ addGCRootFacts prog stgState localGCRoots = withGCRootFacts stgState localGCRoot
   Souffle.addFact prog $ GCRoot $ BS8.unpack $ unGCSymbol s
 
 addReferenceFacts :: Souffle.Handle ExtStgGC -> StgState -> SouffleM ()
-addReferenceFacts prog stgState = withReferenceFacts stgState $ \from to -> do
-  Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from) (BS8.unpack $ unGCSymbol to)
+addReferenceFacts prog stgState = withReferenceFacts stgState $ \from' to' -> do
+  Souffle.addFact prog $ Reference (BS8.unpack $ unGCSymbol from') (BS8.unpack $ unGCSymbol to')
 
 withGCRootFacts :: Monad m => StgState -> [Atom] -> (String -> GCSymbol -> m ()) -> m ()
 withGCRootFacts StgState{..} localGCRoots addGCRoot = do
@@ -123,7 +148,7 @@ withGCRootFacts StgState{..} localGCRoots addGCRoot = do
   visitGCRef (addGCRoot "stable pointer") [PtrAtom (StablePtr idx) (intPtrToPtr $ IntPtr idx) | idx <- IntMap.keys ssStablePointers]
 
   -- CAFs
-  visitGCRef (addGCRoot "CAF") $ map HeapPtr $ IntSet.toList ssCAFSet
+  visitGCRef (addGCRoot "CAF") (HeapPtr <$> IntSet.toList ssCAFSet)
 
   -- stack continuations of live threads
   forM_ (IntMap.toList ssThreads) $ \(tid, ts) -> case tsStatus ts of
@@ -143,7 +168,7 @@ withGCRootFacts StgState{..} localGCRoots addGCRoot = do
 
 withReferenceFacts :: forall m . Monad m => StgState -> (GCSymbol -> GCSymbol -> m ()) -> m ()
 withReferenceFacts StgState{..} addReference = do
-  let addRefs :: (VisitGCRef a, Monad m) => IntMap a -> RefNamespace -> m ()
+  let addRefs :: (VisitGCRef a) => IntMap a -> RefNamespace -> m ()
       addRefs im ns = do
         let l = IntMap.toList im
         forM_ l $ \(i, v) -> visitGCRef (addReference (encodeRef i ns)) v
@@ -151,6 +176,7 @@ withReferenceFacts StgState{..} addReference = do
   -- HINT: these types are tracked by GC
   let dynamicHeap = IntMap.filterWithKey (\a _ -> a >= ssDynamicHeapStart) ssHeap
       cafHeap     = IntMap.restrictKeys ssHeap ssCAFSet
+
   addRefs dynamicHeap           NS_HeapPtr
   addRefs cafHeap               NS_HeapPtr
   addRefs ssWeakPointers        NS_WeakPointer
@@ -217,36 +243,36 @@ collectGCSymbol dd@RefSet{..} sym = do
   -- HINT: decode datalog value
   let (namespace, idx) = decodeRef sym
   pure $ case namespace of
-    NS_Array              -> dd {rsArrays             = IntSet.insert idx rsArrays}
-    NS_ArrayArray         -> dd {rsArrayArrays        = IntSet.insert idx rsArrayArrays}
-    NS_HeapPtr            -> dd {rsHeap               = IntSet.insert idx rsHeap}
-    NS_MutableArray       -> dd {rsMutableArrays      = IntSet.insert idx rsMutableArrays}
-    NS_MutableArrayArray  -> dd {rsMutableArrayArrays = IntSet.insert idx rsMutableArrayArrays}
-    NS_MutableByteArray   -> dd {rsMutableByteArrays  = IntSet.insert idx rsMutableByteArrays}
-    NS_MutVar             -> dd {rsMutVars            = IntSet.insert idx rsMutVars}
-    NS_TVar               -> dd {rsTVars              = IntSet.insert idx rsTVars}
-    NS_MVar               -> dd {rsMVars              = IntSet.insert idx rsMVars}
-    NS_SmallArray         -> dd {rsSmallArrays        = IntSet.insert idx rsSmallArrays}
-    NS_SmallMutableArray  -> dd {rsSmallMutableArrays = IntSet.insert idx rsSmallMutableArrays}
-    NS_StableName         -> dd {rsStableNames        = IntSet.insert idx rsStableNames}
-    NS_WeakPointer        -> dd {rsWeakPointers       = IntSet.insert idx rsWeakPointers}
-    NS_StablePointer      -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
-    NS_Thread             -> dd {rsThreads            = IntSet.insert idx rsThreads}
-    _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
+    NS_Array             -> dd {rsArrays             = IntSet.insert idx rsArrays}
+    NS_ArrayArray        -> dd {rsArrayArrays        = IntSet.insert idx rsArrayArrays}
+    NS_HeapPtr           -> dd {rsHeap               = IntSet.insert idx rsHeap}
+    NS_MutableArray      -> dd {rsMutableArrays      = IntSet.insert idx rsMutableArrays}
+    NS_MutableArrayArray -> dd {rsMutableArrayArrays = IntSet.insert idx rsMutableArrayArrays}
+    NS_MutableByteArray  -> dd {rsMutableByteArrays  = IntSet.insert idx rsMutableByteArrays}
+    NS_MutVar            -> dd {rsMutVars            = IntSet.insert idx rsMutVars}
+    NS_TVar              -> dd {rsTVars              = IntSet.insert idx rsTVars}
+    NS_MVar              -> dd {rsMVars              = IntSet.insert idx rsMVars}
+    NS_SmallArray        -> dd {rsSmallArrays        = IntSet.insert idx rsSmallArrays}
+    NS_SmallMutableArray -> dd {rsSmallMutableArrays = IntSet.insert idx rsSmallMutableArrays}
+    NS_StableName        -> dd {rsStableNames        = IntSet.insert idx rsStableNames}
+    NS_WeakPointer       -> dd {rsWeakPointers       = IntSet.insert idx rsWeakPointers}
+    NS_StablePointer     -> dd {rsStablePointers     = IntSet.insert idx rsStablePointers}
+    NS_Thread            -> dd {rsThreads            = IntSet.insert idx rsThreads}
+    -- _                     -> error $ "invalid dead value: " ++ show namespace ++ " " ++ show idx
 
 readbackLiveData :: FilePath -> Bool -> SouffleM RefSet
 readbackLiveData factDir isQuiet = do
   liveSet <- liftIO $ loadStringSet isQuiet (factDir </> "Live.csv")
-  foldM (\dd sym -> collectGCSymbol dd sym) emptyRefSet $ Set.toList liveSet
+  foldM collectGCSymbol emptyRefSet $ Set.toList liveSet
 
 readbackDeadlockingThreadData :: FilePath -> Bool -> SouffleM IntSet
 readbackDeadlockingThreadData factDir isQuiet = do
   deadlockingSet <- liftIO $ loadStringSet isQuiet (factDir </> "DeadlockingThread.csv")
-  rsThreads <$> foldM (\dd sym -> collectGCSymbol dd sym) emptyRefSet (Set.toList deadlockingSet)
+  rsThreads <$> foldM collectGCSymbol emptyRefSet (Set.toList deadlockingSet)
 
 loadStringSet :: Bool -> String -> IO (Set GCSymbol)
 loadStringSet isQuiet factPath = do
   absFactPath <- makeAbsolute factPath
   unless isQuiet $ do
     putStrLn $ "loading: " ++ show absFactPath
-  Set.fromList . map GCSymbol . BS8.lines <$> BS8.readFile absFactPath
+  Set.fromList . fmap GCSymbol . BS8.lines <$> BS8.readFile absFactPath

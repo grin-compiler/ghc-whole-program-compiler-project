@@ -1,21 +1,30 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, CPP, ScopedTypeVariables #-}
+{-# LANGUAGE CPP       #-}
+{-# LANGUAGE MagicHash #-}
 
 module PrimOp.AddrSpec where
 
-import Control.Monad.State.Strict
+import           Control.Applicative         (Applicative (..))
+import           Control.Monad               (Functor (..))
+import           Control.Monad.State.Strict  (evalStateT)
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.QuickCheck.Modifiers
-import Test.QuickCheck.Monadic
+import           Data.Function               (($))
+import           Data.Maybe                  (Maybe (..))
+import           Data.Word                   (Word8)
 
-import Stg.Syntax (Name, Type(..))
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Addr
+import           Foreign.Ptr                 (WordPtr (..), wordPtrToPtr)
 
-import Foreign.Ptr
-import Data.Word
-import GHC.Exts
+import           GHC.Exts
+
+import           Stg.Interpreter.Base       
+import           Stg.Interpreter.PrimOp.Addr
+import           Stg.Syntax                  (Name, Type (..))
+
+import           System.IO                   (IO)
+
+import           Test.Hspec                  (Expectation, HasCallStack, Spec, describe, hspec, it, shouldReturn)
+import           Test.QuickCheck             (NonZero (..), Testable (..))
+
+import           Text.Show                   (Show (..))
 
 runTests :: IO ()
 runTests = hspec spec
@@ -34,7 +43,7 @@ unboxPtr (Ptr x) = x
 unboxInt :: Int -> Int#
 unboxInt (I# x) = x
 
-shouldReturnShow :: (HasCallStack, Show a, Eq a) => IO a -> a -> Expectation
+shouldReturnShow :: (HasCallStack, Show a) => IO a -> a -> Expectation
 shouldReturnShow m a = fmap show m `shouldReturn` show a
 
 spec :: Spec

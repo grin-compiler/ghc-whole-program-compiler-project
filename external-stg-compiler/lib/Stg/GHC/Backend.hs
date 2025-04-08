@@ -1,7 +1,7 @@
 module Stg.GHC.Backend where
 
 -- Compiler
-import GHC
+import GHC hiding (Backend)
 import GHC.Paths ( libdir )
 import GHC.Platform ( platformOS, osSubsectionsViaSymbols )
 import GHC.Driver.CodeOutput
@@ -33,7 +33,7 @@ import GHC.Cmm
 import GHC.Cmm.Info (cmmToRawCmm )
 import GHC.StgToCmm (codeGen)
 import GHC.Types.Unique.Supply ( mkSplitUniqSupply, initUs_ )
-import GHC.StgToCmm.Types (CgInfos (..))
+import GHC.StgToCmm.Types (CmmCgInfos (..))
 
 import Control.Monad.Trans
 import Control.Monad
@@ -46,6 +46,9 @@ import qualified Stg.Syntax as C
 
 import Data.List (isSuffixOf)
 import System.FilePath
+import GHC.ForeignSrcLang
+import GHC.Types.ForeignStubs
+import GHC.Types.HpcInfo
 
 -------------------------------------------------------------------------------
 -- Module
@@ -103,7 +106,7 @@ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName 
   -- Compile
   dflags <- getSessionDynFlags
   pkgs <- setSessionDynFlags $
-    dflags { hscTarget = target, ghcLink = NoLink }
+    dflags { targetPlatform = target, ghcLink = NoLink }
     `gopt_set`  Opt_KeepSFiles
     `gopt_set`  Opt_KeepLlvmFiles
 --    `dopt_set`  Opt_D_dump_cmm
@@ -156,7 +159,6 @@ type CollectedCCs
   = ( [CostCentre]       -- local cost-centres that need to be decl'd
     , [CostCentreStack]  -- pre-defined "singleton" cost centre stacks
     )
--}
   let ccs       = emptyCollectedCCs :: CollectedCCs
       hpc       = emptyHpcInfo False
 
@@ -169,18 +171,18 @@ type CollectedCCs
       NCG   -> (HscAsm, As False)
 
   -- WORKAROUND: filter out rts includes
-  let incPathsFixed = [p | p <- incPaths, not (isSuffixOf "rts-1.0/include" p)]
+  let incPathsFixed = [p | p <- incPaths, not ("rts-1.0/include" `isSuffixOf` p)]
 
   -- Compile & Link
   dflags <- getSessionDynFlags
   setSessionDynFlags $
     (if noHsMain then flip gopt_set Opt_NoHsMain else id) $
     dflags
-      { hscTarget     = target
-      , ghcLink       = LinkBinary
-      , libraryPaths  = libraryPaths dflags ++ libPaths
-      , ldInputs      = ldInputs dflags ++ map Option ldOpts
-      , includePaths  = addQuoteInclude (includePaths dflags) incPathsFixed
+      { targetPlatform = target
+      , ghcLink        = LinkBinary
+      , libraryPaths   = libraryPaths dflags ++ libPaths
+      , ldInputs       = ldInputs dflags ++ fmap Option ldOpts
+      , includePaths   = addQuoteInclude (includePaths dflags) incPathsFixed
       }
     `gopt_set`  Opt_KeepSFiles
     `gopt_set`  Opt_KeepLlvmFiles
@@ -198,7 +200,7 @@ type CollectedCCs
 
   let libSet = Set.fromList ["rts"] -- "rts", "ghc-prim-cbits", "base-cbits", "integer-gmp-cbits"]
   dflags <- getSessionDynFlags
-  let ignored_pkgs  = [IgnorePackage p |  p <- map (unpackFS . unitIdFS) pkgs, Set.notMember p libSet]
+  let ignored_pkgs  = [IgnorePackage p |  p <- fmap (unpackFS . unitIdFS) pkgs, Set.notMember p libSet]
       my_pkgs       = [ExposePackage p (PackageArg p)  (ModRenaming True []) | p <- Set.toList libSet]
   setSessionDynFlags $ dflags { ignorePackageFlags = ignored_pkgs, packageFlags = my_pkgs }
   dflags <- getSessionDynFlags
@@ -225,7 +227,7 @@ newGen :: DynFlags
        -> CollectedCCs
        -> [StgTopBinding]
        -> HpcInfo
-       -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], CgInfos)
+       -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], CmmCgInfos)
 newGen dflags hsc_env output_filename this_mod foreign_stubs data_tycons cost_centre_info stg_binds hpc_info = do
   -- TODO: add these to parameters
   let location = ModLocation
@@ -244,7 +246,7 @@ newGen dflags hsc_env output_filename this_mod foreign_stubs data_tycons cost_ce
 
   ------------------  Code output -----------------------
   rawcmms0 <- {-# SCC "cmmToRawCmm" #-}
-            lookupHook (\x -> cmmToRawCmmHook x)
+            lookupHook cmmToRawCmmHook
               (\dflg _ -> cmmToRawCmm dflg) dflags dflags (Just this_mod) cmms
 
   let dump a = do

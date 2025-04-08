@@ -1,21 +1,24 @@
 module WPC.GlobalEnv where
 
-import Data.IORef
-import System.IO.Unsafe
+import           Data.Function          (($))
+import           Data.IORef             (IORef, newIORef)
+import           Data.Maybe             (Maybe (..))
 
-import GHC.Plugins
-import GHC.Stg.Syntax
-import GHC.Types.ForeignStubs
+import           GHC.Plugins            (HscEnv, ModGuts, ModSummary)
+import           GHC.Stg.Syntax         (CgStgTopBinding)
+import           GHC.Types.ForeignStubs (ForeignStubs)
 
-import WPC.ForeignStubDecls
+import           System.IO.Unsafe       (unsafePerformIO)
+
+import           WPC.ForeignStubDecls   (StubDecl)
 
 data GlobalEnv
   = GlobalEnv
-  { geModSummary  :: Maybe ModSummary
-  , geModGuts     :: Maybe ModGuts
-  , geStgBinds    :: Maybe [CgStgTopBinding]
-  , geHscEnv      :: Maybe HscEnv
-  , geStubDecls   :: Maybe [(ForeignStubs, StubDecl)]
+  { geModSummary :: Maybe ModSummary
+  , geModGuts    :: Maybe ModGuts
+  , geStgBinds   :: Maybe [CgStgTopBinding]
+  , geHscEnv     :: Maybe HscEnv
+  , geStubDecls  :: Maybe [(ForeignStubs, StubDecl)]
   }
 
 emptyGlobalEnv :: GlobalEnv

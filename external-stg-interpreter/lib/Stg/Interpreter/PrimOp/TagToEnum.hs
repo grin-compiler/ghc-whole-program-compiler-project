@@ -1,13 +1,17 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.TagToEnum where
 
-import Data.List (findIndex)
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+import           Data.Bool            (Bool (..))
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.List            (findIndex, (!!), (++))
+import           Data.Maybe           (Maybe (..))
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (CutTyCon (..), DC (..), DataCon (..), Name, TyCon (..), Type)
+
+import           Text.Show            (Show (..))
 
 dataToTagOp :: [Atom] -> M [Atom]
 dataToTagOp [whnf@HeapPtr{}] = do

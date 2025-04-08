@@ -1,0 +1,32 @@
+# These are just too annoying
+- ignore: { name: Redundant do }
+- ignore: { name: Redundant bracket }
+- ignore: { name: Redundant lambda }
+- ignore: { name: Redundant $ }
+- ignore: { name: Redundant flip }
+- ignore: { name: Redundant <$> }
+- ignore: { name: Redundant pure }
+- ignore: { name: Move brackets to avoid $ }
+- ignore: { name: Use tuple-section }
+- ignore: { name: Avoid lambda using `infix` }
+
+# Losing variable names can be not-nice
+- ignore: { name: Eta reduce }
+- ignore: { name: Avoid lambda }
+
+# Humans know better
+- ignore: { name: Use camelCase }
+- ignore: { name: Use const }
+- ignore: { name: Use section }
+- ignore: { name: Use if }
+- ignore: { name: Use notElem }
+- ignore: { name: Use fromMaybe }
+- ignore: { name: Use maybe }
+- ignore: { name: Use fmap }
+- ignore: { name: Use foldl }
+- ignore: { name: "Use :" }
+- ignore: { name: Use ++ }
+- ignore: { name: Use || }
+- ignore: { name: Use && }
+- ignore: { name: 'Use ?~' }
+- ignore: { name: Use <$> }

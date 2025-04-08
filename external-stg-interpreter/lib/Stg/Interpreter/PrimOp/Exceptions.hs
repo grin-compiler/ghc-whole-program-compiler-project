@@ -1,13 +1,25 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Exceptions where
 
-import Control.Monad.State
+import           Control.Applicative                (Applicative (..))
+import           Control.Monad                      (Monad (..), unless, when)
+import           Control.Monad.State                (MonadIO (..), gets)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Bool                          (Bool (..), not, (&&), (||))
+import           Data.Eq                            (Eq (..))
+import           Data.Function                      (($))
+import           Data.List                          (drop, null)
+import           Data.Maybe                         (Maybe (..), fromJust)
+import           Data.Monoid                        (Monoid (..))
+
+import           GHC.Err                            (error, undefined)
+
+import           Stg.Interpreter.Base
 import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
+import           Stg.Syntax                         (Name, TyCon, Type)
 
-pattern IntV i = IntAtom i
+import           System.IO                          (print)
+
+import           Text.Show                          (Show (..))
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -53,7 +65,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     raiseEx rtsOverflowException
 
   -- raiseIO# :: a -> State# RealWorld -> (# State# RealWorld, b #)
-  ( "raiseIO#", [ex, s]) -> do
+  ( "raiseIO#", [ex, _s]) -> do
     tid <- gets ssCurrentThreadId
     mylog $ show (tid, op, args)
     -- for debug only
@@ -76,7 +88,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ------------------------ debug
 
     -- set new masking state
-    unless (tsBlockExceptions == True && tsInterruptible == True) $ do
+    unless (tsBlockExceptions && tsInterruptible) $ do
       updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = True}
       --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " maskAsyncExceptions# b:True i:True"
       stackPush $ RestoreExMask (True, True) tsBlockExceptions tsInterruptible
@@ -100,7 +112,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     ------------------------ debug
 
     -- set new masking state
-    unless (tsBlockExceptions == True && tsInterruptible == False) $ do
+    unless (tsBlockExceptions && not tsInterruptible) $ do
       updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = False}
       --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " maskUninterruptible# b:True i:False"
       stackPush $ RestoreExMask (True, False) tsBlockExceptions tsInterruptible
@@ -124,8 +136,8 @@ evalPrimOp fallback op args t tc = case (op, args) of
           when (tsStatus throwingTS == ThreadBlocked (BlockedOnThrowAsyncEx tid)) $ do
             updateThreadState thowingTid throwingTS {tsStatus = ThreadRunning}
           -- raise exception
-          ts <- getCurrentThreadState
-          updateThreadState tid ts {tsBlockedExceptions = waitingTids}
+          ts' <- getCurrentThreadState
+          updateThreadState tid ts' {tsBlockedExceptions = waitingTids}
           -- run action
           stackPush $ Apply [w] -- HINT: the stack may be captured by ApStack if there is an Update frame,
                                 --        so we have to setup the continuation properly
@@ -133,11 +145,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
           pure []
       [] -> do
           -- set new masking state
-          unless (tsBlockExceptions ts == False && tsInterruptible ts == False) $ do
+          unless (not (tsBlockExceptions ts) && not (tsInterruptible ts)) $ do
             updateThreadState tid $ ts {tsBlockExceptions = False, tsInterruptible = False}
             --liftIO $ putStrLn $ "set mask - " ++ show tid ++ " unmaskAsyncExceptions# b:False i:False"
             stackPush $ RestoreExMask (False, False) (tsBlockExceptions ts) (tsInterruptible ts)
-          pure ()
           -- run action
           stackPush $ Apply [w]
           pure [f]
@@ -192,10 +203,10 @@ evalPrimOp fallback op args t tc = case (op, args) of
                 2 == masked, interruptible
     -}
     let status = case (tsBlockExceptions, tsInterruptible) of
-          (False, False)  -> 0
-          (True,  False)  -> 1
-          (True,  True)   -> 2
-          (False, True)   -> error "impossible exception mask, tsBlockExceptions: False, tsInterruptible: True"
+          (False, False) -> 0
+          (True,  False) -> 1
+          (True,  True)  -> 2
+          (False, True)  -> error "impossible exception mask, tsBlockExceptions: False, tsInterruptible: True"
     pure [IntV status]
 
   _ -> fallback op args t tc
@@ -235,13 +246,12 @@ int maybePerformBlockedException (Capability *cap, StgTSO *tso) -- Returns: non-
 
 raiseEx :: Atom -> M [Atom]
 raiseEx a = do
-  tid <- gets ssCurrentThreadId
+  _tid <- gets ssCurrentThreadId
   --mylog $ "pre - raiseEx, current-result: " ++ show a
   --reportThread tid
-  result <- raiseEx0 a
+  raiseEx0 a
   --mylog $ "post - raiseEx, next-result: " ++ show result
   --reportThread tid
-  pure result
 
 raiseEx0 :: Atom -> M [Atom]
 raiseEx0 ex = unwindStack where
@@ -259,9 +269,9 @@ raiseEx0 ex = unwindStack where
         -- mask async exceptions before running the handler
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = if bEx then iEx else True}
+        updateThreadState tid $ ts {tsBlockExceptions = True, tsInterruptible = not bEx || iEx}
         unless bEx $ do
-          stackPush $ RestoreExMask (True, if bEx then iEx else True) bEx iEx
+          stackPush $ RestoreExMask (True, not bEx || iEx) bEx iEx
 
         -- run the exception handler
         stackPush $ Apply [ex, Void]
@@ -270,7 +280,10 @@ raiseEx0 ex = unwindStack where
       Just (CatchSTM _stmAction exHandler) -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        let tlogStackTop : tlogStackTail = tsTLogStack ts
+        let (tlogStackTop, tlogStackTail) =
+              case tsTLogStack ts of
+                []      -> undefined
+                (a : b) -> (a, b)
         -- HINT: abort current nested transaction, and reload the parent tlog then run the exception handler in it
         --mylog $ show tid ++ " ** CatchSTM"
         updateThreadState tid $ ts
@@ -284,7 +297,7 @@ raiseEx0 ex = unwindStack where
       Just CatchRetry{} -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid $ ts { tsTLogStack = tail $ tsTLogStack ts}
+        updateThreadState tid $ ts { tsTLogStack = drop 1 $ tsTLogStack ts}
         unwindStack
 
       Just (Update addr) -> do
@@ -302,16 +315,15 @@ raiseEx0 ex = unwindStack where
         tid <- gets ssCurrentThreadId
         -- extra validation (optional)
         when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
-        let Just tlog = tsActiveTLog ts
+        let tlog = fromJust $ tsActiveTLog ts
         isValid <- validateTLog tlog
-        case isValid of
-          True -> do
+        if isValid then do
             -- abandon transaction
             --mylog $ show tid ++ " ** Atomically - valid"
             updateThreadState tid $ ts {tsActiveTLog = Nothing}
             --unsubscribeTVarWaitQueues tid tlog
             unwindStack
-          False -> do
+        else do
             --mylog $ show tid ++ " ** Atomically - invalid"
             -- restart transaction due to invalid STM state
             -- Q: what about async exceptions?

@@ -1,0 +1,19 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:lambda"
+
+    - path: "test"
+      component: "lambda:test:lambda-test"
+
+    - path: "app/mklampak.hs"
+      component: "lambda:exe:mklampak"
+
+    - path: "app/mkfacts.hs"
+      component: "lambda:exe:mkfacts"
+
+    - path: "app/strip-fullpak.hs"
+      component: "lambda:exe:strip-fullpak"
+
+    - path: "app/catlambda.hs"
+      component: "lambda:exe:catlambda"

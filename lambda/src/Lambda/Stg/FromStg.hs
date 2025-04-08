@@ -12,6 +12,7 @@ import Text.Printf
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Text as T
 import Control.Monad.Trans.Maybe
+import Control.Monad
 
 import Data.Functor.Foldable
 import qualified Data.Foldable
@@ -62,7 +63,7 @@ data Env
 
   -- name shadowing related
   , scopeName       :: Name             -- HINT: current scope name
-  , shadowedNameMap :: !(Map Name Name) -- HINT: substitution map for shadowed names, original name -> unique name
+  , shadowedNameMap :: !(Map Name Name) -- HINT: substitution fmap for shadowed names, original name -> unique name
   , scopeShadowSet  :: !(Set Name)      -- HINT: shadowed (original) names defined in the current scope
 
   -- code name mapping
@@ -99,7 +100,7 @@ addBinderNameMapEntry b name = do
 
 addAltNameMapEntry :: C.Binder -> [Name] -> CG ()
 addAltNameMapEntry b altNames = do
-  let nameMapEntry = intercalate "\t" $ "a" : (BS8.unpack $ C.binderUniqueName b) : map unpackName altNames
+  let nameMapEntry = intercalate "\t" $ "a" : (BS8.unpack $ C.binderUniqueName b) : fmap unpackName altNames
   modify' $ \env@Env{..} -> env { codeNameMap = nameMapEntry : codeNameMap }
 
 scopeBracket :: Name -> CG a -> CG a
@@ -130,7 +131,7 @@ refreshTyVars tys = do
 
   let substFun :: Ty -> Ty
       substFun t = ana (project . mapNameTy (subst $ Map.fromList substEnv)) t
-  pure $ map substFun tys
+  pure $ fmap substFun tys
 
 addExternal :: External -> CG ()
 addExternal ext = modify' $ \env@Env{..} -> env {externals = Map.insert (eName ext) ext externals}
@@ -246,7 +247,7 @@ isUnboxedTuple name = BS8.isPrefixOf "ghc-prim_GHC.Prim.(#" name
 convertType :: C.Type -> RepType
 convertType = \case
   C.SingleValue r   -> SingleValue $ getPrimRep r
-  C.UnboxedTuple l  -> UnboxedTuple $ map getPrimRep l
+  C.UnboxedTuple l  -> UnboxedTuple $ fmap getPrimRep l
   C.PolymorphicRep  -> PolymorphicRep
 
 getPrimRep :: C.PrimRep -> PrimRep
@@ -363,7 +364,6 @@ ffiArgType = \case
       "ghc-prim_GHC.Prim.coercionToken#"  -> pure (SO_Builtin, Void)
       "ghc-prim_GHC.Prim.proxy#"          -> pure (SO_Builtin, Void)
       "ghc-prim_GHC.Prim.(##)"            -> pure (SO_Builtin, Void)
--}
 
 ffiRetType :: C.Type -> MaybeT CG Ty
 ffiRetType = \case
@@ -451,7 +451,7 @@ mkConGroup :: C.UnitId -> C.ModuleName -> C.TyCon -> ConGroup
 mkConGroup u mod tc
   = ConGroup
   { cgName  = mkPackageQualifiedName (BS8.unpack $ C.getUnitId u) (BS8.unpack $ C.getModuleName mod) (BS8.unpack $ C.tcName tc)
-  , cgCons  = map (mkConSpec tc) $ C.tcDataCons tc
+  , cgCons  = fmap (mkConSpec tc) $ C.tcDataCons tc
   }
 
 mkConSpec :: C.TyCon -> C.DataCon -> ConSpec
@@ -459,7 +459,7 @@ mkConSpec tc C.DataCon{..}
   = ConSpec
   { csName    = mkPackageQualifiedName (BS8.unpack $ C.getUnitId dcUnitId) (BS8.unpack $ C.getModuleName dcModule) (BS8.unpack dcName)
   , csArgsRep = case dcRep of
-      C.AlgDataCon l      -> map getPrimRep l
+      C.AlgDataCon l      -> fmap getPrimRep l
       C.UnboxedTupleCon n -> replicate n VoidRep
   }
 
@@ -622,8 +622,8 @@ visitOpApp resultName op args ty mtc = do
 
       _ -> do
         let name      = BS8.unpack labelName
-            argsTy    = map showArgType args
-            argsHSTy  = map showArgHSType args
+            argsTy    = fmap showArgType args
+            argsHSTy  = fmap showArgHSType args
             retTy     = show ty
             errMsg    = unlines
                           [ "Unsupported foreign primitive type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])
@@ -635,8 +635,8 @@ visitOpApp resultName op args ty mtc = do
 
     C.StgFCallOp f@C.ForeignCall{..} -> case foreignCTarget of
       C.DynamicTarget -> do
-        let (fnTy:argsTy)     = map showArgType args
-            (fnHSTy:argsHSTy) = map showArgHSType args
+        let (fnTy:argsTy)     = fmap showArgType args
+            (fnHSTy:argsHSTy) = fmap showArgHSType args
             retTy             = show ty
             errMsg            = unlines
                                   [ "DynamicTarget is not supported: (" ++ fnTy ++ ") :: " ++ intercalate " -> " (argsTy ++ [retTy])
@@ -661,8 +661,8 @@ visitOpApp resultName op args ty mtc = do
 
         _ -> do
           let name      = BS8.unpack labelName
-              argsTy    = map showArgType args
-              argsHSTy  = map showArgHSType args
+              argsTy    = fmap showArgType args
+              argsHSTy  = fmap showArgHSType args
               retTy     = show ty
               errMsg    = unlines
                             [ "Unsupported foreign function type: " ++ name ++ " :: " ++ intercalate " -> " (argsTy ++ [retTy])

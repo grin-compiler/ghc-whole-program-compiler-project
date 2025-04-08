@@ -1,20 +1,28 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, CPP #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module PrimOp.IntSpec where
 
-import Control.Monad.State.Strict
+import           Control.Applicative        (Applicative (..))
+import           Control.Monad.State.Strict (evalStateT)
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.QuickCheck.Modifiers
-import Test.QuickCheck.Monadic
+import           Data.Char                  (ord)
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($))
+import           Data.Maybe                 (Maybe (..))
 
-import Stg.Syntax (Name, Type(..))
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Int
+import           GHC.Exts
 
-import GHC.Exts
-import Data.Char
+import           Stg.Interpreter.Base      
+import           Stg.Interpreter.PrimOp.Int
+import           Stg.Syntax                 (Name, Type (..))
+
+import           System.IO                  (IO)
+
+import           Test.Hspec                 (Spec, describe, hspec, it)
+import           Test.QuickCheck            (Arbitrary (..), Gen, NonZero (..), Testable (..), forAll)
+import           Test.QuickCheck.Monadic    (PropertyM, assert, monadicIO, run)
 
 runTests :: IO ()
 runTests = hspec spec
@@ -53,14 +61,12 @@ spec = do
         [IntV stgVal] <- evalOp "*#" [IntV a, IntV b]
         assert $ stgVal == (I# ((unboxInt a) *# (unboxInt b)))
 
-#if __GLASGOW_HASKELL__ >= 900
     it "timesInt2#" $
       property $ forAll (arbitrary :: Gen (Int, Int)) $ \(a, b) -> monadicIO $ do
         [IntV stgVal1, IntV stgVal2, IntV stgVal3] <- evalOp "timesInt2#" [IntV a, IntV b]
 
         let !(# x, y, z #) = timesInt2# (unboxInt a) (unboxInt b)
         assert $ (stgVal1, stgVal2, stgVal3) == (I# x, I# y, I# z)
-#endif
 
     it "mulIntMayOflo#" $
       property $ forAll (arbitrary :: Gen (Int, Int)) $ \(a, b) -> monadicIO $ do

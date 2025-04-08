@@ -1,18 +1,56 @@
+cabal-version:       3.14
 name:                external-stg
 version:             0.1.0.1
 synopsis:            A library to dump GHC's STG representation.
 
-license:             BSD3
+license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Csaba Hruska
 maintainer:          csaba.hruska@gmail.com
 copyright:           (c) 2018 Csaba Hruska
 category:            Development
 build-type:          Simple
-tested-with:         GHC==8.8.3
-cabal-version:       >=1.10
+
+common lang
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
+  ghc-options:
+    -Wall
+    -Wnoncanonical-monad-instances
+    -Wincomplete-uni-patterns
+    -Wincomplete-record-updates
+    -Wredundant-constraints
+    -Widentities
+    -Wunused-packages
+    -Wmissing-deriving-strategies
+
 
 library
+  import:              lang
+  hs-source-dirs:      lib
+  cpp-options:         -DEXTERNAL_STG_PACKAGE
+  build-depends:       base,
+                       bytestring,
+                       filemanip,
+                       filepath,
+                       directory,
+                       process,
+                       binary,
+                       containers,
+                       mtl,
+                       unordered-containers,
+                       hashable,
+                       final-pretty-printer,
+                       zip,
+                       text,
+                       aeson,
+                       yaml,
+                       external-stg-syntax
   exposed-modules:
     Stg.Pretty
     Stg.IRLocation
@@ -29,64 +67,36 @@ library
     Stg.Analysis.LiveVariable
     Stg.Foreign.Linker
     Stg.Foreign.Stubs
-  hs-source-dirs:      lib
-  ghc-options:         -Wall
-  cpp-options:         -DEXTERNAL_STG_PACKAGE
-  other-extensions:    GeneralizedNewtypeDeriving
-  build-depends:       base,
-                       bytestring,
-                       filemanip,
-                       filepath,
-                       directory,
-                       process,
-                       binary,
-                       containers,
-                       transformers,
-                       mtl,
-                       unordered-containers,
-                       hashable,
-                       ansi-wl-pprint,
-                       final-pretty-printer,
-                       zip,
-                       text,
-                       aeson,
-                       yaml,
-                       external-stg-syntax
-  default-language:    Haskell2010
 
 executable ext-stg
+  import:              lang
   hs-source-dirs:      app
   main-is:             ext-stg.hs
   build-depends:       base < 5.0,
                        external-stg,
-                       external-stg-syntax,
-                       ansi-wl-pprint,
                        bytestring,
                        text,
                        optparse-applicative
-  default-language:    Haskell2010
 
 executable stgapp
+  import:              lang
   hs-source-dirs:      app
   main-is:             stgapp.hs
   build-depends:       base < 5.0,
                        containers,
                        filepath,
                        directory,
-                       yaml,
                        unix,
-                       process,
                        bytestring,
                        external-stg,
                        external-stg-syntax,
                        optparse-applicative
-  default-language:    Haskell2010
 
 executable mkfullpak
+  import:              lang
   hs-source-dirs:      app
   main-is:             mkfullpak.hs
   build-depends:       base
                      , filepath
                      , optparse-applicative
                      , external-stg
-  default-language:    Haskell2010

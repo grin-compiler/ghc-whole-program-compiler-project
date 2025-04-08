@@ -1,5 +1,6 @@
-{-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies, TemplateHaskell #-}
-{-# LANGUAGE RecordWildCards, LambdaCase, TupleSections, OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Stg.DeadFunctionElimination.Analysis where
 
 import Control.Monad.IO.Class

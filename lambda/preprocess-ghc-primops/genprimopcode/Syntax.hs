@@ -128,7 +128,7 @@ myseqAll []      x = x
 
 sanityTop :: Info -> ()
 sanityTop (Info defs entries)
-   = let opt_names = map get_attrib_name defs
+   = let opt_names = fmap get_attrib_name defs
          primops = filter is_primop entries
      in  
      if   length opt_names /= length (nub opt_names)
@@ -137,7 +137,7 @@ sanityTop (Info defs entries)
 
 sanityPrimOp :: [String] -> Entry -> ()
 sanityPrimOp def_names p
-   = let p_names = map get_attrib_name (opts p)
+   = let p_names = fmap get_attrib_name (opts p)
          p_names_ok
             = length p_names == length (nub p_names)
               && all (`elem` def_names) p_names

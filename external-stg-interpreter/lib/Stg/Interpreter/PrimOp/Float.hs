@@ -1,17 +1,23 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
-{-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE Strict        #-}
+{-# LANGUAGE UnboxedTuples #-}
 module Stg.Interpreter.PrimOp.Float where
 
-import GHC.Exts
-import GHC.Float
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern FloatV f  = FloatAtom f
-pattern DoubleV d = DoubleAtom d
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+
+import           GHC.Exts
+import           GHC.Float            (Floating (..), acoshFloat, asinhFloat, atanhFloat, expm1Float, log1pFloat,
+                                       powerFloat)
+import           GHC.Num              (Num (..))
+import           GHC.Real             (Fractional (..), RealFrac (..), realToFrac)
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -114,7 +120,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- decodeFloat_Int# :: Float# -> (# Int#, Int# #)
   ( "decodeFloat_Int#", [FloatV (F# a)]) -> do
-    let !(# mantissa, exponent #) = decodeFloat_Int# a
-    pure [IntV (I# mantissa), IntV (I# exponent)]
+    let !(# mantissa, exponent' #) = decodeFloat_Int# a
+    pure [IntV (I# mantissa), IntV (I# exponent')]
 
   _ -> fallback op args t tc

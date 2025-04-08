@@ -1,20 +1,34 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.PrimOp.STM where
 
-import GHC.Stack
-import Control.Monad.State
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad        (Monad (..), forM_, mapM, when)
+import           Control.Monad.State  (gets, modify')
 
-import Text.Pretty.Simple (pShowNoColor)
-import qualified Data.Text.Lazy.IO as Text
-import Data.Maybe
+import           Data.Bool            (Bool (..), not)
+import           Data.Eq              (Eq (..))
+import           Data.Function        (const, ($))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import qualified Data.IntSet          as IntSet
+import           Data.List            (and, drop, (++))
+import           Data.Maybe           (Maybe (..), fromJust, maybeToList)
+import           Data.Monoid          (Monoid (..))
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
+import           GHC.Err              (error, undefined)
+import           GHC.Stack            (HasCallStack)
+
+import           Prelude              (Enum (..))
+
+import           Stg.Interpreter.Base (Atom (..), BlockReason (..), M, PrimOpEval, Rts (..), ScheduleReason (..),
+                                       StackContinuation (..), StgState (..), TLog, TLogEntry (..), TVarDescriptor (..),
+                                       ThreadState (..), ThreadStatus (..), getCurrentThreadState, getThreadState,
+                                       lookupTVar, promptM, reportThread, stackPop, stackPush, subscribeTVarWaitQueues,
+                                       unsubscribeTVarWaitQueues, updateThreadState, validateTLog)
+import           Stg.Syntax           (Name, TyCon, Type)
+
+import           System.IO            (print, putStrLn)
+
+import           Text.Show            (Show (..))
 
 {-
   STM design notes
@@ -46,7 +60,7 @@ TODO:
   - read paper from 6.1 transaction logs
 
 Q: is there a new tlog entry for each tvar operation or is it one entry per tvar?
-A: 
+A:
 
 Q: what is the difference between STM and SQL transactions?
     is it the value sampling?
@@ -83,7 +97,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       print (op, args)
     tid <- gets ssCurrentThreadId
     ts <- getThreadState tid
-    let Just tlog = tsActiveTLog ts
+    let tlog = fromJust $ tsActiveTLog ts
     -- push tlog, start fresh active tlog for the nested transaction
     updateThreadState tid $ ts {tsActiveTLog = Just mempty, tsTLogStack = tlog : tsTLogStack ts}
     stackPush $ CatchRetry firstStmAction altStmAction False mempty
@@ -99,7 +113,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
       print (op, args)
     tid <- gets ssCurrentThreadId
     ts <- getThreadState tid
-    let Just tlog = tsActiveTLog ts
+    let tlog = fromJust $ tsActiveTLog ts
     -- push tlog, start fresh active tlog for the nested transaction
     updateThreadState tid $ ts {tsActiveTLog = Just mempty, tsTLogStack = tlog : tsTLogStack ts}
     stackPush $ CatchSTM f h
@@ -118,18 +132,18 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- DONE
   -- readTVar# :: TVar# s a -> State# s -> (# State# s, a #)
-  ( "readTVar#", [TVar t, _s]) -> do
+  ( "readTVar#", [TVar t', _s]) -> do
     promptM $ print (op, args)
     -- read from TLog
     tid <- gets ssCurrentThreadId
     ts <- getThreadState tid
-    let Just tlogEntryMap = tsActiveTLog ts
-        tlogStack         = tsTLogStack ts
-    case IntMap.lookup t tlogEntryMap of
+    let tlogEntryMap = fromJust $ tsActiveTLog ts
+        tlogStack    = tsTLogStack ts
+    case IntMap.lookup t' tlogEntryMap of
       Nothing -> do
         -- HINT: first access
-        entry@TLogEntry{..} <- getTLogEntry tlogStack t
-        let extendedTLog = IntMap.insert t entry tlogEntryMap
+        entry@TLogEntry{..} <- getTLogEntry tlogStack t'
+        let extendedTLog = IntMap.insert t' entry tlogEntryMap
         updateThreadState tid $ ts {tsActiveTLog = Just extendedTLog}
         pure [tleCurrentLocalValue]
       Just TLogEntry{..} -> do
@@ -137,31 +151,31 @@ evalPrimOp fallback op args t tc = case (op, args) of
 
   -- DONE
   -- readTVarIO# :: TVar# s a -> State# s -> (# State# s, a #)
-  ( "readTVarIO#", [TVar t, _s]) -> do
+  ( "readTVarIO#", [TVar t', _s]) -> do
     promptM $ print (op, args)
-    a <- tvdValue <$> lookupTVar t
+    a <- tvdValue <$> lookupTVar t'
     pure [a]
 
   -- DONE
   -- writeTVar# :: TVar# s a -> a -> State# s -> State# s
-  ( "writeTVar#", [TVar t, value, _s]) -> do
+  ( "writeTVar#", [TVar t', value, _s]) -> do
     promptM $ print (op, args)
     -- write to TLog
     tid <- gets ssCurrentThreadId
     ts <- getThreadState tid
-    let Just tlogEntryMap = tsActiveTLog ts
-        tlogStack         = tsTLogStack ts
-    case IntMap.lookup t tlogEntryMap of
+    let tlogEntryMap = fromJust $ tsActiveTLog ts
+        tlogStack    = tsTLogStack ts
+    case IntMap.lookup t' tlogEntryMap of
       Nothing -> do
         -- HINT: first access
-        entry <- getTLogEntry tlogStack t
+        entry <- getTLogEntry tlogStack t'
         let newEntry      = entry {tleCurrentLocalValue = value}
-            extendedTLog  = IntMap.insert t newEntry tlogEntryMap
+            extendedTLog  = IntMap.insert t' newEntry tlogEntryMap
         updateThreadState tid $ ts {tsActiveTLog = Just extendedTLog}
         pure []
       Just oldEntry -> do
         let newEntry    = oldEntry {tleCurrentLocalValue = value}
-        let updatedTLog = IntMap.insert t newEntry tlogEntryMap
+        let updatedTLog = IntMap.insert t' newEntry tlogEntryMap
         updateThreadState tid $ ts {tsActiveTLog = Just updatedTLog}
         pure []
 
@@ -198,20 +212,23 @@ getTLogEntry [] tvarId = do
     , tleCurrentLocalValue    = globalValue
     }
 getTLogEntry (tlog : tlogStack) tvarId = case IntMap.lookup tvarId tlog of
-  Nothing     -> getTLogEntry tlogStack tvarId
-  Just entry  -> pure entry
+  Nothing    -> getTLogEntry tlogStack tvarId
+  Just entry -> pure entry
 
 -- read: stg_catch_stm_frame
 mergeNestedOrRestart :: HasCallStack => [Atom] -> M [Atom]
 mergeNestedOrRestart result = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
-  let Just tlog = tsActiveTLog ts
-      tlogStack@(tlogStackTop : tlogStackTail) = tsTLogStack ts
+  let tlog = fromJust $ tsActiveTLog ts
+      (tlogStackTop, tlogStackTail) =
+        case tsTLogStack ts of
+           []      -> undefined
+           (a : b) -> (a, b)
+      tlogStack = tlogStackTop : tlogStackTail
   -- validate every tlog
   allValid <- and <$> mapM validateTLog (tlog : tlogStack)
-  case allValid of
-    False -> do
+  if allValid then do
       -- drop current transaction
       updateThreadState tid $ ts
         { tsActiveTLog  = Just tlogStackTop
@@ -219,7 +236,7 @@ mergeNestedOrRestart result = do
         }
       -- restart the whole transaction
       restartSTMFromAtomicallyFrame
-    True  -> do
+  else do
       -- merge nested
       let mergedTLog = IntMap.unionWith (\a _ -> a) tlog tlogStackTop
       updateThreadState tid $ ts
@@ -247,14 +264,14 @@ restartSTMFromAtomicallyFrame = unwindStack where
         -- HINT: pop tlog stack for some extra stg state consistency and validation
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid $ ts {tsTLogStack = tail $ tsTLogStack ts}
+        updateThreadState tid $ ts {tsTLogStack = drop 1 $ tsTLogStack ts}
         unwindStack
 
       Just CatchRetry{} -> do
         -- HINT: pop tlog stack for some extra stg state consistency and validation
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
-        updateThreadState tid $ ts {tsTLogStack = tail $ tsTLogStack ts}
+        updateThreadState tid $ ts {tsTLogStack = drop 1 $ tsTLogStack ts}
         unwindStack
 
       _ -> unwindStack -- HINT: discard stack frames
@@ -293,10 +310,14 @@ retrySTM = unwindStack where
       Just CatchSTM{} -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
+        let (tlogStackTop, tlogStackTail) =
+              case tsTLogStack ts of
+                 []      -> undefined
+                 (a : b) -> (a, b)
         -- HINT: pop tlog stack, merge the old stack top to the active tlog (it is needed for TVar subscription on STM suspend)
         updateThreadState tid $ ts
-          { tsTLogStack = tail $ tsTLogStack ts
-          , tsActiveTLog = Just $ IntMap.unionsWith (\a _ -> a) $ maybeToList (tsActiveTLog ts) ++ [head $ tsTLogStack ts]
+          { tsTLogStack = tlogStackTail
+          , tsActiveTLog = Just $ IntMap.unionsWith const $ maybeToList (tsActiveTLog ts) ++ [tlogStackTop]
           }
         unwindStack
 
@@ -306,9 +327,13 @@ retrySTM = unwindStack where
       Just (CatchRetry _firstStmAction _altStmAction True firstTLog) -> do
         ts <- getCurrentThreadState
         tid <- gets ssCurrentThreadId
+        let (tlogStackTop, tlogStackTail) =
+              case tsTLogStack ts of
+                 []      -> undefined
+                 (a : b) -> (a, b)
         updateThreadState tid $ ts
-          { tsTLogStack   = tail $ tsTLogStack ts
-          , tsActiveTLog  = Just $ IntMap.unionsWith (\a _ -> a) $ maybeToList (tsActiveTLog ts) ++ [head $ tsTLogStack ts, firstTLog]
+          { tsTLogStack   = tlogStackTail
+          , tsActiveTLog  = Just $ IntMap.unionsWith const $ maybeToList (tsActiveTLog ts) ++ [tlogStackTop, firstTLog]
           }
         unwindStack
 
@@ -325,7 +350,7 @@ retrySTM = unwindStack where
       Just (Atomically stmAction) -> do
         tid <- gets ssCurrentThreadId
         ts <- getThreadState tid
-        let Just tlog = tsActiveTLog ts
+        let tlog = fromJust $ tsActiveTLog ts
         -- extra validation (optional)
         when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
 
@@ -336,18 +361,18 @@ retrySTM = unwindStack where
           putStrLn $ "[STM] tid: " ++ show tid ++ " tlog: " ++ show tlog
           putStrLn $ "[STM] validateTLog: " ++ show isValid
 
-        if (not isValid)
+        if not isValid
           then do
             restartTransaction stmAction
           else do
             promptM $ putStrLn $ "[STM] retry, block thread, tid: " ++ show tid
-            tid <- gets ssCurrentThreadId
-            ts <- getThreadState tid
+            tid' <- gets ssCurrentThreadId
+            ts' <- getThreadState tid'
             -- subscribe to wait queues
-            let Just tlog = tsActiveTLog ts
-            subscribeTVarWaitQueues tid tlog -- HINT: GC deadlock detection will cover empty tlog and dead TVar caused deadlocks
+            let tlog' = fromJust $ tsActiveTLog ts'
+            subscribeTVarWaitQueues tid' tlog -- HINT: GC deadlock detection will cover empty tlog and dead TVar caused deadlocks
             -- suspend thread
-            updateThreadState tid (ts {tsStatus = ThreadBlocked (BlockedOnSTM tlog), tsActiveTLog = Just mempty})
+            updateThreadState tid' (ts' {tsStatus = ThreadBlocked (BlockedOnSTM tlog'), tsActiveTLog = Just mempty})
             -- Q: who will update the tsTLog after the wake up?
             stackPush $ Atomically stmAction
             stackPush $ Apply [Void]
@@ -369,7 +394,7 @@ commitOrRestart :: HasCallStack => Atom -> [Atom] -> M [Atom]
 commitOrRestart stmAction result = do
   tid <- gets ssCurrentThreadId
   ts <- getThreadState tid
-  let Just tlog = tsActiveTLog ts
+  let tlog = fromJust $ tsActiveTLog ts
   -- extra validation (optional)
   when (tsTLogStack ts /= []) $ error "internal error: non-empty tsTLogStack without tsActiveTLog"
   -- validate

@@ -1,38 +1,48 @@
-{-# LANGUAGE BangPatterns #-}
 module WPC.Modpak where
 
-import System.Directory
-import System.FilePath
-import Data.Maybe
-import Data.Containers.ListUtils ( nubOrd )
+import           Control.Applicative        (Applicative (..))
+import           Control.DeepSeq            (force)
 
--- for external stg
-import qualified WPC.StgToExtStg as ExtStg
-import qualified Data.ByteString.Lazy as BSL
+import           Data.Binary                (encode)
+import           Data.Bool                  (Bool (..), otherwise)
+import qualified Data.ByteString.Lazy       as BSL
 import qualified Data.ByteString.Lazy.Char8 as BSL8
-import Data.Binary
+import           Data.Containers.ListUtils  (nubOrd)
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($), (.))
+import           Data.Functor               (Functor (..))
+import           Data.List                  (unlines, unwords, (++))
+import           Data.Maybe                 (Maybe (..), fromJust, fromMaybe)
 
--- for .modpak
-import GHC.SysTools.Process
-import qualified GHC.Data.EnumSet as EnumSet
-import GHC.Types.ForeignStubs
-import GHC.Stg.Syntax
+import           GHC.Core.Ppr               (pprCoreBindings)
+import qualified GHC.Data.EnumSet           as EnumSet
+import           GHC.Data.OsPath            (unsafeDecodeUtf)
+import           GHC.Driver.Config.Finder   (initFinderOpts)
+import           GHC.Driver.Config.Tidy     (initTidyOpts)
+import           GHC.Err                    (error)
+import           GHC.Iface.Binary           (CompressionIFace (..))
+import           GHC.Iface.Load             (writeIface)
+import           GHC.Iface.Make             (mkFullIface, mkPartialIface)
+import           GHC.Iface.Tidy             (tidyProgram)
+import           GHC.Plugins                (CgGuts (..), CoreProgram, DynFlags (..), GenModule (..), GeneralFlag (..),
+                                             GhcNameVersion (..), HscEnv (..), ModGuts, ModLocation (..), ModSummary,
+                                             Module, NamePprCtx (..), Option (..), QualifyName (..),
+                                             alwaysPrintPromTick, gopt_set, mkDumpStyle, neverQualifyModules,
+                                             neverQualifyPackages, objectSuf, showSDoc, targetProfile, withPprStyle)
+import           GHC.Stg.Syntax             (CgStgTopBinding, panicStgPprOpts, pprStgTopBindings)
+import           GHC.SysTools.Process       (runSomething)
+import           GHC.Types.ForeignStubs     (ForeignStubs)
+import           GHC.Unit.Finder            (mkStubPaths)
+import           GHC.Utils.TmpFs            (TempFileLifetime (..), newTempName)
 
-import GHC.Plugins
-import GHC.Utils.TmpFs
-import GHC.Core.Ppr    ( pprCoreBindings )
-import GHC.Unit.Finder
-import GHC.Driver.Config.Finder (initFinderOpts)
+import           System.Directory           (copyFile, createDirectoryIfMissing, renameFile)
+import           System.FilePath            (makeRelative, replaceExtension, takeDirectory, (</>))
+import           System.IO                  (FilePath, IO, writeFile)
 
-import GHC.Iface.Load
-import GHC.Iface.Make
-import GHC.Iface.Tidy
-import GHC.Driver.Config.Tidy
-import Control.DeepSeq (force)
+import           Text.Show                  (Show (..))
 
-import GHC.Prelude
-
-import WPC.ForeignStubDecls
+import           WPC.ForeignStubDecls       (ForeignStubDecls)
+import qualified WPC.StgToExtStg            as ExtStg
 
 outputModPak
   :: HscEnv
@@ -54,18 +64,18 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
       tmpfs  = hsc_tmpfs hsc_env
 
   --- save stg ---
-  let stgBin      = encode (ExtStg.cvtModule dflags "stg" modUnitId modName mSrcPath stg_binds foreign_stubs0 foreign_decls)
-      modName     = moduleName this_mod
-      modUnitId   = moduleUnit this_mod
-      mSrcPath    = ml_hs_file location
+  let stgBin    = encode (ExtStg.cvtModule dflags "stg" modUnitId modName mSrcPath stg_binds foreign_stubs0 foreign_decls)
+      modName   = moduleName this_mod
+      modUnitId = moduleUnit this_mod
+      mSrcPath  = ml_hs_file location
 
-      odir            = fromMaybe "." (objectDir dflags)
-      modpak_output0  = replaceExtension (ml_hi_file location) (objectSuf dflags ++ "_modpak")
-      modpak_output   = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "modpaks" </> makeRelative odir modpak_output0
+      odir           = fromMaybe "." (objectDir dflags)
+      modpak_output0 = replaceExtension (ml_hi_file location) (objectSuf dflags ++ "_modpak")
+      modpak_output  = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "modpaks" </> makeRelative odir modpak_output0
   createDirectoryIfMissing True (takeDirectory modpak_output)
 
-  let moddir_output0  = replaceExtension (ml_hi_file location) (objectSuf dflags)
-  let moddir_output   = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "hs-modules" </> makeRelative odir moddir_output0
+  let moddir_output0 = replaceExtension (ml_hi_file location) (objectSuf dflags)
+  let moddir_output  = odir </> "extra-compilation-artifacts" </> "wpc-plugin" </> "hs-modules" </> makeRelative odir moddir_output0
   createDirectoryIfMissing True moddir_output
 
   -- stgbin
@@ -94,11 +104,12 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
   let (mod_guts, mod_summary) = fromMaybe (error "missing ModGuts for fullcore .hi") mb_mod_guts
 
   fullcoreHiFile <- newTempName logger tmpfs (tmpDir dflags) TFL_CurrentModule (objectSuf dflags ++ "_fullcore-hi")
-  writeFullCoreInterface hsc_env mod_guts mod_summary fullcoreHiFile
+  writeFullCoreInterface hsc_env mod_guts mod_summary fullcoreHiFile foreign_stubs0
 
   -- module compilation info
-  let ppYamlList key l = unlines $ key : ["- " ++ x | x <- nubOrd $ map show l]
+  let ppYamlList key l = unlines $ key : ["- " ++ x | x <- nubOrd $ fmap show l]
       ppYamlSingle key v = unwords [key, show v]
+
   infoFile <- newTempName logger tmpfs (tmpDir dflags) TFL_CurrentModule (objectSuf dflags ++ "_info")
   writeFile infoFile $ unlines
     [ ppYamlSingle "ghc_name:"              (ghcNameVersion_programName $ ghcNameVersion dflags)
@@ -133,11 +144,11 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
       Just fn -> addToZip "module.hs" fn
     ) ++
     (if has_stub_h
-      then addToZip "module_stub.h" (mkStubPaths (initFinderOpts dflags) modName location)
+      then addToZip "module_stub.h" $ unsafeDecodeUtf $ fromJust $ mkStubPaths (initFinderOpts dflags) modName location
       else []
     ) ++
     (case m_stub_c of
-      Nothing   -> []
+      Nothing -> []
       Just fn -> addToZip "module_stub.c" fn
     )
 
@@ -155,10 +166,10 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
     Nothing -> pure ()
     Just fn -> copyToDir "module.hs" fn
   if has_stub_h
-    then copyToDir "module_stub.h" (mkStubPaths (initFinderOpts dflags) modName location)
+    then copyToDir "module_stub.h" $ unsafeDecodeUtf $ fromJust $ mkStubPaths (initFinderOpts dflags) modName location
     else pure ()
   case m_stub_c of
-    Nothing   -> pure ()
+    Nothing -> pure ()
     Just fn -> copyToDir "module_stub.c" fn
   {-
   -- compress
@@ -171,8 +182,8 @@ outputModPak hsc_env this_mod core_binds stg_binds foreign_stubs0 foreign_decls 
     ]
   -}
 
-writeFullCoreInterface :: HscEnv -> ModGuts -> ModSummary -> FilePath -> IO ()
-writeFullCoreInterface hscEnv0 mod_guts mod_summary output_name = do
+writeFullCoreInterface :: HscEnv -> ModGuts -> ModSummary -> FilePath -> ForeignStubs -> IO ()
+writeFullCoreInterface hscEnv0 mod_guts mod_summary output_name foreign_stubs = do
   let logger  = hsc_logger hscEnv0
       dflags0 = hsc_dflags hscEnv0
       -- HINT: export the whole module core IR
@@ -186,9 +197,9 @@ writeFullCoreInterface hscEnv0 mod_guts mod_summary output_name = do
         {-# SCC "GHC.Driver.Main.mkPartialIface" #-}
         -- This `force` saves 2M residency in test T10370
         -- See Note [Avoiding space leaks in toIface*] for details.
-        force (mkPartialIface hscEnv (cg_binds cg_guts) details mod_summary mod_guts)
+        force (mkPartialIface hscEnv (cg_binds cg_guts) details mod_summary [] mod_guts)
 
   -- In interpreted mode the regular codeGen backend is not run so we
   -- generate a interface without codeGen info.
-  final_iface <- mkFullIface hscEnv partial_iface Nothing Nothing
-  writeIface logger (targetProfile dflags) output_name final_iface
+  final_iface <- mkFullIface hscEnv partial_iface Nothing Nothing foreign_stubs []
+  writeIface logger (targetProfile dflags) NormalCompression output_name final_iface

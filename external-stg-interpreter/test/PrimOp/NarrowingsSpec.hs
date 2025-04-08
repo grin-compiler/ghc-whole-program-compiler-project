@@ -1,19 +1,25 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns #-}
+{-# LANGUAGE MagicHash #-}
 
 module PrimOp.NarrowingsSpec where
 
-import Control.Monad.State.Strict
+import           Control.Applicative               (Applicative (..))
+import           Control.Monad.State.Strict        (evalStateT)
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.QuickCheck.Modifiers
-import Test.QuickCheck.Monadic
+import           Data.Eq                           (Eq (..))
+import           Data.Function                     (($))
+import           Data.Maybe                        (Maybe (..))
 
-import Stg.Syntax (Name, Type(..))
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Narrowings
+import           GHC.Exts
 
-import GHC.Exts
+import           Stg.Interpreter.Base 
+import           Stg.Interpreter.PrimOp.Narrowings
+import           Stg.Syntax                        (Name, Type (..))
+
+import           System.IO                         (IO)
+
+import           Test.Hspec                        (Spec, describe, hspec, it)
+import           Test.QuickCheck                   (Arbitrary (..), Gen, Testable (..), forAll)
+import           Test.QuickCheck.Monadic           (PropertyM, assert, monadicIO, run)
 
 runTests :: IO ()
 runTests = hspec spec

@@ -1,20 +1,28 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module PrimOp.Word8Spec where
 
-import Control.Monad.State.Strict
+import           Control.Applicative          (Applicative (..))
+import           Control.Monad.State.Strict   (evalStateT)
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.QuickCheck.Modifiers
-import Test.QuickCheck.Monadic
+import           Data.Eq                      (Eq (..))
+import           Data.Function                (($))
+import           Data.Maybe                   (Maybe (..))
 
-import Stg.Syntax (Name, Type(..))
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Word8
+import           GHC.Exts
+import           GHC.Real                     (fromIntegral)
+import           GHC.Word                     (Word8 (..))
 
-import GHC.Exts
-import GHC.Word
+import           Stg.Interpreter.Base         
+import           Stg.Interpreter.PrimOp.Word8
+import           Stg.Syntax                   (Name, Type (..))
+
+import           System.IO                    (IO)
+
+import           Test.Hspec                   (Spec, describe, hspec, it)
+import           Test.QuickCheck              (Arbitrary (..), Gen, NonZero (..), Testable (..), forAll)
+import           Test.QuickCheck.Monadic      (PropertyM, assert, monadicIO, run)
 
 runTests :: IO ()
 runTests = hspec spec

@@ -122,7 +122,7 @@ addZstdEntry path content = do
 -}
 
 readNameMap :: BS8.ByteString -> (Map BS8.ByteString BS8.ByteString, Map BS8.ByteString [BS8.ByteString])
-readNameMap content = foldl' go mempty . map BS8.words $ BS8.lines content where
+readNameMap content = foldl' go mempty . fmap BS8.words $ BS8.lines content where
   go (bMap, aMap) = \case
     [] -> (bMap, aMap)
     ["b", stgName, lambdaName]  -> (Map.insert stgName lambdaName bMap, aMap)

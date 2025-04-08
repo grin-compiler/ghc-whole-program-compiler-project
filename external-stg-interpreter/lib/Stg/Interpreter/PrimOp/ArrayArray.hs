@@ -1,16 +1,21 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 module Stg.Interpreter.PrimOp.ArrayArray where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import qualified Data.Vector as V
+import           Control.Applicative  (Applicative (..))
+import           Control.Monad.State  (gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import qualified Data.IntMap          as IntMap
+import           Data.Maybe           (Maybe)
+import qualified Data.Vector          as V
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+import           GHC.Num              (Num (..))
+
+import           Prelude              (Enum (..))
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 lookupArrayArrIdx :: ArrayArrIdx -> M (V.Vector Atom)
 lookupArrayArrIdx = \case
@@ -32,7 +37,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     mutableArrayArrays <- gets ssMutableArrayArrays
     next <- gets ssNextMutableArrayArray
     let result = MutableArrayArray $ ArrayMutArrIdx next
-        v      = V.replicate (fromIntegral i) result -- wow
+        v      = V.replicate i result -- wow
     modify' $ \s -> s {ssMutableArrayArrays = IntMap.insert next v mutableArrayArrays, ssNextMutableArrayArray = succ next}
     pure [result]
 
@@ -47,82 +52,82 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- sizeofArrayArray# :: ArrayArray# -> Int#
   ( "sizeofArrayArray#", [ArrayArray a]) -> do
     v <- lookupArrayArrIdx a
-    pure [IntV . fromIntegral $ V.length v]
+    pure [IntV $ V.length v]
 
   -- sizeofMutableArrayArray# :: MutableArrayArray# s -> Int#
   ( "sizeofMutableArrayArray#", [MutableArrayArray a]) -> do
     v <- lookupArrayArrIdx a
-    pure [IntV . fromIntegral $ V.length v]
+    pure [IntV $ V.length v]
 
   -- indexByteArrayArray# :: ArrayArray# -> Int# -> ByteArray#
   ( "indexByteArrayArray#", [ArrayArray a, IntV i]) -> do
     v <- lookupArrayArrIdx a
-    let x@ByteArray{} = v V.! (fromIntegral i)
+    let x@ByteArray{} = v V.! i
     pure [x]
 
   -- indexArrayArrayArray# :: ArrayArray# -> Int# -> ArrayArray#
   ( "indexArrayArrayArray#", [ArrayArray a, IntV i]) -> do
     v <- lookupArrayArrIdx a
-    let x@ArrayArray{} = v V.! (fromIntegral i)
+    let x@ArrayArray{} = v V.! i
     pure [x]
 
   -- readByteArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, ByteArray# #)
   ( "readByteArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
     v <- lookupArrayArrIdx a
-    let x@ByteArray{} = v V.! (fromIntegral i)
+    let x@ByteArray{} = v V.! i
     pure [x]
 
   -- readMutableByteArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableByteArray# s #)
   ( "readMutableByteArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
     v <- lookupArrayArrIdx a
-    let x@MutableByteArray{} = v V.! (fromIntegral i)
+    let x@MutableByteArray{} = v V.! i
     pure [x]
 
   -- readArrayArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, ArrayArray# #)
   ( "readArrayArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
     v <- lookupArrayArrIdx a
-    let x@ArrayArray{} = v V.! (fromIntegral i)
+    let x@ArrayArray{} = v V.! i
     pure [x]
 
   -- readMutableArrayArrayArray# :: MutableArrayArray# s -> Int# -> State# s -> (# State# s, MutableArrayArray# s #)
   ( "readMutableArrayArrayArray#", [MutableArrayArray a, IntV i, _s]) -> do
     v <- lookupArrayArrIdx a
-    let x@MutableArrayArray{} = v V.! (fromIntegral i)
+    let x@MutableArrayArray{} = v V.! i
     pure [x]
 
   -- writeByteArrayArray# :: MutableArrayArray# s -> Int# -> ByteArray# -> State# s -> State# s
   ( "writeByteArrayArray#", [MutableArrayArray m, IntV i, a@ByteArray{}, _s]) -> do
     v <- lookupArrayArrIdx m
-    updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
+    updateArrayArrIdx m (v V.// [(i, a)])
     pure []
 
   -- writeMutableByteArrayArray# :: MutableArrayArray# s -> Int# -> MutableByteArray# s -> State# s -> State# s
   ( "writeMutableByteArrayArray#", [MutableArrayArray m, IntV i, a@MutableByteArray{}, _s]) -> do
     v <- lookupArrayArrIdx m
-    updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
+    updateArrayArrIdx m (v V.// [(i, a)])
     pure []
 
   -- writeArrayArrayArray# :: MutableArrayArray# s -> Int# -> ArrayArray# -> State# s -> State# s
   ( "writeArrayArrayArray#", [MutableArrayArray m, IntV i, a@ArrayArray{}, _s]) -> do
     v <- lookupArrayArrIdx m
-    updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
+    updateArrayArrIdx m (v V.// [(i, a)])
     pure []
 
   -- writeMutableArrayArrayArray# :: MutableArrayArray# s -> Int# -> MutableArrayArray# s -> State# s -> State# s
   ( "writeMutableArrayArrayArray#", [MutableArrayArray m, IntV i, a@MutableArrayArray{}, _s]) -> do
     v <- lookupArrayArrIdx m
-    updateArrayArrIdx m (v V.// [(fromIntegral i, a)])
+    updateArrayArrIdx m (v V.// [(i, a)])
     pure []
 
   -- copyArrayArray# :: ArrayArray# -> Int# -> MutableArrayArray# s -> Int# -> Int# -> State# s -> State# s
   ( "copyArrayArray#", [ArrayArray src, IntV os, MutableArrayArray dst, IntV od, IntV n, _s]) -> do
     vsrc <- lookupArrayArrIdx src
     vdst <- lookupArrayArrIdx dst
-    let vdst' = vdst V.// [ (fromIntegral di, v)
+    let vdst' = vdst V.// [ (di, v)
                           | i <- [ 0 .. n-1 ]
                           , let si = os + i
                           , let di = od + i
-                          , let v = vsrc V.! (fromIntegral si)
+                          , let v = vsrc V.! si
                           ]
     updateArrayArrIdx dst vdst'
     pure []
@@ -131,11 +136,11 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "copyMutableArrayArray#", [MutableArrayArray src, IntV os, MutableArrayArray dst, IntV od, IntV n, _s]) -> do
     vsrc <- lookupArrayArrIdx src
     vdst <- lookupArrayArrIdx dst
-    let vdst' = vdst V.// [ (fromIntegral di, v)
+    let vdst' = vdst V.// [ (di, v)
                           | i <- [ 0 .. n-1 ]
                           , let si = os + i
                           , let di = od + i
-                          , let v = vsrc V.! (fromIntegral si)
+                          , let v = vsrc V.! si
                           ]
     updateArrayArrIdx dst vdst'
     pure []

@@ -1,10 +1,20 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 module Stg.Analysis.LiveVariable (annotateWithLiveVariables) where
 
-import Data.Set (Set)
-import qualified Data.Set as Set
+import           Control.Monad (Functor (..))
 
-import Stg.Syntax
+import           Data.Bool     (not)
+import           Data.Function (($), (.))
+import           Data.List     (foldr, unzip, (++))
+import           Data.Set      (Set)
+import qualified Data.Set      as Set
+import           Data.Tuple    (fst)
+
+import           GHC.Err       (error)
+
+import           Stg.Syntax    (Alt, Alt' (..), Arg' (..), Binder (..), Binding, Binding' (..), Expr, Expr' (..),
+                                Id (..), Module, Module' (..), Rhs, Rhs' (..), TopBinding, TopBinding' (..))
+
+import           Text.Show     (Show (..))
 
 type UsedLocal = Set Id
 
@@ -13,17 +23,17 @@ annotateWithLiveVariables = visitModule
 
 -- HINT: used local bindings
 mkUsedLocal :: [Binder] -> UsedLocal
-mkUsedLocal l = Set.fromList [Id b | b <- l, binderTopLevel b == False]
+mkUsedLocal l = Set.fromList [Id b | b <- l, not (binderTopLevel b)]
 
 remove :: [Binder] -> UsedLocal -> UsedLocal
-remove l u = foldr (\b -> Set.delete (Id b)) u l
+remove l u = foldr (Set.delete . Id) u l
 
 visitAlt :: Alt -> (UsedLocal, Alt)
 visitAlt a@Alt{..} = (remove altBinders u, a {altRHS = expr})
   where (u, expr) = visitExpr altRHS
 
 visitModule :: Module -> Module
-visitModule m@Module{..} = m {moduleTopBindings = map visitTopBinding moduleTopBindings}
+visitModule m@Module{..} = m {moduleTopBindings = fmap visitTopBinding moduleTopBindings}
 
 visitTopBinding :: TopBinding -> TopBinding
 visitTopBinding t = case t of
@@ -49,7 +59,7 @@ visitRhs = \case
   StgRhsClosure _ update args expr ->
     let (u, expr')  = visitExpr expr
         u'          = remove args u
-        freeVars    = map unId $ Set.toList u'
+        freeVars    = fmap unId $ Set.toList u'
     in (u', StgRhsClosure freeVars update args expr')
 
   StgRhsCon dc args -> (u, StgRhsCon dc args) where u = mkUsedLocal [b | StgVarArg b <- args]
@@ -66,7 +76,7 @@ visitExpr e = case e of
 
   StgCase expr b aty alts ->
     let (u0, expr') = visitExpr expr
-        (uA, alts') = unzip $ map visitAlt alts
+        (uA, alts') = unzip $ fmap visitAlt alts
         u = remove [b] $ Set.unions $ u0 : uA
     in (u, StgCase expr' b aty alts')
 
@@ -89,4 +99,4 @@ visitExpr e = case e of
 getBindingBinders :: Binding -> [Binder]
 getBindingBinders = \case
   StgNonRec b _ -> [b]
-  StgRec l      -> map fst l
+  StgRec l      -> fmap fst l

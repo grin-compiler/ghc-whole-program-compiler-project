@@ -1,36 +1,56 @@
-{-# LANGUAGE LambdaCase, OverloadedStrings #-}
-import Control.Monad
-import Data.Containers.ListUtils
-import System.Directory
-import System.FilePath
-import System.FilePath.Find
-import System.Process
-import Text.Printf
+import           Control.Applicative           (Applicative (..), (<$>))
+import           Control.Concurrent.Async.Pool (mapTasks, withTaskGroup)
+import           Control.Monad                 (Functor (..), Monad (..), forM, mapM)
 
-import Control.Concurrent.Async.Pool
-import GHC.Conc (getNumProcessors)
-import System.TimeIt
-import System.Timeout
-import System.Exit
-import System.IO
-import System.Environment
+import           Data.Bool                     (Bool (..), not, otherwise, (&&), (||))
+import           Data.ByteString               (ByteString)
+import qualified Data.ByteString.Char8         as BS8
+import           Data.Containers.ListUtils     (nubOrd)
+import           Data.Eq                       (Eq (..))
+import           Data.Function                 (($), (.))
+import           Data.Int                      (Int)
+import           Data.List                     (concat, filter, length, null, (++))
+import qualified Data.Map                      as Map
+import           Data.Maybe                    (Maybe (..), catMaybes, fromJust, fromMaybe)
+import           Data.Set                      (Set)
+import qualified Data.Set                      as Set
+import           Data.String                   (String, unlines, unwords)
 
-import Data.Maybe
-import Data.Set (Set)
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as BS8
-import Text.PrettyPrint.ANSI.Leijen hiding ((</>), (<$>))
+import           GHC.Conc                      (getNumProcessors)
+import           GHC.Float                     (Double)
+import           GHC.Num                       (Num (..))
+import           GHC.Real                      (Fractional (..), fromIntegral)
 
+import           Prettyprinter                 (Doc, Pretty (..), annotate)
+import           Prettyprinter.Render.Terminal (AnsiStyle, Color (..), color)
+
+import           System.Directory              (doesFileExist, getSymbolicLinkTarget, makeAbsolute, pathIsSymbolicLink)
+import           System.Environment            (getArgs)
+import           System.Exit                   (ExitCode (..))
+import           System.FilePath               (FilePath, dropExtension, takeDirectory, takeFileName, (-<.>), (</>))
+import           System.FilePath.Find          (always, depth, fileName, find, readLink, (==?), (~~?))
+import           System.IO                     (IO, IOMode (..), putStrLn, readFile, withFile)
+import           System.Process                (CreateProcess (..), StdStream (..), proc, waitForProcess,
+                                                withCreateProcess)
+import           System.TimeIt                 (timeItNamed)
+import           System.Timeout                (timeout)
+
+import           Text.Printf                   (printf)
+import           Text.Read                     (read)
+import           Text.Show                     (Show (..))
+
+green :: Doc AnsiStyle -> Doc AnsiStyle
+green = annotate (color Green)
+
+cyan :: Doc AnsiStyle -> Doc AnsiStyle
+cyan = annotate (color Cyan)
+
+red :: Doc AnsiStyle -> Doc AnsiStyle
+red = annotate (color Red)
 
 {- testsuite compilation / preparation
   COMPILE TESTS:
     (PATH=/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/_build/stage1/bin:$PATH make CLEANUP=0 THREADS=12 RUNNABLE_ONLY=1 EXTRA_HC_OPTS='-fPIC')
--}
-
-{-
-#test_path = '/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/'
 -}
 
 {-
@@ -63,15 +83,15 @@ data TestResult
   | Error   FilePath String
   | Skip    FilePath
   | Timeout FilePath
-  deriving Show
+  deriving stock Show
 
 report :: TestResult -> IO TestResult
 report t = do
   case t of
     OK f      -> printf "%s %s\n" (show $ green "OK") f
-    Error f e -> printf "%s %s\n%s\n" (show $ red "ERROR") (show . red $ text f) (show . red $ text e)
-    Skip f    -> printf "%s %s\n" (show $ cyan "SKIP") (show . cyan $ text f)
-    Timeout f -> printf "%s %s\n" (show $ red "TIMEOUT") (show . red $ text f)
+    Error f e -> printf "%s %s\n%s\n" (show $ red "ERROR") (show . red $ pretty f) (show . red $ pretty e)
+    Skip f    -> printf "%s %s\n" (show $ cyan "SKIP") (show . cyan $ pretty f)
+    Timeout f -> printf "%s %s\n" (show $ red "TIMEOUT") (show . red $ pretty f)
     Fail f (expectedExitCode, exitCode) (expectedStdout, out) (expectedStderr, err) -> do
       let exitCodeMsg = if expectedExitCode == exitCode then "" else unlines
             [ "  exitcode mismatch"
@@ -89,7 +109,7 @@ report t = do
             , "  got     : " ++ show err
             ]
           msg = unlines $ filter (not . null) [exitCodeMsg, stdoutMsg, stderrMsg]
-      printf "%s %s\n%s\n" (show $ red "FAIL") (show $ red $ text f) (show $ red $ text msg)
+      printf "%s %s\n%s\n" (show $ red "FAIL") (show $ red $ pretty f) (show $ red $ pretty msg)
   pure t
 
 runTestProcess :: FilePath -> String -> [String] -> ByteString -> IO (ExitCode, ByteString, ByteString)
@@ -113,11 +133,11 @@ runTestProcess path cmd args input = do
 
 readTestOpts :: FilePath -> IO (Bool, Bool)
 readTestOpts optsPath = do
-  opts <- Map.fromList . read <$> readFile optsPath
+  opts <- Map.fromList @String . read <$> readFile optsPath
   pure . fromJust $ (,) <$> Map.lookup "ignore_stdout" opts <*> Map.lookup "ignore_stderr" opts
 
 runTest :: Set FilePath -> FilePath -> IO TestResult
-runTest skipSet stderrPath = do
+runTest skipSet' stderrPath = do
   let stdoutPath    = stderrPath -<.> ".stdout"
       stdinPath     = stderrPath -<.> ".stdin"
       argsPath      = stderrPath -<.> ".args"
@@ -134,7 +154,7 @@ runTest skipSet stderrPath = do
   stgApps <- find (depth ==? 0) (fileName ~~? (testName ++ ".*_ghc_stgapp")) testDir
   case stgApps of
     [ghcstgappPath]
-      | Set.member ghcstgappPath skipSet
+      | Set.member ghcstgappPath skipSet'
       -> do
         report $ Skip ghcstgappPath
 
@@ -176,6 +196,7 @@ runTest skipSet stderrPath = do
     []  -> report $ Error "" $ "missing ghc_stgapp: " ++ testDir </> testName ++ ".*_ghc_stgapp"
     l   -> report $ Error "" $ "ambiguous ghc_stgapp: " ++ unwords l
 
+main :: IO ()
 main = do
   scanList <- getArgs >>= \case
     []  -> pure testPaths
@@ -203,8 +224,10 @@ main = do
   log "SKIP"    [() | Skip{} <- result]
   log "TIMEOUT" [() | Timeout{} <- result]
 
-
+{-
+testPaths1 :: [String]
 testPaths1 = ["/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/codeGen/should_run/T18527.run"]
+-}
 
 testPaths :: [FilePath]
 testPaths =
@@ -255,6 +278,7 @@ testPaths =
 skipSet :: Set FilePath
 skipSet = Set.fromList $ [] -- ++ skip_set ++ skip_fail ++ skip_timeout
 
+{-
 skip_set :: [FilePath]
 skip_set =
   -- has stubs
@@ -319,7 +343,9 @@ skip_set =
   , "/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/base/tests/IO/encoding002.run/encoding002.o_ghc_stgapp"
   , "/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/libraries/process/tests/T8343.run/T8343.o_ghc_stgapp"
   ]
+-}
 
+{-
 skip_fail :: [FilePath]
 skip_fail =
   [ "/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/codeGen/should_run/cgrun060.run/cgrun060.o_ghc_stgapp"
@@ -503,3 +529,4 @@ skip_timeout =
   , "/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/simplCore/should_run/T5920.run/T5920.o_ghc_stgapp"
   , "/home/csaba/haskell/grin-compiler/ghc-whole-program-compiler-project/ghc-wpc/testsuite/tests/simplCore/should_run/T5997.run/T5997.o_ghc_stgapp"
   ]
+-}

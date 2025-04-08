@@ -58,7 +58,7 @@ normalizeQQInput = trim . unindent' . tabsToSpaces
             unindentedHead = dropWhile (== ' ') head
             minimumTailIndent = minimumIndent . unlines $ tail
             unindentedTail = case minimumTailIndent of
-              Just indent -> map (drop indent) tail
+              Just indent -> fmap (drop indent) tail
               Nothing -> tail
           in unlines $ unindentedHead : unindentedTail
         [] -> []
@@ -72,7 +72,7 @@ dropWhileRev p = foldr (\x xs -> if p x && null xs then [] else x:xs) []
 unindent :: [Char] -> [Char]
 unindent s =
   case minimumIndent s of
-    Just indent -> unlines . map (drop indent) . lines $ s
+    Just indent -> unlines . fmap (drop indent) . lines $ s
     Nothing -> s
 
 tabsToSpaces :: [Char] -> [Char]
@@ -82,7 +82,7 @@ tabsToSpaces [] = []
 
 minimumIndent :: [Char] -> Maybe Int
 minimumIndent =
-  listToMaybe . sort . map lineIndent
+  listToMaybe . sort . fmap lineIndent
     . filter (not . null . dropWhile isSpace) . lines
 
 -- | Amount of preceding spaces on first line

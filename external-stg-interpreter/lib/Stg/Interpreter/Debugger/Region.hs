@@ -1,23 +1,41 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+
 module Stg.Interpreter.Debugger.Region where
 
-import Text.Printf
-import Control.Monad.State
-import Data.Maybe
-import qualified Data.List as List
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-import qualified Data.IntMap as IntMap
-import qualified Data.IntSet as IntSet
-import qualified Data.ByteString.Char8 as BS8
-import System.Console.Pretty
+import           Control.Applicative      (Applicative (..))
+import           Control.Monad            (Monad (..), forM_, unless, when)
+import           Control.Monad.State      (MonadIO (..), gets, modify, modify')
 
-import Stg.Interpreter.Base
-import Stg.Interpreter.Debug
-import Stg.Syntax
+import           Data.Bool                (Bool, otherwise, (&&))
+import qualified Data.ByteString.Char8    as BS8
+import           Prelude                  (Enum (..))
+import           Data.Eq                  (Eq (..))
+import           Data.Function            (($), (.))
+import           Data.Int                 (Int)
+import qualified Data.IntMap              as IntMap
+import           Data.List                ((++))
+import qualified Data.Map                 as Map
+import           Data.Maybe               (Maybe (..), fromMaybe)
+import           Data.Monoid              (Monoid (..))
+import qualified Data.Set                 as Set
+import           Data.String              (String, words)
+import           Data.Tuple               (fst, snd)
 
-import qualified Stg.Interpreter.GC as GC
+import           GHC.Err                  (error)
+import           GHC.Num                  (Num (..))
+
+import           Stg.Interpreter.Base     (AddressState (..), Heap, HeapObject, M, Region (..), StgState (..),
+                                           debugPrintHeapObject, emptyCallGraph, getAddressState, joinCallGraph)
+import           Stg.Interpreter.Debug    (exportRegionCallGraph)
+import qualified Stg.Interpreter.GC       as GC
 import qualified Stg.Interpreter.GC.GCRef as GC
+import           Stg.Syntax               (Name)
+
+import           System.Console.Pretty    (Color (..), Pretty (..), Style (..))
+import           System.IO                (putStrLn)
+
+import           Text.Printf              (printf)
+import           Text.Show                (Show (..))
+
 
 evalRegionCommand :: String -> M ()
 evalRegionCommand cmd = do
@@ -25,7 +43,7 @@ evalRegionCommand cmd = do
   case words cmd of
     ["estgi.debug.region.start", name] -> startRegion tid . EventRegion $ BS8.pack name
     ["estgi.debug.region.end",   name] -> endRegion tid . EventRegion $ BS8.pack name
-    _ -> pure ()
+    _                                  -> pure ()
 
 dumpHeapObject :: Int -> HeapObject -> String
 dumpHeapObject i o = printf "%-8d %3s  %s" i (GC.ppLNE o) (debugPrintHeapObject o)
@@ -34,8 +52,8 @@ dumpOriginM :: Int -> M String
 dumpOriginM i = do
   origin <- gets ssOrigin
   case IntMap.lookup i origin of
-    Nothing -> pure ""
-    Just (oId,oAddr,_) -> pure $ (color White $ style Bold "  ORIGIN: ") ++ (color Green $ show oId) ++ " " ++ show oAddr
+    Nothing            -> pure ""
+    Just (oId,oAddr,_) -> pure $ color White (style Bold "  ORIGIN: ") ++ color Green (show oId) ++ " " ++ show oAddr
 
 dumpHeapM :: Heap -> M ()
 dumpHeapM h = do
@@ -114,14 +132,16 @@ checkRegion markerName = do
   case Map.lookup markerName markers of
     Nothing -> pure ()
     Just rl -> do
-      forM_ rl $ \r@(IRRegion s e) -> case r of
-        _ | markerName == s && markerName == e -> endRegion tid r >> startRegion tid r
-        _ | markerName == s -> startRegion tid r
-        _ | markerName == e -> endRegion tid r
+      forM_ rl $ \r -> case r of
+        (IRRegion s e) -> if | markerName == s && markerName == e -> endRegion tid r >> startRegion tid r
+                             | markerName == s                    -> startRegion tid r
+                             | markerName == e                    -> endRegion tid r
+                             | otherwise                          -> error ""
+        EventRegion _ -> error ""
 
 nextRegionIndex :: Region -> M Int
 nextRegionIndex r = do
-  idx <- fromMaybe 0 <$> gets (Map.lookup r . ssRegionCounter)
+  idx <- gets (fromMaybe 0 . Map.lookup r . ssRegionCounter)
   modify' $ \s@StgState{..} -> s {ssRegionCounter = Map.insert r (succ idx) ssRegionCounter}
   pure idx
 

@@ -1,14 +1,23 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.DelayWait where
 
-import Control.Monad.State
-import Data.Time.Clock
-import Data.Fixed
+import           Control.Applicative  (Applicative (..))
+import           Control.Monad        (unless)
+import           Control.Monad.State  (MonadIO (..), gets)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Eq              (Eq (..))
+import           Data.Fixed           (Pico)
+import           Data.Function        (($))
+import           Data.List            ((++))
+import           Data.Maybe           (Maybe)
+import           Data.Time.Clock      (addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 
-pattern IntV i = IntAtom i
+import           GHC.Err              (error)
+import           GHC.Real             (Fractional (..), fromIntegral)
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
+
+import           Text.Show            (Show (..))
 
 {-
   NOTE:

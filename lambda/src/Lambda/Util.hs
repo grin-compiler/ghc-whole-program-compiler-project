@@ -20,19 +20,19 @@ foldLocalNameDefExp f = foldLocalNameDefExpF f . project
 
 foldLocalNameDefExpF :: (Monoid m) => (Name -> m) -> ExpF a -> m
 foldLocalNameDefExpF f = \case
-  DefF _ args _ -> mconcat $ map (f . fst) args
+  DefF _ args _ -> mconcat $ fmap (f . fst) args
   ProgramF{}    -> mempty
   e             -> foldNameDefExpF f e
 
 foldNameDefExpF :: (Monoid m) => (Name -> m) -> ExpF a -> m
 foldNameDefExpF f = \case
-  ProgramF{..}            -> mconcat $ map (f . sName) pStaticDataF
-  DefF n args _           -> mconcat $ f n : map (f . fst) args
-  LetF bs _               -> mconcat $ map (f . fst3) bs
-  LetRecF bs _            -> mconcat $ map (f . fst3) bs
-  LetSF bs _              -> mconcat $ map (f . fst3) bs
-  AltF a (NodePat _ bs) _ -> mconcat $ f a : map f bs
-  ClosureF _ bs _         -> mconcat $ map (f . fst) bs
+  ProgramF{..}            -> mconcat $ fmap (f . sName) pStaticDataF
+  DefF n args _           -> mconcat $ f n : fmap (f . fst) args
+  LetF bs _               -> mconcat $ fmap (f . fst3) bs
+  LetRecF bs _            -> mconcat $ fmap (f . fst3) bs
+  LetSF bs _              -> mconcat $ fmap (f . fst3) bs
+  AltF a (NodePat _ bs) _ -> mconcat $ f a : fmap f bs
+  ClosureF _ bs _         -> mconcat $ fmap (f . fst) bs
   _                       -> mempty
 
 fst3 :: (a, b, c) -> a
@@ -40,8 +40,8 @@ fst3 (a, _, _) = a
 
 mapNameExp :: (Name -> Name) -> Exp -> Exp
 mapNameExp f = \case
-  prg@Program{..} -> prg { pPublicNames = map f pPublicNames
-                         , pForeignExportedNames = map f pForeignExportedNames
+  prg@Program{..} -> prg { pPublicNames = fmap f pPublicNames
+                         , pForeignExportedNames = fmap f pForeignExportedNames
                          , pStaticData  = [sd {sName = f $ sName sd} | sd <- pStaticData]
                          }
   Def n args e    -> Def (f n) [(f a, t) | (a, t) <- args] e

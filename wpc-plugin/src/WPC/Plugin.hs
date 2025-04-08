@@ -1,48 +1,54 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE RecordWildCards #-}
 module WPC.Plugin (plugin) where
 
-import System.Directory
-import System.FilePath
-import System.IO
-import Data.IORef
-import Data.Maybe
+import           Control.Applicative         (Applicative (..))
+import           Control.Monad               (Functor (..), Monad (..))
 
-import GHC.Plugins
-import GHC.Driver.Hooks
-import GHC.Driver.Pipeline as Pipeline
-import GHC.Driver.Pipeline.Phases
-import GHC.Driver.Pipeline.Execute
-import GHC.Unit.Module.Status
-import qualified GHC.StgToCmm as StgToCmm ( codeGen )
-import GHC.Driver.Config.StgToCmm (initStgToCmmConfig)
-import GHC.StgToCmm.Config
-import GHC.Types.IPE
-import GHC.Stg.Syntax
-import GHC.StgToCmm.Types (ModuleLFInfos)
-import GHC.Types.CostCentre
-import GHC.Types.HpcInfo
-import qualified GHC.Data.Stream as Stream
-import GHC.Data.Stream (Stream)
-import GHC.Cmm
-import GHC.Cmm.Info
-import GHC.Utils.TmpFs
-import GHC.Utils.Misc
-import GHC.Unit.Home.ModInfo
-import GHC.Driver.CodeOutput
-import Language.Haskell.Syntax.Decls
-import GHC.Types.ForeignCall
+import           Data.Bool                   (Bool (..), otherwise)
+import           Data.Eq                     (Eq (..))
+import           Data.Function               (($), (.))
+import           Data.IORef                  (modifyIORef, readIORef)
+import           Data.List                   ((++))
+import           Data.Maybe                  (Maybe (..), fromJust, fromMaybe)
+import           Data.Tuple                  (fst)
 
-import Control.Monad
-import qualified Data.Map as Map
+import           GHC.Cmm                     (CmmGroup, CmmGroupSRTs, RawCmmGroup)
+import           GHC.Cmm.Info                (cmmToRawCmm)
+import qualified GHC.Data.Stream             as Stream
+import           GHC.Driver.CodeOutput       (outputForeignStubs)
+import           GHC.Driver.Hooks            (Hooks (..))
+import           GHC.Driver.Pipeline         as Pipeline (TPhase (..), link, runPhase)
+import           GHC.Driver.Pipeline.Execute (runCcPhase)
+import           GHC.Driver.Pipeline.Phases  (PhaseHook (..))
+import           GHC.Plugins                 (CgGuts (..), CommandLineOption, CoreM, CoreToDo (..), DynFlags (..),
+                                              GhcLink, HscEnv (..), IsDoc (..), ModGuts (..), ModLocation (..), Module,
+                                              NamePprCtx (..), OccName, OutputableP (..), Plugin (..), QualifyName (..),
+                                              SuccessFlag, TyCon, alwaysPrintPromTick, blankLine, defaultPlugin,
+                                              hsc_units, liftIO, mkDumpStyle, neverQualifyModules, neverQualifyPackages,
+                                              objectSuf, showSDoc, targetProfile, withPprStyle)
+import           GHC.Stg.Syntax              (CgStgTopBinding)
+import qualified GHC.StgToCmm                as StgToCmm (codeGen)
+import           GHC.StgToCmm.CgUtils        (CgStream)
+import           GHC.StgToCmm.Config         (StgToCmmConfig)
+import           GHC.StgToCmm.Types          (ModuleLFInfos)
+import           GHC.Types.CostCentre        (CollectedCCs)
+import           GHC.Types.IPE               (InfoTableProvMap)
+import           GHC.Types.Unique.DSM        (UniqDSMT)
+import           GHC.Unit.Home.ModInfo       (HomePackageTable)
+import           GHC.Unit.Module.Status      (HscBackendAction (..))
+import           GHC.Utils.TmpFs             (TempFileLifetime (..), newTempName)
 
-import WPC.Modpak
-import WPC.GhcStgApp
-import WPC.Foreign
-import WPC.Stubs
-import WPC.GlobalEnv
-import WPC.ForeignStubDecls
+import           System.Directory            (copyFile, createDirectoryIfMissing)
+import           System.FilePath             (makeRelative, replaceExtension, takeDirectory, (</>))
+import           System.IO                   (Handle, IO, IOMode (..), hClose, hPutStr, openFile, putStrLn)
+
+import           Text.Show                   (Show (..))
+
+import           WPC.Foreign                 (dsForeignsFun)
+import           WPC.ForeignStubDecls        (ForeignStubDecls (..))
+import           WPC.GhcStgApp               (writeGhcStgApp)
+import           WPC.GlobalEnv               (GlobalEnv (..), globalEnvIORef)
+import           WPC.Modpak                  (outputModPak)
+import           WPC.Stubs                   (outputCapiStubs)
 
 plugin :: Plugin
 plugin = defaultPlugin
@@ -51,7 +57,7 @@ plugin = defaultPlugin
   }
 
 coreToDosFun :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
-coreToDosFun cmdOpts todo0 = do
+coreToDosFun _cmdOpts todo0 = do
   let captureCore :: ModGuts -> CoreM ModGuts
       captureCore mg = do
         --putMsgS $ "wpc-plugin captureCore pass"
@@ -61,7 +67,7 @@ coreToDosFun cmdOpts todo0 = do
       todo = todo0 ++ [CoreDoPluginPass "capture IR" captureCore]
 
   --putMsgS $ "wpc-plugin coreToDosFun cmdOpts: " ++ show cmdOpts
-  --putMsg $ text "wpc-plugin coreToDosFun todo: " <+> vcat (map ppr todo)
+  --putMsg $ text "wpc-plugin coreToDosFun todo: " <+> vcat (fmap ppr todo)
   return todo
 
 driverFun :: [CommandLineOption] -> HscEnv -> IO HscEnv
@@ -122,32 +128,32 @@ data TPhase res where
 runPhaseFun :: forall a . TPhase a -> IO a
 runPhaseFun phase = do
   let phaseStr = case phase of
-        T_Unlit{}         -> "T_Unlit"
-        T_FileArgs{}      -> "T_FileArgs"
-        T_Cpp{}           -> "T_Cpp"
-        T_HsPp{}          -> "T_HsPp"
-        T_HscRecomp{}     -> "T_HscRecomp"
-        T_Hsc{}           -> "T_Hsc"
-        T_HscPostTc{}     -> "T_HscPostTc"
-        T_HscBackend{}    -> "T_HscBackend"
-        T_CmmCpp{}        -> "T_CmmCpp"
-        T_Cmm{}           -> "T_Cmm"
-        T_Cc{}            -> "T_Cc"
-        T_As{}            -> "T_As"
-        T_Js{}            -> "T_Js"
-        T_ForeignJs{}     -> "T_ForeignJs"
-        T_LlvmOpt{}       -> "T_LlvmOpt"
-        T_LlvmLlc{}       -> "T_LlvmLlc"
-        T_LlvmAs{}        -> "T_LlvmAs"
-        T_LlvmMangle{}    -> "T_LlvmMangle"
-        T_MergeForeign{}  -> "T_MergeForeign"
+        T_Unlit{}        -> "T_Unlit"
+        T_FileArgs{}     -> "T_FileArgs"
+        T_Cpp{}          -> "T_Cpp"
+        T_HsPp{}         -> "T_HsPp"
+        T_HscRecomp{}    -> "T_HscRecomp"
+        T_Hsc{}          -> "T_Hsc"
+        T_HscPostTc{}    -> "T_HscPostTc"
+        T_HscBackend{}   -> "T_HscBackend"
+        T_CmmCpp{}       -> "T_CmmCpp"
+        T_Cmm{}          -> "T_Cmm"
+        T_Cc{}           -> "T_Cc"
+        T_As{}           -> "T_As"
+        T_Js{}           -> "T_Js"
+        T_ForeignJs{}    -> "T_ForeignJs"
+        T_LlvmOpt{}      -> "T_LlvmOpt"
+        T_LlvmLlc{}      -> "T_LlvmLlc"
+        T_LlvmAs{}       -> "T_LlvmAs"
+        T_LlvmMangle{}   -> "T_LlvmMangle"
+        T_MergeForeign{} -> "T_MergeForeign"
 
   putStrLn $ " ###### wpc-plugin runPhaseFun phase: " ++ phaseStr
   --undefined
 
   case phase of
-    T_Cc phase pipe_env hsc_env location input_fn -> do
-      output_fn <- runCcPhase phase pipe_env hsc_env location input_fn
+    T_Cc phase' pipe_env hsc_env location input_fn -> do
+      output_fn <- runCcPhase phase' pipe_env hsc_env location input_fn
       putStrLn $ " ###### wpc-plugin runPhaseFun T_Cc input_fn: " ++ input_fn ++ " output_fn: " ++ output_fn
       let dflags        = hsc_dflags hsc_env
           odir          = fromMaybe "." (objectDir dflags)
@@ -189,11 +195,11 @@ runPhaseFun phase = do
       GlobalEnv{..} <- readIORef globalEnvIORef
       --writeIORef globalEnvIORef (emptyModpakData {geHscEnv = Just hscEnv})
       modifyIORef globalEnvIORef $ \d -> d {geHscEnv = Just hscEnv}
-      let CgGuts{..}            = hscs_guts
-          Just (mg@ModGuts{..}) = geModGuts
-          Just ms               = geModSummary
-          Just stgBinds         = geStgBinds
-          Just stubDecls        = geStubDecls
+      let CgGuts{..}       = hscs_guts
+          (mg@ModGuts{..}) = fromJust $ geModGuts
+          ms               = fromJust $ geModSummary
+          stgBinds         = fromJust $ geStgBinds
+          stubDecls        = fromJust $ geStubDecls
 
       ----------------
       -- handle stubs
@@ -213,14 +219,14 @@ runPhaseFun phase = do
 
     _ -> runPhase phase
 
-stgToCmmFun :: HscEnv -> StgToCmmConfig -> InfoTableProvMap -> [TyCon] -> CollectedCCs -> [CgStgTopBinding] -> HpcInfo -> Stream IO CmmGroup ModuleLFInfos
-stgToCmmFun hscEnv cfg itpm tcList ccc stgBinds hpcInfo = do
+stgToCmmFun :: HscEnv -> StgToCmmConfig -> InfoTableProvMap -> [TyCon] -> CollectedCCs -> [CgStgTopBinding] -> CgStream CmmGroup ModuleLFInfos
+stgToCmmFun hscEnv cfg itpm tcList ccc stgBinds = do
   liftIO $ do
     putStrLn $ " ###### run stgToCmmFun"
     modifyIORef globalEnvIORef $ \d -> d {geStgBinds = Just stgBinds}
-  StgToCmm.codeGen (hsc_logger hscEnv) (hsc_tmpfs hscEnv) cfg itpm tcList ccc stgBinds hpcInfo
+  fmap fst $ StgToCmm.codeGen (hsc_logger hscEnv) (hsc_tmpfs hscEnv) cfg itpm tcList ccc stgBinds
 
-cmmToRawCmmFun :: Handle -> HscEnv -> DynFlags -> Maybe Module -> Stream IO CmmGroupSRTs a -> IO (Stream IO RawCmmGroup a)
+cmmToRawCmmFun ::forall a. Handle -> HscEnv -> DynFlags -> Maybe Module -> CgStream CmmGroupSRTs a -> IO (CgStream RawCmmGroup a)
 cmmToRawCmmFun cmmHandle hscEnv dflags mMod cmms = do
   let logger    = hsc_logger hscEnv
       profile   = targetProfile dflags
@@ -228,7 +234,8 @@ cmmToRawCmmFun cmmHandle hscEnv dflags mMod cmms = do
   rawcmms0 <- cmmToRawCmm logger profile cmms
 
   -- name pretty printer setup
-  let qualifyImportedNames mod _
+  let qualifyImportedNames :: Module -> OccName -> QualifyName
+      qualifyImportedNames mod _
         | Just mod == mMod  = NameUnqual
         | otherwise         = NameNotInScope1
       print_unqual = QueryQualify qualifyImportedNames
@@ -237,21 +244,23 @@ cmmToRawCmmFun cmmHandle hscEnv dflags mMod cmms = do
                                   alwaysPrintPromTick
       dumpStyle = mkDumpStyle print_unqual
 
-  let dump a = do
-        let cmmDoc = vcat $ map (\i -> pdoc platform i $$ blankLine) a
-        hPutStr cmmHandle . showSDoc dflags $ withPprStyle dumpStyle cmmDoc
+  let dump :: RawCmmGroup -> UniqDSMT IO RawCmmGroup
+      dump a = do
+        let cmmDoc = vcat $ fmap (\i -> pdoc platform i $$ blankLine) a
+        liftIO $ hPutStr cmmHandle . showSDoc dflags $ withPprStyle dumpStyle cmmDoc
         pure a
+
   pure $ Stream.mapM dump rawcmms0
 
 linkFun :: GhcLink -> DynFlags -> Bool -> HomePackageTable -> IO SuccessFlag
 linkFun ghcLink dflags isBatchMode hpt = do
   putStrLn " ###### linkFun"
   GlobalEnv{..} <- readIORef globalEnvIORef
-  let Just HscEnv{..} = geHscEnv
+  let HscEnv{..} = fromJust $ geHscEnv
       hooks = hsc_hooks {linkHook = Nothing}
   result <- Pipeline.link ghcLink hsc_logger hsc_tmpfs hsc_FC hooks dflags hsc_unit_env isBatchMode Nothing hpt
   {-
-    IDEA: generate ghcstgapp file along with modpak file for the main module
+    IDEA: generate ghc_stgapp file along with modpak file for the main module
             do not use the link hook
             this will make the plugin work for 'ghc -c' + 'ghc Main.o -o ExeName' use cases
           OR

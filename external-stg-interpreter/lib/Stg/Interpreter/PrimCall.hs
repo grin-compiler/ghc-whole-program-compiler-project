@@ -1,16 +1,23 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+
 module Stg.Interpreter.PrimCall where
 
-import Control.Monad.State.Strict
-import Foreign
+import           Control.Applicative               (Applicative (..))
+import           Control.Monad.State.Strict        (MonadIO (..), gets)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Exceptions
+import           Data.Function                     (($))
+import           Data.List                         ((++))
+import           Data.Maybe                        (Maybe)
 
-pattern WordV i   = WordAtom i
-pattern FloatV f  = FloatAtom f
-pattern DoubleV d = DoubleAtom d
+import           Foreign                           (Ptr, Storable (..), Word32, Word64, castPtr, with)
+
+import           GHC.Float                         (Double, Float)
+import           GHC.Real                          (fromIntegral)
+
+import           Stg.Interpreter.Base
+import           Stg.Interpreter.PrimOp.Exceptions (raiseEx)
+import           Stg.Syntax                        (PrimCall (..), TyCon, Type)
+
+import           Text.Show                         (Show (..))
 
 -- HINT: prim call emulation of .cmm code, because the interpreter FFI does not support Cmm
 --        the Cmm code operates on the native memory layout
@@ -19,7 +26,7 @@ pattern DoubleV d = DoubleAtom d
 -- NOTE: the WordV should contain a 64 bit wide value
 
 evalPrimCallOp :: PrimCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalPrimCallOp pCall@(PrimCall primCallTarget primCallUnitId) args t _tc = do
+evalPrimCallOp pCall@(PrimCall primCallTarget _primCallUnitId) args t _tc = do
   case primCallTarget of
   -- stg_raiseDivZZerozh :: State# RealWorld -> (# State# RealWorld, Void# #)
     "stg_raiseDivZZerozh"

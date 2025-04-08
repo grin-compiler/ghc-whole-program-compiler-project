@@ -16,6 +16,7 @@ import qualified Data.Map as Map
 import Data.Hashable
 
 import Stg.Syntax
+import Control.Monad
 
 data Env
   = Env
@@ -372,7 +373,7 @@ dropEmpty l = [v | v@(_, b) <- l, not $ null b]
 stripTyCons :: Set Name -> Set Name -> [TyCon] -> SM [(UnitId, [(ModuleName, [TyCon])])]
 stripTyCons liveCons liveConGroups modTyCons = do
   Env{..} <- get
-  let modTyConSet     = Set.fromList $ map TC modTyCons
+  let modTyConSet     = Set.fromList $ fmap TC modTyCons
       refConTyConSet  = Set.fromList [TC $ uncutTyCon dcTyCon | DC DataCon{..} <- Set.toList referredCons]
       allTyCons       = [tc | TC tc <- Set.toList $ Set.unions [referredTyCons, refConTyConSet, modTyConSet]]
 
@@ -436,9 +437,9 @@ calcDependencies unitId modName = do
                   ]
 
       extDeps :: [(UnitId, ModuleName)]
-      extDeps = map fst extIds ++ extTyCons ++ extCons
+      extDeps = fmap fst extIds ++ extTyCons ++ extCons
 
-      deps    = map (fmap (map fst)) . groupByUnitIdAndModule $ zip extDeps (repeat ())
+      deps    = fmap (fmap (map fst)) . groupByUnitIdAndModule $ zip extDeps (repeat ())
 
   pure (deps, extGroups)
 
@@ -447,7 +448,7 @@ calcDependencies unitId modName = do
 topLiftedBindings :: TopBinding' idBnd idOcc dcOcc tcOcc -> [idBnd]
 topLiftedBindings = \case
   StgTopLifted (StgNonRec b _)  -> [b]
-  StgTopLifted (StgRec bs)      -> map fst bs
+  StgTopLifted (StgRec bs)      -> fmap fst bs
   StgTopStringLit _ _           -> []
 
 groupByUnitIdAndModule :: Ord b => [((UnitId, ModuleName), b)] -> [(UnitId, [(ModuleName, [b])])]

@@ -59,7 +59,7 @@ main = do
     createArchive lampakName $ do
       -- top level info
       let content = BS8.pack $ unlines
-            [ "modules:", Stg.printSection $ map (Stg.getModuleName . Stg.moduleName) mods
+            [ "modules:", Stg.printSection $ fmap (Stg.getModuleName . Stg.moduleName) mods
             ]
 
       addZstdEntry "app.info" content

@@ -1,15 +1,20 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.StablePointer where
 
-import Foreign.Ptr
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import qualified Data.Map as Map
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad.State  (gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($), (.))
+import qualified Data.IntMap          as IntMap
+import qualified Data.Map             as Map
+import           Data.Maybe           (Maybe (..))
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+import           Foreign.Ptr          (IntPtr (..), intPtrToPtr)
+
+import           Prelude              (Enum (..))
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

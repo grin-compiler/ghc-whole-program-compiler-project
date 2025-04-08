@@ -1242,4 +1242,3 @@ PrimOp
   .decl MutVar(ext_result:Variable, ty_node:Variable, item:Variable)
 
   .decl StablePtr(ext_result:Variable, ty_node:Variable, item:Variable)
--}

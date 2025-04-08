@@ -1,16 +1,15 @@
+cabal-version:       3.14
 name:                lambda
 version:             0.1.0.0
 
 homepage:            https://github.com/grin-compiler/ghc-whole-program-compiler-project
-license:             BSD3
+license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Csaba Hruska, Andor Penzes
 maintainer:          csaba.hruska@gmail.com
 copyright:           2021 Csaba Hruska
 category:            Compiler
 build-type:          Simple
-
-cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
@@ -39,7 +38,7 @@ library
     , mtl
     , bytestring
     , recursion-schemes
-    , ansi-wl-pprint
+    , prettyprinter-compat-ansi-wl-pprint
     , megaparsec
     , neat-interpolation
     , text
@@ -53,10 +52,17 @@ library
     , comonad
     , binary
     , external-stg
+    , external-stg-syntax
     , transformers
     , hashable
 
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
 
 
 source-repository head
@@ -85,7 +91,7 @@ test-suite lambda-test
                      , microlens
                      , transformers
                      , mtl
-                     , ansi-wl-pprint
+                     , prettyprinter-compat-ansi-wl-pprint
                      , pretty-show
                      , directory
                      , inline-c
@@ -102,10 +108,22 @@ test-suite lambda-test
                      PrimOpStablePtrSpec
                      PrimOpSTMSpec
                      PrimOpWeakPtrSpec
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
 
 executable mklampak
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
   hs-source-dirs:      app
   main-is:             mklampak.hs
   build-depends:       base
@@ -118,13 +136,20 @@ executable mklampak
                      , mtl
                      , bytestring
                      , binary
-                     , ansi-wl-pprint
+                     , prettyprinter-compat-ansi-wl-pprint
                      , zip
                      , external-stg
+                     , external-stg-syntax
                      , lambda
 
 executable mkfacts
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
   hs-source-dirs:      app
   main-is:             mkfacts.hs
   build-depends:       base
@@ -136,9 +161,16 @@ executable mkfacts
                      , bytestring
                      , zip
                      , external-stg
+                     , external-stg-syntax
 
 executable strip-fullpak
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
   hs-source-dirs:      app
   main-is:             strip-fullpak.hs
   build-depends:       base
@@ -152,10 +184,17 @@ executable strip-fullpak
                      , binary
                      , zip
                      , external-stg
+                     , external-stg-syntax
                      , lambda
 
 executable catlambda
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
   hs-source-dirs:      app
   main-is:             catlambda.hs
   build-depends:       base
@@ -167,3 +206,4 @@ executable catlambda
                      , bytestring
                      , zip
                      , external-stg
+                     , external-stg-syntax

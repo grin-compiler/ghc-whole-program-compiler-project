@@ -1,26 +1,43 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, FlexibleInstances #-}
+
 module Stg.Interpreter.GC where
 
-import Text.Printf
-import Control.Monad.State
-import qualified Data.Map as Map
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
+import           Control.Applicative                 (Applicative (..))
+import           Control.Concurrent                  (MVar, ThreadId, forkIO, newEmptyMVar, putMVar, takeMVar,
+                                                      tryTakeMVar)
+import           Control.Monad                       (Monad (..), mapM, mapM_, unless, when)
+import           Control.Monad.State                 (MonadIO (..), MonadState (..), gets, modify')
 
-import Control.Concurrent
+import           Data.Bool                           (Bool (..), not, (&&), (||))
+import           Data.Eq                             (Eq (..))
+import           Data.Function                       (($), (.))
+import qualified Data.IntMap                         as IntMap
+import           Data.IntSet                         (IntSet)
+import qualified Data.IntSet                         as IntSet
+import           Data.List                           (length, null, (++))
+import qualified Data.Map                            as Map
+import           Data.Maybe                          (Maybe (..))
+import           Data.Ord                            (Ord (..))
+import           Data.String                         (String)
+import           Data.Time.Clock                     (getCurrentTime)
 
-import Stg.Syntax
-import Stg.Interpreter.Debug (exportCallGraph)
-import Stg.Interpreter.Base
-import Stg.Interpreter.GC.LiveDataAnalysis
-import Stg.Interpreter.GC.DeadlockAnalysis
-import qualified Stg.Interpreter.PrimOp.WeakPointer as PrimWeakPointer
+import           GHC.Float                           (Float)
+import           GHC.Num                             (Num (..))
+import           GHC.Real                            (Fractional (..), fromIntegral)
 
-import Stg.Interpreter.GC.RetainerAnalysis
+import           Prelude                             (Enum (..))
 
-import Data.Time.Clock
+import           Stg.Interpreter.Base                (Atom, HeapObject (..), M, PrintableMVar (..), RefSet (..),
+                                                      StgState (..), ThreadState (..), getAddressState, isThreadLive,
+                                                      lookupWeakPointerDescriptor, mylog, promptM_)
+import           Stg.Interpreter.Debug               (exportCallGraph)
+import           Stg.Interpreter.GC.DeadlockAnalysis (handleDeadlockedThreads, validateGCThreadResult)
+import           Stg.Interpreter.GC.LiveDataAnalysis (runLiveDataAnalysis)
+import           Stg.Interpreter.GC.RetainerAnalysis (loadRetainerDb)
+
+import           System.IO                           (IO, print, putStrLn)
+
+import           Text.Printf                         (printf)
+import           Text.Show                           (Show (..))
 
 checkGC :: [Atom] -> M ()
 checkGC localGCRoots = do
@@ -29,7 +46,7 @@ checkGC localGCRoots = do
   lastGCAddr <- gets ssLastGCAddr
   gcIsRunning <- gets ssGCIsRunning
 
-  lastGCTime <- gets ssLastGCTime
+  _lastGCTime <- gets ssLastGCTime
   t0 <- liftIO getCurrentTime
   requestMajorGC <- gets ssRequestMajorGC
   let
@@ -48,8 +65,8 @@ checkGC localGCRoots = do
       , ssRequestMajorGC  = False
       }
     runGC localGCRoots
-    t0 <- liftIO getCurrentTime
-    modify' $ \s@StgState{..} -> s {ssLastGCTime = t0}
+    _t0 <- liftIO getCurrentTime
+    modify' $ \s -> s {ssLastGCTime = t0}
     {-
       TODO:
         done - send the current state for live data analysis (async channel) if the GC condition triggers
@@ -157,7 +174,7 @@ reportDeletedCode old = do
 finalizeDeadWeakPointers :: IntSet -> M ()
 finalizeDeadWeakPointers rsWeaks = do
   let deadWeaks = IntSet.toList rsWeaks
-  wdescs <- mapM lookupWeakPointerDescriptor deadWeaks
+  _wdescs <- mapM lookupWeakPointerDescriptor deadWeaks
   {-
   liftIO $ do
     putStrLn $ " * GC - run finalizers for dead weak pointers: " ++ show rsWeaks
@@ -221,20 +238,20 @@ reportAddressCounters StgState{..} = do
   let reportI msg val = do
         printf "  %s %d\n" msg val
   putStrLn "resource address counters:"
-  reportI "ssNextHeapAddr          " ssNextHeapAddr
-  reportI "ssNextStableName        " ssNextStableName
-  reportI "ssNextWeakPointer       " ssNextWeakPointer
-  reportI "ssNextStablePointer     " ssNextStablePointer
-  reportI "ssNextMutableByteArray  " ssNextMutableByteArray
-  reportI "ssNextMVar              " ssNextMVar
-  reportI "ssNextTVar              " ssNextTVar
-  reportI "ssNextMutVar            " ssNextMutVar
-  reportI "ssNextArray             " ssNextArray
-  reportI "ssNextMutableArray      " ssNextMutableArray
-  reportI "ssNextSmallArray        " ssNextSmallArray
-  reportI "ssNextSmallMutableArray " ssNextSmallMutableArray
-  reportI "ssNextArrayArray        " ssNextArrayArray
-  reportI "ssNextMutableArrayArray " ssNextMutableArrayArray
+  reportI ("ssNextHeapAddr          " :: String) ssNextHeapAddr
+  reportI ("ssNextStableName        " :: String) ssNextStableName
+  reportI ("ssNextWeakPointer       " :: String) ssNextWeakPointer
+  reportI ("ssNextStablePointer     " :: String) ssNextStablePointer
+  reportI ("ssNextMutableByteArray  " :: String) ssNextMutableByteArray
+  reportI ("ssNextMVar              " :: String) ssNextMVar
+  reportI ("ssNextTVar              " :: String) ssNextTVar
+  reportI ("ssNextMutVar            " :: String) ssNextMutVar
+  reportI ("ssNextArray             " :: String) ssNextArray
+  reportI ("ssNextMutableArray      " :: String) ssNextMutableArray
+  reportI ("ssNextSmallArray        " :: String) ssNextSmallArray
+  reportI ("ssNextSmallMutableArray " :: String) ssNextSmallMutableArray
+  reportI ("ssNextArrayArray        " :: String) ssNextArrayArray
+  reportI ("ssNextMutableArrayArray " :: String) ssNextMutableArrayArray
 
 reportRemovedData :: StgState -> RefSet -> IO ()
 reportRemovedData StgState{..} RefSet{..} = do
@@ -250,19 +267,19 @@ reportRemovedData StgState{..} RefSet{..} = do
 
 
   putStrLn "freed after GC:"
-  reportI "ssHeap               " ssHeap rsHeap
-  reportI "ssWeakPointers       " ssWeakPointers rsWeakPointers
-  reportI "ssTVars              " ssTVars rsTVars
-  reportI "ssMVars              " ssMVars rsMVars
-  reportI "ssMutVars            " ssMutVars rsMutVars
-  reportI "ssArrays             " ssArrays rsArrays
-  reportI "ssMutableArrays      " ssMutableArrays rsMutableArrays
-  reportI "ssSmallArrays        " ssSmallArrays rsSmallArrays
-  reportI "ssSmallMutableArrays " ssSmallMutableArrays rsSmallMutableArrays
-  reportI "ssArrayArrays        " ssArrayArrays rsArrayArrays
-  reportI "ssMutableArrayArrays " ssMutableArrayArrays rsMutableArrayArrays
-  reportI "ssMutableByteArrays  " ssMutableByteArrays rsMutableByteArrays
-  reportM "ssStableNameMap      " ssStableNameMap rsStableNames
+  reportI ("ssHeap               " :: String) ssHeap rsHeap
+  reportI ("ssWeakPointers       " :: String) ssWeakPointers rsWeakPointers
+  reportI ("ssTVars              " :: String) ssTVars rsTVars
+  reportI ("ssMVars              " :: String) ssMVars rsMVars
+  reportI ("ssMutVars            " :: String) ssMutVars rsMutVars
+  reportI ("ssArrays             " :: String) ssArrays rsArrays
+  reportI ("ssMutableArrays      " :: String) ssMutableArrays rsMutableArrays
+  reportI ("ssSmallArrays        " :: String) ssSmallArrays rsSmallArrays
+  reportI ("ssSmallMutableArrays " :: String) ssSmallMutableArrays rsSmallMutableArrays
+  reportI ("ssArrayArrays        " :: String) ssArrayArrays rsArrayArrays
+  reportI ("ssMutableArrayArrays " :: String) ssMutableArrayArrays rsMutableArrayArrays
+  reportI ("ssMutableByteArrays  " :: String) ssMutableByteArrays rsMutableByteArrays
+  reportM ("ssStableNameMap      " :: String) ssStableNameMap rsStableNames
 
   let threads = IntMap.elems ssThreads
   printf "live threads: %-6d  all threads: %d\n" (length $ [ts | ts <- threads, isThreadLive (tsStatus ts)]) (length threads)

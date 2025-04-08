@@ -1,0 +1,13 @@
+cradle:
+  cabal:
+    - path: "lib"
+      component: "lib:external-stg"
+
+    - path: "app/ext-stg.hs"
+      component: "external-stg:exe:ext-stg"
+
+    - path: "app/stgapp.hs"
+      component: "external-stg:exe:stgapp"
+
+    - path: "app/mkfullpak.hs"
+      component: "external-stg:exe:mkfullpak"

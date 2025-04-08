@@ -1,6 +1,12 @@
 module Stg.GHC.Symbols where
 
-import Stg.Syntax
+import           Data.Eq     (Eq)
+import           Data.List   ((++))
+import           Data.Ord    (Ord)
+import           Data.String (String)
+
+import           Text.Show   (Show)
+
 
 liveSymbols :: [(String, String, String)]
 liveSymbols =
@@ -75,7 +81,7 @@ data Symbol
   | CData   { getSymbolName :: String }
   | CmmFun  { getSymbolName :: String }
   | CmmData { getSymbolName :: String }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 rtsSymbols :: [Symbol]
 rtsSymbols =
@@ -93,6 +99,12 @@ rtsSymbols =
   -- used by haskell base library ; GHC RTS stats
   , CFun "getRTSStatsEnabled"                -- c fun
   , CFun "getRTSStats"                       -- c fun
+
+  -- Assume charset names are ASCII
+  , CFun "localeEncoding"                    -- c fun
+
+  -- checks to see whether input is available on the file descriptor
+  , CFun "fdReady"                           -- c fun
 
   -- used by haskell base library ; stack trace
   , CFun "backtraceFree"                     -- c fun

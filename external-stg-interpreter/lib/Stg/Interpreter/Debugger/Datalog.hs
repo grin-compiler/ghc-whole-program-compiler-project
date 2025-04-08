@@ -1,31 +1,42 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.Debugger.Datalog (exportStgState) where
 
-import Control.Monad
-import Control.Monad.State
-import Control.Monad.Reader
-import qualified Data.Set as Set
-import Data.Map (Map)
-import qualified Data.Map as Map
-import qualified Data.IntMap as IntMap
-import Data.IntMap (IntMap)
-import qualified Data.IntSet as IntSet
-import qualified Data.ByteString.Char8 as BS8
-import Data.Vector (Vector)
-import qualified Data.Vector as V
+import           Control.Applicative      (Applicative (..))
+import           Control.Monad            (forM, forM_, mapM, mapM_, void)
+import           Control.Monad.State      (MonadIO (..), MonadState (..), StateT, execStateT)
+
+import           Data.Bool                (Bool (..))
+import qualified Data.ByteString.Char8    as BS8
+import           Data.Function            (flip, ($))
+import           Data.Int                 (Int)
+import           Data.IntMap              (IntMap)
+import qualified Data.IntMap              as IntMap
+import qualified Data.IntSet              as IntSet
+import           Data.List                (intercalate, length, nub, reverse, zip, (++))
+import           Data.Map                 (Map)
+import qualified Data.Map                 as Map
+import           Data.Maybe               (Maybe (..), maybeToList)
 import qualified Data.Primitive.ByteArray as BA
-import Data.Maybe
-import Data.List (intercalate, nub)
-import Text.Printf
+import           Data.String              (String)
+import           Data.Tuple               (snd)
+import           Data.Vector              (Vector)
+import qualified Data.Vector              as V
 
-import System.Directory
-import System.FilePath
-import System.IO
+import           GHC.Err                  (error)
 
-import qualified Stg.Interpreter.GC as GC
+import           Stg.Interpreter.Base     (AddressState (..), ArrIdx (..), ArrayArrIdx (..), Atom (..),
+                                           ByteArrayDescriptor (..), ByteArrayIdx (baId), HeapObject (..),
+                                           MVarDescriptor (..), PtrOrigin (..), Region (..), SmallArrIdx (..),
+                                           StackContinuation (..), StgState (..), TVarDescriptor (..), ThreadState (..),
+                                           WeakPtrDescriptor (..), convertAddressState, debugPrintHeapObject,
+                                           showStackCont)
+import           Stg.Syntax               (Binder (..), DC (..), DataCon (..), Id (..), Name, getModuleName, getUnitId)
 
-import Stg.Interpreter.Base
-import Stg.Syntax
+import           System.Directory         (createDirectoryIfMissing, makeAbsolute)
+import           System.FilePath          (FilePath, (</>))
+import           System.IO                (Handle, IO, IOMode (..), hClose, hPutStrLn, openFile, putStrLn)
+
+import           Text.Printf              (printf)
+import           Text.Show                (Show (..))
 
 
 data Param
@@ -35,7 +46,7 @@ data Param
   | A   Atom
   | ID  Id
 
-data DLExport
+newtype DLExport
   = DLExport
   { dleHandleMap  :: Map Name Handle
   }
@@ -46,7 +57,7 @@ getHandle :: Name -> DL Handle
 getHandle n = do
   DLExport{..} <- get
   case Map.lookup n dleHandleMap of
-    Just h -> pure h
+    Just h  -> pure h
     Nothing -> error $ "missing handle for: " ++ show n
 
 genParam :: Param -> DL String
@@ -107,7 +118,7 @@ emitAtomToRef a = do
     StableName i            -> add $ printf "$R_StableName\t%d" i
     PtrAtom (StablePtr i) _ -> add $ printf "$R_StablePointer\t%d" i
     ThreadId i              -> add $ printf "$R_ThreadId\t%d" i
-    _                   -> pure ()
+    _                       -> pure ()
 
 arrIdxToRef :: ArrIdx -> String
 arrIdxToRef = \case
@@ -154,7 +165,8 @@ exportStgStateM stgState@StgState{..} = do
     addFact "StableName" [I i, A a]
 
   forM_ (IntMap.toList ssMutableByteArrays) $ \(i, ByteArrayDescriptor{..}) -> do
-    addFact "MutableByteArray" [I i, S (show baaPinned), I baaAlignment, I $ BA.sizeofMutableByteArray baaMutableByteArray]
+    sz <- BA.getSizeofMutableByteArray baaMutableByteArray
+    addFact "MutableByteArray" [I i, S (show baaPinned), I baaAlignment, I sz]
 
   -- mvars
   forM_ (IntMap.toList ssMVars) $ \(i, mv@MVarDescriptor{..}) -> do
@@ -246,7 +258,7 @@ exportStgStateM stgState@StgState{..} = do
           IRRegion{..}    -> (regionStart, regionEnd)
           EventRegion{..} -> (regionName, regionName)
     forM_ (IntMap.toList l) $ \(idx, (s, e)) -> do
-      forM_ (zip (genAddressState s) (genAddressState e)) $ \((start_ns, start_value), (end_ns, end_value)) -> do
+      forM_ (zip (genAddressState s) (genAddressState e)) $ \((start_ns, start_value), (_end_ns, end_value)) -> do
         addFact "Region" [N start_name, N end_name, I idx, S start_ns, I start_value, I end_value]
 
   -- ssDynamicHeapStart
@@ -376,7 +388,7 @@ exportStgState dbFolder s = do
   putStrLn $ "save StgState datalog facts to: " ++ dir
   createDirectoryIfMissing True dir
   hMap <- mkHandles dir allFactNames
-  DLExport{..} <- execStateT (exportStgStateM s) $ DLExport
+  void $ execStateT (exportStgStateM s) $ DLExport
     { dleHandleMap  = hMap
     }
   mapM_ hClose $ Map.elems hMap

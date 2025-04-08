@@ -1,21 +1,27 @@
 module WPC.ForeignStubDecls where
 
-import GHC.Plugins
-import GHC.Types.ForeignStubs
-import GHC.Types.ForeignCall
-import GHC.Hs.Extension
-import Language.Haskell.Syntax.Decls
+import           Data.Bool                     (Bool (..))
+import           Data.Int                      (Int)
+import           Data.Maybe                    (Maybe)
+import           Data.Monoid                   (Monoid (..))
+import           Data.String                   (String)
+
+import           GHC.Hs.Extension              (GhcTc)
+import           GHC.Plugins                   (FastString, Id)
+import           GHC.Types.ForeignStubs        (ForeignStubs (..))
+
+import           Language.Haskell.Syntax.Decls (ForeignExport, ForeignImport)
 
 -- | Foreign export stub detailed declarations
 newtype ForeignStubDecls = ForeignStubDecls [(ForeignStubs, StubDecl)]
 
 data StubImpl
   = StubImplImportCWrapper
-  { siCWrapperLabel   :: FastString
-  , siStdCallArgSize  :: (Maybe Int) -- arg list size for std call mangling
-  , siIsIOCall        :: Bool
-  , siReturnType      :: String
-  , siArgTypes        :: [String]
+  { siCWrapperLabel  :: FastString
+  , siStdCallArgSize :: (Maybe Int) -- arg list size for std call mangling
+  , siIsIOCall       :: Bool
+  , siReturnType     :: String
+  , siArgTypes       :: [String]
   }
 
 data StubDecl
@@ -24,6 +30,6 @@ data StubDecl
 
 mergeForeignStubs :: [ForeignStubs] -> ForeignStubs
 mergeForeignStubs stubs = case [(h, c) | ForeignStubs h c <- stubs] of
-  []  -> NoStubs
-  l   -> ForeignStubs h c where (h, c) = mconcat l
+  [] -> NoStubs
+  l  -> ForeignStubs h c where (h, c) = mconcat l
 

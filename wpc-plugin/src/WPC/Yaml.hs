@@ -1,10 +1,8 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 module WPC.Yaml where
 
-import GHC.Prelude
-import GHC.Utils.Json
-import GHC.Utils.Outputable
+import           GHC.Prelude          (Bool (..), ($))
+import           GHC.Utils.Json       (JsonDoc (..), escapeJsonString)
+import           GHC.Utils.Outputable (IsDoc (..), IsLine (..), Outputable (..), SDoc, colon, doubleQuotes, nest, ($+$))
 
 renderYAML :: JsonDoc -> SDoc
 renderYAML d =

@@ -1,58 +1,108 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 module Stg.Interpreter.Base where
 
-import Data.Word
-import Foreign.Ptr
-import Foreign.C.Types
-import Control.Monad.State.Strict
-import Data.List (foldl')
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Map (Map)
-import qualified Data.Map as Map
-import qualified Data.Map.Strict as StrictMap
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteString.Internal as BS
-import qualified Data.ByteString.Lazy as BL
-import Data.Vector (Vector)
-import qualified Data.Primitive.ByteArray as BA
-import Control.Monad.Primitive
-import System.Posix.DynamicLinker
-import Control.Concurrent.MVar
-import Control.Concurrent.Chan.Unagi.Bounded
-import Foreign.ForeignPtr.Unsafe
-import Data.Time.Clock
-import System.IO
-import Text.Pretty.Simple (pShowNoColor, pShow)
-import qualified Data.Text.Lazy.IO as Text
+import           Control.Applicative                   (Applicative (..), (<$>))
+import           Control.Concurrent.Chan.Unagi.Bounded (InChan, OutChan)
+import           Control.Concurrent.MVar               (MVar, putMVar, takeMVar)
+import           Control.Monad                         (Functor (..), Monad (..), forM, forM_, mapM_, unless, void,
+                                                        when)
+import           Control.Monad.Primitive               (RealWorld)
+import           Control.Monad.State.Strict            (MonadIO (..), MonadState (..), StateT, gets, modify')
 
-import GHC.Stack
-import Text.Printf
-import Debug.Trace
-import Stg.Syntax
-import Stg.IRLocation
+import           Data.Bool                             (Bool (..), otherwise)
+import           Data.ByteString.Char8                 (ByteString)
+import qualified Data.ByteString.Char8                 as BS8
+import qualified Data.ByteString.Internal              as BS
+import           Data.Char                             (Char)
+import           Data.Eq                               (Eq (..))
+import           Data.Function                         (($), (.))
+import           Data.Int                              (Int)
+import           Data.IntMap                           (IntMap)
+import qualified Data.IntMap                           as IntMap
+import           Data.IntSet                           (IntSet)
+import qualified Data.IntSet                           as IntSet
+import           Data.List                             (and, any, drop, foldl', length, (++))
+import           Data.Map                              (Map)
+import qualified Data.Map                              as Map
+import qualified Data.Map.Strict                       as StrictMap
+import           Data.Maybe                            (Maybe (..), maybe)
+import           Data.Monoid                           (Monoid (..))
+import           Data.Ord                              (Ord (..), Ordering (..))
+import qualified Data.Primitive.ByteArray              as BA
+import           Data.Set                              (Set)
+import qualified Data.Set                              as Set
+import           Data.String                           (String)
+import qualified Data.Text.Lazy.IO                     as Text
+import           Data.Time.Clock                       (UTCTime)
+import           Data.Tuple                            (snd)
+import           Data.Vector                           (Vector)
+import           Data.Word                             (Word, Word8)
+
+import           Foreign.C.Types                       (CInt)
+import           Foreign.ForeignPtr.Unsafe             (unsafeForeignPtrToPtr)
+import           Foreign.Ptr                           (IntPtr (..), Ptr, plusPtr, ptrToIntPtr)
+
+import           GHC.Err                               (error, undefined)
+import           GHC.Float                             (Double, Float)
+import           GHC.Num                               (Num (..))
+import           GHC.Stack                             (HasCallStack, callStack, prettyCallStack)
+
+import           Prelude                               (Enum (..))
+
+import           Stg.IRLocation                        (StgPoint)
+import           Stg.Syntax                            (Alt, AltType, Binder (..), DC (..), DataCon (..), ForeignCall,
+                                                        Id (..), LabelSpec, Lit (..), Name, PrimCall, Rhs, TyCon, Type)
+
+import           System.IO                             (Handle, IO, hPutStrLn, print, putStrLn)
+import           System.Posix.DynamicLinker            (DL)
+
+import           Text.Pretty.Simple                    (pShowNoColor)
+import           Text.Read                             (Read)
+import           Text.Show                             (Show (..))
+
+pattern CharV :: Char -> Atom
+pattern CharV c   = Literal (LitChar c)
+pattern IntV :: Int -> Atom
+pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int8V :: Int -> Atom
+pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int16V :: Int -> Atom
+pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int32V :: Int -> Atom
+pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern Int64V :: Int -> Atom
+pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern WordV :: Word -> Atom
+pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word8V :: Word -> Atom
+pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word16V :: Word -> Atom
+pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word32V :: Word -> Atom
+pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern Word64V :: Word -> Atom
+pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern FloatV :: Float -> Atom
+pattern FloatV f  = FloatAtom f
+pattern DoubleV :: Double -> Atom
+pattern DoubleV d = DoubleAtom d
 
 type StgRhsClosure = Rhs  -- NOTE: must be StgRhsClosure only!
 
 data ArrIdx
   = MutArrIdx !Int
   | ArrIdx    !Int
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data SmallArrIdx
   = SmallMutArrIdx !Int
   | SmallArrIdx    !Int
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data ArrayArrIdx
   = ArrayMutArrIdx !Int
   | ArrayArrIdx    !Int
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data ByteArrayIdx
   = ByteArrayIdx
@@ -60,7 +110,7 @@ data ByteArrayIdx
   , baPinned    :: !Bool
   , baAlignment :: !Int
   }
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data ByteArrayDescriptor
   = ByteArrayDescriptor
@@ -70,12 +120,15 @@ data ByteArrayDescriptor
   , baaAlignment        :: !Int
   }
 instance Show ByteArrayDescriptor where
+  show :: ByteArrayDescriptor -> String
   show _ = "ByteArrayDescriptor (TODO)"
 
 instance Eq ByteArrayDescriptor where
+  (==) :: ByteArrayDescriptor -> ByteArrayDescriptor -> Bool
   _ == _ = True -- TODO
 
 instance Ord ByteArrayDescriptor where
+  compare :: ByteArrayDescriptor -> ByteArrayDescriptor -> Ordering
   _ `compare` _ = EQ -- TODO
 
 data PtrOrigin
@@ -86,30 +139,30 @@ data PtrOrigin
   | CostCentreStackPtr              -- GHC Cmm STG machine's cost centre stack
   | StablePtr     !Int              -- stable pointer must have AddrRep
   | LabelPtr      !Name !LabelSpec  -- foreign symbol/label name + label sepcification (i.e. data or function)
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data WeakPtrDescriptor
   = WeakPtrDescriptor
-  { wpdKey          :: Atom
-  , wpdValue        :: Maybe Atom -- live or dead
-  , wpdFinalizer    :: Maybe Atom -- closure
-  , wpdCFinalizers  :: [(Atom, Maybe Atom, Atom)] -- fun, env ptr, data ptr
+  { wpdKey         :: Atom
+  , wpdValue       :: Maybe Atom -- live or dead
+  , wpdFinalizer   :: Maybe Atom -- closure
+  , wpdCFinalizers :: [(Atom, Maybe Atom, Atom)] -- fun, env ptr, data ptr
   }
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data MVarDescriptor
   = MVarDescriptor
-  { mvdValue    :: Maybe Atom
-  , mvdQueue    :: [Int] -- thread id, blocking in this mvar ; this is required only for the fairness ; INVARIANT: BlockedOnReads are present at the beginning of the queue
+  { mvdValue :: Maybe Atom
+  , mvdQueue :: [Int] -- thread id, blocking in this mvar ; this is required only for the fairness ; INVARIANT: BlockedOnReads are present at the beginning of the queue
   }
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data TVarDescriptor
   = TVarDescriptor
-  { tvdValue  :: Atom
-  , tvdQueue  :: IntSet -- thread id, STM wake up queue
+  { tvdValue :: Atom
+  , tvdQueue :: IntSet -- thread id, STM wake up queue
   }
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 -- TODO: detect coercions during the evaluation
 data Atom     -- Q: should atom fit into a cpu register? A: yes
@@ -138,29 +191,30 @@ data Atom     -- Q: should atom fit into a cpu register? A: yes
   | LiftedUndefined
   | Rubbish
   | Unbinded          !Id -- program point that created this value (used for debug purposes)
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 type ReturnValue = [Atom]
 
 newtype CutShow a = CutShow {getCutShowItem :: a}
-  deriving (Eq, Ord)
+  deriving stock (Eq, Ord)
 
 instance Show (CutShow a) where
+  show :: CutShow a -> String
   show _ = "<cut-show>"
 
 data HeapObject
   = Con
-    { hoIsLNE       :: Bool
-    , hoCon         :: DC
-    , hoConArgs     :: [Atom]
+    { hoIsLNE   :: Bool
+    , hoCon     :: DC
+    , hoConArgs :: [Atom]
     }
   | Closure
-    { hoIsLNE       :: Bool
-    , hoName        :: Id
-    , hoCloBody     :: CutShow StgRhsClosure
-    , hoEnv         :: Env    -- local environment ; with live variables only, everything else is pruned
-    , hoCloArgs     :: [Atom]
-    , hoCloMissing  :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
+    { hoIsLNE      :: Bool
+    , hoName       :: Id
+    , hoCloBody    :: CutShow StgRhsClosure
+    , hoEnv        :: Env    -- local environment ; with live variables only, everything else is pruned
+    , hoCloArgs    :: [Atom]
+    , hoCloMissing :: Int    -- HINT: this is a Thunk if 0 arg is missing ; if all is missing then Fun ; Pap is some arg is provided
     }
   | BlackHole -- NOTE: each blackhole has exactly one corresponding thread and one update frame
     { hoBHOwnerThreadId :: Int        -- owner thread id
@@ -168,11 +222,11 @@ data HeapObject
     , hoBHWaitQueue     :: [Int]      -- blocking queue of thread ids
     }
   | ApStack                   -- HINT: needed for the async exceptions
-    { hoResult      :: [Atom]
-    , hoStack       :: [StackContinuation]
+    { hoResult :: [Atom]
+    , hoStack  :: [StackContinuation]
     }
   | RaiseException Atom
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data StackContinuation
   -- basic block related
@@ -200,12 +254,12 @@ data StackContinuation
   | KeepAlive     !Atom
   -- ext stg interpreter debug related
   | DebugFrame    !DebugFrame             -- for debug purposes, it does not required for STG evaluation
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data DebugFrame
   = RestoreProgramPoint !(Maybe Id) !ProgramPoint
   | DisablePrimOpTrace
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data ScheduleReason
   = SR_ThreadFinished
@@ -213,7 +267,7 @@ data ScheduleReason
   | SR_ThreadFinishedFFICallback
   | SR_ThreadBlocked
   | SR_ThreadYield
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 {-
   Q: do we want homogeneous or heterogeneous Heap ; e.g. single intmap with mixed things or multiple intmaps/vector with multiple address spaces
@@ -221,35 +275,39 @@ data ScheduleReason
 
 newtype Printable a = Printable {unPrintable :: a}
 instance Show (Printable a) where
+  show :: Printable a -> String
   show _ = "Printable"
 
-newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a} deriving Eq
+newtype PrintableMVar a = PrintableMVar {unPrintableMVar :: MVar a}
+  deriving stock Eq
 instance Show (PrintableMVar a) where
+  show :: PrintableMVar a -> String
   show _ = "MVar"
 
 data DebuggerChan
   = DebuggerChan
-  { dbgSyncRequest    :: MVar DebugCommand
-  , dbgSyncResponse   :: MVar DebugOutput
-  , dbgAsyncEventIn   :: InChan DebugEvent
-  , dbgAsyncEventOut  :: OutChan DebugEvent
+  { dbgSyncRequest   :: MVar DebugCommand
+  , dbgSyncResponse  :: MVar DebugOutput
+  , dbgAsyncEventIn  :: InChan DebugEvent
+  , dbgAsyncEventOut :: OutChan DebugEvent
   }
-  deriving Eq
+  deriving stock Eq
 
 instance Show DebuggerChan where
+  show :: DebuggerChan -> String
   show _ = "DebuggerChan"
 
 data DebugEvent
   = DbgEventHitBreakpoint !Breakpoint
   | DbgEventStopped
-  deriving (Show)
+  deriving stock (Show)
 
 data Breakpoint
   = BkpStgPoint   StgPoint
   | BkpPrimOp     Name
   | BkpFFISymbol  Name
   | BkpCustom     Name
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 data DebugCommand
   = CmdListClosures
@@ -262,7 +320,7 @@ data DebugCommand
   | CmdPeekHeap         Addr
   | CmdStop
   | CmdInternal         String -- HINT: non-reified commands for quick experimentation
-  deriving (Show)
+  deriving stock (Show)
 
 data DebugOutput
   = DbgOutCurrentClosure  !(Maybe Id) !Addr !Env
@@ -274,27 +332,27 @@ data DebugOutput
   | DbgOutString          !String
   | DbgOutByteString      !ByteString
   | DbgOut
-  deriving (Show)
+  deriving stock (Show)
 
 data DebugState
   = DbgRunProgram
   | DbgStepByStep
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data TracingState
   = NoTracing
   | DoTracing
-    { thOriginDB          :: Handle
-    , thWholeProgramPath  :: Handle
+    { thOriginDB         :: Handle
+    , thWholeProgramPath :: Handle
     }
-  deriving (Show)
+  deriving stock (Show)
 
 data CallGraph
   = CallGraph
   { cgInterClosureCallGraph :: !(StrictMap.Map (StaticOrigin, ProgramPoint, ProgramPoint) Int)
   , cgIntraClosureCallGraph :: !(StrictMap.Map (ProgramPoint, StaticOrigin, ProgramPoint) Int)
   }
-  deriving (Show)
+  deriving stock (Show)
 
 joinCallGraph :: CallGraph -> CallGraph -> CallGraph
 joinCallGraph (CallGraph a1 b1) (CallGraph a2 b2) = CallGraph (StrictMap.unionWith (+) a1 a2) (StrictMap.unionWith (+) b1 b2)
@@ -311,7 +369,7 @@ type Env    = Map Id (StaticOrigin, Atom)   -- NOTE: must contain only the defin
 type Stack  = [StackContinuation]
 
 envToAtoms :: Env -> [Atom]
-envToAtoms = map snd . Map.elems
+envToAtoms = fmap snd . Map.elems
 
 data StaticOrigin
   = SO_CloArg
@@ -321,13 +379,13 @@ data StaticOrigin
   | SO_TopLevel
   | SO_Builtin
   | SO_ClosureResult
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
-data DebugSettings
+newtype DebugSettings
   = DebugSettings
   { dsKeepGCFacts :: Bool
   }
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 defaultDebugSettings :: DebugSettings
 defaultDebugSettings
@@ -336,54 +394,54 @@ defaultDebugSettings
   }
 
 newtype GCSymbol = GCSymbol {unGCSymbol :: ByteString}
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 data StgState
   = StgState
-  { ssHeap                :: !Heap
-  , ssStaticGlobalEnv     :: !Env   -- NOTE: top level bindings only!
-  , ssDynamicHeapStart    :: !Int
+  { ssHeap                  :: !Heap
+  , ssStaticGlobalEnv       :: !Env   -- NOTE: top level bindings only!
+  , ssDynamicHeapStart      :: !Int
 
   -- GC
-  , ssLastGCTime          :: !UTCTime
-  , ssLastGCAddr          :: !Int
-  , ssGCInput             :: PrintableMVar ([Atom], StgState)
-  , ssGCOutput            :: PrintableMVar RefSet
-  , ssGCIsRunning         :: Bool
-  , ssGCCounter           :: Int
-  , ssRequestMajorGC      :: Bool
-  , ssCAFSet              :: IntSet
+  , ssLastGCTime            :: !UTCTime
+  , ssLastGCAddr            :: !Int
+  , ssGCInput               :: PrintableMVar ([Atom], StgState)
+  , ssGCOutput              :: PrintableMVar RefSet
+  , ssGCIsRunning           :: Bool
+  , ssGCCounter             :: Int
+  , ssRequestMajorGC        :: Bool
+  , ssCAFSet                :: IntSet
 
   -- let-no-escape support
-  , ssTotalLNECount       :: !Int
+  , ssTotalLNECount         :: !Int
 
   -- string constants ; models the program memory's static constant region
   -- HINT: the value is a PtrAtom that points to the key BS's content
-  , ssCStringConstants    :: Map ByteString Atom
+  , ssCStringConstants      :: Map ByteString Atom
 
   -- threading
-  , ssThreads             :: IntMap ThreadState
+  , ssThreads               :: IntMap ThreadState
 
   -- thread scheduler related
-  , ssCurrentThreadId     :: Int
-  , ssScheduledThreadIds  :: [Int]  -- HINT: one round
-  , ssThreadStepBudget    :: !Int
+  , ssCurrentThreadId       :: Int
+  , ssScheduledThreadIds    :: [Int]  -- HINT: one round
+  , ssThreadStepBudget      :: !Int
 
   -- primop related
 
-  , ssStableNameMap       :: Map Atom Int
-  , ssWeakPointers        :: IntMap WeakPtrDescriptor
-  , ssStablePointers      :: IntMap Atom
-  , ssMutableByteArrays   :: IntMap ByteArrayDescriptor
-  , ssMVars               :: IntMap MVarDescriptor
-  , ssTVars               :: IntMap TVarDescriptor
-  , ssMutVars             :: IntMap Atom
-  , ssArrays              :: IntMap (Vector Atom)
-  , ssMutableArrays       :: IntMap (Vector Atom)
-  , ssSmallArrays         :: IntMap (Vector Atom)
-  , ssSmallMutableArrays  :: IntMap (Vector Atom)
-  , ssArrayArrays         :: IntMap (Vector Atom)
-  , ssMutableArrayArrays  :: IntMap (Vector Atom)
+  , ssStableNameMap         :: Map Atom Int
+  , ssWeakPointers          :: IntMap WeakPtrDescriptor
+  , ssStablePointers        :: IntMap Atom
+  , ssMutableByteArrays     :: IntMap ByteArrayDescriptor
+  , ssMVars                 :: IntMap MVarDescriptor
+  , ssTVars                 :: IntMap TVarDescriptor
+  , ssMutVars               :: IntMap Atom
+  , ssArrays                :: IntMap (Vector Atom)
+  , ssMutableArrays         :: IntMap (Vector Atom)
+  , ssSmallArrays           :: IntMap (Vector Atom)
+  , ssSmallMutableArrays    :: IntMap (Vector Atom)
+  , ssArrayArrays           :: IntMap (Vector Atom)
+  , ssMutableArrayArrays    :: IntMap (Vector Atom)
 
   , ssNextThreadId          :: !Int
   , ssNextHeapAddr          :: {-# UNPACK #-} !Int
@@ -402,71 +460,71 @@ data StgState
   , ssNextMutableArrayArray :: !Int
 
   -- FFI related
-  , ssCBitsMap            :: DL
-  , ssStateStore          :: PrintableMVar StgState
+  , ssCBitsMap              :: DL
+  , ssStateStore            :: PrintableMVar StgState
 
   -- FFI + createAdjustor
-  , ssCWrapperHsTypeMap   :: !(Map Name (Bool, Name, [Name]))
+  , ssCWrapperHsTypeMap     :: !(Map Name (Bool, Name, [Name]))
 
   -- RTS related
-  , ssRtsSupport          :: Rts
+  , ssRtsSupport            :: Rts
 
   -- debug
-  , ssIsQuiet             :: Bool
-  , ssLocalEnv            :: [Atom]
-  , ssCurrentClosureEnv   :: Env
-  , ssCurrentClosure      :: Maybe Id
-  , ssCurrentClosureAddr  :: Int
-  , ssExecutedClosures    :: !(Set Int)
-  , ssExecutedClosureIds  :: !(Set Id)
-  , ssExecutedPrimOps     :: !(Set Name)
-  , ssExecutedFFI         :: !(Set ForeignCall)
-  , ssExecutedPrimCalls   :: !(Set PrimCall)
-  , ssClosureCallCounter  :: !Int
-  , ssPrimOpTrace         :: !Bool
+  , ssIsQuiet               :: Bool
+  , ssLocalEnv              :: [Atom]
+  , ssCurrentClosureEnv     :: Env
+  , ssCurrentClosure        :: Maybe Id
+  , ssCurrentClosureAddr    :: Int
+  , ssExecutedClosures      :: !(Set Int)
+  , ssExecutedClosureIds    :: !(Set Id)
+  , ssExecutedPrimOps       :: !(Set Name)
+  , ssExecutedFFI           :: !(Set ForeignCall)
+  , ssExecutedPrimCalls     :: !(Set PrimCall)
+  , ssClosureCallCounter    :: !Int
+  , ssPrimOpTrace           :: !Bool
 
   -- call graph
-  , ssCallGraph           :: !CallGraph
-  , ssCurrentProgramPoint :: !ProgramPoint
+  , ssCallGraph             :: !CallGraph
+  , ssCurrentProgramPoint   :: !ProgramPoint
 
   -- debugger API
-  , ssDebuggerChan        :: DebuggerChan
+  , ssDebuggerChan          :: DebuggerChan
 
-  , ssEvaluatedClosures   :: !(Set Name)
-  , ssBreakpoints         :: !(Map Breakpoint Int)
-  , ssStepCounter         :: !Int
-  , ssDebugFuel           :: !(Maybe Int)
-  , ssDebugState          :: DebugState
-  , ssStgErrorAction      :: Printable (M ())
+  , ssEvaluatedClosures     :: !(Set Name)
+  , ssBreakpoints           :: !(Map Breakpoint Int)
+  , ssStepCounter           :: !Int
+  , ssDebugFuel             :: !(Maybe Int)
+  , ssDebugState            :: DebugState
+  , ssStgErrorAction        :: Printable (M ())
 
   -- region tracker
-  , ssMarkers             :: !(Map Name (Set Region))
-  , ssRegionStack         :: !(Map (Int, Region) [(Int, AddressState, CallGraph)]) -- HINT: key = threadId + region ; value = index + start + call-graph
-  , ssRegionInstances     :: !(Map Region (IntMap (AddressState, AddressState))) -- region => instance-index => start end
-  , ssRegionCounter       :: !(Map Region Int)
+  , ssMarkers               :: !(Map Name (Set Region))
+  , ssRegionStack           :: !(Map (Int, Region) [(Int, AddressState, CallGraph)]) -- HINT: key = threadId + region ; value = index + start + call-graph
+  , ssRegionInstances       :: !(Map Region (IntMap (AddressState, AddressState))) -- region => instance-index => start end
+  , ssRegionCounter         :: !(Map Region Int)
 
   -- retainer db
-  , ssReferenceMap        :: !(Map GCSymbol (Set GCSymbol))
-  , ssRetainerMap         :: !(Map GCSymbol (Set GCSymbol))
-  , ssGCRootSet           :: !(Set GCSymbol)
+  , ssReferenceMap          :: !(Map GCSymbol (Set GCSymbol))
+  , ssRetainerMap           :: !(Map GCSymbol (Set GCSymbol))
+  , ssGCRootSet             :: !(Set GCSymbol)
 
   -- tracing
-  , ssTracingState        :: TracingState
+  , ssTracingState          :: TracingState
 
   -- origin db
-  , ssOrigin              :: !(IntMap (Id, Int, Int)) -- HINT: closure, closure address, thread id
+  , ssOrigin                :: !(IntMap (Id, Int, Int)) -- HINT: closure, closure address, thread id
 
   -- GC marker
-  , ssGCMarkers           :: ![AddressState]
+  , ssGCMarkers             :: ![AddressState]
 
   -- tracing primops
-  , ssTraceEvents         :: ![(String, AddressState)]
-  , ssTraceMarkers        :: ![(String, Int, AddressState)]
+  , ssTraceEvents           :: ![(String, AddressState)]
+  , ssTraceMarkers          :: ![(String, Int, AddressState)]
 
   -- internal dev mode debug settings
-  , ssDebugSettings       :: DebugSettings
+  , ssDebugSettings         :: DebugSettings
   }
-  deriving (Show)
+  deriving stock (Show)
 
 -- for the primop tests
 fakeStgStateForPrimopTests :: StgState
@@ -609,59 +667,59 @@ emptyStgState now isQuiet stateStore dl dbgChan dbgState tracingState debugSetti
 data Rts
   = Rts
   -- data constructors needed for FFI argument boxing from the base library
-  { rtsCharCon      :: DataCon
-  , rtsIntCon       :: DataCon
-  , rtsInt8Con      :: DataCon
-  , rtsInt16Con     :: DataCon
-  , rtsInt32Con     :: DataCon
-  , rtsInt64Con     :: DataCon
-  , rtsWordCon      :: DataCon
-  , rtsWord8Con     :: DataCon
-  , rtsWord16Con    :: DataCon
-  , rtsWord32Con    :: DataCon
-  , rtsWord64Con    :: DataCon
-  , rtsPtrCon       :: DataCon
-  , rtsFunPtrCon    :: DataCon
-  , rtsFloatCon     :: DataCon
-  , rtsDoubleCon    :: DataCon
-  , rtsStablePtrCon :: DataCon
-  , rtsTrueCon      :: DataCon
-  , rtsFalseCon     :: DataCon
+  { rtsCharCon                         :: DataCon
+  , rtsIntCon                          :: DataCon
+  , rtsInt8Con                         :: DataCon
+  , rtsInt16Con                        :: DataCon
+  , rtsInt32Con                        :: DataCon
+  , rtsInt64Con                        :: DataCon
+  , rtsWordCon                         :: DataCon
+  , rtsWord8Con                        :: DataCon
+  , rtsWord16Con                       :: DataCon
+  , rtsWord32Con                       :: DataCon
+  , rtsWord64Con                       :: DataCon
+  , rtsPtrCon                          :: DataCon
+  , rtsFunPtrCon                       :: DataCon
+  , rtsFloatCon                        :: DataCon
+  , rtsDoubleCon                       :: DataCon
+  , rtsStablePtrCon                    :: DataCon
+  , rtsTrueCon                         :: DataCon
+  , rtsFalseCon                        :: DataCon
 
   -- closures used by FFI wrapper code ; heap address of the closure
-  , rtsUnpackCString              :: Atom
-  , rtsTopHandlerRunIO            :: Atom
-  , rtsTopHandlerRunNonIO         :: Atom
-  , rtsTopHandlerFlushStdHandles  :: Atom
+  -- , rtsUnpackCString                   :: Atom
+  , rtsTopHandlerRunIO                 :: Atom
+  , rtsTopHandlerRunNonIO              :: Atom
+  , rtsTopHandlerFlushStdHandles       :: Atom
 
   -- closures used by the exception primitives
-  , rtsDivZeroException   :: Atom
-  , rtsUnderflowException :: Atom
-  , rtsOverflowException  :: Atom
+  , rtsDivZeroException                :: Atom
+  , rtsUnderflowException              :: Atom
+  , rtsOverflowException               :: Atom
 
   -- closures used by the STM primitives
-  , rtsNestedAtomically   :: Atom -- (exception)
+  , rtsNestedAtomically                :: Atom -- (exception)
 
   -- closures used by the GC deadlock detection
-  , rtsBlockedIndefinitelyOnMVar  :: Atom -- (exception)
-  , rtsBlockedIndefinitelyOnSTM   :: Atom -- (exception)
-  , rtsNonTermination             :: Atom -- (exception)
+  , rtsBlockedIndefinitelyOnMVar       :: Atom -- (exception)
+  , rtsBlockedIndefinitelyOnSTM        :: Atom -- (exception)
+  , rtsNonTermination                  :: Atom -- (exception)
 
   -- rts helper custom closures
-  , rtsApplyFun1Arg :: Atom
-  , rtsTuple2Proj0  :: Atom
+  , rtsApplyFun1Arg                    :: Atom
+  , rtsTuple2Proj0                     :: Atom
 
   -- builtin special store, see FFI (i.e. getOrSetGHCConcSignalSignalHandlerStore)
-  , rtsGlobalStore  :: Map Name Atom
+  , rtsGlobalStore                     :: Map Name Atom
 
   -- program contants
-  , rtsProgName     :: String
-  , rtsProgArgs     :: [String]
+  , rtsProgName                        :: String
+  , rtsProgArgs                        :: [String]
 
   -- native C data symbols
-  , rtsDataSymbol_enabled_capabilities  :: Ptr CInt
+  , rtsDataSymbol_enabled_capabilities :: Ptr CInt
   }
-  deriving (Show)
+  deriving stock (Show)
 
 type M = StateT StgState IO
 
@@ -688,7 +746,7 @@ stackPush sc = do
 stackPop :: M (Maybe StackContinuation)
 stackPop = do
   let tailFun ts@ThreadState{..} = ts {tsStack = drop 1 tsStack}
-  Just ts@ThreadState{..} <- state $ \s@StgState{..} ->
+  Just ThreadState{..} <- state $ \s@StgState{..} ->
     ( IntMap.lookup ssCurrentThreadId ssThreads
     , s {ssThreads = IntMap.adjust tailFun ssCurrentThreadId ssThreads}
     )
@@ -700,7 +758,7 @@ stackPop = do
 
 freshHeapAddress :: HasCallStack => M Addr
 freshHeapAddress = do
-  limit <- gets ssNextHeapAddr
+  _limit <- gets ssNextHeapAddr
   state $ \s@StgState{..} -> (ssNextHeapAddr, s {ssNextHeapAddr = succ ssNextHeapAddr})
 
 allocAndStore :: HasCallStack => HeapObject -> M Addr
@@ -743,16 +801,15 @@ stgErrorM :: HasCallStack => String -> M a
 stgErrorM msg = do
   tid <- gets ssCurrentThreadId
   liftIO $ do
-    putStrLn $ " * stgErrorM: " ++ show msg
     putStrLn $ "current thread id: " ++ show tid
   reportThread tid
   curClosure <- gets ssCurrentClosure
   liftIO $ do
+    putStrLn $ " * stgErrorM: " ++ show msg
     putStrLn $ "current closure: " ++ show curClosure
     putStrLn $ " * native estgi call stack:"
     putStrLn $ prettyCallStack callStack
-  action <- unPrintable <$> gets ssStgErrorAction
-  action
+  void $ unPrintable <$> gets ssStgErrorAction
   error "stgErrorM"
 
 addBinderToEnv :: StaticOrigin -> Binder -> Atom -> Env -> Env
@@ -762,7 +819,7 @@ addZippedBindersToEnv :: StaticOrigin -> [(Binder, Atom)] -> Env -> Env
 addZippedBindersToEnv so bvList env = foldl' (\e (b, v) -> Map.insert (Id b) (so, v) e) env bvList
 
 addManyBindersToEnv :: StaticOrigin -> [Binder] -> [Atom] -> Env -> Env
-addManyBindersToEnv so [] [] env = env
+addManyBindersToEnv _  [] [] env = env
 addManyBindersToEnv so (b : binders) (v : values) env = addManyBindersToEnv so binders values $ Map.insert (Id b) (so, v) env
 addManyBindersToEnv so (b : binders) values env = addManyBindersToEnv so binders values $ Map.insert (Id b) (so, Unbinded (Id b)) env
 addManyBindersToEnv so binders values _env = error $ "addManyBindersToEnv - length mismatch: " ++ show (so, [(Id b, binderType b, binderTypeSig b) | b <- binders], values)
@@ -776,12 +833,12 @@ lookupEnvSO localEnv b = do
     Just a  -> pure a
     Nothing -> case binderUniqueName b of
       -- HINT: GHC.Prim module does not exist it's a wired in module
-      "ghc-prim_GHC.Prim.void#"           -> pure (SO_Builtin, Void)
-      "ghc-prim_GHC.Prim.realWorld#"      -> pure (SO_Builtin, Void)
-      "ghc-prim_GHC.Prim.coercionToken#"  -> pure (SO_Builtin, Void)
-      "ghc-prim_GHC.Prim.proxy#"          -> pure (SO_Builtin, Void)
-      "ghc-prim_GHC.Prim.(##)"            -> pure (SO_Builtin, Void)
-      _ -> stgErrorM $ "unknown variable: " ++ show b
+      "ghc-prim_GHC.Prim.void#"          -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.realWorld#"     -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.coercionToken#" -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.proxy#"         -> pure (SO_Builtin, Void)
+      "ghc-prim_GHC.Prim.(##)"           -> pure (SO_Builtin, Void)
+      _                                  -> stgErrorM $ "unknown variable: " ++ show b
 
 lookupEnv :: HasCallStack => Env -> Binder -> M Atom
 lookupEnv localEnv b = snd <$> lookupEnvSO localEnv b
@@ -802,7 +859,7 @@ readHeapCon a = readHeap a >>= \o -> case o of
 readHeapClosure :: HasCallStack => Atom -> M HeapObject
 readHeapClosure a = readHeap a >>= \o -> case o of
     Closure{} -> pure o
-    _ -> stgErrorM $ "expected closure but got: "-- ++ show o
+    _         -> stgErrorM $ "expected closure but got: "-- ++ show o
 
 -- primop related
 
@@ -923,7 +980,7 @@ markClosure :: Name -> M ()
 markClosure n = modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = setInsert n ssEvaluatedClosures}
 
 markExecuted :: Int -> M ()
-markExecuted i = pure () -- modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
+markExecuted _ = pure () -- modify' $ \s@StgState{..} -> s {ssExecutedClosures = setInsert i ssExecutedClosures}
 
 markExecutedId :: Id -> M ()
 markExecutedId i = modify' $ \s@StgState{..} -> s {ssExecutedClosureIds = setInsert i ssExecutedClosureIds}
@@ -965,7 +1022,7 @@ addIntraClosureCallGraphEdge from so to = do
     }
 
 setProgramPoint :: ProgramPoint -> M ()
-setProgramPoint pp = modify' $ \s@StgState{..} -> s {ssCurrentProgramPoint = pp}
+setProgramPoint pp = modify' $ \s -> s {ssCurrentProgramPoint = pp}
 
 -- string constants
 -- NOTE: the string gets extended with a null terminator
@@ -984,24 +1041,24 @@ getCStringConstantPtrAtom key = do
 ---------------------------------------------
 -- stm
 
-promptM :: IO () -> M ()
+promptM :: HasCallStack => IO () -> M ()
 promptM ioAction = do
   isQuiet <- gets ssIsQuiet
-  tid <- gets ssCurrentThreadId
+  -- tid <- gets ssCurrentThreadId
   pp <- gets ssCurrentProgramPoint
-  cc <- gets ssCurrentClosure
-  tsList <- gets $ IntMap.toList . ssThreads
+  _cc <- gets ssCurrentClosure
+  -- tsList <- gets $ IntMap.toList . ssThreads
   liftIO . unless isQuiet $ do
-    now <- getCurrentTime
-    putStrLn $ "  now           = " ++ show now
-    putStrLn $ "  tid           = " ++ show tid ++ "    thread status list: " ++ show [(tid, tsStatus ts) | (tid, ts) <- tsList]
+    -- now <- getCurrentTime
+    -- putStrLn $ "  now           = " ++ show now
+    -- putStrLn $ "  tid           = " ++ show tid ++ "    thread status list: " ++ show [(tid', tsStatus ts) | (tid', ts) <- tsList]
     putStrLn $ "  program point = " ++ show pp
     ioAction
     --putStrLn "[press enter]"
     --getLine
     pure ()
 
-promptM_ :: M () -> M ()
+promptM_ :: HasCallStack => M () -> M ()
 promptM_ ioAction = do
   isQuiet <- gets ssIsQuiet
   unless isQuiet $ do
@@ -1012,10 +1069,10 @@ promptM_ ioAction = do
 
 data TLogEntry
   = TLogEntry
-  { tleObservedGlobalValue  :: !Atom
-  , tleCurrentLocalValue    :: !Atom
+  { tleObservedGlobalValue :: !Atom
+  , tleCurrentLocalValue   :: !Atom
   }
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 type TLog = IntMap TLogEntry
 
@@ -1049,7 +1106,7 @@ unsubscribeTVarWaitQueues tid tlog = do
 data AsyncExceptionMask
   = NotBlocked
   | Blocked     {isInterruptible :: !Bool}
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 data ThreadState
   = ThreadState
@@ -1068,7 +1125,7 @@ data ThreadState
   , tsActiveTLog        :: !(Maybe TLog) -- elems: (global value, local value)
   , tsTLogStack         :: ![TLog]
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 -- thread operations
 
@@ -1179,14 +1236,14 @@ data BlockReason
   | BlockedOnRead         Int       -- file descriptor
   | BlockedOnWrite        Int       -- file descriptor
   | BlockedOnDelay        UTCTime   -- target time to wake up thread
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 data ThreadStatus
   = ThreadRunning
   | ThreadBlocked   BlockReason
   | ThreadFinished  -- RTS name: ThreadComplete
   | ThreadDied      -- RTS name: ThreadKilled
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 isThreadLive :: ThreadStatus -> Bool
 isThreadLive = \case
@@ -1288,7 +1345,7 @@ reportThread tid = do
 reportThreadIO :: Int -> ThreadState -> IO ()
 reportThreadIO tid endTS = do
     putStrLn ""
-    putStrLn $ show ("tid", tid, "tsStatus", tsStatus endTS)
+    print ("tid" :: String, tid, "tsStatus" :: String, tsStatus endTS)
     Text.putStrLn $ pShowNoColor endTS
     putStrLn ""
 
@@ -1302,21 +1359,21 @@ showStackCont = \case
 
 data RefSet
   = RefSet
-  { rsHeap                :: !IntSet
-  , rsWeakPointers        :: !IntSet
-  , rsTVars               :: !IntSet
-  , rsMVars               :: !IntSet
-  , rsMutVars             :: !IntSet
-  , rsArrays              :: !IntSet
-  , rsMutableArrays       :: !IntSet
-  , rsSmallArrays         :: !IntSet
-  , rsSmallMutableArrays  :: !IntSet
-  , rsArrayArrays         :: !IntSet
-  , rsMutableArrayArrays  :: !IntSet
-  , rsMutableByteArrays   :: !IntSet
-  , rsStableNames         :: !IntSet
-  , rsStablePointers      :: !IntSet
-  , rsThreads             :: !IntSet
+  { rsHeap               :: !IntSet
+  , rsWeakPointers       :: !IntSet
+  , rsTVars              :: !IntSet
+  , rsMVars              :: !IntSet
+  , rsMutVars            :: !IntSet
+  , rsArrays             :: !IntSet
+  , rsMutableArrays      :: !IntSet
+  , rsSmallArrays        :: !IntSet
+  , rsSmallMutableArrays :: !IntSet
+  , rsArrayArrays        :: !IntSet
+  , rsMutableArrayArrays :: !IntSet
+  , rsMutableByteArrays  :: !IntSet
+  , rsStableNames        :: !IntSet
+  , rsStablePointers     :: !IntSet
+  , rsThreads            :: !IntSet
   }
 
 emptyRefSet :: RefSet
@@ -1357,7 +1414,7 @@ data AddressState
   , asNextArrayArray        :: !Int
   , asNextMutableArrayArray :: !Int
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 emptyAddressState :: AddressState
 emptyAddressState = AddressState
@@ -1409,7 +1466,7 @@ data Region
   | EventRegion
   { regionName  :: Name
   }
-  deriving (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show)
 
 -- let-no-escape statistics
 markLNE :: [Addr] -> M ()
@@ -1423,7 +1480,7 @@ data ProgramPoint
   = PP_Global
   | PP_Apply      Int ProgramPoint
   | PP_StgPoint   StgPoint
-  deriving (Eq, Ord, Read, Show)
+  deriving stock (Eq, Ord, Read, Show)
 
 dumpStgState :: M ()
 dumpStgState = do
@@ -1492,7 +1549,7 @@ wakeupBlackHoleQueueThreads addr = readHeap (HeapPtr addr) >>= \case
     forM_ hoBHWaitQueue $ \waitingTid -> do
       waitingTS <- getThreadState waitingTid
       case tsStatus waitingTS of
-        ThreadBlocked (BlockedOnBlackHole dstAddr) -> do
+        ThreadBlocked (BlockedOnBlackHole _dstAddr) -> do
           updateThreadState waitingTid (waitingTS {tsStatus = ThreadRunning})
         _ -> error $ "internal error - invalid thread status: " ++ show (tsStatus waitingTS)
   x -> error $ "internal error - expected BlackHole, got: " ++ show x

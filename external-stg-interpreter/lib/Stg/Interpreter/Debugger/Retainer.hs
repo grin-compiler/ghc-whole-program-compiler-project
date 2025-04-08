@@ -1,29 +1,41 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
 module Stg.Interpreter.Debugger.Retainer
  ( exportRetainerGraph
 -- , exportRetainerDominatorTree
  ) where
 
-import Control.Monad.Writer
-import Control.Monad.State
-import Data.Maybe
-import Data.Bimap ( Bimap )
-import qualified Data.Bimap as Bimap
-import Data.Map (Map)
-import Data.Set (Set)
-import Data.IntMap.Strict (IntMap)
-import Data.IntSet (IntSet)
-import qualified Data.Set as Set
-import qualified Data.IntSet as IntSet
-import qualified Data.IntMap.Strict as IntMap
-import qualified Data.Map as Map
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Graph.Dom as Graph
-import System.IO
-import Stg.Interpreter.Base
-import Stg.Interpreter.GC.GCRef
-import Stg.Interpreter.GC.LiveDataAnalysis
-import Stg.Interpreter.Debugger.TraverseState
+import           Control.Applicative                    (Applicative (..))
+import           Control.Monad                          (forM_, when)
+import           Control.Monad.State                    (MonadState (..), StateT, evalStateT, execStateT, gets, modify')
+import           Control.Monad.Writer                   (MonadIO (..), MonadWriter (..), execWriter)
+
+import           Data.Bimap                             (Bimap)
+import qualified Data.Bimap                             as Bimap
+import           Data.Bool                              (Bool (..), not, otherwise)
+import qualified Data.ByteString.Char8                  as BS8
+import           Data.Function                          (flip, id, ($), (.))
+import           Data.Int                               (Int)
+import           Data.IntMap.Strict                     (IntMap)
+import qualified Data.IntMap.Strict                     as IntMap
+import           Data.IntSet                            (IntSet)
+import qualified Data.IntSet                            as IntSet
+import           Data.List                              (drop, (++))
+import           Data.Map                               (Map)
+import qualified Data.Map                               as Map
+import           Data.Maybe                             (Maybe (..), mapMaybe, maybe)
+import           Data.Monoid                            (Monoid (..))
+import           Data.Set                               (Set)
+import qualified Data.Set                               as Set
+import           Data.String                            (String)
+
+import           Stg.Interpreter.Base                   (GCSymbol (..), StgState (..))
+import           Stg.Interpreter.Debugger.TraverseState (getHeapObjectCategory, getHeapObjectSummary)
+import           Stg.Interpreter.GC.GCRef               (RefNamespace (..), decodeRef)
+import           Stg.Interpreter.GC.LiveDataAnalysis    (withGCRootFacts, withReferenceFacts)
+
+import           System.IO                              (FilePath, Handle, IO, IOMode (..), hPutStr, print, withFile)
+
+import           Text.Show                              (Show (..))
+
 
 
 data RetainerState
@@ -61,25 +73,24 @@ exportRetainerGraph nodesFname edgesFname stgState root = do
   let gcRootSet :: Map GCSymbol String
       gcRootSet = execWriter $ withGCRootFacts stgState (ssLocalEnv stgState) $ \msg s -> tell $ Map.singleton s msg
 
-  withFile edgesFname WriteMode $ \hEdge -> do
-    withFile nodesFname WriteMode $ \hNode -> do
-      BS8.hPutStrLn hNode $ BS8.intercalate "\t"
-        [ "Id"
-        , "Label"
-        , "partition2"
-        ]
-      BS8.hPutStrLn hEdge $ BS8.intercalate "\t"
-        [ "Source"
-        , "Target"
-        , "partition2"
-        ]
-      flip evalStateT Set.empty . addEdgesFrom hNode hEdge stgState gcRootSet root True $ \case
-        source
-          | Just i <- Bimap.lookup source rsNodeMap
-          , Just edges <- IntMap.lookup i rsGraph
-          -> catMaybes $ map (flip Bimap.lookupR rsNodeMap) $ IntSet.toList edges
-          | otherwise
-          -> []
+  withFile edgesFname WriteMode $ \hEdge -> withFile nodesFname WriteMode $ \hNode -> do
+    BS8.hPutStrLn hNode $ BS8.intercalate "\t"
+      [ "Id"
+      , "Label"
+      , "partition2"
+      ]
+    BS8.hPutStrLn hEdge $ BS8.intercalate "\t"
+      [ "Source"
+      , "Target"
+      , "partition2"
+      ]
+    flip evalStateT Set.empty . addEdgesFrom hNode hEdge stgState gcRootSet root True $ \case
+      source
+        | Just i <- Bimap.lookup source rsNodeMap
+        , Just edges <- IntMap.lookup i rsGraph
+        -> (mapMaybe (`Bimap.lookupR` rsNodeMap) (IntSet.toList edges))
+        | otherwise
+        -> []
 
   pure ()
 
@@ -109,8 +120,7 @@ addEdgesFrom hNode hEdge stgState@StgState{..} gcRootSet source isRoot getEdges 
       BS8.hPut hNode "\t"
       hPutStr hNode $
         (if isRoot then ("Root " ++) else id) $
-        (maybe id (\msg str -> "GCRoot " ++ msg ++ " " ++ str) $ Map.lookup source gcRootSet) $
-        nodeLabel
+        maybe id (\msg str -> "GCRoot " ++ msg ++ " " ++ str) (Map.lookup source gcRootSet) nodeLabel
       BS8.hPut hNode "\t"
       hPutStr hNode nodeCategory
       BS8.hPut hNode "\n"

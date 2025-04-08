@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, TupleSections, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings #-}
+
 module Stg.DeadFunctionElimination.Facts where
 
 import Data.Map (Map)
@@ -29,7 +30,7 @@ writeDfeFacts prefixPath Module{..} = do
       getTopBinders :: TopBinding -> [Binder]
       getTopBinders = \case
         StgTopLifted (StgNonRec b _)  -> [b]
-        StgTopLifted (StgRec bs)      ->  map fst bs
+        StgTopLifted (StgRec bs)      ->  fmap fst bs
         StgTopStringLit b _           -> [b]
 
       topBinders :: [Binder]
@@ -89,7 +90,7 @@ writeDfeFacts prefixPath Module{..} = do
       visitBinding :: Name -> Binding -> IO ()
       visitBinding fun = \case
         StgNonRec _ rhs -> visitRhs fun rhs
-        StgRec    l     -> mapM_ (visitRhs fun) $ map snd l
+        StgRec    l     -> mapM_ (visitRhs fun) $ fmap snd l
 
       visitRhs :: Name -> Rhs -> IO ()
       visitRhs fun = \case

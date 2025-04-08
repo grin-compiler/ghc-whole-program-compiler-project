@@ -1,12 +1,24 @@
-import Control.Monad
-import Data.List
+import           Control.Applicative         (Applicative (..), (<$>))
+import           Control.Monad
 
-import Options.Applicative
-import qualified Data.ByteString.Lazy as BSL
-import qualified Data.Text.IO as T
+import           Data.Bool                   (not)
+import qualified Data.ByteString.Lazy        as BSL
+import           Data.Function               (($), (.))
+import           Data.List                   (isSuffixOf)
+import           Data.Monoid                 (Monoid (..), (<>))
+import           Data.String                 (String)
+import qualified Data.Text.IO                as T
+import           Data.Tuple                  (fst)
 
-import Stg.Pretty
-import Stg.IO
+import           Options.Applicative         (CommandFields, InfoMod, Mod, Parser)
+import           Options.Applicative.Builder (argument, command, help, info, long, metavar, progDesc, str, subparser,
+                                              switch)
+import           Options.Applicative.Extra   (execParser, helper)
+
+import           Stg.IO                      (decodeStgbin, modpakStgbinPath, readModpakL)
+import           Stg.Pretty                  (Config (..), pShowWithConfig, pprModule)
+
+import           System.IO                   (FilePath, IO)
 
 modes :: Parser (IO ())
 modes = subparser
@@ -25,9 +37,9 @@ modes = subparser
       where
         run fname hideTickish = do
             dump <- case () of
-              _ | isSuffixOf "modpak" fname -> Stg.IO.readModpakL fname modpakStgbinPath decodeStgbin
-              _ | isSuffixOf "stgbin" fname -> decodeStgbin <$> BSL.readFile fname
-              _ -> fail "unknown file format"
+              _ | "modpak" `isSuffixOf` fname -> readModpakL fname modpakStgbinPath decodeStgbin
+              _ | "stgbin" `isSuffixOf` fname -> decodeStgbin <$> BSL.readFile fname
+              _                               -> fail "unknown file format"
             let cfg = Config
                   { cfgPrintTickish = not hideTickish
                   }

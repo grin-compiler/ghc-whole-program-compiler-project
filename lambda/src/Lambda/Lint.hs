@@ -27,13 +27,13 @@ lintLambda prg@Program{..} = do
                   , Set.fromList [sName | StaticData{..} <- pStaticData]
                   ]
       unknown = Set.difference envUse known
-  --printf "node pats:\n%s" . unlines . map tab $ Set.toList envCon
+  --printf "node pats:\n%s" . unlines . fmap tab $ Set.toList envCon
 
-  printf "unknown:\n%s" . unlines . map tab $ Set.toList unknown
-  printf "errors:\n%s" . unlines . map tab $ Set.toList envErr
-  --printf "unused:\n%s" . unlines . map show $ Set.toList (Set.difference envDef envUse)
+  printf "unknown:\n%s" . unlines . fmap tab $ Set.toList unknown
+  printf "errors:\n%s" . unlines . fmap tab $ Set.toList envErr
+  --printf "unused:\n%s" . unlines . fmap show $ Set.toList (Set.difference envDef envUse)
   let duplicates = [n | (n,i) <- Map.toList envDef, i > 1]
-  printf "duplicates:\n%s" . unlines . map tab $ duplicates
+  printf "duplicates:\n%s" . unlines . fmap tab $ duplicates
 
 data Env
   = Env
@@ -54,7 +54,7 @@ env = Env
   }
 
 addDef n = Map.singleton n 1
-addDefs ns = Map.unionsWith (+) $ map addDef ns
+addDefs ns = Map.unionsWith (+) $ fmap addDef ns
 
 addNames ns = Set.fromList ns
 
@@ -64,7 +64,7 @@ test = cata folder where
     VarF name         -> env {envUse = Set.singleton name}
     AppF name args    -> env {envUse = addNames $ name : args}
     -- def
-    DefF name args e  -> env {envDef = addDefs $ name : map fst args} <> e
+    DefF name args e  -> env {envDef = addDefs $ name : fmap fst args} <> e
     LetRecF binds e   -> mconcat [env {envDef = addDef name} <> a | (name, _, a) <- binds] <> e
     LetSF binds e     -> mconcat [env {envDef = addDef name} <> a | (name, _, a) <- binds] <> e
     LetF binds e      -> mconcat [env {envDef = addDef name} <> a | (name, _, a) <- binds] <> e

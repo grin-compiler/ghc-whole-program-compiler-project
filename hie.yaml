@@ -1,0 +1,28 @@
+cradle:
+  cabal:
+    - path: "external-stg/lib"
+      component: "lib:external-stg"
+
+    - path: "external-stg/app/ext-stg.hs"
+      component: "external-stg:exe:ext-stg"
+
+    - path: "external-stg/app/stgapp.hs"
+      component: "external-stg:exe:stgapp"
+
+    - path: "external-stg/app/mkfullpak.hs"
+      component: "external-stg:exe:mkfullpak"
+
+    - path: "external-stg-interpreter/lib"
+      component: "lib:external-stg-interpreter"
+
+    - path: "external-stg-interpreter/app/ExtStgInterpreter.hs"
+      component: "external-stg-interpreter:exe:ext-stg-interpreter"
+
+    - path: "external-stg-interpreter/app/RunStgiTestsuite.hs"
+      component: "external-stg-interpreter:exe:run-stgi-testsuite"
+
+    - path: "external-stg-interpreter/test"
+      component: "external-stg-interpreter:test:primop-test"
+
+    - path: "external-stg-syntax/lib"
+      component: "lib:external-stg-syntax"

@@ -16,7 +16,7 @@ The interpreter was tested only on Linux.
    ```
    cd ghc-whole-program-compiler-project/external-stg-interpreter
 
-   stack install
+   cabal install
    ```
 
 ## Example Usage

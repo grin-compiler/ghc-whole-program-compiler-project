@@ -1,29 +1,75 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+
 module Stg.Interpreter.Rts (initRtsSupport, extStgRtsSupportModule, globalStoreSymbols) where
 
-import GHC.Stack
-import Control.Monad.State
-import Control.Concurrent.MVar
+import           Control.Monad         (Functor (..), forM_)
+import           Control.Monad.State   (MonadIO (..), gets, modify')
 
-import Foreign.Marshal.Utils
+import           Data.Bool             (Bool (..))
+import           Data.Eq               (Eq (..))
+import           Data.Function         (($))
+import           Data.Int              (Int)
+import           Data.List             (concatMap, (++))
+import qualified Data.Map              as Map
+import           Data.Maybe            (Maybe (..))
+import           Data.Monoid           (Monoid (..))
+import qualified Data.Set              as Set
+import           Data.String           (String)
+import           Data.Tuple            (fst)
 
-import Data.List (foldl')
-import qualified Data.Set as Set
-import qualified Data.Map as Map
+import           Foreign.Marshal.Utils (new)
 
-import Stg.Syntax
-import Stg.Reconstruct
-import Stg.Interpreter.Base
+import           GHC.Err               (error, undefined)
 
-pattern CharV c = Literal (LitChar c)
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+import           Stg.Interpreter.Base  (Atom, M, Rts (..), StgState (..), lookupEnv, promptM_)
+import           Stg.Reconstruct       (reconModule)
+import           Stg.Syntax            (Alt' (..), AltCon' (..), AltType' (..), Arg' (..), Binder (..), BinderId (..),
+                                        Binding' (..), DataCon (..), DataConId (..), DataConRep (..), Expr' (..),
+                                        ForeignStubs' (..), IdDetails (..), Module, Module' (..), ModuleName (..), Name,
+                                        PrimRep (..), Rhs' (..), SBinder (..), SDataCon (..), STyCon (..), Scope (..),
+                                        SrcSpan (..), TopBinding' (..), TyCon (..), TyConId (..), Type (..),
+                                        UnhelpfulSpanReason (..), Unique (..), UnitId (..), UpdateFlag (..))
 
+import           System.IO             (print, putStrLn)
+
+import           Text.Show             (Show (..))
+
+emptyRts :: String -> [String] -> Rts
 emptyRts progName progArgs = Rts
-  { rtsGlobalStore  = Map.empty
-  , rtsProgName     = progName
-  , rtsProgArgs     = progArgs
+  { rtsGlobalStore = Map.empty
+  , rtsProgName    = progName
+  , rtsProgArgs    = progArgs
+  , rtsCharCon     = undefined
+  , rtsIntCon   = undefined
+  , rtsInt8Con  = undefined
+  , rtsInt16Con = undefined
+  , rtsInt32Con = undefined
+  , rtsInt64Con = undefined
+  , rtsWordCon   = undefined
+  , rtsWord8Con  = undefined
+  , rtsWord16Con = undefined
+  , rtsWord32Con = undefined
+  , rtsWord64Con = undefined
+  , rtsPtrCon       = undefined
+  , rtsFunPtrCon    = undefined
+  , rtsFloatCon     = undefined
+  , rtsDoubleCon    = undefined
+  , rtsStablePtrCon = undefined
+  , rtsTrueCon  = undefined
+  , rtsFalseCon = undefined
+  -- , rtsUnpackCString             = undefined
+  , rtsTopHandlerRunIO           = undefined
+  , rtsTopHandlerRunNonIO        = undefined
+  , rtsTopHandlerFlushStdHandles = undefined
+  , rtsDivZeroException   = undefined
+  , rtsUnderflowException = undefined
+  , rtsOverflowException  = undefined
+  , rtsNestedAtomically          = undefined
+  , rtsBlockedIndefinitelyOnMVar = undefined
+  , rtsBlockedIndefinitelyOnSTM  = undefined
+  , rtsNonTermination = undefined
+  , rtsApplyFun1Arg   = undefined
+  , rtsTuple2Proj0    = undefined
+  , rtsDataSymbol_enabled_capabilities = undefined
   }
 
 initRtsCDataSymbols :: M ()
@@ -39,7 +85,7 @@ initRtsSupport :: String -> [String] -> [Module] -> M ()
 initRtsSupport progName progArgs mods = do
 
   -- create empty Rts data con, it is filled gradually
-  modify' $ \s@StgState{..} -> s {ssRtsSupport = emptyRts progName progArgs}
+  modify' $ \s -> s {ssRtsSupport = emptyRts progName progArgs}
   initRtsCDataSymbols
 
   -- collect rts related modules
@@ -51,7 +97,7 @@ initRtsSupport progName progArgs mods = do
   -- lookup wired-in constructors
   let dcMap = Map.fromList
                 [ ((moduleUnitId, moduleName, tcName, dcName), dc)
-                | m@Module{..} <- rtsMods
+                | Module{..} <- rtsMods
                 , (tcU, tcMs) <- moduleTyCons
                 , tcU == moduleUnitId
                 , (tcM, tcs) <- tcMs
@@ -68,11 +114,11 @@ initRtsSupport progName progArgs mods = do
   -- lookup wired-in closures
   let getBindings = \case
         StgTopLifted (StgNonRec i _) -> [i]
-        StgTopLifted (StgRec l) -> map fst l
+        StgTopLifted (StgRec l) -> fmap fst l
         _ -> []
       closureMap = Map.fromList
                 [ ((uId, mName, bName), topBinding)
-                | m@Module{..} <- rtsMods
+                | Module{..} <- rtsMods
                 , topBinding@Binder{..} <- concatMap getBindings moduleTopBindings
                 , (uId, mName, bName, _) <- wiredInClosures
                 , UnitId uId == moduleUnitId
@@ -81,12 +127,12 @@ initRtsSupport progName progArgs mods = do
                 ]
 
   promptM_ $ do
-    forM_ mods $ \m@Module{..} -> do
+    forM_ mods $ \Module{..} -> do
       liftIO $ print (moduleUnitId, moduleName)
 
   forM_ wiredInClosures $ \(u, m, n, setter) -> do
     case Map.lookup (u, m, n) closureMap of
-        Nothing -> liftIO $ putStrLn $ "missing wired in closure: " ++ show (u, m, n)-- ++ "\n" ++ unlines (map show $ Map.keys closureMap)
+        Nothing -> liftIO $ putStrLn $ "missing wired in closure: " ++ show (u, m, n)-- ++ "\n" ++ unlines (fmap show $ Map.keys closureMap)
         Just b  -> do
           cl <- lookupEnv mempty b
           modify' $ \s@StgState{..} -> s {ssRtsSupport = setter ssRtsSupport cl}
@@ -149,7 +195,6 @@ wiredInClosures =
   [ ("ghc-internal",      "GHC.Internal.TopHandler",         "runIO",                        \s cl -> s {rtsTopHandlerRunIO            = cl})
   , ("ghc-internal",      "GHC.Internal.TopHandler",         "runNonIO",                     \s cl -> s {rtsTopHandlerRunNonIO         = cl})
   , ("ghc-internal",      "GHC.Internal.TopHandler",         "flushStdHandles",              \s cl -> s {rtsTopHandlerFlushStdHandles  = cl})
-  , ("ghc-internal",      "GHC.Internal.Pack",               "unpackCString",                \s cl -> s {rtsUnpackCString              = cl})
   , ("ghc-internal",      "GHC.Internal.Exception.Type",     "divZeroException",             \s cl -> s {rtsDivZeroException           = cl})
   , ("ghc-internal",      "GHC.Internal.Exception.Type",     "underflowException",           \s cl -> s {rtsUnderflowException         = cl})
   , ("ghc-internal",      "GHC.Internal.Exception.Type",     "overflowException",            \s cl -> s {rtsOverflowException          = cl})

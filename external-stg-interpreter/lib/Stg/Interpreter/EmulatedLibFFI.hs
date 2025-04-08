@@ -1,63 +1,42 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+{-# LANGUAGE CApiFFI #-}
+{-# LANGUAGE CPP     #-}
 module Stg.Interpreter.EmulatedLibFFI where
 
 ----- FFI experimental
-import qualified GHC.Exts as Exts
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Internal as BS
+import           Control.Applicative        (Applicative (..), (<$>))
+import           Control.Monad.State.Strict (MonadIO (..), gets)
 
-import Foreign.Storable
-import Foreign.Ptr
-import Foreign.C.Types
-import Foreign.C.String
-import Data.Word
-import Data.Int
-import Data.Maybe
-import Foreign.Marshal.Alloc
-import Foreign.Marshal.Array
-import qualified Data.Primitive.ByteArray as BA
------
-import System.Exit
-import System.IO
-import System.FilePath
-import Text.Printf
+import qualified Data.ByteString            as BS
+import           Data.Eq                    (Eq (..))
+import           Data.Function              (($), (.))
+import           Data.List                  (filter, (++))
+import           Data.Maybe                 (Maybe)
+import qualified Data.Primitive.ByteArray   as BA
+import qualified Data.Text                  as Text
+import qualified Data.Text.Encoding         as Text
+import           Data.Word                  (Word8)
 
-import Data.Time.Clock
+import           Foreign.C.Types            (CInt (..), CSize (..))
+import           Foreign.Ptr                (Ptr)
 
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
+import qualified GHC.Exts                   as Exts
+import           GHC.Stack                  (HasCallStack)
 
-import Data.Set (Set)
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
+import           Prelude                    (Enum (..))
 
-import GHC.Stack
-import Control.Monad.State.Strict
-import Control.Concurrent.MVar
+import           Stg.Interpreter.Base
+import           Stg.Syntax                 (CCallTarget (..), ForeignCall (..), TyCon, Type)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import Stg.Interpreter.Debug
+import           System.FilePath            (takeBaseName)
+import           System.IO                  (IO, hFlush, hPutStr, hPutStrLn, stderr)
+import           System.Posix               (CSsize (..))
 
-pattern CharV c   = Literal (LitChar c)
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern FloatV f  = FloatAtom f
-pattern DoubleV d = DoubleAtom d
+import           Text.Printf                (printf)
+import           Text.Show                  (Show (..))
 
 {-# NOINLINE evalFCallOp #-}
-evalFCallOp :: EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
-evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
+evalFCallOp :: HasCallStack => EvalOnNewThread -> ForeignCall -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
+evalFCallOp _evalOnNewThread fCall@ForeignCall{..} args t _tc = do
     --liftIO $ putStrLn $ "[evalFCallOp]  " ++ show foreignCTarget ++ " " ++ show args
     case foreignCTarget of
 
@@ -88,7 +67,21 @@ evalFCallOp evalOnNewThread fCall@ForeignCall{..} args t _tc = do
           Rts{..} <- gets ssRtsSupport
           liftIO $ hPutStrLn stderr $ takeBaseName rtsProgName ++ ": " ++ printf formatStr value
           pure []
+
+      -- #include <unistd.h> c_write :: CInt -> Ptr Word8 -> CSize -> IO CSsize
+      -- https://pubs.opengroup.org/onlinepubs/7908799/xsh/write.html
+      StaticTarget _ "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite" _ _
+        | [IntAtom i, PtrAtom (ByteArrayPtr _) ptr, WordAtom w, Void] <- args
+        -> do
+          let i' = toEnum i
+              w' = toEnum $ fromEnum w
+          res <- liftIO $ c_write i' ptr w'
+          pure [IntV $ fromEnum res]
+
       StaticTarget _ "errorBelch2" _ _
         -> stgErrorM $ "unsupported StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
 
       _ -> stgErrorM $ "unsupported emulation of user StgFCallOp: " ++ show fCall ++ " :: " ++ show t ++ "\n args: " ++ show args
+
+foreign import capi unsafe "unistd.h write"
+   c_write :: CInt -> Ptr Word8 -> CSize -> IO CSsize

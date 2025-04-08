@@ -1,8 +1,12 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Parallelism where
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Control.Applicative  (Applicative (..))
+
+import           Data.Function        (($))
+import           Data.Maybe           (Maybe)
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 {-
   NOTE:
@@ -10,8 +14,6 @@ import Stg.Interpreter.Base
     - on single core evaluation they do nothing
     - the ext-stg interpreter is a single core evaluator
 -}
-
-pattern IntV i = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

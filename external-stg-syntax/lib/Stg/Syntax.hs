@@ -1,17 +1,26 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module Stg.Syntax where
 
-import GHC.Generics
-
-import qualified Data.ByteString as BS
+import           Data.Binary           (Binary)
+import           Data.Bool             (Bool (..), otherwise, (&&), (||))
+import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as BS8
-import Data.Binary
-import Data.List
+import           Data.Char             (Char)
+import           Data.Eq               (Eq (..))
+import           Data.Function         (($))
+import           Data.Int              (Int)
+import           Data.List             (elemIndex, reverse, sum, zip, (!!), (++))
+import           Data.Maybe            (Maybe (..))
+import           Data.Monoid           ((<>))
+import           Data.Ord              (Ord (..), Ordering (..))
+import           Data.Ratio            (Rational)
+import           Data.String           (String, IsString)
+
+import           GHC.Generics          (Generic)
+import           GHC.Num               (Integer, Num (..))
+import           GHC.Real              (Integral (..), (^))
+
+import           Text.Read             (Read (..), ReadS, lex)
+import           Text.Show             (Show (..))
 
 -- utility
 
@@ -19,42 +28,51 @@ import Data.List
 newtype Id = Id {unId :: Binder}
 
 instance Eq Id where
+  (==) :: Id -> Id -> Bool
   (Id a) == (Id b) = binderUNameHash a == binderUNameHash b && binderUniqueName a == binderUniqueName b
 
 instance Ord Id where
+  compare :: Id -> Id -> Ordering
   compare (Id a) (Id b) = case compare (binderUNameHash a) (binderUNameHash b) of
-    EQ  -> compare (binderUniqueName a) (binderUniqueName b)
-    x   -> x
+    EQ -> compare (binderUniqueName a) (binderUniqueName b)
+    x  -> x
 
 instance Show Id where
+  show :: Id -> String
   show (Id a) = BS8.unpack $ binderUniqueName a
 
 -- DataCon
 newtype DC = DC {unDC :: DataCon}
 
 instance Eq DC where
+  (==) :: DC -> DC -> Bool
   (DC a) == (DC b) = dcUNameHash a == dcUNameHash b && dcUniqueName a == dcUniqueName b
 
 instance Ord DC where
+  compare :: DC -> DC -> Ordering
   compare (DC a) (DC b) = case compare (dcUNameHash a) (dcUNameHash b) of
-    EQ  -> compare (dcUniqueName a) (dcUniqueName b)
-    x   -> x
+    EQ -> compare (dcUniqueName a) (dcUniqueName b)
+    x  -> x
 
 instance Show DC where
+  show :: DC -> String
   show (DC a) = BS8.unpack $ dcUniqueName a
 
 -- TyCon
 newtype TC = TC {unTC :: TyCon}
 
 instance Eq TC where
+  (==) :: TC -> TC -> Bool
   (TC a) == (TC b) = tcUNameHash a == tcUNameHash b && tcUniqueName a == tcUniqueName b
 
 instance Ord TC where
+  compare :: TC -> TC -> Ordering
   compare (TC a) (TC b) = case compare (tcUNameHash a) (tcUNameHash b) of
-    EQ  -> compare (tcUniqueName a) (tcUniqueName b)
-    x   -> x
+    EQ -> compare (tcUniqueName a) (tcUniqueName b)
+    x  -> x
 
 instance Show TC where
+  show :: TC -> String
   show (TC a) = BS8.unpack $ tcUniqueName a
 
 -- idinfo
@@ -67,15 +85,17 @@ type Name = BS8.ByteString
 
 data Unique
   = Unique !Char !Int
-  deriving (Eq, Ord, Generic)
+  deriving stock (Eq, Ord, Generic)
 
 instance Read Unique where
+  readsPrec :: Int -> ReadS Unique
   readsPrec _d r =
     [ (Unique c (base62ToInt numStr), s)
     | (c : numStr, s) <- lex r
     ]
 
 instance Show Unique where
+ show :: Unique -> String
  show (Unique c n) = c : intToBase62 n
 
 base62ToInt :: String -> Int
@@ -104,25 +124,25 @@ intToBase62 n_ = go n_ "" where
 
 data RealSrcSpan
   = RealSrcSpan'
-  { srcSpanFile   :: !Name
-  , srcSpanSLine  :: !Int
-  , srcSpanSCol   :: !Int
-  , srcSpanELine  :: !Int
-  , srcSpanECol   :: !Int
+  { srcSpanFile  :: !Name
+  , srcSpanSLine :: !Int
+  , srcSpanSCol  :: !Int
+  , srcSpanELine :: !Int
+  , srcSpanECol  :: !Int
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data BufSpan
   = BufSpan
-  { bufSpanStart  :: !Int
-  , bufSpanEnd    :: !Int
+  { bufSpanStart :: !Int
+  , bufSpanEnd   :: !Int
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data SrcSpan
   = RealSrcSpan   !RealSrcSpan !(Maybe BufSpan)
   | UnhelpfulSpan !UnhelpfulSpanReason
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data UnhelpfulSpanReason
   = UnhelpfulNoLocationInfo
@@ -130,7 +150,7 @@ data UnhelpfulSpanReason
   | UnhelpfulInteractive
   | UnhelpfulGenerated
   | UnhelpfulOther !Name
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- tickish related
 
@@ -142,7 +162,7 @@ data Tickish
     { sourceSpan :: RealSrcSpan
     , sourceName :: Name
     }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- type related
 
@@ -164,7 +184,7 @@ data PrimRep
   | FloatRep
   | DoubleRep
   | VecRep Int PrimElemRep  -- ^ A vector
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data PrimElemRep
   = Int8ElemRep
@@ -177,7 +197,7 @@ data PrimElemRep
   | Word64ElemRep
   | FloatElemRep
   | DoubleElemRep
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 
 {-
@@ -191,23 +211,25 @@ data Type
   = SingleValue     !PrimRep
   | UnboxedTuple    ![PrimRep]
   | PolymorphicRep
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- data con related
 
 newtype TyConId
   = TyConId Unique
-  deriving (Eq, Ord, Binary, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
+  deriving anyclass (Binary)
 
 newtype DataConId
   = DataConId Unique
-  deriving (Eq, Ord, Binary, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
+  deriving anyclass (Binary)
 
 -- raw data con
 data DataConRep
   = AlgDataCon      ![PrimRep]
   | UnboxedTupleCon !Int
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data SDataCon
   = SDataCon
@@ -217,7 +239,7 @@ data SDataCon
   , sdcWorker :: !SBinder
   , sdcDefLoc :: !SrcSpan
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data STyCon
   = STyCon
@@ -226,50 +248,59 @@ data STyCon
   , stcDataCons :: ![SDataCon]
   , stcDefLoc   :: !SrcSpan
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 newtype CutTyCon = CutTyCon {uncutTyCon :: TyCon }
-instance Eq CutTyCon where _ == _ = True
-instance Ord CutTyCon where compare _ _ = EQ
-instance Show CutTyCon where show (CutTyCon tc) = "CutTyCon " ++ (BS8.unpack $ tcUniqueName tc)
+
+instance Eq CutTyCon where
+  (==) :: CutTyCon -> CutTyCon -> Bool
+  _ == _ = True
+
+instance Ord CutTyCon where
+  compare :: CutTyCon -> CutTyCon -> Ordering
+  compare _ _ = EQ
+
+instance Show CutTyCon where
+  show :: CutTyCon -> String
+  show (CutTyCon tc) = "CutTyCon " ++ BS8.unpack (tcUniqueName tc)
 
 -- user friendly data con
 data DataCon
   = DataCon
-  { dcName   :: !Name
-  , dcId     :: !DataConId
-  , dcUnitId :: !UnitId
-  , dcModule :: !ModuleName
-  , dcRep    :: !DataConRep
-  , dcTyCon  :: !CutTyCon
-  , dcWorker :: !Binder
-  , dcDefLoc :: !SrcSpan
+  { dcName       :: !Name
+  , dcId         :: !DataConId
+  , dcUnitId     :: !UnitId
+  , dcModule     :: !ModuleName
+  , dcRep        :: !DataConRep
+  , dcTyCon      :: !CutTyCon
+  , dcWorker     :: !Binder
+  , dcDefLoc     :: !SrcSpan
   -- optimization
-  , dcUniqueName  :: {-# UNPACK #-} !Name
-  , dcUNameHash   :: {-# UNPACK #-} !Int
+  , dcUniqueName :: {-# UNPACK #-} !Name
+  , dcUNameHash  :: {-# UNPACK #-} !Int
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data TyCon
   = TyCon
-  { tcName      :: !Name
-  , tcId        :: !TyConId
-  , tcUnitId    :: !UnitId
-  , tcModule    :: !ModuleName
-  , tcDataCons  :: ![DataCon]
-  , tcDefLoc    :: !SrcSpan
+  { tcName       :: !Name
+  , tcId         :: !TyConId
+  , tcUnitId     :: !UnitId
+  , tcModule     :: !ModuleName
+  , tcDataCons   :: ![DataCon]
+  , tcDefLoc     :: !SrcSpan
   -- optimization
-  , tcUniqueName  :: {-# UNPACK #-} !Name
-  , tcUNameHash   :: {-# UNPACK #-} !Int
+  , tcUniqueName :: {-# UNPACK #-} !Name
+  , tcUNameHash  :: {-# UNPACK #-} !Int
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- id info
 
 data CbvMark
   = MarkedCbv
   | NotMarkedCbv
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data IdDetails
   = VanillaId
@@ -285,65 +316,69 @@ data IdDetails
   | JoinId        Int (Maybe [CbvMark])
   | WorkerLikeId  [CbvMark]
   | RepPolyId
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- stg expr related
 
 newtype UnitId
   = UnitId Name
-  deriving (Eq, Ord, Binary, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
+  deriving anyclass (Binary)
 
 getUnitId :: UnitId -> Name
 getUnitId (UnitId n) = n
 
 newtype ModuleName
   = ModuleName Name
-  deriving (Eq, Ord, Binary, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
+  deriving anyclass (Binary)
+  deriving newtype (IsString)
 
 getModuleName :: ModuleName -> Name
 getModuleName (ModuleName n) = n
 
 newtype BinderId
   = BinderId Unique
-  deriving (Eq, Ord, Binary, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
+  deriving anyclass (Binary)
 
 data SBinder
   = SBinder
-    { sbinderName     :: !Name
-    , sbinderId       :: !BinderId
-    , sbinderType     :: !Type
-    , sbinderTypeSig  :: !Name
-    , sbinderScope    :: !Scope
-    , sbinderDetails  :: !IdDetails
-    , sbinderInfo     :: !IdInfo
-    , sbinderDefLoc   :: !SrcSpan
+    { sbinderName    :: !Name
+    , sbinderId      :: !BinderId
+    , sbinderType    :: !Type
+    , sbinderTypeSig :: !Name
+    , sbinderScope   :: !Scope
+    , sbinderDetails :: !IdDetails
+    , sbinderInfo    :: !IdInfo
+    , sbinderDefLoc  :: !SrcSpan
     }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Binder
   = Binder
-    { binderName      :: !Name
-    , binderId        :: !BinderId
-    , binderType      :: !Type
-    , binderTypeSig   :: !Name
-    , binderScope     :: !Scope
-    , binderDetails   :: !IdDetails
-    , binderInfo      :: !IdInfo
-    , binderDefLoc    :: !SrcSpan
-    , binderUnitId    :: !UnitId
-    , binderModule    :: !ModuleName
-    , binderTopLevel  :: !Bool
+    { binderName       :: !Name
+    , binderId         :: !BinderId
+    , binderType       :: !Type
+    , binderTypeSig    :: !Name
+    , binderScope      :: !Scope
+    , binderDetails    :: !IdDetails
+    , binderInfo       :: !IdInfo
+    , binderDefLoc     :: !SrcSpan
+    , binderUnitId     :: !UnitId
+    , binderModule     :: !ModuleName
+    , binderTopLevel   :: !Bool
     -- optimization
-    , binderUniqueName  :: {-# UNPACK #-} !Name
-    , binderUNameHash   :: {-# UNPACK #-} !Int
+    , binderUniqueName :: {-# UNPACK #-} !Name
+    , binderUNameHash  :: {-# UNPACK #-} !Int
     }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Scope
   = ModulePublic    -- ^ visible for every haskell module
   | ModulePrivate   -- ^ visible for a single haskell module
   | ClosurePrivate  -- ^ visible for expression body
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 mkTyConUniqueName :: UnitId -> ModuleName -> STyCon -> Name
 mkTyConUniqueName unitId modName STyCon{..} = getUnitId unitId <> "_" <> getModuleName modName <> "." <> stcName
@@ -380,12 +415,12 @@ data LitNumType
   | LitNumWord16  -- ^ @Word16#@ - exactly 16 bits
   | LitNumWord32  -- ^ @Word32#@ - exactly 32 bits
   | LitNumWord64  -- ^ @Word64#@ - exactly 64 bits
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data LabelSpec
   = FunctionLabel !(Maybe Int) -- only for stdcall convention
   | DataLabel
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Lit
   = LitChar     !Char
@@ -396,24 +431,24 @@ data Lit
   | LitLabel    !BS8.ByteString LabelSpec
   | LitNumber   !LitNumType !Integer
   | LitRubbish  !Type
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- | A top-level binding.
 data TopBinding' idBnd idOcc dcOcc tcOcc
 -- See Note [CoreSyn top-level string literals]
   = StgTopLifted    (Binding' idBnd idOcc dcOcc tcOcc)
   | StgTopStringLit idBnd BS.ByteString
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Binding' idBnd idOcc dcOcc tcOcc
   = StgNonRec idBnd (Rhs' idBnd idOcc dcOcc tcOcc)
   | StgRec    [(idBnd, Rhs' idBnd idOcc dcOcc tcOcc)]
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Arg' idOcc
   = StgVarArg  idOcc
   | StgLitArg  !Lit
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Expr' idBnd idOcc dcOcc tcOcc
   = StgApp
@@ -452,17 +487,17 @@ data Expr' idBnd idOcc dcOcc tcOcc
   | StgTick
         Tickish
         (Expr' idBnd idOcc dcOcc tcOcc)     -- sub expression
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data AltType' tcOcc
   = PolyAlt
   | MultiValAlt !Int
   | PrimAlt     !PrimRep
   | AlgAlt      tcOcc
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
-data UpdateFlag = ReEntrant | Updatable | SingleEntry
-  deriving (Eq, Ord, Generic, Show)
+data UpdateFlag = ReEntrant | Updatable | SingleEntry | JumpedTo
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Rhs' idBnd idOcc dcOcc tcOcc
   = StgRhsClosure
@@ -475,7 +510,7 @@ data Rhs' idBnd idOcc dcOcc tcOcc
   | StgRhsCon
         dcOcc               -- DataCon
         [Arg' idOcc]        -- Args
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Alt' idBnd idOcc dcOcc tcOcc
   = Alt
@@ -483,75 +518,75 @@ data Alt' idBnd idOcc dcOcc tcOcc
     , altBinders :: [idBnd]
     , altRHS     :: Expr' idBnd idOcc dcOcc tcOcc
     }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data AltCon' dcOcc
   = AltDataCon  dcOcc
   | AltLit      !Lit
   | AltDefault
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data Safety = PlaySafe | PlayInterruptible | PlayRisky
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data CCallConv = CCallConv | CApiConv | StdCallConv | PrimCallConv | JavaScriptCallConv
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data SourceText
   = SourceText    !BS8.ByteString
   | NoSourceText
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data CCallTarget
   = StaticTarget !SourceText !BS8.ByteString !(Maybe UnitId) !Bool {- is function -}
   | DynamicTarget
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data ForeignCall
   = ForeignCall
-  { foreignCTarget  :: !CCallTarget
-  , foreignCConv    :: !CCallConv
-  , foreignCSafety  :: !Safety
+  { foreignCTarget :: !CCallTarget
+  , foreignCConv   :: !CCallConv
+  , foreignCSafety :: !Safety
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data PrimCall = PrimCall !BS8.ByteString !UnitId
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data StgOp
   = StgPrimOp     !Name
   | StgPrimCallOp !PrimCall
   | StgFCallOp    !ForeignCall
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- foreign export stubs
 data Header = Header !SourceText !Name
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data ForeignImport = CImport !CCallConv !Safety !(Maybe Header) !CImportSpec !SourceText
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data CImportSpec
   = CLabel    !Name
   | CFunction !CCallTarget
   | CWrapper
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data ForeignExport = CExport !CExportSpec !SourceText
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data CExportSpec = CExportStatic !SourceText !Name !CCallConv
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data StubImpl
   = StubImplImportCWrapper  !Name !(Maybe Int) !Bool !Name ![Name]
   | StubImplImportCApi      !Name ![(Maybe Header, BS8.ByteString, Char)]
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data StubDecl' idOcc
   = StubDeclImport !ForeignImport !(Maybe StubImpl)
   | StubDeclExport !ForeignExport idOcc !BS8.ByteString
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data ModuleLabelKind
     = MLK_Initializer       Name
@@ -559,39 +594,39 @@ data ModuleLabelKind
     | MLK_Finalizer         Name
     | MLK_FinalizerArray
     | MLK_IPEBuffer
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data ModuleCLabel
   = ModuleCLabel !UnitId !ModuleName !ModuleLabelKind
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 data ForeignStubs' idOcc
   = NoStubs
   | ForeignStubs
-    { fsCHeader       :: !BS8.ByteString
-    , fsCSource       :: !BS8.ByteString
-    , fsInitializers  :: ![ModuleCLabel]
-    , fsFinalizers    :: ![ModuleCLabel]
-    , fsDecls         :: ![StubDecl' idOcc]
+    { fsCHeader      :: !BS8.ByteString
+    , fsCSource      :: !BS8.ByteString
+    , fsInitializers :: ![ModuleCLabel]
+    , fsFinalizers   :: ![ModuleCLabel]
+    , fsDecls        :: ![StubDecl' idOcc]
     }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- the whole module
 
 data Module' idBnd idOcc dcOcc tcBnd tcOcc
   = Module
-  { modulePhase               :: !BS8.ByteString
-  , moduleUnitId              :: !UnitId
-  , moduleName                :: !ModuleName
-  , moduleSourceFilePath      :: !(Maybe Name) -- HINT: RealSrcSpan's source file refers to this value
-  , moduleForeignStubs        :: !(ForeignStubs' idOcc)
-  , moduleHasForeignExported  :: !Bool
-  , moduleDependency          :: ![(UnitId, [ModuleName])]
-  , moduleExternalTopIds      :: ![(UnitId, [(ModuleName, [idBnd])])]
-  , moduleTyCons              :: ![(UnitId, [(ModuleName, [tcBnd])])]
-  , moduleTopBindings         :: ![TopBinding' idBnd idOcc dcOcc tcOcc]
+  { modulePhase              :: !BS8.ByteString
+  , moduleUnitId             :: !UnitId
+  , moduleName               :: !ModuleName
+  , moduleSourceFilePath     :: !(Maybe Name) -- HINT: RealSrcSpan's source file refers to this value
+  , moduleForeignStubs       :: !(ForeignStubs' idOcc)
+  , moduleHasForeignExported :: !Bool
+  , moduleDependency         :: ![(UnitId, [ModuleName])]
+  , moduleExternalTopIds     :: ![(UnitId, [(ModuleName, [idBnd])])]
+  , moduleTyCons             :: ![(UnitId, [(ModuleName, [tcBnd])])]
+  , moduleTopBindings        :: ![TopBinding' idBnd idOcc dcOcc tcOcc]
   }
-  deriving (Eq, Ord, Generic, Show)
+  deriving stock (Eq, Ord, Generic, Show)
 
 -- convenience layers: raw and user friendly
 

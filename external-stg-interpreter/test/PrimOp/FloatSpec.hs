@@ -1,19 +1,31 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, CPP, ScopedTypeVariables #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module PrimOp.FloatSpec where
 
-import Control.Monad.State.Strict
+import           Control.Applicative          (Applicative (..))
+import           Control.Monad                (Functor (..))
+import           Control.Monad.State.Strict   (evalStateT)
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.QuickCheck.Modifiers
-import Test.QuickCheck.Monadic
+import           Data.Eq                      (Eq (..))
+import           Data.Function                (($))
+import           Data.Maybe                   (Maybe (..))
 
-import Stg.Syntax (Name, Type(..))
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Float
+import           GHC.Exts
 
-import GHC.Exts
+import           Stg.Interpreter.Base        
+import           Stg.Interpreter.PrimOp.Float
+import           Stg.Syntax                   (Name, Type (..))
+
+import           System.IO                    (IO)
+
+import           Test.Hspec                   (Expectation, HasCallStack, Spec, describe, hspec, it, shouldReturn)
+import           Test.QuickCheck              (Arbitrary (..), Gen, NonNegative (..), NonZero (..), Positive (..),
+                                               Testable (..), forAll)
+import           Test.QuickCheck.Monadic      (PropertyM, assert, monadicIO, run)
+
+import           Text.Show                    (Show (..))
 
 runTests :: IO ()
 runTests = hspec spec
@@ -37,7 +49,7 @@ evalOp2 op args = do
 unboxFloat :: Float -> Float#
 unboxFloat (F# x) = x
 
-shouldReturnShow :: (HasCallStack, Show a, Eq a) => IO a -> a -> Expectation
+shouldReturnShow :: (HasCallStack, Show a) => IO a -> a -> Expectation
 shouldReturnShow m a = fmap show m `shouldReturn` show a
 
 spec :: Spec
@@ -120,7 +132,6 @@ spec = do
         [FloatV stgVal] <- evalOp "logFloat#" [FloatV a]
         assert $ stgVal == (F# (logFloat# (unboxFloat a)))
 
-#if __GLASGOW_HASKELL__ >= 810
     it "expm1Float#" $
       property $ forAll (arbitrary :: Gen Float) $ \a -> monadicIO $ do
         [FloatV stgVal] <- evalOp "expm1Float#" [FloatV a]
@@ -130,7 +141,6 @@ spec = do
       property $ forAll (arbitrary :: Gen (Positive Float)) $ \(Positive a) -> monadicIO $ do
         [FloatV stgVal] <- evalOp "log1pFloat#" [FloatV a]
         assert $ stgVal == (F# (log1pFloat# (unboxFloat a)))
-#endif
 
     it "logFloat#" $
       property $ forAll (arbitrary :: Gen (Positive Float)) $ \(Positive a) -> monadicIO $ do

@@ -1,31 +1,29 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
+-- {-# LANGUAGE Strict #-}
 module Stg.Interpreter.PrimOp.Addr where
 
-import Control.Monad.State
-import Data.Char
-import Data.Word
-import Data.Int
-import Data.Bits
-import qualified Data.ByteString.Char8 as BS8
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Internal as BS
-import Foreign.Ptr
-import Foreign.Storable
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad        (when)
+import           Control.Monad.State  (MonadIO (..))
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Bits            (Bits (..))
+import           Data.Char            (Char, chr, ord)
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($), (.))
+import           Data.Int             (Int, Int16, Int32, Int64, Int8)
+import           Data.Maybe           (Maybe)
+import           Data.Ord             (Ord (..))
+import           Data.Word            (Word, Word16, Word32, Word64, Word8)
 
-pattern CharV c = Literal (LitChar c)
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int8V i   = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int16V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int64V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word8V i  = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word16V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word64V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+import           Foreign.Ptr          (IntPtr (..), Ptr, castPtr, intPtrToPtr, minusPtr, plusPtr, ptrToIntPtr,
+                                       ptrToWordPtr)
+import           Foreign.Storable     (Storable (..))
+
+import           GHC.Float            (Double, Float)
+import           GHC.Num              (Num (..))
+import           GHC.Real             (Integral (..), fromIntegral)
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -373,7 +371,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "atomicExchangeWordAddr#", [PtrAtom _ p, WordV value, _s]) -> do
     liftIO $ do
       oldValue <- peek (castPtr p :: Ptr Word)
-      poke (castPtr p :: Ptr Word) (fromIntegral value)
+      poke (castPtr p :: Ptr Word) value
       pure [WordV oldValue]
 
   -- atomicCasAddrAddr# :: Addr# -> Addr# -> Addr# -> State# s -> (# State# s, Addr# #)
@@ -389,7 +387,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     liftIO $ do
       oldValue <- peek (castPtr p :: Ptr Word)
       when (oldValue == expected) $ do
-        poke (castPtr p :: Ptr Word) (fromIntegral value)
+        poke (castPtr p :: Ptr Word) value
       pure [WordV oldValue]
 
   -- atomicCasWord8Addr# :: Addr# -> Word8# -> Word8# -> State# t0 -> (# State# t0, Word8# #)

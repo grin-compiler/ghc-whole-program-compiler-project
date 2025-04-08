@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, TupleSections, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Stg.DeadFunctionElimination.StripModule where
 
 import Data.Maybe
@@ -38,7 +39,7 @@ stripDeadParts stgappName mod = do
           | otherwise -> Nothing
 
   -- TODO: strip stgModuleTyCons
-  pure mod {moduleTopBindings = catMaybes $ map dropDeadBinding $ moduleTopBindings mod}
+  pure mod {moduleTopBindings = mapMaybe dropDeadBinding (moduleTopBindings mod)}
 
 tryStripDeadParts :: FilePath -> Module -> IO Module
 tryStripDeadParts stgappName mod = do

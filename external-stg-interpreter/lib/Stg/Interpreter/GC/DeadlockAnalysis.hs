@@ -1,14 +1,24 @@
-{-# LANGUAGE RecordWildCards, LambdaCase #-}
 module Stg.Interpreter.GC.DeadlockAnalysis where
 
-import Control.Monad
-import Control.Monad.State
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
-import qualified Data.IntMap as IntMap
+import           Control.Applicative                (Applicative (..))
+import           Control.Monad                      (forM_, when)
+import           Control.Monad.State                (MonadState (..), gets)
 
-import Stg.Interpreter.Base
+import           Data.Bool                          ((&&))
+import           Data.Function                      (($))
+import qualified Data.IntMap                        as IntMap
+import           Data.IntSet                        (IntSet)
+import qualified Data.IntSet                        as IntSet
+import           Data.List                          (reverse, (++))
+import           Data.Maybe                         (Maybe (..))
+
+import           GHC.Err                            (error)
+
+import           Stg.Interpreter.Base               (BlockReason (..), M, RefSet (..), Rts (..), StgState (..),
+                                                     ThreadState (..), ThreadStatus (..), getThreadState, reportThread)
 import qualified Stg.Interpreter.PrimOp.Concurrency as PrimConcurrency
+
+import           Text.Show                          (Show (..))
 
 validateGCThreadResult :: RefSet -> IntSet -> M ()
 validateGCThreadResult RefSet{..} deadlockedThreadIds = do
@@ -36,7 +46,6 @@ validateGCThreadResult RefSet{..} deadlockedThreadIds = do
       BlockedOnRead{}         -> assertLiveThread tid
       BlockedOnWrite{}        -> assertLiveThread tid
       BlockedOnDelay{}        -> assertLiveThread tid
-  pure ()
 
 -- the analysis is done in datalog, this code just uses the analysis result
 
@@ -63,5 +72,5 @@ handleDeadlockedThreads deadlockedThreadIds = do
         BlockedOnThrowAsyncEx{} -> pure () -- HINT: it might be blocked on other deadlocked thread
         BlockedOnSTM{}          -> raiseEx tid rtsBlockedIndefinitelyOnSTM
         BlockedOnForeignCall{}  -> error "not implemented yet"
-        s -> error $ "internal error - invalid thread state: " ++ show s
+        s                       -> error $ "internal error - invalid thread state: " ++ show s
       s -> error $ "internal error - invalid thread state: " ++ show s

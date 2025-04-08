@@ -1,19 +1,34 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
+
 module Stg.Interpreter.Debugger where
 
-import GHC.Stack
-import Control.Monad.State
-import qualified Data.Set as Set
-import qualified Data.Map as Map
-import qualified Data.IntMap as IntMap
+import           Control.Applicative                   (Applicative (..))
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
-import Control.Concurrent.MVar
+import           Control.Concurrent.MVar               (putMVar, takeMVar, tryTakeMVar)
+import           Control.Monad                         (Functor (..), Monad (..), unless)
+import           Control.Monad.State                   (MonadIO (..), gets, modify')
 
-import Stg.Interpreter.Base
-import Stg.Syntax
-import Stg.IRLocation
+import           Data.Bool                             (Bool (..), otherwise)
+import           Data.Function                         (($))
+import qualified Data.IntMap                           as IntMap
+import           Data.List                             ((++))
+import qualified Data.Map                              as Map
+import           Data.Maybe                            (Maybe (..), maybe)
+import           Data.Ord                              (Ord (..))
+import qualified Data.Set                              as Set
 
-import Stg.Interpreter.Debugger.Internal
+import           GHC.Stack                             (HasCallStack)
+
+import           Prelude                               (Enum (..))
+
+import           Stg.Interpreter.Base                  (Atom (..), Breakpoint, DebugCommand (..), DebugEvent (..),
+                                                        DebugOutput (..), DebugState (..), DebuggerChan (..), M,
+                                                        StgState (..), readHeap)
+import           Stg.Interpreter.Debugger.Internal     (runInternalCommand)
+
+import           System.IO                             (putStrLn)
+
+import           Text.Show                             (Show (..))
+
 
 sendDebugEvent :: DebugEvent -> M ()
 sendDebugEvent dbgEvent = do
@@ -42,7 +57,7 @@ runDebugCommand cmd = do
       liftIO $ putMVar dbgSyncResponse $ DbgOutCurrentClosure currentClosure currentClosureAddr closureEnv
 
     CmdClearClosureList -> do
-      modify' $ \s@StgState{..} -> s {ssEvaluatedClosures = Set.empty}
+      modify' $ \s -> s {ssEvaluatedClosures = Set.empty}
       liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdListClosures -> do
@@ -60,24 +75,23 @@ runDebugCommand cmd = do
     CmdStep -> liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdContinue -> do
-      modify' $ \s@StgState{..} -> s {ssDebugState = DbgRunProgram}
+      modify' $ \s -> s {ssDebugState = DbgRunProgram}
       liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdPeekHeap addr -> do
       heap <- gets ssHeap
-      case IntMap.member addr heap of
-        True -> do
-          ho <- readHeap $ HeapPtr addr
-          liftIO $ putMVar dbgSyncResponse $ DbgOutHeapObject addr ho
-        False -> do
-          liftIO $ putMVar dbgSyncResponse DbgOut
+      if IntMap.member addr heap then do
+        ho <- readHeap $ HeapPtr addr
+        liftIO $ putMVar dbgSyncResponse $ DbgOutHeapObject addr ho
+      else
+        liftIO $ putMVar dbgSyncResponse DbgOut
 
     CmdStop -> do
-      modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+      modify' $ \s -> s {ssDebugState = DbgStepByStep}
       liftIO $ putMVar dbgSyncResponse DbgOut
 
-    CmdInternal cmd -> do
-      runInternalCommand cmd
+    CmdInternal cmd' -> do
+      runInternalCommand cmd'
 
 isDebugExitCommand :: DebugCommand -> Bool
 isDebugExitCommand = \case
@@ -99,9 +113,7 @@ processCommandsUntilExit :: M ()
 processCommandsUntilExit = do
   cmd <- getNextDebugCommand
   runDebugCommand cmd
-  if isDebugExitCommand cmd
-    then pure ()
-    else processCommandsUntilExit
+  unless (isDebugExitCommand cmd) processCommandsUntilExit
 
 hasFuel :: M Bool
 hasFuel = do
@@ -111,7 +123,7 @@ hasFuel = do
 
 checkBreakpoint :: [Atom] -> Breakpoint -> M ()
 checkBreakpoint localEnv breakpoint = do
-  modify' $ \s@StgState{..} -> s {ssLocalEnv = localEnv}
+  modify' $ \s -> s {ssLocalEnv = localEnv}
   dbgState <- gets ssDebugState
   exit <- processCommandsNonBlocking
   shouldStep <- hasFuel
@@ -120,7 +132,7 @@ checkBreakpoint localEnv breakpoint = do
       sendDebugEvent DbgEventStopped
       unless exit processCommandsUntilExit
     DbgRunProgram -> do
-      unless shouldStep $ modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+      unless shouldStep $ modify' $ \s -> s {ssDebugState = DbgStepByStep}
       bkMap <- gets ssBreakpoints
       case Map.lookup breakpoint bkMap of
         Nothing -> pure ()
@@ -132,7 +144,7 @@ checkBreakpoint localEnv breakpoint = do
           | otherwise -> do
               -- HINT: trigger breakpoint
               liftIO $ putStrLn $ "hit breakpoint: " ++ show breakpoint
-              Just currentClosure <- gets ssCurrentClosure
+              Just _currentClosure <- gets ssCurrentClosure
               sendDebugEvent $ DbgEventHitBreakpoint breakpoint
-              modify' $ \s@StgState{..} -> s {ssDebugState = DbgStepByStep}
+              modify' $ \s -> s {ssDebugState = DbgStepByStep}
               unless exit processCommandsUntilExit

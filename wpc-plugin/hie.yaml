@@ -1,0 +1,7 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:wpc-plugin"
+
+    - path: "src"
+      component: "wpc-plugin:lib:wpc-plugin"

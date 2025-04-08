@@ -55,6 +55,6 @@ controlFlowAnalysisImplM log calledByOuterCode initialReachable prg = do
   result <- filter (\n -> takeExtension n == ".csv") <$> listDirectory tmpCfa
   Map.fromList <$> forM result
     (\fname -> do
-        row <- map (Text.splitOn "\t") . Text.lines <$> Text.readFile (tmpCfa </> fname)
+        row <- fmap (Text.splitOn "\t") . Text.lines <$> Text.readFile (tmpCfa </> fname)
         pure (takeBaseName fname, row)
     )

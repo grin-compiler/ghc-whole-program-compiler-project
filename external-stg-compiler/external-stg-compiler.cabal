@@ -1,4 +1,4 @@
-cabal-version:       2.4
+cabal-version:       3.14
 name:                external-stg-compiler
 version:             0.1.0.0
 -- synopsis:
@@ -40,7 +40,13 @@ library
     , souffle-haskell
     , time
 
-  default-language:     Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
   cpp-options:          -DEXTERNAL_STG_COMPILER_PACKAGE
 
   include-dirs:         cbits
@@ -69,7 +75,13 @@ executable gen-exe
                      , containers
                      , bytestring
 
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
 
 executable gen-obj
   hs-source-dirs:      app
@@ -80,7 +92,13 @@ executable gen-obj
                      , ghc-paths
                      , external-stg
                      , external-stg-compiler
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
 
 executable gen-exe2
   hs-source-dirs:      app
@@ -97,7 +115,13 @@ executable gen-exe2
                      , filepath
                      , bytestring
 
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
 
 executable gen-obj2
   hs-source-dirs:      app
@@ -111,7 +135,13 @@ executable gen-obj2
                      , bytestring
                      , external-stg
                      , external-stg-compiler
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
 
 executable show-ghc-stg
   hs-source-dirs:      app
@@ -123,7 +153,13 @@ executable show-ghc-stg
                      , external-stg
                      , external-stg-compiler
                      , filepath
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards
 
 executable dce-fullpak
   hs-source-dirs:      app
@@ -139,4 +175,10 @@ executable dce-fullpak
                      , bytestring
                      , zip
 
-  default-language:    Haskell2010
+  default-language: GHC2024
+  default-extensions:
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    NoImplicitPrelude
+    OverloadedStrings
+    RecordWildCards

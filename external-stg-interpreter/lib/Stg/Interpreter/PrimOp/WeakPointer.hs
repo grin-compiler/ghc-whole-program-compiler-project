@@ -1,16 +1,27 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.WeakPointer where
 
-import Control.Monad.State
-import qualified Data.IntMap as IntMap
-import Data.Maybe
-import Foreign.Ptr
+import           Control.Applicative  (Applicative (..), (<$>))
+import           Control.Monad        (mapM, mapM_, void)
+import           Control.Monad.State  (gets, modify')
 
-import Stg.Syntax
-import Stg.Interpreter.Base
-import qualified Stg.Interpreter.FFI as FFI
+import           Data.Eq              (Eq (..))
+import           Data.Function        (($))
+import           Data.Int             (Int)
+import qualified Data.IntMap          as IntMap
+import           Data.List            ((++))
+import           Data.Maybe           (Maybe (..), catMaybes, isNothing, maybeToList)
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+import           Foreign.Ptr          (castPtrToFunPtr)
+
+import           GHC.Err              (error)
+
+import           Prelude              (Enum (..))
+
+import           Stg.Interpreter.Base
+import qualified Stg.Interpreter.FFI  as FFI
+import           Stg.Syntax           (Name, TyCon, Type (..))
+
+import           Text.Show            (Show (..))
 
 newWeakPointer :: Atom -> Atom -> Maybe Atom -> M Int
 newWeakPointer key value finalizer = do
@@ -44,7 +55,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
     wpd@WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
     let desc = wpd {wpdCFinalizers = (fun, if hasEnv == 0 then Nothing else Just envPtr, dataPtr) : wpdCFinalizers}
     modify' $ \s@StgState{..} -> s {ssWeakPointers = IntMap.insert wpId desc ssWeakPointers}
-    pure [IntV $ if wpdValue == Nothing then 0 else 1]
+    pure [IntV $ if isNothing wpdValue then 0 else 1]
 
   -- deRefWeak# :: Weak# a -> State# RealWorld -> (# State# RealWorld, Int#, a #)
   ( "deRefWeak#", [WeakPointer wpId, _w]) -> do
@@ -69,7 +80,7 @@ finalizeWeak wpId = do
   wpd@WeakPtrDescriptor{..} <- lookupWeakPointerDescriptor wpId
   case wpdValue of
     Nothing -> pure [IntV 0, LiftedUndefined]
-    Just v  -> do
+    Just _v -> do
       let finalizedWpd = wpd {wpdValue = Nothing}
       modify' $ \s@StgState{..} -> s {ssWeakPointers = IntMap.insert wpId finalizedWpd ssWeakPointers}
       mapM_ runCFinalizer wpdCFinalizers
@@ -80,8 +91,7 @@ finalizeWeak wpId = do
 runCFinalizer :: (Atom, Maybe Atom, Atom) -> M ()
 runCFinalizer (PtrAtom _ cFunPtr, mCEnv, cData) = do
   cArgs <- catMaybes <$> mapM FFI.mkFFIArg (maybeToList mCEnv ++ [cData])
-  liftIOAndBorrowStgState $ do
+  void $ liftIOAndBorrowStgState $ do
     let cRetType = UnboxedTuple []
     FFI.evalForeignCall (castPtrToFunPtr cFunPtr) cArgs cRetType
-  pure ()
 runCFinalizer f = error $ "unsupported weakptr c finalizer: " ++ show f

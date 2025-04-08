@@ -230,7 +230,7 @@ happyExpListPerState st =
         bit_start = st * 72
         bit_end = (st + 1) * 72
         read_bit = readArrayBit happyExpList
-        bits = map read_bit [bit_start..bit_end - 1]
+        bits = fmap read_bit [bit_start..bit_end - 1]
         bits_indexed = zip bits [0..71]
         token_strs_expected = concatMap f bits_indexed
         f (False, _) = []
@@ -1471,7 +1471,6 @@ happyFail  0# tk old_st (HappyCons ((action)) (sts))
                                                 (saved_tok `HappyStk` _ `HappyStk` stk) =
 --      trace ("discarding state, depth " ++ show (length stk))  $
         happyDoAction 0# tk action sts ((saved_tok`HappyStk`stk))
--}
 
 -- Enter error recovery: generate an error token,
 --                       save the old token and carry on.

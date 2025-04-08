@@ -1,39 +1,43 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE NamedFieldPuns #-}
 module WPC.GhcStgApp where
 
-import GHC.Prelude
+import           Control.Applicative       (Applicative (..))
 
-import GHC.Data.Maybe
-import GHC.Platform.ArchOS
-import GHC.Utils.Outputable
-import GHC.Unit.Info
-import GHC.Unit.Home.ModInfo
-import GHC.Unit.Module.Deps
-import GHC.Linker.Static.Utils
-import GHC.Linker.Types
-import GHC.Unit.Module.ModIface
+import           Data.Bool                 (Bool (..), not, otherwise)
+import           Data.Containers.ListUtils (nubOrd)
+import           Data.Eq                   (Eq (..))
+import           Data.Function             (($), (.))
+import           Data.Functor              (Functor (..))
+import           Data.List                 (isPrefixOf, (++))
+import qualified Data.Set                  as Set
+import           Data.String               (String)
+import           Data.Version              (showVersion)
 
-import GHC.Driver.Ppr
-import GHC.Driver.Session
+import           GHC.Data.Maybe            (Maybe (..), fromMaybe, maybe, maybeToList)
+import qualified GHC.Data.ShortText        as ST
+import           GHC.Driver.Ppr            (showSDoc)
+import           GHC.Driver.Session        (DynFlags (..), GeneralFlag (..), GhcNameVersion (..), Option (..),
+                                            PlatformMisc (..), gopt, objectSuf, ways)
+import           GHC.Linker.Static.Utils   (exeFileName)
+import           GHC.Linker.Types          (linkableObjs)
+import           GHC.Platform              (Platform (..), platformOS)
+import           GHC.Platform.ArchOS       (stringEncodeOS)
+import           GHC.Unit.Env              (UnitEnv (..), preloadUnitsInfo', ue_unit_dbs)
+import           GHC.Unit.Home.ModInfo     (HomeModInfo (..), HomeModLinkable (..), HomePackageTable, eltsHpt)
+import           GHC.Unit.Info             (GenericUnitInfo (..))
+import           GHC.Unit.Module.Deps      (Dependencies (..))
+import           GHC.Unit.Module.ModIface  (ModIface_ (..))
+import           GHC.Unit.State            (UnitDatabase (..), mayThrowUnitErr)
+import           GHC.Unit.Types            (GenModule (..), wiredInUnitIds)
+import           GHC.Utils.Json            (JsonDoc (..))
+import           GHC.Utils.Outputable      (Outputable (..))
 
-import qualified GHC.Data.ShortText as ST
+import           System.Directory          (getCurrentDirectory)
+import           System.FilePath           (FilePath, isAbsolute, makeRelative, (</>))
+import           System.IO                 (IO, putStrLn, writeFile)
 
-import GHC.Utils.Json
+import           Text.Show                 (Show (..))
 
-import Data.List                 ( isPrefixOf )
-import Data.Containers.ListUtils ( nubOrd )
-import qualified Data.Set as Set
-import Data.Version
-import GHC.Unit.State
-import GHC.Unit.Env
-import GHC.Unit.Types
-import GHC.Platform
-
-import System.FilePath
-import System.Directory
-
-import WPC.Yaml
+import           WPC.Yaml                  (renderYAML)
 
 {-
 TODO:
@@ -60,43 +64,47 @@ writeGhcStgApp dflags unit_env hpt = do
   dep_unit_infos <- mayThrowUnitErr (preloadUnitsInfo' unit_env dep_units)
   let pp :: Outputable a => a -> String
       pp = showSDoc dflags . ppr
+
+      toAbsPath :: FilePath -> FilePath
       toAbsPath p
         | isAbsolute p  = p
         | otherwise     = root </> p
-      arrOfAbsPathST = arrOfAbsPath . map ST.unpack
-      arrOfAbsPath = JSArray . map JSString . nubOrd . map toAbsPath
+
+      arrOfAbsPathST = arrOfAbsPath . fmap ST.unpack
+      arrOfAbsPath = JSArray . fmap JSString . nubOrd . fmap toAbsPath
+
       app_deps = JSArray
         [ JSObject
           [ ("name",              JSString $ pp unitPackageName)
           , ("version",           JSString (showVersion unitPackageVersion))
           , ("id",                JSString $ pp unitId)
           , ("unit-import-dirs",  arrOfAbsPathST unitImportDirs)
-          , ("unit-libraries",    JSArray $ map (JSString . ST.unpack) unitLibraries)
+          , ("unit-libraries",    JSArray $ fmap (JSString . ST.unpack) unitLibraries)
           , ("library-dirs",      arrOfAbsPathST unitLibraryDirs)
-          , ("extra-libraries",   JSArray $ map (JSString . ST.unpack) unitExtDepLibsSys)
+          , ("extra-libraries",   JSArray $ fmap (JSString . ST.unpack) unitExtDepLibsSys)
           , ("framework-dirs",    arrOfAbsPathST unitExtDepFrameworkDirs)
-          , ("extra-frameworks",  JSArray $ map (JSString . ST.unpack) unitExtDepFrameworks)
-          , ("ld-options",        JSArray $ map (JSString . ST.unpack) unitLinkerOptions)
-          , ("exposed-modules",   JSArray $ map (JSString . pp) [mod | (mod, Nothing) <- unitExposedModules])
-          , ("hidden-modules",    JSArray $ map (JSString . pp) unitHiddenModules)
-          , ("depends",           JSArray $ map (JSString . pp) unitDepends)
+          , ("extra-frameworks",  JSArray $ fmap (JSString . ST.unpack) unitExtDepFrameworks)
+          , ("ld-options",        JSArray $ fmap (JSString . ST.unpack) unitLinkerOptions)
+          , ("exposed-modules",   JSArray $ fmap (JSString . pp) [mod' | (mod', Nothing) <- unitExposedModules])
+          , ("hidden-modules",    JSArray $ fmap (JSString . pp) unitHiddenModules)
+          , ("depends",           JSArray $ fmap (JSString . pp) unitDepends)
           ]
         | GenericUnitInfo{..} <- dep_unit_infos
         ]
 
-  let arrOfStr      = JSArray . map JSString . nubOrd
-      appLdOptions  = [ o
-                      | Option o <- ldInputs dflags
-                      , not $ isPrefixOf "-l" o
-                      ]
-      odir          = fromMaybe "." (objectDir dflags)
-      mainModName   = mainModuleNameIs dflags
-      mainModObjs   = [ makeRelative odir o
-                      | HomeModInfo{..} <- home_mod_infos
-                      , mainModName == moduleName (mi_module hm_iface)
-                      , l <- maybeToList $ homeMod_object hm_linkable
-                      , o <- linkableObjs l
-                      ]
+  let arrOfStr     = JSArray . fmap JSString . nubOrd
+      appLdOptions = [ o
+                     | Option o <- ldInputs dflags
+                     , not $ isPrefixOf "-l" o
+                     ]
+      odir        = fromMaybe "." $ objectDir dflags
+      mainModName = mainModuleNameIs dflags
+      mainModObjs = [ makeRelative odir o
+                    | HomeModInfo{..} <- home_mod_infos
+                    , mainModName == moduleName (mi_module hm_iface)
+                    , l <- maybeToList $ homeMod_object hm_linkable
+                    , o <- linkableObjs l
+                    ]
   mainModObj <- case mainModObjs of
     [o] -> pure $ JSString o
     l   -> do
@@ -109,20 +117,20 @@ writeGhcStgApp dflags unit_env hpt = do
     , ("platform-os",       JSString . stringEncodeOS . platformOS $ targetPlatform dflags)
     , ("no-hs-main",        JSBool $ gopt Opt_NoHsMain dflags)
     , ("o-suffix",          JSString $ objectSuf dflags)
-    , ("ways",              arrOfStr $ map show . Set.toList $ ways dflags)
+    , ("ways",              arrOfStr $ fmap show . Set.toList $ ways dflags)
     , ("object-dir",        JSString . toAbsPath $ fromMaybe root (objectDir dflags))
     , ("app-unit-id",       JSString . pp $ ue_current_unit unit_env)
-    , ("app-modules",       JSArray $ map (JSString . pp) [moduleName . mi_module $ hm_iface | HomeModInfo{..} <- home_mod_infos])
+    , ("app-modules",       JSArray $ fmap (JSString . pp) [moduleName . mi_module $ hm_iface | HomeModInfo{..} <- home_mod_infos])
     , ("app-main-module-name",    JSString $ pp mainModName)
     , ("app-main-module-object",  mainModObj)
     , ("extra-ld-inputs",   arrOfAbsPath [f | FileOption _ f <- ldInputs dflags])
     , ("library-dirs",      arrOfAbsPath $ libraryPaths dflags)
     , ("extra-libraries",   arrOfStr [lib | Option ('-':'l':lib) <- ldInputs dflags])
     , ("framework-dirs",    arrOfAbsPath $ frameworkPaths dflags)
-    , ("extra-frameworks",  JSArray $ map JSString $ cmdlineFrameworks dflags)
+    , ("extra-frameworks",  JSArray $ fmap JSString $ cmdlineFrameworks dflags)
     , ("ld-options",        arrOfStr appLdOptions)
-    , ("unit-db-paths",     arrOfAbsPath $ maybe [] (map unitDatabasePath) $ ue_unit_dbs unit_env)
-    , ("wired-in-unit-ids", JSArray $ map (JSString . pp) wiredInUnitIds)
+    , ("unit-db-paths",     arrOfAbsPath $ maybe [] (fmap unitDatabasePath) $ ue_unit_dbs unit_env)
+    , ("wired-in-unit-ids", JSArray $ fmap (JSString . pp) wiredInUnitIds)
     , ("app-deps",          app_deps)
     ]
 

@@ -1,19 +1,28 @@
-{-# LANGUAGE OverloadedStrings, PatternSynonyms, MagicHash, UnboxedTuples, BangPatterns, CPP, ScopedTypeVariables #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module PrimOp.DoubleSpec where
 
-import Control.Monad.State.Strict
+import           Control.Applicative           (Applicative (..))
+import           Control.Monad                 (Functor (..))
+import           Control.Monad.State.Strict    (evalStateT)
 
-import Test.Hspec
-import Test.QuickCheck
-import Test.QuickCheck.Modifiers
-import Test.QuickCheck.Monadic
+import           Data.Function                 (($))
+import           Data.Maybe                    (Maybe (..))
 
-import Stg.Syntax (Name, Type(..))
-import Stg.Interpreter.Base
-import Stg.Interpreter.PrimOp.Double
+import           GHC.Exts
 
-import GHC.Exts
+import           Stg.Interpreter.Base         
+import           Stg.Interpreter.PrimOp.Double
+import           Stg.Syntax                    (Name, Type (..))
+
+import           System.IO                     (IO)
+
+import           Test.Hspec                    (Expectation, HasCallStack, Spec, describe, hspec, it, shouldReturn)
+import           Test.QuickCheck               (NonZero (..), Testable (..))
+
+import           Text.Show                     (Show (..))
 
 runTests :: IO ()
 runTests = hspec spec
@@ -29,7 +38,7 @@ evalOp op args = do
 unboxDouble :: Double -> Double#
 unboxDouble (D# x) = x
 
-shouldReturnShow :: (HasCallStack, Show a, Eq a) => IO a -> a -> Expectation
+shouldReturnShow :: (HasCallStack, Show a) => IO a -> a -> Expectation
 shouldReturnShow m a = fmap show m `shouldReturn` show a
 
 spec :: Spec
@@ -101,7 +110,6 @@ spec = do
       property $ \(a :: Double) -> do
         evalOp "logDouble#" [DoubleV a] `shouldReturnShow` [DoubleV (D# (logDouble# (unboxDouble a)))]
 
-#if __GLASGOW_HASKELL__ >= 810
     it "expm1Double#" $
       property $ \(a :: Double) -> do
         evalOp "expm1Double#" [DoubleV a] `shouldReturn` [DoubleV (D# (expm1Double# (unboxDouble a)))]
@@ -109,7 +117,6 @@ spec = do
     it "log1pDouble#" $
       property $ \(a :: Double) -> do
         evalOp "log1pDouble#" [DoubleV a] `shouldReturnShow` [DoubleV (D# (log1pDouble# (unboxDouble a)))]
-#endif
 
     it "sqrtDouble#" $
       property $ \(a :: Double) -> do
@@ -176,4 +183,5 @@ spec = do
     it "decodeDouble_Int64#" $
       property $ \(a :: Double) -> do
         let !(# x, y #) = decodeDouble_Int64# (unboxDouble a)
-        evalOp "decodeDouble_Int64#" [DoubleV a] `shouldReturn` [IntV (I# x), IntV (I# y)]
+        let x' = int64ToInt# x
+        evalOp "decodeDouble_Int64#" [DoubleV a] `shouldReturn` [IntV (I# x'), IntV (I# y)]

@@ -1,15 +1,28 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Concurrency where
 
-import Control.Monad.State
+import           Control.Applicative   (Applicative (..), (<$>))
+import           Control.Monad         (Monad (..), when)
+import           Control.Monad.State   (MonadIO (..), gets, modify')
+
+import           Data.Bool             (Bool (..), not, otherwise, (||))
 import qualified Data.ByteString.Char8 as BS8
-import qualified Data.IntMap as IntMap
-import Foreign.Ptr
+import           Data.Eq               (Eq (..))
+import           Data.Function         (($), (.))
+import           Data.Int              (Int)
+import qualified Data.IntMap           as IntMap
+import           Data.List             (drop, filter, null, reverse, (++))
+import           Data.Maybe            (Maybe (..), fromJust)
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Foreign.Ptr           (castPtr)
 
-pattern IntV i = IntAtom i
+import           GHC.Err               (error, undefined)
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax            (Name, TyCon, Type)
+
+import           System.IO             (print, putStrLn)
+
+import           Text.Show             (Show (..))
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -70,79 +83,77 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "killThread#", [ThreadId tidTarget, exception, _s]) -> do
     tid <- gets ssCurrentThreadId
     mylog $ "killThread# current-tid: " ++ show tid ++ " target-tid: " ++ show tidTarget
-    case tid == tidTarget of
-      True -> do
-        mylog "killMyself"
-        -- killMyself
-        {-
+    if tid == tidTarget then do
+      mylog "killMyself"
+      -- killMyself
+      {-
           the thread might survive
             Q: how?
             A: a catch frame can save the thread so that it will handle the exception
         -}
-        removeFromQueues tidTarget
-        let myResult = [] -- HINT: this is the result of the killThread# primop
-        raiseAsyncEx myResult tidTarget exception
+      removeFromQueues tidTarget
+      let myResult = [] -- HINT: this is the result of the killThread# primop
+      raiseAsyncEx myResult tidTarget exception
 
-        -- TODO: remove this below, problem: raiseAsyncEx may kill the thread ; model kill thread as return to scheduler operation with a descriptive reason
-        -- return the result that the raise async ex has calculated
-        tsCurrentResult <$> getCurrentThreadState
+      -- TODO: remove this below, problem: raiseAsyncEx may kill the thread ; model kill thread as return to scheduler operation with a descriptive reason
+      -- return the result that the raise async ex has calculated
+      tsCurrentResult <$> getCurrentThreadState
+    else do
+      -- kill other thread
+      targetTS <- getThreadState tidTarget
+      mylog $ "kill other thread " ++ show tidTarget ++ " " ++ show (tsStatus targetTS, tsBlockExceptions targetTS, tsInterruptible targetTS)
 
-      False -> do
-        -- kill other thread
-        targetTS <- getThreadState tidTarget
-        mylog $ "kill other thread " ++ show tidTarget ++ " " ++ show (tsStatus targetTS, tsBlockExceptions targetTS, tsInterruptible targetTS)
+      let blockIfNotInterruptible_raiseOtherwise
+            | tsBlockExceptions targetTS
+            , not (tsInterruptible targetTS)  = block
+            | otherwise                       = raise
 
-        let blockIfNotInterruptible_raiseOtherwise
-              | tsBlockExceptions targetTS
-              , not (tsInterruptible targetTS)  = block
-              | otherwise                       = raise
+          blockIfBlocked_raiseOtherwise
+            | tsBlockExceptions targetTS  = block
+            | otherwise                   = raise
 
-            blockIfBlocked_raiseOtherwise
-              | tsBlockExceptions targetTS  = block
-              | otherwise                   = raise
+          block = do
+            mylog "block"
+            -- add our thread id and exception to target's blocked excpetions queue
+            updateThreadState tidTarget (targetTS {tsBlockedExceptions = (tid, exception) : tsBlockedExceptions targetTS})
+            -- block our thread
+            myTS <- getCurrentThreadState
+            updateThreadState tid (myTS {tsStatus = ThreadBlocked $ BlockedOnThrowAsyncEx tidTarget})
 
-            block = do
-              mylog "block"
-              -- add our thread id and exception to target's blocked excpetions queue
-              updateThreadState tidTarget (targetTS {tsBlockedExceptions = (tid, exception) : tsBlockedExceptions targetTS})
-              -- block our thread
-              myTS <- getCurrentThreadState
-              updateThreadState tid (myTS {tsStatus = ThreadBlocked $ BlockedOnThrowAsyncEx tidTarget})
+            when False $ do
+              reportThread tidTarget
+              error $ "BlockedOnThrowAsyncEx, targetTS.tsStatus = " ++ show (tsStatus targetTS) ++ " targetTS.mask: " ++ show (tsBlockExceptions targetTS, tsInterruptible targetTS)
 
-              when False $ do
-                reportThread tidTarget
-                error $ "BlockedOnThrowAsyncEx, targetTS.tsStatus = " ++ show (tsStatus targetTS) ++ " targetTS.mask: " ++ show (tsBlockExceptions targetTS, tsInterruptible targetTS)
+            --liftIO $ putStrLn $ " * killThread#, blocked tid: " ++ show tid
+            -- push reschedule continuation, reason: block
+            stackPush $ RunScheduler SR_ThreadBlocked
+            mylog "block - end"
+            --reportThread tid
+            --reportThread tidTarget
+            pure []
 
-              --liftIO $ putStrLn $ " * killThread#, blocked tid: " ++ show tid
-              -- push reschedule continuation, reason: block
-              stackPush $ RunScheduler SR_ThreadBlocked
-              mylog "block - end"
-              --reportThread tid
-              --reportThread tidTarget
-              pure []
+          raise = do
+            mylog "raise"
+            removeFromQueues tidTarget
+            raiseAsyncEx (tsCurrentResult targetTS) tidTarget exception
+            mylog "raise - end"
+            pure []
 
-            raise = do
-              mylog "raise"
-              removeFromQueues tidTarget
-              raiseAsyncEx (tsCurrentResult targetTS) tidTarget exception
-              mylog "raise - end"
-              pure []
+      case tsStatus targetTS of
+        ThreadFinished  -> pure []  -- NOTE: nothing to do
+        ThreadDied      -> pure []  -- NOTE: nothing to do
+        ThreadRunning   -> blockIfBlocked_raiseOtherwise
+        ThreadBlocked blockReason -> case blockReason of
 
-        case tsStatus targetTS of
-          ThreadFinished  -> pure []  -- NOTE: nothing to do
-          ThreadDied      -> pure []  -- NOTE: nothing to do
-          ThreadRunning   -> blockIfBlocked_raiseOtherwise
-          ThreadBlocked blockReason -> case blockReason of
-
-            BlockedOnForeignCall{}  -> block
-            BlockedOnBlackHole{}    -> blockIfBlocked_raiseOtherwise
-            BlockedOnThrowAsyncEx{} -> blockIfNotInterruptible_raiseOtherwise
-            BlockedOnSTM{}          -> blockIfNotInterruptible_raiseOtherwise
-            BlockedOnMVar{}         -> blockIfNotInterruptible_raiseOtherwise
-            BlockedOnMVarRead{}     -> blockIfNotInterruptible_raiseOtherwise
-            BlockedOnRead{}         -> blockIfNotInterruptible_raiseOtherwise
-            BlockedOnWrite{}        -> blockIfNotInterruptible_raiseOtherwise
-            BlockedOnDelay{}        -> blockIfNotInterruptible_raiseOtherwise
+          BlockedOnForeignCall{}  -> block
+          BlockedOnBlackHole{}    -> blockIfBlocked_raiseOtherwise
+          BlockedOnThrowAsyncEx{} -> blockIfNotInterruptible_raiseOtherwise
+          BlockedOnSTM{}          -> blockIfNotInterruptible_raiseOtherwise
+          BlockedOnMVar{}         -> blockIfNotInterruptible_raiseOtherwise
+          BlockedOnMVarRead{}     -> blockIfNotInterruptible_raiseOtherwise
+          BlockedOnRead{}         -> blockIfNotInterruptible_raiseOtherwise
+          BlockedOnWrite{}        -> blockIfNotInterruptible_raiseOtherwise
+          BlockedOnDelay{}        -> blockIfNotInterruptible_raiseOtherwise
 
   -- yield# :: State# RealWorld -> State# RealWorld
   ( "yield#", [_s]) -> do
@@ -157,7 +168,7 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- labelThread# :: ThreadId# -> Addr# -> State# RealWorld -> State# RealWorld
   ( "labelThread#", [ThreadId tid, PtrAtom _ p, _s]) -> do
     threadLabel <- liftIO . BS8.packCString $ castPtr p
-    let setLabel ts@ThreadState{..} = ts {tsLabel = Just threadLabel}
+    let setLabel ts = ts {tsLabel = Just threadLabel}
     modify' $ \s@StgState{..} -> s {ssThreads = IntMap.adjust setLabel tid ssThreads}
     pure []
 
@@ -213,13 +224,13 @@ raiseAsyncEx lastResult targetTid exception = do
             , tsStatus          = ThreadRunning -- HINT: whatever blocked this thread now that operation got cancelled by the async exception
             -- NOTE: Ensure that async exceptions are blocked now, so we don't get a surprise exception before we get around to executing the handler.
             , tsBlockExceptions = True
-            , tsInterruptible   = if bEx then iEx else True
+            , tsInterruptible   = not bEx || iEx
             }
           --liftIO $ putStrLn $ "set mask - " ++ show targetTid ++ " raiseAsyncEx b:True i:" ++ show (if bEx then iEx else True)
 
         -- replace Update with ApStack
         Update addr : stackTail -> do
-          when (result == []) $ error "internal error - result should be a [HeapPtr], but it's value is []"
+          when (null result) $ error "internal error - result should be a [HeapPtr], but it's value is []"
           let apStack = ApStack
                 { hoResult  = result
                 , hoStack   = reverse stackPiece
@@ -241,7 +252,7 @@ raiseAsyncEx lastResult targetTid exception = do
               reportThread targetTid
               error "internal error"
             _ -> pure ()
-          let Just tlog = tsActiveTLog ts
+          let _tlog = fromJust $ tsActiveTLog ts
           -- HINT: abort transaction, do not need to unsubscribe, because it was already done in killThread# before it called raiseAsyncEx
           updateThreadState targetTid $ ts {tsActiveTLog = Nothing}
           unwindStack result (AtomicallyOp stmAction : stackPiece) stackTail
@@ -256,8 +267,11 @@ raiseAsyncEx lastResult targetTid exception = do
               reportThread targetTid
               error "internal error"
             _ -> pure ()
-          let Just tlog = tsActiveTLog ts
-              tlogStackTop : tlogStackTail = tsTLogStack ts
+          let _tlog = fromJust $ tsActiveTLog ts
+              (tlogStackTop, tlogStackTail) =
+                case tsTLogStack ts of
+                  []      -> undefined
+                  (a : b) -> (a, b)
           -- HINT: abort transaction, do not need to unsubscribe, because it was already done in killThread# before it called raiseAsyncEx
           mylog $ show targetTid ++ " ** raiseAsyncEx - CatchSTM"
           updateThreadState targetTid $ ts
@@ -277,8 +291,8 @@ raiseAsyncEx lastResult targetTid exception = do
               reportThread targetTid
               error "internal error"
             _ -> pure ()
-          let Just tlog = tsActiveTLog ts
-          updateThreadState targetTid $ ts { tsTLogStack = tail $ tsTLogStack ts }
+          let _tlog = fromJust $ tsActiveTLog ts
+          updateThreadState targetTid $ ts { tsTLogStack = drop 1 $ tsTLogStack ts }
           unwindStack result (stackHead : stackPiece) stackTail
 
         -- collect stack frames for ApStack
@@ -302,7 +316,7 @@ removeFromQueues tid = do
     ThreadBlocked BlockedOnWrite{}          -> pure () -- HINT: no queue for file write
     ThreadBlocked BlockedOnThrowAsyncEx{}   -> pure () -- Q: what to do?
     ThreadBlocked (BlockedOnBlackHole addr) -> removeFromBlackHoleQueue tid addr
-    _ -> error $ "TODO: removeFromQueues " ++ show tsStatus
+    _                                       -> error $ "TODO: removeFromQueues " ++ show tsStatus
 
 removeFromMVarQueue :: Int -> Int -> M ()
 removeFromMVarQueue tid m = do

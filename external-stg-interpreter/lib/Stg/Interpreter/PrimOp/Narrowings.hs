@@ -1,15 +1,16 @@
-{-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
 module Stg.Interpreter.PrimOp.Narrowings where
 
-import Data.Int
-import Data.Word
+import           Control.Applicative  (Applicative (..))
 
-import Stg.Syntax
-import Stg.Interpreter.Base
+import           Data.Function        (($))
+import           Data.Int             (Int16, Int32, Int8)
+import           Data.Maybe           (Maybe)
+import           Data.Word            (Word16, Word32, Word8)
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+import           GHC.Real             (fromIntegral)
+
+import           Stg.Interpreter.Base
+import           Stg.Syntax           (Name, TyCon, Type)
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of
@@ -32,4 +33,4 @@ evalPrimOp fallback op args t tc = case (op, args) of
   -- narrow32Word# :: Word# -> Word#
   ( "narrow32Word#", [WordV a]) -> pure [WordV $ fromIntegral (fromIntegral a :: Word32)]
 
-  _ -> fallback op args t tc
+  _                             -> fallback op args t tc
