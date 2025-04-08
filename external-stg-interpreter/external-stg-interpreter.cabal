@@ -44,12 +44,12 @@ library
   default-extensions:
     DeriveAnyClass
     GeneralizedNewtypeDeriving
+    MultiWayIf
     NoImplicitPrelude
     OverloadedStrings
+    PatternSynonyms
     RecordWildCards
     TypeFamilies
-    MultiWayIf
-    PatternSynonyms
   ghc-options:
     -Wall
     -Wnoncanonical-monad-instances
@@ -62,56 +62,53 @@ library
   ghc-options:         -fobject-code -O2
   build-depends:
     base,
-    time,
-    unix,
-    filepath,
-    directory,
-    libffi,
-    zip,
-    yaml,
-    text,
+    bimap,
     bytestring,
     containers,
-    transformers,
-    primitive,
-    vector,
-    mtl,
-    inline-c,
-    unagi-chan,
-    pretty-terminal,
-    pretty-simple,
-    bimap,
-    souffle-haskell,
+    directory,
+    external-stg,
     external-stg-syntax,
-    external-stg
+    filepath,
+    inline-c,
+    libffi,
+    mtl,
+    pretty-simple,
+    pretty-terminal,
+    primitive,
+    souffle-haskell,
+    text,
+    time,
+    transformers,
+    unagi-chan,
+    unix,
+    vector,
+    yaml,
+    zip
   exposed-modules:
     Foreign.LibFFI.Closure
 
     Stg.Interpreter
     Stg.Interpreter.Base
-    Stg.Interpreter.FFI
-    Stg.Interpreter.PrimCall
-    Stg.Interpreter.Rts
-    Stg.Interpreter.RtsFFI
-    Stg.Interpreter.EmulatedLibFFI
     Stg.Interpreter.Debug
-    Stg.Interpreter.IOManager
-    Stg.Interpreter.ThreadScheduler
     Stg.Interpreter.Debugger
     Stg.Interpreter.Debugger.Datalog
     Stg.Interpreter.Debugger.Internal
     Stg.Interpreter.Debugger.Region
-    Stg.Interpreter.Debugger.UI
-    Stg.Interpreter.Debugger.TraverseState
     Stg.Interpreter.Debugger.Retainer
+    Stg.Interpreter.Debugger.TraverseState
+    Stg.Interpreter.Debugger.UI
+    Stg.Interpreter.EmulatedLibFFI
+    Stg.Interpreter.FFI
     Stg.Interpreter.GC
+    Stg.Interpreter.GC.DeadlockAnalysis
     Stg.Interpreter.GC.GCRef
     Stg.Interpreter.GC.LiveDataAnalysis
     Stg.Interpreter.GC.RetainerAnalysis
-    Stg.Interpreter.GC.DeadlockAnalysis
+    Stg.Interpreter.IOManager
+    Stg.Interpreter.PrimCall
     Stg.Interpreter.PrimOp.Addr
-    Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.Array
+    Stg.Interpreter.PrimOp.ArrayArray
     Stg.Interpreter.PrimOp.ByteArray
     Stg.Interpreter.PrimOp.Char
     Stg.Interpreter.PrimOp.Compact
@@ -122,29 +119,32 @@ library
     Stg.Interpreter.PrimOp.Float
     Stg.Interpreter.PrimOp.GHCiBytecode
     Stg.Interpreter.PrimOp.InfoTableOrigin
-    Stg.Interpreter.PrimOp.Int64
-    Stg.Interpreter.PrimOp.Int32
-    Stg.Interpreter.PrimOp.Int16
-    Stg.Interpreter.PrimOp.Int8
     Stg.Interpreter.PrimOp.Int
+    Stg.Interpreter.PrimOp.Int16
+    Stg.Interpreter.PrimOp.Int32
+    Stg.Interpreter.PrimOp.Int64
+    Stg.Interpreter.PrimOp.Int8
+    Stg.Interpreter.PrimOp.MVar
     Stg.Interpreter.PrimOp.MiscEtc
     Stg.Interpreter.PrimOp.MutVar
-    Stg.Interpreter.PrimOp.MVar
     Stg.Interpreter.PrimOp.Narrowings
     Stg.Interpreter.PrimOp.ObjectLifetime
     Stg.Interpreter.PrimOp.Parallelism
     Stg.Interpreter.PrimOp.Prefetch
+    Stg.Interpreter.PrimOp.STM
     Stg.Interpreter.PrimOp.SmallArray
     Stg.Interpreter.PrimOp.StablePointer
-    Stg.Interpreter.PrimOp.STM
     Stg.Interpreter.PrimOp.TagToEnum
     Stg.Interpreter.PrimOp.Unsafe
     Stg.Interpreter.PrimOp.WeakPointer
-    Stg.Interpreter.PrimOp.Word64
-    Stg.Interpreter.PrimOp.Word32
-    Stg.Interpreter.PrimOp.Word16
-    Stg.Interpreter.PrimOp.Word8
     Stg.Interpreter.PrimOp.Word
+    Stg.Interpreter.PrimOp.Word16
+    Stg.Interpreter.PrimOp.Word32
+    Stg.Interpreter.PrimOp.Word64
+    Stg.Interpreter.PrimOp.Word8
+    Stg.Interpreter.Rts
+    Stg.Interpreter.RtsFFI
+    Stg.Interpreter.ThreadScheduler
   
   include-dirs:        
     datalog
@@ -159,10 +159,10 @@ executable ext-stg-interpreter
   main-is: ExtStgInterpreter.hs
   build-depends:
     base < 5.0,
-    unagi-chan,
-    shellwords,
+    external-stg-interpreter,
     optparse-applicative,
-    external-stg-interpreter
+    shellwords,
+    unagi-chan
   include-dirs:        
     datalog
     souffle/src/include
@@ -175,17 +175,17 @@ executable run-stgi-testsuite
   hs-source-dirs: app
   main-is: RunStgiTestsuite.hs
   build-depends:
+    async-pool,
     base < 5.0,
-    containers,
-    filepath,
-    directory,
     bytestring,
+    containers,
+    directory,
+    filemanip,
+    filepath,
     prettyprinter,
     prettyprinter-ansi-terminal,
-    timeit,
-    filemanip,
-    async-pool,
-    process
+    process,
+    timeit
   ghc-options: -rtsopts -threaded
 
 test-suite primop-test
@@ -195,21 +195,21 @@ test-suite primop-test
   main-is: Spec.hs
   build-depends:
     base >=4.11,
-    mtl,
-    external-stg-syntax,
     external-stg-interpreter,
+    external-stg-syntax,
     hspec,
+    mtl,
     QuickCheck
 
   other-modules:
-    PrimOp.Word8Spec
-    PrimOp.Word16Spec
-    PrimOp.IntSpec
-    PrimOp.Int8Spec
-    PrimOp.Int16Spec
-    PrimOp.CharSpec
-    PrimOp.NarrowingsSpec
-    PrimOp.FloatSpec
-    PrimOp.DoubleSpec
-    PrimOp.WordSpec
     PrimOp.AddrSpec
+    PrimOp.CharSpec
+    PrimOp.DoubleSpec
+    PrimOp.FloatSpec
+    PrimOp.Int16Spec
+    PrimOp.Int8Spec
+    PrimOp.IntSpec
+    PrimOp.NarrowingsSpec
+    PrimOp.Word16Spec
+    PrimOp.Word8Spec
+    PrimOp.WordSpec
