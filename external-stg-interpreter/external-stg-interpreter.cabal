@@ -1,4 +1,4 @@
-cabal-version:       3.0
+cabal-version:       3.14
 name:                external-stg-interpreter
 version:             0.1.0.1
 synopsis:            External STG interpreter
@@ -39,7 +39,7 @@ common lang
     -Wmissing-deriving-strategies
 
 library
-  hs-source-dirs:      lib
+  hs-source-dirs: lib
   default-language: GHC2024
   default-extensions:
     DeriveAnyClass
@@ -60,29 +60,30 @@ library
     -Wunused-packages
     -Wmissing-deriving-strategies
   ghc-options:         -fobject-code -O2
-  build-depends:       base,
-                       time,
-                       unix,
-                       filepath,
-                       directory,
-                       libffi,
-                       zip,
-                       yaml,
-                       text,
-                       bytestring,
-                       containers,
-                       transformers,
-                       primitive,
-                       vector,
-                       mtl,
-                       inline-c,
-                       unagi-chan,
-                       pretty-terminal,
-                       pretty-simple,
-                       bimap,
-                       souffle-haskell,
-                       external-stg-syntax,
-                       external-stg
+  build-depends:
+    base,
+    time,
+    unix,
+    filepath,
+    directory,
+    libffi,
+    zip,
+    yaml,
+    text,
+    bytestring,
+    containers,
+    transformers,
+    primitive,
+    vector,
+    mtl,
+    inline-c,
+    unagi-chan,
+    pretty-terminal,
+    pretty-simple,
+    bimap,
+    souffle-haskell,
+    external-stg-syntax,
+    external-stg
   exposed-modules:
     Foreign.LibFFI.Closure
 
@@ -148,60 +149,67 @@ library
   include-dirs:        
     datalog
     souffle/src/include
-  cxx-options:          -D__EMBEDDED_SOUFFLE__ -std=c++17 -Wno-deprecated-declarations
-  cxx-sources:          datalog/ext-stg-gc.cpp
+  cxx-options: -D__EMBEDDED_SOUFFLE__ -std=c++17 -Wno-deprecated-declarations
+  cxx-sources: datalog/ext-stg-gc.cpp
 
 
 executable ext-stg-interpreter
-  import:              lang
-  hs-source-dirs:      app
-  main-is:             ExtStgInterpreter.hs
-  build-depends:       base < 5.0,
-                       unagi-chan,
-                       shellwords,
-                       optparse-applicative,
-                       external-stg-interpreter
-
+  import: lang
+  hs-source-dirs: app
+  main-is: ExtStgInterpreter.hs
+  build-depends:
+    base < 5.0,
+    unagi-chan,
+    shellwords,
+    optparse-applicative,
+    external-stg-interpreter
+  include-dirs:        
+    datalog
+    souffle/src/include
+  cxx-options: -D__EMBEDDED_SOUFFLE__ -std=c++17 -Wno-deprecated-declarations
+  cxx-sources: datalog/ext-stg-gc.cpp
   ghc-options: -rtsopts -threaded
 
 executable run-stgi-testsuite
-  import:              lang
-  hs-source-dirs:      app
-  main-is:             RunStgiTestsuite.hs
-  build-depends:       base < 5.0,
-                       containers,
-                       filepath,
-                       directory,
-                       bytestring,
-                       prettyprinter,
-                       prettyprinter-ansi-terminal,
-                       timeit,
-                       filemanip,
-                       async-pool,
-                       process
-
+  import: lang
+  hs-source-dirs: app
+  main-is: RunStgiTestsuite.hs
+  build-depends:
+    base < 5.0,
+    containers,
+    filepath,
+    directory,
+    bytestring,
+    prettyprinter,
+    prettyprinter-ansi-terminal,
+    timeit,
+    filemanip,
+    async-pool,
+    process
   ghc-options: -rtsopts -threaded
 
 test-suite primop-test
-  import:              lang
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             Spec.hs
-  build-depends:       base >=4.11
-                     , mtl
-                     , external-stg-syntax
-                     , external-stg-interpreter
-                     , hspec
-                     , QuickCheck
+  import: lang
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Spec.hs
+  build-depends:
+    base >=4.11,
+    mtl,
+    external-stg-syntax,
+    external-stg-interpreter,
+    hspec,
+    QuickCheck
 
-  other-modules:       PrimOp.Word8Spec
-                       PrimOp.Word16Spec
-                       PrimOp.IntSpec
-                       PrimOp.Int8Spec
-                       PrimOp.Int16Spec
-                       PrimOp.CharSpec
-                       PrimOp.NarrowingsSpec
-                       PrimOp.FloatSpec
-                       PrimOp.DoubleSpec
-                       PrimOp.WordSpec
-                       PrimOp.AddrSpec
+  other-modules:
+    PrimOp.Word8Spec
+    PrimOp.Word16Spec
+    PrimOp.IntSpec
+    PrimOp.Int8Spec
+    PrimOp.Int16Spec
+    PrimOp.CharSpec
+    PrimOp.NarrowingsSpec
+    PrimOp.FloatSpec
+    PrimOp.DoubleSpec
+    PrimOp.WordSpec
+    PrimOp.AddrSpec
