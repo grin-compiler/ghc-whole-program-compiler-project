@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.DelayWait where
 
+import Control.Monad
 import Control.Monad.State
 import Data.Time.Clock
 import Data.Fixed

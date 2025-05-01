@@ -1,7 +1,7 @@
 module Stg.GHC.Backend where
 
 -- Compiler
-import GHC
+import GHC hiding (Backend)
 import GHC.Paths ( libdir )
 import GHC.Platform ( platformOS, osSubsectionsViaSymbols )
 import GHC.Driver.CodeOutput
@@ -10,11 +10,12 @@ import GHC.Driver.Main
 import GHC.Driver.Phases
 import GHC.Driver.Pipeline
 import GHC.Driver.Session
---import GHC.Driver.Types
 import GHC.Utils.Error
 import GHC.Utils.Outputable
 import GHC.Builtin.Names (rOOT_MAIN)
 import GHC.Unit.State
+import GHC.Types.Basic
+import GHC.Types.HpcInfo
 
 -- Stg Types
 import GHC.Data.FastString
@@ -33,7 +34,7 @@ import GHC.Cmm
 import GHC.Cmm.Info (cmmToRawCmm )
 import GHC.StgToCmm (codeGen)
 import GHC.Types.Unique.Supply ( mkSplitUniqSupply, initUs_ )
-import GHC.StgToCmm.Types (CgInfos (..))
+import GHC.StgToCmm.Types
 
 import Control.Monad.Trans
 import Control.Monad
@@ -61,11 +62,11 @@ modl = rOOT_MAIN
 data Backend = NCG | LLVM
 
 
-compileToObject :: Backend -> Unit -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> IO ()
+compileToObject :: Backend -> Unit -> ModuleName -> C.ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> IO ()
 compileToObject backend unitId modName stubs tyCons topBinds_simple outputName = do
   runGhc (Just libdir) $ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName
 
-compileToObjectM :: Backend -> Unit -> ModuleName -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> Ghc ()
+compileToObjectM :: Backend -> Unit -> ModuleName -> C.ForeignStubs -> [TyCon] -> [StgTopBinding] -> FilePath -> Ghc ()
 compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName = do
   dflags <- getSessionDynFlags
 
@@ -103,7 +104,7 @@ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName 
   -- Compile
   dflags <- getSessionDynFlags
   pkgs <- setSessionDynFlags $
-    dflags { hscTarget = target, ghcLink = NoLink }
+    dflags { targetPlatform = target, ghcLink = NoLink }
     `gopt_set`  Opt_KeepSFiles
     `gopt_set`  Opt_KeepLlvmFiles
 --    `dopt_set`  Opt_D_dump_cmm
@@ -125,7 +126,7 @@ compileToObjectM backend unitId modName stubs tyCons topBinds_simple outputName 
   pure ()
 
 
-compileProgram :: Backend -> Bool -> [String] -> [String] -> [String] -> [String] -> ForeignStubs -> [TyCon] -> [StgTopBinding] -> IO ()
+compileProgram :: Backend -> Bool -> [String] -> [String] -> [String] -> [String] -> C.ForeignStubs -> [TyCon] -> [StgTopBinding] -> IO ()
 compileProgram backend noHsMain incPaths libPaths ldOpts clikeFiles stubs tyCons topBinds_simple = runGhc (Just libdir) $ do
   dflags <- getSessionDynFlags
 
@@ -176,7 +177,7 @@ type CollectedCCs
   setSessionDynFlags $
     (if noHsMain then flip gopt_set Opt_NoHsMain else id) $
     dflags
-      { hscTarget     = target
+      { targetPlatform = target
       , ghcLink       = LinkBinary
       , libraryPaths  = libraryPaths dflags ++ libPaths
       , ldInputs      = ldInputs dflags ++ map Option ldOpts
@@ -220,12 +221,12 @@ newGen :: DynFlags
        -> HscEnv
        -> FilePath
        -> Module
-       -> ForeignStubs
+       -> C.ForeignStubs
        -> [TyCon]
        -> CollectedCCs
        -> [StgTopBinding]
        -> HpcInfo
-       -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], CgInfos)
+       -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], CmmCgInfos)
 newGen dflags hsc_env output_filename this_mod foreign_stubs data_tycons cost_centre_info stg_binds hpc_info = do
   -- TODO: add these to parameters
   let location = ModLocation

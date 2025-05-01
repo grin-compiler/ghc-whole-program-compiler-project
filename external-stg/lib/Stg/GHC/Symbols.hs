@@ -1,7 +1,5 @@
 module Stg.GHC.Symbols where
 
-import Stg.Syntax
-
 liveSymbols :: [(String, String, String)]
 liveSymbols =
   -- exceptions (top level CAFs that create an Exception data constructor that can passed to raise# or raiseIO#)

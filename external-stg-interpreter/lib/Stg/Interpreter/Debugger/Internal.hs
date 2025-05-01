@@ -3,6 +3,7 @@ module Stg.Interpreter.Debugger.Internal where
 
 import Text.Printf
 import qualified Text.Read as Text
+import Control.Monad
 import Control.Monad.State
 import qualified Data.List as List
 import qualified Data.Set as Set

@@ -12,6 +12,15 @@ copyright:           2020 Csaba Hruska
 category:            Compiler
 build-type:          Simple
 
+flag external-ext-stg-liveness
+  manual:
+    True
+  default:
+    False
+  description:
+    If enabled, the ext-stg-liveness binary is provided externally and available in $PATH
+    Disbled by default.
+
 library
   hs-source-dirs:      lib
   exposed-modules:
@@ -43,13 +52,14 @@ library
   default-language:     Haskell2010
   cpp-options:          -DEXTERNAL_STG_COMPILER_PACKAGE
 
-  include-dirs:         cbits
+  if !flag(external-ext-stg-liveness)
+    include-dirs:         cbits
 
-  extra-libraries:      gomp
+    extra-libraries:      gomp
 
-  cxx-sources:          cbits/ext-stg-liveness.cpp
-  cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
-  ld-options:           "-Wl,--undefined=__factory_Sf_ext_stg_liveness_instance"
+    cxx-sources:          cbits/ext-stg-liveness.cpp
+    cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
+    ld-options:           "-Wl,--undefined=__factory_Sf_ext_stg_liveness_instance"
 
 executable gen-exe
   hs-source-dirs:      app

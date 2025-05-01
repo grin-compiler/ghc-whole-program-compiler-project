@@ -13,6 +13,7 @@ import Stg.Syntax (Name, Type(..))
 import Stg.Interpreter.Base
 import Stg.Interpreter.PrimOp.Double
 
+import GHC.Int
 import GHC.Exts
 
 runTests :: IO ()
@@ -176,4 +177,4 @@ spec = do
     it "decodeDouble_Int64#" $
       property $ \(a :: Double) -> do
         let !(# x, y #) = decodeDouble_Int64# (unboxDouble a)
-        evalOp "decodeDouble_Int64#" [DoubleV a] `shouldReturn` [IntV (I# x), IntV (I# y)]
+        evalOp "decodeDouble_Int64#" [DoubleV a] `shouldReturn` [IntV (fromIntegral (I64# x)), IntV (I# y)]

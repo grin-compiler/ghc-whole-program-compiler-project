@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms #-}
 module Stg.Interpreter.PrimOp.Concurrency where
 
+import Control.Monad
 import Control.Monad.State
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.IntMap as IntMap

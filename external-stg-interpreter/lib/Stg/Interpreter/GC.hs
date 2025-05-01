@@ -2,6 +2,7 @@
 module Stg.Interpreter.GC where
 
 import Text.Printf
+import Control.Monad
 import Control.Monad.State
 import qualified Data.Map as Map
 import Data.IntMap (IntMap)

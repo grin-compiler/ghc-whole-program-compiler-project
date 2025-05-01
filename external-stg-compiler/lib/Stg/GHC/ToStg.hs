@@ -37,6 +37,7 @@ import GHC.Core.TyCon
 import GHC.Core.DataCon
 import GHC.Core.Type
 
+import Control.Monad
 import Control.Monad.State
 import Data.List (partition)
 

@@ -8,6 +8,7 @@ import GHC.Prelude
 import qualified Data.ByteString.Char8 as BS8
 
 import qualified GHC
+import qualified GHC.Tc.Types.Origin    as GHC
 import qualified GHC.Hs.Extension       as GHC
 import qualified GHC.Hs.Decls           as GHC
 import qualified GHC.Builtin.PrimOps    as GHC
@@ -15,6 +16,7 @@ import qualified GHC.Core               as GHC
 import qualified GHC.Core.DataCon       as GHC
 import qualified GHC.Core.TyCon         as GHC
 import qualified GHC.Core.TyCo.Ppr      as GHC
+import qualified GHC.Core.TyCon         as GHC
 import qualified GHC.Core.TyCo.Rep      as GHC
 import qualified GHC.Core.Type          as GHC
 import qualified GHC.Data.FastString    as GHC
