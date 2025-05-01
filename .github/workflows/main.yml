@@ -11,16 +11,15 @@ jobs:
     if: github.ref != 'refs/heads/master'
     steps:
      - uses: DeterminateSystems/nix-installer-action@main
-     - name: Cancel Previous Runs
-       uses: styfle/cancel-workflow-action@0.9.1
-       with:
-         access_token: ${{ github.token }}
 
      - name: Nix channel update
        run: nix-channel --update
 
      - name: Cabal install
        run: nix-env -iA cabal-install -f '<nixpkgs>'
+
+     - name: Cabal update
+       run: cabal update
 
      - name: Build external-stg-interpreter
        run: nix-shell -p ghc -p bzip2.dev -p zlib.dev --run 'cabal build external-stg-interpreter'
