@@ -30,6 +30,9 @@ evalOp op args = do
 unboxWord :: Word -> Word#
 unboxWord (W# x) = x
 
+unboxWord64 :: Word64 -> Word64#
+unboxWord64 (W64# x) = x
+
 unboxInt :: Int -> Int#
 unboxInt (I# x) = x
 
@@ -171,7 +174,7 @@ spec = do
 
     it "popCnt64#" $
       property $ \(a :: Word) -> do
-        evalOp "popCnt64#" [WordV a] `shouldReturn` [WordV (W# (popCnt64# (unboxWord a)))]
+        evalOp "popCnt64#" [WordV a] `shouldReturn` [WordV (W# (popCnt64# (unboxWord64 (fromIntegral a))))]
 
     it "popCnt#" $
       property $ \(a :: Word) -> do
@@ -191,7 +194,9 @@ spec = do
 
     it "pdep64#" $
       property $ \(a :: Word, b :: Word) -> do
-        evalOp "pdep64#" [WordV a, WordV b] `shouldReturn` [WordV (W# (pdep64# (unboxWord a) (unboxWord b)))]
+        evalOp "pdep64#" [WordV a, WordV b] `shouldReturn` [
+          WordV $ fromIntegral (W64# (pdep64# (unboxWord64 (fromIntegral a)) (unboxWord64 (fromIntegral b))))
+          ]
 
     it "pdep#" $
       property $ \(a :: Word, b :: Word) -> do
@@ -211,7 +216,8 @@ spec = do
 
     it "pext64#" $
       property $ \(a :: Word, b :: Word) -> do
-        evalOp "pext64#" [WordV a, WordV b] `shouldReturn` [WordV (W# (pext64# (unboxWord a) (unboxWord b)))]
+        evalOp "pext64#" [WordV a, WordV b] `shouldReturn`
+          [WordV $ fromIntegral (W64# (pext64# (unboxWord64 (fromIntegral a)) (unboxWord64 (fromIntegral b))))]
 
     it "pext#" $
       property $ \(a :: Word, b :: Word) -> do
@@ -231,7 +237,7 @@ spec = do
 
     it "clz64#" $
       property $ \(a :: Word) -> do
-        evalOp "clz64#" [WordV a] `shouldReturn` [WordV (W# (clz64# (unboxWord a)))]
+        evalOp "clz64#" [WordV a] `shouldReturn` [WordV $ W# (clz64# (unboxWord64 (fromIntegral a)))]
 
     it "clz#" $
       property $ \(a :: Word) -> do
@@ -250,8 +256,8 @@ spec = do
         evalOp "ctz32#" [WordV a] `shouldReturn` [WordV (W# (ctz32# (unboxWord a)))]
 
     it "ctz64#" $
-      property $ \(a :: Word) -> do
-        evalOp "ctz64#" [WordV a] `shouldReturn` [WordV (W# (ctz64# (unboxWord a)))]
+      property $ \(a :: Word) ->
+        evalOp "ctz64#" [WordV a] `shouldReturn` [WordV (W# (ctz64# (unboxWord64 (fromIntegral a))))]
 
     it "ctz#" $
       property $ \(a :: Word) -> do
@@ -267,7 +273,7 @@ spec = do
 
     it "byteSwap64#" $
       property $ \(a :: Word) -> do
-        evalOp "byteSwap64#" [WordV a] `shouldReturn` [WordV (W# (byteSwap64# (unboxWord a)))]
+        evalOp "byteSwap64#" [WordV a] `shouldReturn` [WordV $ fromIntegral (W64# (byteSwap64# (unboxWord64 (fromIntegral a))))]
 
     it "byteSwap#" $
       property $ \(a :: Word) -> do
@@ -288,7 +294,8 @@ spec = do
 
     it "bitReverse64#" $
       property $ \(a :: Word) -> do
-        evalOp "bitReverse64#" [WordV a] `shouldReturn` [WordV (W# (bitReverse64# (unboxWord a)))]
+        evalOp "bitReverse64#" [WordV a] `shouldReturn`
+           [Word64V $ fromIntegral (W64# (bitReverse64# (unboxWord64 (fromIntegral a))))]
 
     it "bitReverse#" $
       property $ \(a :: Word) -> do

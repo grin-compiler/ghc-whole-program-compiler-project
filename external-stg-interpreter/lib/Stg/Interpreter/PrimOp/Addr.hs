@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards, LambdaCase, OverloadedStrings, PatternSynonyms, Strict #-}
 module Stg.Interpreter.PrimOp.Addr where
 
+import Control.Monad
 import Control.Monad.State
 import Data.Char
 import Data.Word
