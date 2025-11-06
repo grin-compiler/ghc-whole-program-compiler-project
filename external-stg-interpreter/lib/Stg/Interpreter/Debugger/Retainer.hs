@@ -4,6 +4,7 @@ module Stg.Interpreter.Debugger.Retainer
 -- , exportRetainerDominatorTree
  ) where
 
+import Control.Monad
 import Control.Monad.Writer
 import Control.Monad.State
 import Data.Maybe

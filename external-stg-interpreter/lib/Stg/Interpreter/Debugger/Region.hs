@@ -2,6 +2,7 @@
 module Stg.Interpreter.Debugger.Region where
 
 import Text.Printf
+import Control.Monad
 import Control.Monad.State
 import Data.Maybe
 import qualified Data.List as List

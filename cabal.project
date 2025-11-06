@@ -1,0 +1,23 @@
+packages:
+  external-stg/
+  external-stg-syntax/
+  external-stg-interpreter/
+  external-stg-compiler/
+  wpc-plugin/
+  lambda/
+
+package external-stg-interpreter
+  flags: +external-ext-stg-gc
+
+package external-stg-compiler
+  flags: +external-ext-stg-liveness
+
+source-repository-package
+  type: git
+  location: https://github.com/david-christiansen/final-pretty-printer
+  tag: 048e8fa2d8b2b7a6f9e4e209db4f67361321eec8
+
+source-repository-package
+  type: git
+  location: https://github.com/luc-tielen/souffle-haskell
+  tag: 268a11283ca9293b5eacabf7a0b79d9368232478

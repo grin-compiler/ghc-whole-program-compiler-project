@@ -2,6 +2,7 @@
 module Stg.Interpreter.Debugger where
 
 import GHC.Stack
+import Control.Monad
 import Control.Monad.State
 import qualified Data.Set as Set
 import qualified Data.Map as Map
