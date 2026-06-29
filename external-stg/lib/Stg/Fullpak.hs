@@ -34,10 +34,11 @@ add zipPath srcPath = do
 mkFullpak :: FilePath -> Bool -> Bool -> FilePath -> IO ()
 mkFullpak ghcstgappPath stgbinsOnly includeAll fullpakName = do
   -- mk .fullpak
+  ghcstgapp <- readGhcStgApp ghcstgappPath
   modinfoList <- getAppModuleMapping ghcstgappPath
   appModpaks <- if includeAll
     then getModuleList modinfoList
-    else collectProgramModules (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
+    else collectProgramModules (map modModpakPath modinfoList) (appUnitId ghcstgapp) (appMainModuleName ghcstgapp) GHCSymbols.liveSymbols
 
   let modpakMap       = Map.fromList [(modModpakPath m , m) | m <- modinfoList]
       fullpakModules  = [modpakMap Map.! m | m <- appModpaks]

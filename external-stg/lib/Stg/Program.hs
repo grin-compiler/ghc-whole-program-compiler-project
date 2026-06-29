@@ -30,11 +30,14 @@ import Stg.JSON ()
 import Stg.Reconstruct (reconModule)
 import qualified Stg.GHC.Symbols as GHCSymbols
 
-moduleToModpak :: String -> String -> FilePath
-moduleToModpak modpakExt moduleName = replaceEq '.' '/' moduleName ++ modpakExt
+moduleToPath :: String -> FilePath
+moduleToPath moduleName = replaceEq '.' '/' moduleName
   where
     replaceEq :: Eq a => a -> a -> [a] -> [a]
     replaceEq from to = map (\cur -> if cur == from then to else cur)
+
+moduleToModpak :: String -> String -> FilePath
+moduleToModpak modpakExt moduleName = moduleToPath moduleName ++ modpakExt
 
 parseSection :: [String] -> String -> [String]
 parseSection content n = map (read . tail) . takeWhile (isPrefixOf "-") . tail . dropWhile (not . isPrefixOf n) $ content
@@ -49,6 +52,7 @@ data StgModuleInfo
   , modPackageName          :: String
   , modPackageVersion       :: String
   , modUnitId               :: String
+  , modUnitArtifactsDir     :: FilePath
   }
   deriving (Eq, Ord, Show)
 
@@ -102,6 +106,7 @@ data GhcStgApp
   , appExtraLibs      :: [String]
   , appExtraLibDirs   :: [FilePath]
   , appLdOptions      :: [String]
+  , appWiredInUnitIds :: [String]
   , appLibDeps        :: [UnitLinkerInfo]
   } deriving (Eq, Show)
 
@@ -125,10 +130,12 @@ instance FromJSON GhcStgApp where
       <*> v .:? "extra-libraries" .!= []
       <*> v .:? "library-dirs" .!= []
       <*> v .:? "ld-options" .!= []
+      <*> v .:? "wired-in-unit-ids" .!= []
       <*> v .:? "app-deps" .!= []
   parseJSON _ = fail "Expected Object for UnitLinkerInfo value"
 
-wpcModpaksPath, wpcCbitsPath, wpcCapiStubsPath, wpcCbitsSourcePath :: String
+wpcHsModulesPath, wpcModpaksPath, wpcCbitsPath, wpcCapiStubsPath, wpcCbitsSourcePath :: String
+wpcHsModulesPath  = "extra-compilation-artifacts" </> "wpc-plugin" </> "hs-modules"
 wpcModpaksPath    = "extra-compilation-artifacts" </> "wpc-plugin" </> "modpaks"
 wpcCbitsPath      = "extra-compilation-artifacts" </> "wpc-plugin" </> "cbits"
 wpcCapiStubsPath  = "extra-compilation-artifacts" </> "wpc-plugin" </> "capi-stubs"
@@ -155,6 +162,7 @@ getAppModuleMapping ghcStgAppFname = do
           , modPackageName    = unitName
           , modPackageVersion = unitVersion
           , modUnitId         = unitId
+          , modUnitArtifactsDir = dir
           }
         | UnitLinkerInfo{..} <- appLibDeps
         , Just dir <- [unitArtifactsDir]
@@ -174,6 +182,7 @@ getAppModuleMapping ghcStgAppFname = do
         , modPackageName    = appUnitId
         , modPackageVersion = ""
         , modUnitId         = appUnitId
+        , modUnitArtifactsDir = appObjectDir
         }
       | mod <- appModules
       , let modpakRelPath = if mod == appMainModuleName
@@ -228,8 +237,9 @@ getFullpakModules fullpakPath = do
 -- .ghc_stgapp
 getGhcStgAppModules :: FilePath -> IO [Module]
 getGhcStgAppModules ghcstgappPath = do
+  ghcstgapp <- readGhcStgApp ghcstgappPath
   modinfoList <- getAppModuleMapping ghcstgappPath
-  appModpaks <- collectProgramModules' False (map modModpakPath modinfoList) "main" "Main" GHCSymbols.liveSymbols
+  appModpaks <- collectProgramModules' False (map modModpakPath modinfoList) (appUnitId ghcstgapp) (appMainModuleName ghcstgapp) GHCSymbols.liveSymbols
   forM appModpaks $ \modpakName -> do
     readModpakL modpakName modpakStgbinPath decodeStgbin
 
@@ -404,20 +414,13 @@ readGhcStgApp fname = do
         | PakUnitInfo{..} <- pakyamlPackages
         ]
 
-      wiredInUnitIds = Set.fromList
-        [ "base"
-        , "ghc"
-        , "ghc-bignum"
-        , "ghc-prim"
-        , "rts"
-        , "template-haskell"
-        ]
+      wiredInUnitIds = Set.fromList $ appWiredInUnitIds ghcStgApp
 
       -- HINT: create versioned unit-id
       calculateUnitId UnitLinkerInfo{..}
-        -- handle wired-in units
+        -- handle wired-in units, convert from 'pkgname' to 'pkgid', like 'base' to 'base-4.20.0.0-inplace' as this is how it's stored in pak.yaml for wiredins
         | Set.member unitId wiredInUnitIds
-        = unitName ++ "-" ++ unitVersion
+        = unitName ++ "-" ++ unitVersion ++ "-inplace"
 
         | otherwise
         = unitId

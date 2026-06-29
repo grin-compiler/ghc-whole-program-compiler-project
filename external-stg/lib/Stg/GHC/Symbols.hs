@@ -64,7 +64,8 @@ liveSymbols =
   , ("base", "GHC.Weak", "runFinalizerBatch")
 
   -- HINT: main_:Main.main is the program entry point called from the program's main C function using the RTS API
-  , ("main", ":Main", "main")
+  , ("", ":Main", "main")
+
   ]
 
 liveQualifiedSymbols :: [String]

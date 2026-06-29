@@ -30,9 +30,9 @@ linkForeignCbitsSharedLib ghcstgappFname = do
 
       cbitsOpts =
           [ unwords $ concat
-            [ [ "-L" ++ dir | dir <- stglibExtraLibDirs]
+            [ [ "-L" ++ show dir | dir <- stglibExtraLibDirs]
             , stglibLdOptions
-            , [ "-l" ++ lib | lib <- stglibExtraLibs]
+            , [ "-l" ++ show lib | lib <- stglibExtraLibs]
             ]
           | StgLibLinkerInfo{..} <- linkerInfoList
           ]
@@ -56,9 +56,9 @@ linkForeignCbitsSharedLib ghcstgappFname = do
           ]
 
       appOpts = unwords $ concat
-        [ [ "-L" ++ dir | dir <- stgappExtraLibDirs]
+        [ [ "-L" ++ show dir | dir <- stgappExtraLibDirs]
         , stgappLdOptions
-        , [ "-l" ++ lib | lib <- stgappExtraLibs]
+        , [ "-l" ++ show lib | lib <- stgappExtraLibs]
         ]
 
       linkScript =
@@ -69,7 +69,7 @@ linkForeignCbitsSharedLib ghcstgappFname = do
               "darwin"  -> "gcc -o cbits.so -shared \\"
               _         -> "gcc -o cbits.so -shared -Wl,--no-as-needed \\"
           ] ++
-        intercalate " \\\n" (map ("  " ++) . filter (/= "") $ arList ++ cbitsOpts ++ stgappCObjects ++ [appOpts] ++ stubOpts) ++ "\n"
+        intercalate " \\\n" (map ("  " ++) . filter (/= "") $ arList ++ cbitsOpts ++ map show stgappCObjects ++ [appOpts] ++ stubOpts) ++ "\n"
 
   let scriptFname = workDir </> "cbits.so.sh"
   writeFile scriptFname linkScript
