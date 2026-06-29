@@ -7,9 +7,9 @@ import qualified Data.IntMap as IntMap
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern IntV i    = IntAtom i
+pattern WordV i   = WordAtom i
+pattern Word32V i = WordAtom i
 
 handleTakeMVar_ValueFullCase :: Int -> MVarDescriptor -> M ()
 handleTakeMVar_ValueFullCase m mvd@MVarDescriptor{..} = do

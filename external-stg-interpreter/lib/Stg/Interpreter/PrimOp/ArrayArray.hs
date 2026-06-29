@@ -8,9 +8,9 @@ import qualified Data.Vector as V
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern IntV i    = IntAtom i
+pattern WordV i   = WordAtom i
+pattern Word32V i = WordAtom i
 
 lookupArrayArrIdx :: ArrayArrIdx -> M (V.Vector Atom)
 lookupArrayArrIdx = \case

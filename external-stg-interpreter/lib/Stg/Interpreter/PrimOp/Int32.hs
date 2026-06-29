@@ -8,10 +8,10 @@ import Data.Int
 import Data.Word
 import Data.Bits
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern Int32V i  = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern IntV i    = IntAtom i
+pattern Int32V i  = IntAtom i
+pattern WordV i   = WordAtom i
+pattern Word32V i = WordAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = do

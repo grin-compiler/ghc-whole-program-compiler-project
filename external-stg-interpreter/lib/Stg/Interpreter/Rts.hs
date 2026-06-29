@@ -16,9 +16,9 @@ import Stg.Reconstruct
 import Stg.Interpreter.Base
 
 pattern CharV c = Literal (LitChar c)
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern IntV i    = IntAtom i
+pattern WordV i   = WordAtom i
+pattern Word32V i = WordAtom i
 
 emptyRts progName progArgs = Rts
   { rtsGlobalStore  = Map.empty

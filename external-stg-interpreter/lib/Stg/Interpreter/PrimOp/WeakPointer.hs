@@ -10,7 +10,7 @@ import Stg.Syntax
 import Stg.Interpreter.Base
 import qualified Stg.Interpreter.FFI as FFI
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern IntV i    = IntAtom i
 
 newWeakPointer :: Atom -> Atom -> Maybe Atom -> M Int
 newWeakPointer key value finalizer = do

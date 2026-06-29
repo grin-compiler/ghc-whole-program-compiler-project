@@ -7,9 +7,9 @@ import GHC.Float
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
-pattern Word32V i = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern IntV i    = IntAtom i
+pattern WordV i   = WordAtom i
+pattern Word32V i = WordAtom i
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 

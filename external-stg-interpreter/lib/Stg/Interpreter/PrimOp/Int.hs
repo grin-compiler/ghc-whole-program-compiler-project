@@ -15,8 +15,8 @@ import Stg.Interpreter.Base
 type PrimInt  = Int64
 
 pattern CharV c   = Literal (LitChar c)
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
-pattern WordV i   = WordAtom i -- Literal (LitNumber LitNumWord i)
+pattern IntV i    = IntAtom i
+pattern WordV i   = WordAtom i
 pattern FloatV f  = FloatAtom f
 pattern DoubleV d = DoubleAtom d
 

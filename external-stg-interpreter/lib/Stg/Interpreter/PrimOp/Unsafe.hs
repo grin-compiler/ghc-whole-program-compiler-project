@@ -4,7 +4,7 @@ module Stg.Interpreter.PrimOp.Unsafe where
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern IntV i    = IntAtom i
 
 evalPrimOp :: PrimOpEval -> Name -> [Atom] -> Type -> Maybe TyCon -> M [Atom]
 evalPrimOp fallback op args t tc = case (op, args) of

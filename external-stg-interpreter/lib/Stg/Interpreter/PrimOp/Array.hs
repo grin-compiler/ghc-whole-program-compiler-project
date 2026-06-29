@@ -8,7 +8,7 @@ import qualified Data.Vector as V
 import Stg.Syntax
 import Stg.Interpreter.Base
 
-pattern IntV i    = IntAtom i -- Literal (LitNumber LitNumInt i)
+pattern IntV i    = IntAtom i
 
 lookupArrIdx :: ArrIdx -> M (V.Vector Atom)
 lookupArrIdx = \case
