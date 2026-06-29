@@ -49,7 +49,7 @@ The wpc-plugin is a compiler plugin for GHC 9.10 or newer. It exports the STG IR
    ```
 3. Find the built `libwpc-plugin.[so|dylib|dll]`
    ```
-   ln -s `find . -type f -name 'libwpc-plugin.so' -o -name 'libwpc-plugin.dylib' -o -name 'libwpc-plugin.dll' | head -1`
+   ln -s `find ~+ -type f -name 'libwpc-plugin.so' -o -name 'libwpc-plugin.dylib' -o -name 'libwpc-plugin.dll' | head -1`
    ```
 
 ## Usage
