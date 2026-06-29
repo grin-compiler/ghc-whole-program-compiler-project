@@ -7,6 +7,7 @@ import Data.Monoid
 import Data.Ord
 import Data.Semigroup ((<>))
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy.Char8 as BSL8
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import System.Directory
@@ -21,9 +22,14 @@ import Options.Applicative
 import Stg.Syntax
 import Stg.Analysis.Closure
 import Stg.Analysis.ForeignInfo
+import Stg.IO
 import Stg.Program
 import Stg.GHC.Symbols
 import Stg.Foreign.Linker
+import qualified Stg.ToMySyntax as My
+import qualified Stg.MySyntax as My
+import Data.Aeson
+
 
 loadModules :: FilePath -> IO [Module]
 loadModules fname = case () of
@@ -45,6 +51,7 @@ modes = subparser
     <> mode "link" linkMode  (progDesc "link cbits.so for the applications with used foreign functions")
     <> mode "hi-list"  hiListMode  (progDesc "whole program interface file list")
     <> mode "srcpaths"  srcpathMode  (progDesc "print module source filepaths")
+    <> mode "gen-json"  genJsonMode  (progDesc "generate json IR files for all modules")
     )
   where
     mode :: String -> Parser a -> InfoMod a -> Mod CommandFields a
@@ -236,6 +243,25 @@ modes = subparser
               (BS8.unpack $ getUnitId $ moduleUnitId m)
               (BS8.unpack $ getModuleName $ moduleName m)
               (BS8.unpack srcPath)
+
+    genJsonMode :: Parser (IO ())
+    genJsonMode =
+        run <$> fullpakFile
+      where
+        run fname = do
+          case () of
+            _ | isSuffixOf "ghc_stgapp" fname -> run1 fname
+            _ -> fail "unknown file format"
+
+        run1 fname = do
+          mods <- getAppModuleMapping fname
+          fnames <- forM mods $ \StgModuleInfo{..} -> do
+            let jsonFname = modModpakPath ++ ".json"
+            --print jsonFname
+            m <- My.cvtSModule <$> readModpakL modModpakPath modpakStgbinPath decodeStgbin'
+            encodeFile jsonFname m
+            pure jsonFname
+          BSL8.putStrLn $ encode fnames
 
 main :: IO ()
 main = join $ execParser $ info (helper <*> modes) mempty

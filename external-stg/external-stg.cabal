@@ -24,6 +24,8 @@ library
     Stg.IO
     Stg.GHC.Symbols
     Stg.JSON
+    Stg.MySyntax
+    Stg.ToMySyntax
     Stg.Analysis.Closure
     Stg.Analysis.ForeignInfo
     Stg.Analysis.LiveVariable
@@ -77,6 +79,7 @@ executable stgapp
                        unix,
                        process,
                        bytestring,
+                       aeson,
                        external-stg,
                        external-stg-syntax,
                        optparse-applicative
