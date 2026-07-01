@@ -24,7 +24,7 @@ import Stg.Analysis.Closure
 import Stg.Analysis.ForeignInfo
 import Stg.IO
 import Stg.Program
-import Stg.GHC.Symbols
+import Stg.GHC.Symbols as GHCSymbols
 import Stg.Foreign.Linker
 import qualified Stg.ToMySyntax as My
 import qualified Stg.MySyntax as My
@@ -254,8 +254,11 @@ modes = subparser
             _ -> fail "unknown file format"
 
         run1 fname = do
+          ghcstgapp <- readGhcStgApp fname
           mods <- getAppModuleMapping fname
-          fnames <- forM mods $ \StgModuleInfo{..} -> do
+          appModpaks <- collectProgramModules' False (map modModpakPath mods) (appUnitId ghcstgapp) (appMainModuleName ghcstgapp) GHCSymbols.liveSymbols
+          --fnames <- forM mods $ \StgModuleInfo{..} -> do -- all modules
+          fnames <- forM appModpaks $ \modModpakPath -> do -- stripped module list
             let jsonFname = modModpakPath ++ ".json"
             --print jsonFname
             m <- My.cvtSModule <$> readModpakL modModpakPath modpakStgbinPath decodeStgbin'
