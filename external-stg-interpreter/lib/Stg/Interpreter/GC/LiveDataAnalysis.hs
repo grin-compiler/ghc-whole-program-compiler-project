@@ -3,6 +3,7 @@
 module Stg.Interpreter.GC.LiveDataAnalysis where
 
 import GHC.Generics
+import Control.Monad
 import Control.Monad.State
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet

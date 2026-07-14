@@ -8,6 +8,7 @@ import Data.Char
 import Foreign.Ptr
 import Foreign.Storable
 import Foreign.Marshal.Utils
+import Control.Monad
 import Control.Monad.State
 import qualified Data.IntMap as IntMap
 import qualified Data.Primitive.ByteArray as BA

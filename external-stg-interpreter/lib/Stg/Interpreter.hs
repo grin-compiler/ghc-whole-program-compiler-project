@@ -10,6 +10,7 @@ import Foreign.Ptr
 import Control.Concurrent
 import Control.Concurrent.MVar
 import qualified Control.Concurrent.Chan.Unagi.Bounded as Unagi
+import Control.Monad
 import Control.Monad.State.Strict
 import Control.Exception
 import qualified Data.Primitive.ByteArray as BA

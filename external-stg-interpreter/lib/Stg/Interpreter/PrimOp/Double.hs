@@ -123,6 +123,6 @@ evalPrimOp fallback op args t tc = case (op, args) of
   ( "decodeDouble_Int64#", [DoubleV (D# x)]) -> do
     -- NOTE: map back to GHC primop
     let !(# a, b #) = decodeDouble_Int64# x
-    pure [Int64V (I# a), IntV (I# b)]
+    pure [Int64V (fromIntegral (I64# a)), IntV (I# b)]
 
   _ -> fallback op args t tc

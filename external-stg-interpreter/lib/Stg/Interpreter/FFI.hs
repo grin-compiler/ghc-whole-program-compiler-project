@@ -41,6 +41,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 
 import GHC.Stack
+import Control.Monad
 import Control.Monad.State.Strict
 import Control.Concurrent.MVar
 

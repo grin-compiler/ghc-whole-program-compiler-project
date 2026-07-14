@@ -6,6 +6,7 @@ module Stg.Interpreter.Debugger.TraverseState
  , getHeapObjectCategory
  ) where
 
+import Control.Monad
 import Control.Monad.State
 import Data.Set (Set)
 import qualified Data.Set as Set

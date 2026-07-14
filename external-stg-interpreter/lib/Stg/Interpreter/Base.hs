@@ -22,6 +22,7 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Vector (Vector)
 import qualified Data.Primitive.ByteArray as BA
 import Control.Monad.Primitive
+import Control.Monad
 import System.Posix.DynamicLinker
 import Control.Concurrent.MVar
 import Control.Concurrent.Chan.Unagi.Bounded

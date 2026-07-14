@@ -11,6 +11,15 @@ copyright:           (c) 2020 Csaba Hruska
 category:            Development
 build-type:          Simple
 
+flag external-ext-stg-gc
+  manual:
+    True
+  default:
+    False
+  description:
+    If enabled, the ext-stg-gc binary is provided externally and available in $PATH
+    Disbled by default
+
 library
   exposed-modules:
     Foreign.LibFFI.Closure
@@ -101,17 +110,16 @@ library
                        external-stg
   default-language:    Haskell2010
 
-  include-dirs:         datalog
-
-
-  cxx-sources:          datalog/ext-stg-gc.cpp
-  cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
-  if os(darwin)
-    ld-options:           "-Wl,-all_load"
-    extra-libraries:      omp stdc++
-  else
-    ld-options:           "-Wl,-u,__factory_Sf_ext_stg_gc_instance"
-    extra-libraries:      gomp
+  if !flag(external-ext-stg-gc)
+    include-dirs:         datalog
+    cxx-sources:          datalog/ext-stg-gc.cpp
+    cxx-options:          -D__EMBEDDED_SOUFFLE__ -D_OPENMP -std=c++17
+    if os(darwin)
+      ld-options:           "-Wl,-all_load"
+      extra-libraries:      omp stdc++
+    else
+      ld-options:           "-Wl,-u,__factory_Sf_ext_stg_gc_instance"
+      extra-libraries:      gomp
 
 executable ext-stg-interpreter
   default-language:    Haskell2010

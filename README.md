@@ -1,4 +1,4 @@
-# GHC whole program compiler project
+# GHC whole program compiler project [![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fgrin-compiler%2Fghc-whole-program-compiler-project%2Fbadge%3Fref%3Dmaster&style=flat-square)](https://actions-badge.atrox.dev/grin-compiler/ghc-whole-program-compiler-project/goto?ref=master)
 
 The project consists of GHC **wpc-plugin** and the corresponding **External STG IR** and **tooling**.
 

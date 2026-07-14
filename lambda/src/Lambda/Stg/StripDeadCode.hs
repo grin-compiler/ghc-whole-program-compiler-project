@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase, TupleSections, RecordWildCards, OverloadedStrings, BangPatterns #-}
 module Lambda.Stg.StripDeadCode (stripDeadCode, StripStat(..), LivenessFacts(..)) where
 
+import Control.Monad
 import Control.Monad.State
 
 import qualified Text.PrettyPrint.ANSI.Leijen as P

@@ -15,6 +15,7 @@ import System.Directory
 import System.FilePath
 import Text.Printf
 
+import Control.Monad
 import Control.Monad.State.Strict
 
 import Stg.Syntax
